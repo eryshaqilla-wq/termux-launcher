@@ -1,0 +1,88 @@
+================================================================================
+                    ESO:LAUNCHER - PROJECT GITHUB ROADMAP & ASSETS
+================================================================================
+Tanggal Update : 16 Oktober 2026
+Basis Upstream : PickleHik3/termux-launcher (Rilis v1.0.6)
+Branch Aktif   : eso-launcher
+Branch Cadangan: backup-v0.2.40
+Repo Fork      : https://github.com/eryshaqilla-wq/termux-launcher.git
+
+--------------------------------------------------------------------------------
+1. BRANDING & IDENTITAS APLIKASI
+--------------------------------------------------------------------------------
+- Nama Proyek      : Eso:Launcher
+- Label Aplikasi   : "Eso:Launcher" (diatur via XML entity &TERMUX_APP_NAME; pada
+                     seluruh variasi bahasa strings.xml di app dan termux-shared).
+- Icon Launcher    : Opsi A - Termux Klasik (> _)
+                     Memulihkan icon vektor prompt terminal klasik Termux (> _)
+                     warna putih bersih di atas latar belakang gelap.
+                     File aset:
+                     * app/src/main/res/drawable/ic_foreground.xml
+                     * app/src/main/res/drawable/ic_service_notification.xml
+                     * app/src/main/res/mipmap-*/ic_launcher.png
+                     * app/src/main/res/mipmap-*/ic_launcher_round.png
+                     * fastlane/metadata/android/en-US/images/icon.png
+
+--------------------------------------------------------------------------------
+2. OPTIMASI & MODIFIKASI TERPILIH (YANG DIPERTAHANKAN)
+--------------------------------------------------------------------------------
+[✓] Optimasi CPU LauncherCtl:
+    - Lokasi: app/src/main/java/com/termux/launcherctl/LauncherCtlApiServer.java
+    - Perubahan: AUTO_START_ENABLED = false di ensureStartedAsync().
+    - Manfaat: Mencegah background API server menyala otomatis dan menguras CPU/baterai,
+      namun fungsi start(Context) tetap aktif bila dipanggil manual.
+
+[✓] CI/CD Auto-Build APK:
+    - Lokasi: .github/workflows/debug_build.yml
+    - Perubahan: Menambahkan branch 'main' dan 'eso-launcher' ke trigger push.
+    - Manfaat: Setiap commit yang di-push ke GitHub langsung menghasilkan APK debug siap unduh.
+
+[✓] Porting Rencana Project Fusion (WebView & IPC):
+    - Paket com.termux.webview.*:
+      * FusionWebViewManager (lifecycle, overlay, split-mode, floating pill, transparansi)
+      * FusionTab & Multi-Tab management (binding ke active TerminalSession)
+      * FusionWebChromeClient & FusionWebViewClient
+      * GhostBridgeInterface (injeksi Web3 window.ethereum & RPC handler)
+      * Google Material Dark + Pastel drawer menu
+    - Paket IPC com.termux.app.TermuxIpcServer:
+      * Local socket Unix domain server untuk menerima perintah dari CLI 'termux-ipc'
+      * Perintah: webview open/close/pill/opacity/eval, toast, vibrate, clipboard, injectCommand.
+
+--------------------------------------------------------------------------------
+3. MODIFIKASI YANG DIBUANG / DITINGGALKAN (CLEAN)
+--------------------------------------------------------------------------------
+[✗] Keyboard Control Hooks:
+    - Modifikasi intent toggle/hide soft keyboard (terminal.toggle_soft_keyboard,
+      terminal.hide_soft_keyboard, disableSoftKeyboardInternal) sengaja DITINGGALKAN.
+    - Alasan: Menjaga TermuxActivity dan TermuxTerminalViewClient 100% murni bawaan
+      v1.0.6, menghindari konflik input, dan keyboard bawaan launcher tetap optimal.
+
+--------------------------------------------------------------------------------
+4. BUNDLE SETUP & METODE TARBALL (FUSION-SETUP)
+--------------------------------------------------------------------------------
+Folder: fusion-setup/ (tersimpan di dalam repository)
+Daftar Berkas:
+1. fusion_payload.tar.gz
+   - Tarball terkompresi berisi payload siap ekstrak ke $HOME Termux.
+   - Isi di dalam tarball:
+     * bin/termux-ipc      : Binary IPC penghubung CLI ke Android WebView/UI
+     * bin/browser         : Wrapper script CLI ('browser <url>')
+     * bin/agy-copilot     : CLI assistan otomasi
+     * wallet/             : Modul Ghost Web3 Wallet daemon & RPC configurations
+     * wallet/x_webview.js : Script injeksi DOM & otomasi WebView (195 KB)
+     * login.template      : Template login shell Termux
+     * termux.properties   : Konfigurasi tombol ekstra & UI terminal
+     * setup.sh            : Automated installer
+2. setup.sh
+   - Script instalasi otomatis all-in-one untuk Termux host dan Linux container.
+   - Mengatur dependensi, unpacking payload, symlink bin, konfigurasi properti.
+3. create_fusion_bundle.py
+   - Script Python untuk menyusun ulang dan mengemas fusion_payload.tar.gz.
+4. x_webview.js
+   - Berkas mandiri script injeksi WebView untuk referensi dan pengujian DOM.
+5. termux-ipc
+   - Binary CLI IPC mandiri.
+6. login.template & termux.properties
+   - Berkas konfigurasi terminal.
+
+================================================================================

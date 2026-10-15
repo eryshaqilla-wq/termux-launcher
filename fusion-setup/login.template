@@ -1,0 +1,283 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# ==============================================================================
+# PROJECT FUSION - ADAPTIVE LOGIN SELECTOR (ROOT / NON-ROOT COMPATIBLE)
+# ==============================================================================
+
+export PREFIX="/data/data/com.termux/files/usr"
+export HOME="/data/data/com.termux/files/home"
+export PATH="$HOME/.local/bin:$PREFIX/bin:$PREFIX/bin/applets:$PATH"
+
+if [ -f "$PREFIX/etc/profile" ]; then
+    . "$PREFIX/etc/profile"
+fi
+
+FUSION_DIR="$HOME/.fusion"
+LINUX_CONF="$FUSION_DIR/linux_entry.sh"
+LINUX_NAME_CONF="$FUSION_DIR/linux_name.txt"
+HAS_LINUX_CONF="$FUSION_DIR/has_linux.txt"
+
+# Cek apakah integrasi Linux diaktifkan
+HAS_LINUX="1"
+if [ -f "$HAS_LINUX_CONF" ]; then
+    HAS_LINUX=$(cat "$HAS_LINUX_CONF" 2>/dev/null | tr -d '[:space:]')
+fi
+
+# Nama Linux jika aktif
+LINUX_NAME="Linux"
+if [ -f "$LINUX_NAME_CONF" ]; then
+    LINUX_NAME=$(cat "$LINUX_NAME_CONF" 2>/dev/null | head -n1)
+    [ -z "$LINUX_NAME" ] && LINUX_NAME="Linux"
+fi
+
+LINUX_ROOTFS_CONF="$FUSION_DIR/linux_rootfs.txt"
+LINUX_ROOTFS=""
+if [ -f "$LINUX_ROOTFS_CONF" ]; then
+    LINUX_ROOTFS=$(cat "$LINUX_ROOTFS_CONF" 2>/dev/null | tr -d '[:space:]')
+fi
+
+# Helper Termux IPC Socket Bionic (Bebas Seccomp Bad system call)
+ipc_send() {
+    local cmd="$*"
+    local py=""
+    if command -v python3 >/dev/null 2>&1; then
+        py="python3"
+    elif command -v python >/dev/null 2>&1; then
+        py="python"
+    fi
+
+    if [ -n "$py" ]; then
+        "$py" -c "import socket,sys; s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM); s.settimeout(0.3); s.connect('\0termux_ipc'); s.sendall(sys.argv[1].encode()+b'\n'); s.close()" "$cmd" 2>/dev/null || true
+    elif [ -x "$PREFIX/bin/termux-ipc" ]; then
+        "$PREFIX/bin/termux-ipc" $cmd >/dev/null 2>&1
+    fi
+}
+
+# JIKA TANPA LINUX: Langsung luncurkan Termux Shell secara cepat & bersih
+if [ "$HAS_LINUX" = "0" ]; then
+    ipc_send MOUSE_ON
+    ipc_send KEYBOARD_ENABLE
+    printf "\033]0;home\007"
+    printf "\033]2;home\007"
+    stty sane 2>/dev/null
+    stty echo 2>/dev/null
+    printf "\e[?25h"
+    clear
+    command -v fastfetch >/dev/null 2>&1 && fastfetch
+    if [ -x "$PREFIX/bin/zsh" ]; then
+        exec -a "-zsh" "$PREFIX/bin/zsh" "$@"
+    else
+        exec -a "-bash" "$PREFIX/bin/bash" "$@"
+    fi
+fi
+
+# ==========================================
+# JIKA ADA LINUX: TAMPILKAN MENU SELECTOR
+# ==========================================
+while true; do
+
+    trigger_agy=0
+    action_clean=0
+
+    printf "\033]0;home\007"
+    printf "\e[0m\e[r\e[?1049l\e[2J\e[3J\e[H" 
+    command -v fastfetch >/dev/null 2>&1 && fastfetch
+
+    # Auto Wakelock
+    _termux_pid=$(pidof com.termux 2>/dev/null || pgrep -o -f "com.termux" 2>/dev/null || echo "$$")
+    _wakelock_flag="${PREFIX:-/data/data/com.termux/files/usr}/tmp/.termux_wakelock"
+    if [ ! -f "$_wakelock_flag" ] || [ "$(cat "$_wakelock_flag" 2>/dev/null)" != "$_termux_pid" ]; then
+        if command -v termux-wake-lock >/dev/null 2>&1; then
+            termux-wake-lock >/dev/null 2>&1
+            echo "$_termux_pid" > "$_wakelock_flag" 2>/dev/null
+        fi
+    fi
+
+    echo ""
+    printf "Tekan \e[1;35m<\e[0m untuk membuka Antigravity\n"
+    printf "Tekan \e[1;35mESC\e[0m untuk Clear RAM\n"
+
+    selected=${selected:-1}
+
+    trap 'ipc_send MOUSE_ON; ipc_send KEYBOARD_ENABLE; printf "\e[?1000l\e[?1006l\e[?25h\033]0;home\007"; stty sane 2>/dev/null; clear; exit' INT TERM
+    printf "\033]0;home\007"
+    printf "\033]2;home\007"
+    stty sane 2>/dev/null
+    stty -echo 2>/dev/null
+    printf "\e[?1000l\e[?1006l\e[?25l"
+    while read -rsn1 -t 0.05 _discard; do :; done
+
+    # IPC Deferred Lock
+    (sleep 0.25; ipc_send MOUSE_OFF; ipc_send KEYBOARD_HIDE) &
+
+    # Toast Notifikasi RAM
+    if [ -n "$CLEAN_TOAST" ]; then
+        ipc_send "TOAST $CLEAN_TOAST"
+        ipc_send VIBRATE
+        unset CLEAN_TOAST
+    fi
+
+    # Loop penangkap tombol
+    while true; do
+        lines=$(tput lines 2>/dev/null || echo 24)
+        menu_start_row=$((lines - 5))
+
+        printf "\e[%d;1H" "$menu_start_row"
+        printf "\e[J"
+
+        printf "\e[1;37mPilih System:\e[0m\n\n"
+
+        if [ $selected -eq 1 ]; then
+            printf "  \e[1;35m>\e[0m \e[1;37m1. %s\e[0m\n" "$LINUX_NAME"
+        else
+            printf "    \e[90m1. %s\e[0m\n" "$LINUX_NAME"
+        fi
+
+        if [ $selected -eq 2 ]; then
+            printf "  \e[1;35m>\e[0m \e[1;37m2. Termux\e[0m\n\n"
+        else
+            printf "    \e[90m2. Termux\e[0m\n\n"
+        fi
+
+        read -rsn1 key
+        case "$key" in
+            $'\e')
+                read -rsn1 -t 0.08 key2
+                if [ "$key2" = "[" ]; then
+                    read -rsn1 -t 0.08 key3
+                    case "$key3" in
+                        'A') [ $selected -gt 1 ] && selected=$((selected - 1)) ;;
+                        'B') [ $selected -lt 2 ] && selected=$((selected + 1)) ;;
+                        'C') break ;; # Kanan = Enter
+                        'D') trigger_agy=1; break ;; # Kiri = Agy
+                    esac
+                elif [ -z "$key2" ]; then
+                    action_clean=1
+                    break
+                fi
+                ;;
+            "<") trigger_agy=1; break ;;
+            "1") selected=1; break ;;
+            "2") selected=2; break ;;
+            "c"|"C") action_clean=1; break ;;
+            "") break ;; # Enter
+        esac
+    done
+
+    # Aksi Clean RAM
+    if [ $action_clean -eq 1 ]; then
+        free_before=$(free -m 2>/dev/null | awk '/Mem:/ {print $4}')
+        if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
+            unset LD_PRELOAD
+            su -c "sync; echo 3 > /proc/sys/vm/drop_caches; am kill-all >/dev/null 2>&1 || true" >/dev/null 2>&1
+        else
+            sync 2>/dev/null || true
+        fi
+        free_after=$(free -m 2>/dev/null | awk '/Mem:/ {print $4}')
+        delta=$((free_after - free_before))
+        if [ $delta -gt 0 ]; then
+            toast_msg="RAM+${delta} = ${free_after}"
+        else
+            toast_msg="RAM = ${free_after}"
+        fi
+
+        stty sane 2>/dev/null
+        stty -echo 2>/dev/null
+        ipc_send MOUSE_OFF
+        ipc_send KEYBOARD_HIDE
+        printf "\e[?1000l\e[?1006l\e[?25l"
+        while read -rsn1 -t 0.05 _discard; do :; done
+
+        CLEAN_TOAST="$toast_msg" exec "$0"
+    fi
+
+    # Trigger Antigravity via Shortcut (<)
+    if [ $trigger_agy -eq 1 ]; then
+        ipc_send MOUSE_ON
+        ipc_send KEYBOARD_ENABLE
+        printf "\e[?1000l\e[?1006l\e[2J\e[3J\e[H"
+        stty echo 2>/dev/null; printf "\e[?25h\033]0;home\007"
+        
+        if [ -x "$FUSION_DIR/run_agy.sh" ]; then
+            "$FUSION_DIR/run_agy.sh"
+        elif command -v agy >/dev/null 2>&1; then
+            agy
+        else
+            echo "Antigravity Assistant..."
+            if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
+                unset LD_PRELOAD
+                if [ -n "$LINUX_ROOTFS" ]; then
+                    su -c "chroot '$LINUX_ROOTFS' /bin/bash -l -i -c 'agy'" 2>/dev/null || su -c "chroot /data/local/nhsystem/kali-arm64 /bin/zsh -l -i -c 'agy'" 2>/dev/null || agy
+                else
+                    su -c "chroot /data/local/nhsystem/kali-arm64 /bin/zsh -l -i -c 'agy'" 2>/dev/null || agy
+                fi
+            else
+                agy 2>/dev/null || echo "AGY belum terinstall di lingkungan ini."
+            fi
+        fi
+        
+        echo -e "\n\e[90m[ Antigravity Ditutup. Tekan sembarang tombol untuk kembali ]\e[0m"
+        read -rsn1
+        stty sane 2>/dev/null; stty -echo 2>/dev/null
+        ipc_send MOUSE_OFF
+        ipc_send KEYBOARD_HIDE
+        printf "\e[?1000l\e[?1006l\e[?25l"
+        while read -rsn1 -t 0.05 _discard; do :; done
+        exec "$0"
+    fi
+
+    # Keluar loop untuk eksekusi pilihan
+    break
+
+done
+
+# Kembalikan terminal normal
+ipc_send MOUSE_ON
+ipc_send KEYBOARD_ENABLE
+printf "\e[?1000l\e[?1006l"
+stty sane 2>/dev/null
+stty echo 2>/dev/null
+printf "\e[?25h\e[2J\e[3J\e[H\033]0;home\007\033]2;home\007"
+
+# ==========================================
+# EKSEKUSI PILIHAN (1: LINUX, 2: TERMUX)
+# ==========================================
+if [ $selected -eq 1 ]; then
+    unset LD_PRELOAD
+    unset LD_LIBRARY_PATH
+
+    if [ -n "$LINUX_ROOTFS" ] && su -c "[ ! -f '$LINUX_ROOTFS/usr/local/bin/browser' ] || [ ! -s '$LINUX_ROOTFS/usr/local/bin/browser' ]" 2>/dev/null; then
+        su -c "mkdir -p '$LINUX_ROOTFS/usr/local/bin' && (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$LINUX_ROOTFS/usr/local/bin/termux-ipc' && echo '#!/bin/bash' > '$LINUX_ROOTFS/usr/local/bin/browser' && echo 'exec termux-ipc webview \"\$@\"' >> '$LINUX_ROOTFS/usr/local/bin/browser' && chmod 755 '$LINUX_ROOTFS/usr/local/bin/termux-ipc' '$LINUX_ROOTFS/usr/local/bin/browser'" 2>/dev/null || true
+    fi
+
+    # Cek apakah installer container tersedia di /sdcard untuk injeksi jika diperlukan
+    if [ -f "/sdcard/fusion-linux-setup.sh" ] && [ -x "/data/local/Droidspaces/bin/droidspaces" ]; then
+        su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$LINUX_NAME\" run -- [ -f /usr/local/bin/termux-ipc ] || /bin/bash /sdcard/fusion-linux-setup.sh" >/dev/null 2>&1 || true
+    fi
+
+    if [ -x "$LINUX_CONF" ]; then
+        "$LINUX_CONF" "$@"
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -ne 0 ]; then
+            echo -e "\n\e[1;31m[!] Sesi Linux berakhir atau gagal (Exit Code: $EXIT_CODE).\e[0m"
+            echo -e "\e[90mBeralih ke Termux shell...\e[0m"
+            sleep 1
+        fi
+    elif command -v bashnh >/dev/null 2>&1; then
+        exec bashnh "$@"
+    else
+        echo "Menjalankan Linux..."
+        if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
+            unset LD_PRELOAD
+            su -c '/data/local/Droidspaces/bin/droidspaces --name="Debian" enter'
+        else
+            proot-distro login debian 2>/dev/null || true
+        fi
+    fi
+fi
+
+# Fallback aman: Selalu berikan shell Termux yang aktif (Zsh jika ada, fallback Bash)
+if [ -x "$PREFIX/bin/zsh" ]; then
+    exec -a "-zsh" "$PREFIX/bin/zsh" "$@"
+else
+    exec -a "-bash" "$PREFIX/bin/bash" "$@"
+fi
