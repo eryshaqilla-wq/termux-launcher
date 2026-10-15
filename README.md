@@ -1,5 +1,7 @@
+# Eso:Launcher
+
 <p align="center">
-  <img src="screenshots/banner.webp" alt="Termux Launcher showing seven authentic Android screens: terminal home, split panes, widgets, voice dictation, Dawn notes, tlstore, and the app drawer" width="100%">
+  <img src="screenshots/banner.webp" alt="Eso:Launcher showing authentic Android screens" width="100%">
 </p>
 
 <p align="center">

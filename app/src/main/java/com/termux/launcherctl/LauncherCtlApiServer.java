@@ -64,6 +64,9 @@ import java.util.concurrent.TimeUnit;
  */
 public class LauncherCtlApiServer {
     private static final String LOG_TAG = "LauncherCtlApiServer";
+
+    /** Background auto-start is off to save CPU; {@link #start(Context)} itself stays functional. */
+    private static final boolean AUTO_START_ENABLED = false;
     private static final String API_VERSION = "v1";
     private static final String LAUNCHERCTL_DIR_PATH = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.launcherctl";
     private static final String TOKEN_FILE_PATH = LAUNCHERCTL_DIR_PATH + "/token";
@@ -229,6 +232,11 @@ public class LauncherCtlApiServer {
     }
 
     public synchronized void ensureStartedAsync(Context context) {
+        if (!AUTO_START_ENABLED) {
+            // Disabled: the background API server is not auto-started, to prevent CPU load.
+            Logger.logInfo(LOG_TAG, "LauncherCtl API server auto-start is disabled");
+            return;
+        }
         if (running || starting) {
             return;
         }

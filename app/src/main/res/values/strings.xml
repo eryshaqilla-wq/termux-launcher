@@ -2,7 +2,7 @@
 
 <!DOCTYPE resources [
     <!ENTITY TERMUX_PACKAGE_NAME "com.termux">
-    <!ENTITY TERMUX_APP_NAME "Termux:Launcher">
+    <!ENTITY TERMUX_APP_NAME "Eso:Launcher">
     <!ENTITY TERMUX_API_APP_NAME "Termux:API">
     <!ENTITY TERMUX_STYLING_APP_NAME "Termux:Styling">
     ]>

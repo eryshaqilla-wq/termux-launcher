@@ -6,6 +6,8 @@ on:
     branches:
       - dev
       - pre
+      - main
+      - eso-launcher
 
 
 concurrency:
