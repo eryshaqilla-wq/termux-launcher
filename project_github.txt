@@ -74,7 +74,8 @@ Daftar Berkas:
      * termux.properties   : Konfigurasi tombol ekstra & UI terminal
      * setup.sh            : Automated installer
 2. setup.sh
-   - Script instalasi otomatis all-in-one untuk Termux host dan Linux container.
+   - Script instalasi otomatis all-in-one (Compact & Mobile-friendly, bebas terpotong di font besar).
+   - Dilengkapi animated loading spinner ala Node / Ora (Braille ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏) saat instalasi pkg/npm.
    - Mengatur dependensi, unpacking payload, symlink bin, konfigurasi properti.
 3. create_fusion_bundle.py
    - Script Python untuk menyusun ulang dan mengemas fusion_payload.tar.gz.
