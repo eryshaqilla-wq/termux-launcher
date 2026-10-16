@@ -706,6 +706,20 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_V0239_EFFECTS_PRESET, value, false);
     }
 
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_SOFTWARE_WALLPAPER_BACKDROP}. */
+    public boolean isSoftwareWallpaperBackdropEnabled() {
+        if (isV0239EffectsPresetEnabled()) {
+            return false;
+        }
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_SOFTWARE_WALLPAPER_BACKDROP, TERMUX_APP.DEFAULT_VALUE_SOFTWARE_WALLPAPER_BACKDROP);
+    }
+
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_SOFTWARE_WALLPAPER_BACKDROP}. */
+    public void setSoftwareWallpaperBackdropEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_SOFTWARE_WALLPAPER_BACKDROP, value, false);
+    }
+
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_FANCIER_GLASS}. The switch alone; whether it takes effect is the chrome's call. */
     public boolean isFancierGlassEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,

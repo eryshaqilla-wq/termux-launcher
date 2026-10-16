@@ -1266,6 +1266,15 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_VALUE_V0239_EFFECTS_PRESET = true;
 
         /**
+         * Software wallpaper backdrop switch.
+         * When false (default: false), wallpaper is composited directly by the Android window manager / SurfaceFlinger
+         * in hardware (pure passthrough mode matching v0.2.39).
+         * When true, launcher decodes and software-draws wallpaper bitmaps via WallpaperBackdropView.
+         */
+        public static final String KEY_SOFTWARE_WALLPAPER_BACKDROP = "software_wallpaper_backdrop";
+        public static final boolean DEFAULT_VALUE_SOFTWARE_WALLPAPER_BACKDROP = false;
+
+        /**
          * Fancier Glass: every glass surface bends the wallpaper at its rim and catches a light
          * along its edge, on top of the frost it already wears. On by default wherever it can run (every Look sets its depth). Needs Android 13
          * and a wallpaper set from inside the launcher; anywhere else the switch is offered

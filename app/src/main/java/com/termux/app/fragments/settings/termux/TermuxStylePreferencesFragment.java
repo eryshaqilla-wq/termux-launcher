@@ -140,10 +140,12 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         SwitchPreferenceCompat fancier = findPreference("fancier_glass");
         SwitchPreferenceCompat grain = findPreference("film_grain_enabled");
         SwitchPreferenceCompat parallax = findPreference("wallpaper_parallax");
+        SwitchPreferenceCompat backdrop = findPreference("software_wallpaper_backdrop");
         if (blur != null) blur.setEnabled(!v0239PresetActive);
         if (fancier != null) fancier.setEnabled(!v0239PresetActive);
         if (grain != null) grain.setEnabled(!v0239PresetActive);
         if (parallax != null) parallax.setEnabled(!v0239PresetActive);
+        if (backdrop != null) backdrop.setEnabled(!v0239PresetActive);
     }
 
     /**
@@ -459,6 +461,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setWallpaperParallaxEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "software_wallpaper_backdrop":
+                mPreferences.setSoftwareWallpaperBackdropEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "terminal_dynamic_colors_enabled":
                 // This switch is the whole palette decision: on, the terminal and the chrome both
                 // take the wallpaper; off, both take the scheme. Either way the chrome palette
@@ -543,6 +549,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "wallpaper_parallax":
                 return mPreferences.isWallpaperParallaxEnabled();
+            case "software_wallpaper_backdrop":
+                return mPreferences.isSoftwareWallpaperBackdropEnabled();
             case "terminal_dynamic_colors_enabled":
                 return mPreferences.isTerminalDynamicColorsEnabled();
             case "app_launcher_bw_icons":

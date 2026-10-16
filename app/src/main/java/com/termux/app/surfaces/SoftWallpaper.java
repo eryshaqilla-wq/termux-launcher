@@ -30,6 +30,8 @@ public final class SoftWallpaper {
     public static boolean isOn(@Nullable TermuxAppSharedPreferences prefs) {
         if (prefs == null || prefs.getSharedPreferences() == null)
             return false;
+        if (prefs.isV0239EffectsPresetEnabled() || !prefs.isSoftwareWallpaperBackdropEnabled())
+            return false;
         // Through the utilities, as every getter reads: a Look the editor previews is seen here too.
         return SharedPreferenceUtils.getBoolean(prefs.getSharedPreferences(), KEY_WALLPAPER_SOFT,
             false);

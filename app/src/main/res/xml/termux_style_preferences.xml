@@ -87,6 +87,11 @@
             app:title="@string/settings_wallpaper_parallax_title"
             app:summary="@string/settings_wallpaper_parallax_summary"
             android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="software_wallpaper_backdrop"
+            app:title="@string/settings_software_wallpaper_backdrop_title"
+            app:summary="@string/settings_software_wallpaper_backdrop_summary"
+            android:defaultValue="false" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_icon_appearance_header">

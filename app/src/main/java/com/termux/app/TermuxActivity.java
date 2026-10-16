@@ -3628,6 +3628,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
 
             @Override @Nullable public Bitmap wallBehindFrame() {
+                if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled()
+                        || !mPreferences.isSoftwareWallpaperBackdropEnabled())) {
+                    mWallBehindFrame = null;
+                    return null;
+                }
                 View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
                 if (!shouldUseWallpaperPassthroughMode() || wallpaperFrame == null) return null;
                 // Radius 0 is the capture itself: the wallpaper as the wall shows it.
@@ -3929,8 +3934,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     @NonNull
     private WallpaperBackdropPolicy.Mode wallpaperBackdropMode() {
+        boolean allowSelfDrawn = mPreferences != null
+            && !mPreferences.isV0239EffectsPresetEnabled()
+            && mPreferences.isSoftwareWallpaperBackdropEnabled();
         return WallpaperBackdropPolicy.mode(shouldUseWallpaperPassthroughMode(),
-            wallpaperPicture(), !mWallpaperReadPermissionDenied);
+            wallpaperPicture(), !mWallpaperReadPermissionDenied, allowSelfDrawn);
     }
 
     /**
@@ -4015,7 +4023,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         // The self-drawn backdrop covers that background, so it carries the same dim over its own
         // frame — set here, with the root's, so the two can never read differently.
-        if (mWallpaperBackdropView != null) mWallpaperBackdropView.setDimColor(color);
+        if (mWallpaperBackdropView != null) {
+            if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled()
+                    || !mPreferences.isSoftwareWallpaperBackdropEnabled())) {
+                mWallpaperBackdropView.hide();
+            } else {
+                mWallpaperBackdropView.setDimColor(color);
+            }
+        }
         // Soft wallpaper's blur half rides on the same view (SPEC §3.4); its dim is in color.
         com.termux.app.surfaces.SoftWallpaper.apply(mWallpaperBackdropView, mPreferences);
     }
@@ -6720,6 +6735,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The keyboard's own radius, not the dock's state.blurRadiusDp it used to share outright —
         // falls back to it while the keyboard's is still the -1 "follow" sentinel.
         int keyboardBlurRadiusDp = getEffectiveInAppKeyboardBlurRadius();
+        if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled() || !mPreferences.isWallpaperBlurEnabled())) {
+            return null;
+        }
+        if (keyboardBlurRadiusDp <= 0 || !ChromePolicy.dockBlurEnabled(keyboardBlurRadiusDp)) {
+            return null;
+        }
         boolean usingManagedWallpaperSource = shouldUseManagedWallpaperBlurSource();
         Bitmap frame = mChrome.blurCache().obtain(keyboardBlurRadiusDp, wallpaperFrame);
         Rect frameRect = mChrome.blurCache().frameRectRef();
@@ -6859,9 +6880,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (backdrop == null || overlay == null || wallpaperFrame == null) {
             return;
         }
+        if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled() || !mPreferences.isWallpaperBlurEnabled())) {
+            clearDecorNavBarBackdrop();
+            return;
+        }
+        if (!navStripBlurEnabled(state)) {
+            clearDecorNavBarBackdrop();
+            return;
+        }
         backdrop.setAlpha(1f);
         // The frost of the surface right above: the keyboard's radius while it is up.
         int stripRadiusDp = navStripBlurRadiusDp(state);
+        if (stripRadiusDp <= 0) {
+            clearDecorNavBarBackdrop();
+            return;
+        }
         // Overscan the strip's blur bitmap upward past the seam with the dock/keyboard (default dock
         // only) so the refraction edge band clears the visible seam and meets the dock's downward
         // overscan. The bitmap is taller than the overlay; a negative top margin pushes the overscan
@@ -6990,7 +7023,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldUseManagedWallpaperBlurSource() {
-        if (mPreferences == null) {
+        if (mPreferences == null || mPreferences.isV0239EffectsPresetEnabled()
+                || !mPreferences.isSoftwareWallpaperBackdropEnabled()) {
             return false;
         }
         return wallpaperSourceFacts().managedOnScreen();
@@ -7296,6 +7330,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable
     private com.termux.app.chrome.WallpaperBlurCache.FrameCapture beginWallpaperFrameCapture(
             @NonNull Rect targetRect, @NonNull View wallpaperFrame) {
+        if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled()
+                || (!mPreferences.isWallpaperBlurEnabled() && !mPreferences.isSoftwareWallpaperBackdropEnabled()))) {
+            return null;
+        }
         if (shouldUseManagedWallpaperBlurSource()) {
             Bitmap managedBackdrop = createManagedWallpaperBackdropBitmapForRect(targetRect, wallpaperFrame);
             if (managedBackdrop != null) {
@@ -25522,6 +25560,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mGeometry.requestNow(GeometryScheduler.Reason.STYLING, GeometryScheduler.ResizePolicy.NOW);
         mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME
             | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
+        updateWallpaperBackdrop();
         syncTerminalWallpaperRenderingMode();
         updateWindowBackgroundForCurrentSession();
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);

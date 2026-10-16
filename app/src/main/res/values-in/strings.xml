@@ -91,6 +91,8 @@
     <string name="settings_wallpaper_blur_summary">Memburamkan wallpaper di balik bilah kaca dan terminal. Matikan untuk kaca transparan tanpa beban blur.</string>
     <string name="settings_film_grain_title">Film grain</string>
     <string name="settings_film_grain_summary">Menambahkan tekstur butiran halus pada permukaan kaca. Matikan untuk meringankan beban canvas.</string>
+    <string name="settings_software_wallpaper_backdrop_title">Backdrop wallpaper software</string>
+    <string name="settings_software_wallpaper_backdrop_summary">Launcher me-render bitmap wallpaper secara software. Nonaktifkan untuk passthrough hardware murni (mode v0.2.39).</string>
     <string name="settings_terminal_cursor_trail_title">Jejak kursor</string>
     <string name="settings_terminal_cursor_trail_summary">Animasi jejak kursor saat mengetik atau bergerak di terminal.</string>
     <string name="settings_terminal_cursor_trail_style_title">Gaya jejak kursor</string>

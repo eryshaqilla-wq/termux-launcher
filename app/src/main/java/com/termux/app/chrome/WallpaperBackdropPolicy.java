@@ -47,6 +47,19 @@ public final class WallpaperBackdropPolicy {
     }
 
     /**
+     * @param allowSelfDrawn when false, forces {@link Mode#PASSTHROUGH} so Android WindowManager
+     *                       composites system wallpaper directly in hardware at 120 FPS (anti-lag).
+     */
+    @NonNull
+    public static Mode mode(boolean wallpaperFeatureEnabled, @NonNull WallpaperPicture picture,
+                            boolean wallpaperReadable, boolean allowSelfDrawn) {
+        if (!allowSelfDrawn) {
+            return Mode.PASSTHROUGH;
+        }
+        return mode(wallpaperFeatureEnabled, picture, wallpaperReadable);
+    }
+
+    /**
      * The zoom every capture in this mode is taken at, as the slider's percent.
      *
      * <p>Self-drawn shares one frame between the backdrop and the glass, so a zoom would move the
