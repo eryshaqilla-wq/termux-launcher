@@ -246,7 +246,7 @@ if [ $selected -eq 1 ]; then
     unset LD_LIBRARY_PATH
 
     if [ -n "$LINUX_ROOTFS" ] && su -c "[ ! -f '$LINUX_ROOTFS/usr/local/bin/browser' ] || [ ! -s '$LINUX_ROOTFS/usr/local/bin/browser' ]" 2>/dev/null; then
-        su -c "mkdir -p '$LINUX_ROOTFS/usr/local/bin' && (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$LINUX_ROOTFS/usr/local/bin/termux-ipc' && echo '#!/bin/bash' > '$LINUX_ROOTFS/usr/local/bin/browser' && echo 'exec termux-ipc webview \"\$@\"' >> '$LINUX_ROOTFS/usr/local/bin/browser' && chmod 755 '$LINUX_ROOTFS/usr/local/bin/termux-ipc' '$LINUX_ROOTFS/usr/local/bin/browser'" 2>/dev/null || true
+        su -c "mkdir -p '$LINUX_ROOTFS/usr/local/bin' && (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$LINUX_ROOTFS/usr/local/bin/termux-ipc' && echo -e '#!/bin/bash\nexec termux-ipc webview \"\$@\"' > '$LINUX_ROOTFS/usr/local/bin/browser' && echo -e '#!/bin/bash\nif [ -f /root/wallet/x_webview.js ]; then\n  exec node /root/wallet/x_webview.js \"\$@\"\nelif [ -f /data/data/com.termux/files/home/wallet/x_webview.js ]; then\n  exec node /data/data/com.termux/files/home/wallet/x_webview.js \"\$@\"\nfi' > '$LINUX_ROOTFS/usr/local/bin/x' && chmod 755 '$LINUX_ROOTFS/usr/local/bin/termux-ipc' '$LINUX_ROOTFS/usr/local/bin/browser' '$LINUX_ROOTFS/usr/local/bin/x'" 2>/dev/null || true
     fi
 
     # Cek apakah installer container tersedia di /sdcard untuk injeksi jika diperlukan

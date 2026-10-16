@@ -10,10 +10,33 @@ os.makedirs(os.path.join(BUNDLE_DIR, "bin"), exist_ok=True)
 os.makedirs(os.path.join(BUNDLE_DIR, "wallet"), exist_ok=True)
 
 print("--- 1. Menyiapkan Binary & Tools ke bundle/bin ---")
-shutil.copy2("/project/termux-ipc", os.path.join(BUNDLE_DIR, "bin/termux-ipc"))
+# Cari termux-ipc
+ipc_source = None
+for candidate in ["/project/termux-launcher/fusion-setup/termux-ipc", "/project/termux-ipc", "/usr/local/bin/termux-ipc"]:
+    if os.path.exists(candidate):
+        ipc_source = candidate
+        break
+if ipc_source:
+    shutil.copy2(ipc_source, os.path.join(BUNDLE_DIR, "bin/termux-ipc"))
 
+# Wrapper browser
 with open(os.path.join(BUNDLE_DIR, "bin/browser"), "w") as f:
     f.write("#!/data/data/com.termux/files/usr/bin/bash\nexec termux-ipc webview \"$@\"\n")
+
+# Wrapper x (otomasi X Radar)
+with open(os.path.join(BUNDLE_DIR, "bin/x"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+TARGET_X="${HOME}/wallet/x_webview.js"
+if [ ! -f "$TARGET_X" ] && [ -f "/root/wallet/x_webview.js" ]; then
+    TARGET_X="/root/wallet/x_webview.js"
+fi
+if [ -f "$TARGET_X" ]; then
+    exec node "$TARGET_X" "$@"
+else
+    echo "x_webview.js tidak ditemukan di $TARGET_X"
+    exit 1
+fi
+""")
 
 if os.path.exists("/usr/local/bin/agy-copilot"):
     shutil.copy2("/usr/local/bin/agy-copilot", os.path.join(BUNDLE_DIR, "bin/agy-copilot"))
@@ -22,32 +45,52 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
     os.chmod(os.path.join(BUNDLE_DIR, "bin", b), 0o755)
 
 print("--- 2. Menyiapkan Wallet & Configs ke bundle/wallet ---")
-shutil.copy2("/root/wallet/wallet.js", os.path.join(BUNDLE_DIR, "wallet/wallet.js"))
-shutil.copy2("/root/wallet/package.json", os.path.join(BUNDLE_DIR, "wallet/package.json"))
+if os.path.exists("/root/wallet/wallet.js"):
+    shutil.copy2("/root/wallet/wallet.js", os.path.join(BUNDLE_DIR, "wallet/wallet.js"))
+if os.path.exists("/root/wallet/package.json"):
+    shutil.copy2("/root/wallet/package.json", os.path.join(BUNDLE_DIR, "wallet/package.json"))
 if os.path.exists("/root/wallet/chains_db.json"):
     shutil.copy2("/root/wallet/chains_db.json", os.path.join(BUNDLE_DIR, "wallet/chains_db.json"))
 
 for rpc in glob.glob("/root/wallet/config_rpc*.json"):
     shutil.copy2(rpc, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(rpc)))
 
-if os.path.exists("/root/wallet/x_webview.js"):
-    shutil.copy2("/root/wallet/x_webview.js", os.path.join(BUNDLE_DIR, "wallet/x_webview.js"))
-    print("✓ Added x_webview.js to wallet bundle")
+# Cari x_webview.js
+x_source = None
+for candidate in ["/project/termux-launcher/fusion-setup/x_webview.js", "/root/wallet/x_webview.js", "/project/clean_build/fusion_bundle/wallet/x_webview.js"]:
+    if os.path.exists(candidate):
+        x_source = candidate
+        break
+if x_source:
+    shutil.copy2(x_source, os.path.join(BUNDLE_DIR, "wallet/x_webview.js"))
+    os.chmod(os.path.join(BUNDLE_DIR, "wallet/x_webview.js"), 0o755)
+    print(f"✓ Added x_webview.js from {x_source} to wallet bundle")
 
-# Dummy template wallets_db.json dan recipes_db.json
+# Dummy template wallets_db.json dan recipes_db.json jika belum ada
 dummy_wallet = {"master_index": None, "wallets": []}
-with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
-    json.dump(dummy_wallet, f, indent=2)
+if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json")):
+    with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
+        json.dump(dummy_wallet, f, indent=2)
 
-with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
-    f.write("{}\n")
+if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
+    with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
+        f.write("{}\n")
 
 # Copy login.template, termux.properties, dan setup.sh
-if os.path.exists("/root/project/login.template"):
-    shutil.copy2("/root/project/login.template", os.path.join(BUNDLE_DIR, "login.template"))
-if os.path.exists("/project/clean_build/termux.properties"):
-    shutil.copy2("/project/clean_build/termux.properties", os.path.join(BUNDLE_DIR, "termux.properties"))
-shutil.copy2("/project/clean_build/setup.sh", os.path.join(BUNDLE_DIR, "setup.sh"))
+login_tmpl = "/project/termux-launcher/fusion-setup/login.template"
+if not os.path.exists(login_tmpl):
+    login_tmpl = "/root/project/login.template"
+if os.path.exists(login_tmpl):
+    shutil.copy2(login_tmpl, os.path.join(BUNDLE_DIR, "login.template"))
+
+props = "/project/termux-launcher/fusion-setup/termux.properties"
+if not os.path.exists(props):
+    props = "/project/clean_build/termux.properties"
+if os.path.exists(props):
+    shutil.copy2(props, os.path.join(BUNDLE_DIR, "termux.properties"))
+
+setup_src = "/project/termux-launcher/fusion-setup/setup.sh"
+shutil.copy2(setup_src, os.path.join(BUNDLE_DIR, "setup.sh"))
 os.chmod(os.path.join(BUNDLE_DIR, "setup.sh"), 0o755)
 
 print("--- 3. Mengemas menjadi fusion_payload.tar.gz ---")
@@ -57,3 +100,24 @@ with tarfile.open(OUTPUT_TAR, "w:gz") as tar:
         tar.add(item_path, arcname=item)
 
 print(f"✓ Payload berhasil dibuat: {OUTPUT_TAR} ({os.path.getsize(OUTPUT_TAR)} bytes)")
+
+# Salin ke lokasi assets aplikasi Android
+ASSETS_DIR = "/project/termux-launcher/app/src/main/assets/fusion"
+FUSION_SETUP_DIR = "/project/termux-launcher/fusion-setup"
+os.makedirs(ASSETS_DIR, exist_ok=True)
+
+# 1. Payload tarball
+shutil.copy2(OUTPUT_TAR, os.path.join(ASSETS_DIR, "fusion_payload.tar.gz"))
+shutil.copy2(OUTPUT_TAR, os.path.join(FUSION_SETUP_DIR, "fusion_payload.tar.gz"))
+
+# 2. Standalone files di assets agar bisa langsung disalin Java saat pertama buka
+shutil.copy2(os.path.join(BUNDLE_DIR, "setup.sh"), os.path.join(ASSETS_DIR, "setup.sh"))
+shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc"), os.path.join(ASSETS_DIR, "termux-ipc"))
+shutil.copy2(os.path.join(BUNDLE_DIR, "bin/browser"), os.path.join(ASSETS_DIR, "browser"))
+shutil.copy2(os.path.join(BUNDLE_DIR, "bin/x"), os.path.join(ASSETS_DIR, "x"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/x_webview.js")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/x_webview.js"), os.path.join(ASSETS_DIR, "x_webview.js"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "termux.properties")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "termux.properties"), os.path.join(ASSETS_DIR, "termux.properties"))
+
+print(f"✓ Berhasil menyinkronkan seluruh aset ke {ASSETS_DIR}")

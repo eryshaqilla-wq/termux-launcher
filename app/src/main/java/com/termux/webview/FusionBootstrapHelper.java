@@ -5,12 +5,15 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 
-/* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionBootstrapHelper {
     public static void copyAssetToFile(Context context, String str, String str2, boolean z) {
+        copyAssetToFile(context, str, str2, z, false);
+    }
+
+    public static void copyAssetToFile(Context context, String str, String str2, boolean z, boolean forceOverwrite) {
         try {
             File file = new File(str2);
-            if (!file.exists() || file.length() <= 0) {
+            if (forceOverwrite || !file.exists() || file.length() <= 0) {
                 File parentFile = file.getParentFile();
                 if (parentFile != null && !parentFile.exists()) {
                     parentFile.mkdirs();
@@ -33,6 +36,9 @@ public class FusionBootstrapHelper {
                     file.setExecutable(true, false);
                     file.setReadable(true, false);
                 }
+            } else if (z && !file.canExecute()) {
+                file.setExecutable(true, false);
+                file.setReadable(true, false);
             }
         } catch (Exception unused) {
         }

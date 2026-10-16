@@ -1,0 +1,11 @@
+#!/data/data/com.termux/files/usr/bin/bash
+TARGET_X="${HOME}/wallet/x_webview.js"
+if [ ! -f "$TARGET_X" ] && [ -f "/root/wallet/x_webview.js" ]; then
+    TARGET_X="/root/wallet/x_webview.js"
+fi
+if [ -f "$TARGET_X" ]; then
+    exec node "$TARGET_X" "$@"
+else
+    echo "x_webview.js tidak ditemukan di $TARGET_X"
+    exit 1
+fi

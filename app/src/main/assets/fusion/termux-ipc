@@ -1,0 +1,591 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Fallback jika dijalankan di chroot / standard linux
+[ -x "$BASH" ] || BASH="$(command -v bash 2>/dev/null || echo /bin/bash)"
+# Client CLI untuk berkomunikasi dengan Termux IPC Server
+# Sesuai dengan spesifikasi APK terinstall (FusionWebViewDispatcher)
+
+ACTION="$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+shift
+
+if [ -z "$ACTION" ]; then
+    echo "Usage: termux-ipc <toast|vibrate|clip-get|clip-set|run|input|mouse-on|mouse-off|disable|enable|hide|show|api|x11-start|x11-stop|x11-launch|x11-audio|webview|ping> [args...]"
+    echo "Untuk kontrol WebView: termux-ipc webview --help"
+    exit 1
+fi
+
+send_cmd() {
+    local payload="$1"
+    local py_cmd=""
+    if command -v python3 >/dev/null 2>&1; then
+        py_cmd="python3"
+    elif command -v python >/dev/null 2>&1; then
+        py_cmd="python"
+    fi
+
+    if [ -n "$py_cmd" ]; then
+        "$py_cmd" -c "
+import socket, sys
+try:
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(2.0)
+    s.connect('\0termux_ipc')
+    s.sendall(sys.argv[1].encode() + b'\n')
+    resp = s.recv(4096).decode(errors='ignore').strip()
+    if resp:
+        print(resp)
+    s.close()
+except Exception:
+    pass
+" "$payload"
+    fi
+}
+
+handle_webview() {
+    local SUB_CMD="$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+
+    case "$SUB_CMD" in
+        ""|help|--help|-h)
+            echo "Usage: termux-ipc webview <sub-command|url> [options]"
+            echo ""
+            echo "Sub-command Tab & Context Management:"
+            echo "  new-tab [url]         Buka tab baru (default: https://google.com)"
+            echo "  tabs | show-tabs      Tampilkan dialog Tab Manager interaktif"
+            echo "  switch-tab <index>    Pindah fokus ke tab nomor <index>"
+            echo "  kill-tab [index]      Tutup tab nomor <index> (default: tab aktif)"
+            echo "  kill-worker           Tutup tab aktif / worker tab"
+            echo "  close | hide          Tutup/sembunyikan seluruh jendela WebView"
+            echo ""
+            echo "Sub-command Kontrol & Developer:"
+            echo "  reload                Muat ulang halaman saat ini"
+            echo "  back                  Navigasi kembali ke halaman sebelumnya"
+            echo "  eval <code>           Eksekusi kode JavaScript pada halaman aktif"
+            echo "  sync | sync-db        Sinkronisasi ulang database dompet & rantai"
+            echo "  macro | macro-rec     Toggle rekam/stop makro aksi klik/input"
+            echo "  macro-play            Putar ulang rekaman makro"
+            echo "  random-fp             Acak fingerprint browser"
+            echo "  opacity               Toggle transparansi overlay WebView"
+            echo "  inspect | dev | cdp   Aktifkan Chrome DevTools CDP remote debugging"
+            echo "  bridge | dom          Ekstrak snapshot DOM halaman ke file JSON"
+            echo ""
+            echo "Sub-command AGY Co-Pilot & Automation:"
+            echo "  autofill              Isi form otomatis dengan profil aktif (Wallet, Email, Nama)"
+            echo "  claim                 Smart Claim reward/faucet/airdrop (Bezier OS Touch)"
+            echo "  cf-bypass             Bypass Cloudflare Turnstile challenge otomatis"
+            echo "  tma-init              Ekstrak dan salin Telegram Mini App initData"
+            echo "  new-terminal          Tambah tab sesi terminal shell Termux baru"
+            echo ""
+            echo "Buka URL dengan Konfigurasi Web3 / Anti-Sybil:"
+            echo "  termux-ipc webview [options] <url>"
+            echo ""
+            echo "Pilihan URL & Web3:"
+            echo "  --wallet [name]       Pilih dompet dari wallets_db.json (default: Master)"
+            echo "  --<chain>             Pilih jaringan (contoh: --base, --bsc, --arbitrum, --morph)"
+            echo "  --auto                Mode auto-sign transaksi otomatis"
+            echo "  --wc <uri>            Hubungkan sesi via WalletConnect URI"
+            echo "  --desktop             Gunakan desktop Chrome User-Agent"
+            echo "  --profile <name>      Nama profil/sesi cookie terisolasi"
+            echo "  --fresh               Profil incognito sekali pakai"
+            echo "  --ghost               Injeksi Ghost Web3 Provider"
+            echo "  --block-media         Blokir download gambar dan video"
+            echo "  --block-fonts         Blokir download custom web fonts"
+            echo "  --block-trackers      Blokir script analytics/tracking"
+            echo "  --block-css           Blokir file CSS stylesheet"
+            echo "  --turbo               Aktifkan semua blocker untuk kecepatan maksimal"
+            return 0
+            ;;
+        new-tab|new-tabs|--new-tab|--new-tabs|worker|--worker)
+            shift
+            local URL="$1"
+            [ -z "$URL" ] && URL="https://google.com"
+            [[ "$URL" != http://* && "$URL" != https://* && "$URL" != file://* ]] && URL="https://$URL"
+            local RESP
+            RESP=$(send_cmd "WEBVIEW_NEW_TAB $URL")
+            if [ "$RESP" = "OK" ]; then
+                echo "Meluncurkan $URL di tab baru"
+            elif [ -n "$RESP" ]; then
+                echo "$RESP"
+            fi
+            return 0
+            ;;
+        tabs|show-tabs|--tabs|--show-tabs)
+            send_cmd "WEBVIEW_SHOW_TABS"
+            return 0
+            ;;
+        kill-tab|--kill-tab)
+            shift
+            local IDX="$1"
+            if [ -n "$IDX" ]; then
+                send_cmd "WEBVIEW_KILL_TAB $IDX"
+            else
+                send_cmd "WEBVIEW_KILL_WORKER"
+            fi
+            return 0
+            ;;
+        kill-worker|--kill-worker)
+            send_cmd "WEBVIEW_KILL_WORKER"
+            return 0
+            ;;
+        switch-tab|--switch-tab|tab|--tab)
+            shift
+            local IDX="$1"
+            if [ -n "$IDX" ]; then
+                send_cmd "WEBVIEW_SWITCH_TAB $IDX"
+            else
+                send_cmd "WEBVIEW_SHOW_TABS"
+            fi
+            return 0
+            ;;
+        close|--close|hide|--hide)
+            send_cmd "WEBVIEW_CLOSE"
+            return 0
+            ;;
+        reload|--reload)
+            send_cmd "WEBVIEW_RELOAD"
+            return 0
+            ;;
+        back|--back)
+            send_cmd "WEBVIEW_BACK"
+            return 0
+            ;;
+        eval|--eval)
+            shift
+            local CODE="$*"
+            if [ -z "$CODE" ]; then
+                echo "Usage: termux-ipc webview eval <javascript code>"
+                return 1
+            fi
+            send_cmd "WEBVIEW_EVAL $CODE"
+            return 0
+            ;;
+        sync|sync-db|--sync|--sync-db)
+            send_cmd "WEBVIEW_SYNC_DB"
+            return 0
+            ;;
+        macro|macro-rec|--macro|--macro-rec)
+            send_cmd "WEBVIEW_MACRO_TOGGLE"
+            return 0
+            ;;
+        macro-play|--macro-play)
+            send_cmd "WEBVIEW_MACRO_PLAY"
+            return 0
+            ;;
+        random-fp|--random-fp|fp)
+            send_cmd "WEBVIEW_RANDOM_FP"
+            return 0
+            ;;
+        opacity|--opacity)
+            send_cmd "WEBVIEW_OPACITY"
+            return 0
+            ;;
+        minimize|min|max|--minimize)
+            send_cmd "WEBVIEW_MINIMIZE"
+            return 0
+            ;;
+        collapse-pill|collapse|expand-pill|--collapse-pill)
+            send_cmd "WEBVIEW_COLLAPSE_PILL"
+            return 0
+            ;;
+        desktop|--desktop)
+            send_cmd "WEBVIEW_DESKTOP"
+            return 0
+            ;;
+        clear-cache|clearcache|clean|--clear-cache)
+            send_cmd "WEBVIEW_CLEAR_CACHE"
+            echo "[termux-ipc] Cache tab aktif telah dibersihkan"
+            return 0
+            ;;
+        inspect|dev|cdp|--inspect|--dev|--cdp)
+            send_cmd "WEBVIEW_DEV_MODE"
+            echo "[termux-ipc] Dev Mode (CDP) diaktifkan."
+            local PID_SOCKET=""
+            if [ -f "/data/data/com.termux/files/home/.webview_cdp_socket" ]; then
+                PID_SOCKET=$(cat /data/data/com.termux/files/home/.webview_cdp_socket 2>/dev/null)
+            elif [ -f "/data/local/nhsystem/kali-arm64/root/webview_cdp_socket" ]; then
+                PID_SOCKET=$(cat /data/local/nhsystem/kali-arm64/root/webview_cdp_socket 2>/dev/null)
+            fi
+            echo "[termux-ipc] Abstract socket: @${PID_SOCKET:-webview_devtools_remote_<PID>}"
+            echo "[termux-ipc] Untuk Chrome DevTools: adb forward tcp:9222 localabstract:${PID_SOCKET:-webview_devtools_remote_<PID>}"
+            echo "[termux-ipc] Lalu buka chrome://inspect di browser"
+            return 0
+            ;;
+        bridge|dom|--bridge|--dom)
+            send_cmd "WEBVIEW_BRIDGE"
+            sleep 0.5
+            local DUMP_FILE=""
+            if [ -f "/data/data/com.termux/files/home/.webview_bridge_dump.json" ]; then
+                DUMP_FILE="/data/data/com.termux/files/home/.webview_bridge_dump.json"
+            elif [ -f "/data/local/nhsystem/kali-arm64/root/webview_bridge_dump.json" ]; then
+                DUMP_FILE="/data/local/nhsystem/kali-arm64/root/webview_bridge_dump.json"
+            fi
+            if [ -n "$DUMP_FILE" ]; then
+                cat "$DUMP_FILE"
+            else
+                echo '{"status": "bridge triggered, dump saving..."}'
+            fi
+            return 0
+            ;;
+        autofill|--autofill)
+            send_cmd "WEBVIEW_AGY_AUTOFILL"
+            echo "[termux-ipc] Auto-Fill form dieksekusi dengan profil aktif"
+            return 0
+            ;;
+        claim|--claim)
+            send_cmd "WEBVIEW_AGY_CLAIM"
+            echo "[termux-ipc] Smart Claim dieksekusi dengan kurva Bezier"
+            return 0
+            ;;
+        cf-bypass|turnstile|--cf-bypass|--turnstile)
+            send_cmd "WEBVIEW_CLOUDFLARE_SOLVE"
+            echo "[termux-ipc] Cloudflare Turnstile solver dipicu"
+            return 0
+            ;;
+        tma-init|--tma-init)
+            send_cmd "WEBVIEW_BRIDGE window.AgyBridge && window.AgyBridge.getTmaInitData && window.AgyBridge.getTmaInitData();"
+            echo "[termux-ipc] TMA initData diminta dan disalin ke clipboard"
+            return 0
+            ;;
+        new-terminal|new-term|--new-terminal|--new-term)
+            send_cmd "WEBVIEW_AGY_NEW_TERMINAL"
+            echo "[termux-ipc] Tab sesi shell terminal Termux baru telah dibuat"
+            return 0
+            ;;
+        agy-stop|stop-agy|stop|--stop)
+            send_cmd "WEBVIEW_EVAL window.AgyBridge && window.AgyBridge.stop && window.AgyBridge.stop();"
+            echo "[termux-ipc] Perintah STOP darurat AGY telah dikirim!"
+            return 0
+            ;;
+    esac
+
+    # Bukan sub-command khusus, parse parameter flags untuk membuka URL
+    local PROFILE="default"
+    local WALLET=""
+    local CHAIN="base"
+    local IS_DESKTOP=0
+    local IS_GHOST=1
+    local IS_AUTO=0
+    local BLOCK_MEDIA=0
+    local BLOCK_FONTS=0
+    local BLOCK_TRACKERS=0
+    local BLOCK_CSS=0
+    local WC=""
+    local URL=""
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --profile)
+                PROFILE="$2"
+                shift 2
+                ;;
+            --wallet)
+                if [ -n "$2" ] && [[ ! "$2" =~ ^-- ]] && [[ ! "$2" =~ ^https?:// ]]; then
+                    WALLET="$2"
+                    shift 2
+                else
+                    WALLET=""
+                    shift 1
+                fi
+                IS_GHOST=1
+                ;;
+            --fresh|--incognito)
+                PROFILE="fresh_$(date +%s)"
+                shift
+                ;;
+            --desktop)
+                IS_DESKTOP=1
+                shift
+                ;;
+            --ghost)
+                IS_GHOST=1
+                shift
+                ;;
+            --auto)
+                IS_AUTO=1
+                IS_GHOST=1
+                shift
+                ;;
+            --block-media)
+                BLOCK_MEDIA=1
+                shift
+                ;;
+            --block-fonts)
+                BLOCK_FONTS=1
+                shift
+                ;;
+            --block-trackers)
+                BLOCK_TRACKERS=1
+                shift
+                ;;
+            --block-css)
+                BLOCK_CSS=1
+                shift
+                ;;
+            --turbo)
+                BLOCK_MEDIA=1
+                BLOCK_FONTS=1
+                BLOCK_TRACKERS=1
+                BLOCK_CSS=1
+                shift
+                ;;
+            --wc)
+                WC="$2"
+                IS_GHOST=1
+                shift 2
+                ;;
+            --help|-h)
+                handle_webview help
+                return 0
+                ;;
+            --*)
+                CHAIN="${1#--}"
+                IS_GHOST=1
+                shift
+                ;;
+            *)
+                URL="$1"
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$URL" ]; then
+        echo "Usage: termux-ipc webview [options] <url>"
+        echo "Gunakan 'termux-ipc webview --help' untuk melihat daftar perintah lengkap."
+        return 1
+    fi
+
+    if [[ "$URL" != http://* && "$URL" != https://* && "$URL" != file://* ]]; then
+        URL="https://$URL"
+    fi
+
+    # Format JSON payload WEBVIEW_CONFIG
+    local CFG_PAYLOAD
+    CFG_PAYLOAD=$(python3 -c "
+import json, sys
+data = {
+    'url': sys.argv[1],
+    'profile': sys.argv[2],
+    'wallet': sys.argv[3],
+    'chain': sys.argv[4],
+    'isGhost': sys.argv[5] == '1',
+    'isDesktop': sys.argv[6] == '1',
+    'isAuto': sys.argv[7] == '1',
+    'wc': sys.argv[8],
+    'block_media': sys.argv[9] == '1',
+    'block_fonts': sys.argv[10] == '1',
+    'block_trackers': sys.argv[11] == '1',
+    'block_css': sys.argv[12] == '1'
+}
+print(json.dumps(data))
+" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS")
+
+    local RESP
+    RESP=$(send_cmd "WEBVIEW_CONFIG $CFG_PAYLOAD")
+    if [ "$RESP" = "OK" ]; then
+        echo "Meluncurkan $URL di tab baru"
+    elif [ -n "$RESP" ]; then
+        echo "$RESP"
+    fi
+}
+
+case "$ACTION" in
+    toast)
+        MSG="$*"
+        res=$(send_cmd "TOAST $MSG")
+        if [ "$res" != "OK" ]; then
+            adb -s 127.0.0.1:5555 shell "am broadcast -a terminal.toast --es text \"$MSG\" >/dev/null 2>&1 || true"
+        fi
+        ;;
+    vibrate)
+        res=$(send_cmd "VIBRATE")
+        if [ "$res" != "OK" ]; then
+            adb -s 127.0.0.1:5555 shell "input keyevent 26 >/dev/null 2>&1 || true"
+        fi
+        ;;
+    clip-get)
+        send_cmd "CLIP_GET"
+        ;;
+    clip-set)
+        TEXT="$*"
+        send_cmd "CLIP_SET $TEXT" >/dev/null 2>&1
+        ;;
+    run)
+        CMD="$*"
+        res=$(send_cmd "RUN $CMD")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.run --es cmd "$CMD" >/dev/null 2>&1
+        fi
+        ;;
+    input)
+        TEXT="$*"
+        res=$(send_cmd "INPUT $TEXT")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.input --es text "$TEXT" >/dev/null 2>&1
+        fi
+        ;;
+    mouse-on)
+        res=$(send_cmd "MOUSE_ON")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.enable_mouse >/dev/null 2>&1
+        fi
+        ;;
+    mouse-off)
+        res=$(send_cmd "MOUSE_OFF")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.disable_mouse >/dev/null 2>&1
+        fi
+        ;;
+    keyboard-disable|disable)
+        res=$(send_cmd "KEYBOARD_DISABLE")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.disable_keyboard >/dev/null 2>&1
+        fi
+        ;;
+    keyboard-enable|enable)
+        res=$(send_cmd "KEYBOARD_ENABLE")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.enable_keyboard >/dev/null 2>&1
+        fi
+        ;;
+    keyboard-hide|hide)
+        res=$(send_cmd "KEYBOARD_HIDE")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.hide_keyboard >/dev/null 2>&1
+        fi
+        ;;
+    keyboard-show|show)
+        res=$(send_cmd "KEYBOARD_SHOW")
+        if [ "$res" != "OK" ]; then
+            am broadcast -a terminal.show_keyboard >/dev/null 2>&1
+        fi
+        ;;
+    x11-start)
+        adb -s 127.0.0.1:5555 shell "su -c 'magiskpolicy --live \"permissive *\" 2>/dev/null || true; export TMPDIR=/data/local/nhsystem/kali-arm64/tmp; mkdir -p \$TMPDIR; export CLASSPATH=\$(pm path com.termux.x11 | cut -d: -f2); nohup /system/bin/app_process / com.termux.x11.CmdEntryPoint :0 >/dev/null 2>&1 &'" >/dev/null 2>&1
+        ;;
+    x11-audio)
+        adb -s 127.0.0.1:5555 shell "su -c 'TERMUX_USER=\$(ls -ld /data/data/com.termux/files/home 2>/dev/null | awk \"{print \\\$3}\"); [ -n \"\$TERMUX_USER\" ] && su \$TERMUX_USER -c \"PATH=/data/data/com.termux/files/usr/bin:\\\$PATH pulseaudio -k 2>/dev/null || true; PATH=/data/data/com.termux/files/usr/bin:\\\$PATH LD_LIBRARY_PATH=/data/data/com.termux/files/usr/lib HOME=/data/data/com.termux/files/home PREFIX=/data/data/com.termux/files/usr TMPDIR=/data/data/com.termux/files/usr/tmp /data/data/com.termux/files/usr/bin/pulseaudio --start --load=\\\"module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1\\\" --exit-idle-time=-1\"'" >/dev/null 2>&1
+        ;;
+    x11-stop)
+        adb -s 127.0.0.1:5555 shell "su -c 'pkill -f com.termux.x11.CmdEntryPoint || true; pkill -f termux-x11 || true; pkill -f pulseaudio || true; /system/bin/am force-stop com.termux.x11 || true; pkill -9 -f com.termux.x11 || true'" >/dev/null 2>&1 || true
+        pkill -f xfce4-session >/dev/null 2>&1 || true
+        pkill -f startxfce4 >/dev/null 2>&1 || true
+        pkill -f dbus-launch >/dev/null 2>&1 || true
+        pkill -f pulseaudio >/dev/null 2>&1 || true
+        ;;
+    x11-launch)
+        adb -s 127.0.0.1:5555 shell "am start -n com.termux.x11/.MainActivity >/dev/null 2>&1 || monkey -p com.termux.x11 -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1
+        ;;
+    api)
+        python3 -c '
+import sys, subprocess, shlex
+
+if len(sys.argv) < 2:
+    print("Usage: termux-ipc api <command> [args...]")
+    sys.exit(1)
+
+sub = sys.argv[1].lower()
+if sub in ("list", "--list", "-l"):
+    print("Daftar Perintah Termux:API yang Didukung:")
+    print("  battery-status, brightness, camera-info, camera-photo,")
+    print("  clipboard-get, clipboard-set, contact-list, dialog,")
+    print("  download, fingerprint, info, location, media-player,")
+    print("  media-scan, microphone-record, notification,")
+    print("  notification-list, notification-remove, sensor, share,")
+    print("  sms-inbox, sms-list, sms-send, speech-to-text,")
+    print("  telephony-call, telephony-cellinfo, telephony-deviceinfo,")
+    print("  toast, torch, tts-engines, tts-speak, usb, vibrate,")
+    print("  volume, wake-lock, wake-unlock, wallpaper,")
+    print("  wifi-connectioninfo, wifi-enable, wifi-scaninfo")
+    sys.exit(0)
+
+if not sub.startswith("termux-"):
+    sub = "termux-" + sub
+
+args = sys.argv[2:]
+inner = f"export PATH=/data/data/com.termux/files/usr/bin:$PATH; export PREFIX=/data/data/com.termux/files/usr; export HOME=/data/data/com.termux/files/home; /data/data/com.termux/files/usr/bin/{sub} " + " ".join(shlex.quote(a) for a in args)
+
+full_cmd = ["adb", "-s", "127.0.0.1:5555", "shell", f"su -c {shlex.quote(inner)}"]
+res = subprocess.run(full_cmd)
+sys.exit(res.returncode)
+' "$@"
+        ;;
+    ping)
+        send_cmd "PING"
+        ;;
+    webview)
+        handle_webview "$@"
+        ;;
+    # Backward compatibility redirects (membungkus perintah legacy ke 'termux-ipc webview ...')
+    new-tab|new-tabs|worker)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview new-tab'." >&2
+        handle_webview "new-tab" "$@"
+        ;;
+    tabs|show-tabs)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview tabs'." >&2
+        handle_webview "tabs" "$@"
+        ;;
+    kill-tab)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview kill-tab'." >&2
+        handle_webview "kill-tab" "$@"
+        ;;
+    kill-worker)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview kill-worker'." >&2
+        handle_webview "kill-worker" "$@"
+        ;;
+    switch-tab|tab)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview switch-tab'." >&2
+        handle_webview "switch-tab" "$@"
+        ;;
+    webview-close)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview close'." >&2
+        handle_webview "close" "$@"
+        ;;
+    webview-eval)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview eval'." >&2
+        handle_webview "eval" "$@"
+        ;;
+    webview-back)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview back'." >&2
+        handle_webview "back" "$@"
+        ;;
+    webview-reload)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview reload'." >&2
+        handle_webview "reload" "$@"
+        ;;
+    webview-sync|sync-db)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview sync'." >&2
+        handle_webview "sync" "$@"
+        ;;
+    webview-macro|macro-rec)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview macro'." >&2
+        handle_webview "macro" "$@"
+        ;;
+    webview-macro-play|macro-play)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview macro-play'." >&2
+        handle_webview "macro-play" "$@"
+        ;;
+    webview-random-fp|random-fp)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview random-fp'." >&2
+        handle_webview "random-fp" "$@"
+        ;;
+    webview-opacity|opacity)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview opacity'." >&2
+        handle_webview "opacity" "$@"
+        ;;
+    webview-inspect|webview-dev|cdp)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview inspect'." >&2
+        handle_webview "inspect" "$@"
+        ;;
+    webview-bridge|bridge|dom)
+        echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview bridge'." >&2
+        handle_webview "bridge" "$@"
+        ;;
+    agy-stop|stop)
+        handle_webview "agy-stop" "$@"
+        ;;
+    *)
+        echo "Aksi tidak dikenal: $ACTION"
+        echo "Pilihan yang tersedia: toast, vibrate, clip-get, clip-set, run, input, mouse-on, mouse-off, keyboard-disable (disable), keyboard-enable (enable), keyboard-hide (hide), keyboard-show (show), webview, api, x11-start, x11-stop, x11-launch, x11-audio, ping"
+        echo "Untuk kontrol WebView: termux-ipc webview --help"
+        exit 1
+        ;;
+esac

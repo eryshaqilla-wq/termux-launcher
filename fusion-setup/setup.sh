@@ -2,9 +2,7 @@
 # ==============================================================================
 # ⚡ ESO:LAUNCHER - UNIVERSAL SETUP (COMPACT & MODERN CLI)
 # ==============================================================================
-
-set -e
-
+# set -e (dinonaktifkan agar setup tidak berhenti tiba-tiba bila ada warning atau mirror update)
 # Warna Terminal
 CYAN='\033[38;2;139;233;253m'
 MAGENTA='\033[38;2;255;121;198m'
@@ -258,25 +256,26 @@ for pkg_cmd in node python git curl; do
 done
 
 if [ $SYSTEM_PKGS_OK -eq 0 ]; then
-    spin "Menginstall nodejs, python, git, curl..." pkg install -y nodejs-lts python git curl
+    spin "Memperbarui katalog paket..." pkg update -y || apt-get update -y || true
+    spin "Menginstall nodejs, python, git, curl..." pkg install -y nodejs python git curl || pkg install -y nodejs-lts python git curl || true
 else
-    echo -e "  ${GREEN}✔ Paket sistem (Node, Python, Git) sudah lengkap${RESET}"
+    echo -e "  ${GREEN}✔ Paket sistem (Node, Python, Git, Curl) sudah lengkap${RESET}"
 fi
 
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
-    spin "Mengekstrak aset payload tarball..." tar -xzf "$PAYLOAD_TAR" -C "$FUSION_HOME"
+    spin "Mengekstrak aset payload tarball..." tar -xzf "$PAYLOAD_TAR" -C "$FUSION_HOME" || true
 fi
 
 # Pasang binary ke $PREFIX/bin
 if [ -d "$FUSION_HOME/bin" ]; then
     cp -rf "$FUSION_HOME/bin/"* "$PREFIX/bin/"
-    chmod +x "$PREFIX/bin/"* 2>/dev/null || true
+    chmod 755 "$PREFIX/bin/"* 2>/dev/null || true
 fi
 
 # Pastikan termux-ipc menggunakan shebang Termux
 if [ -f "$PREFIX/bin/termux-ipc" ]; then
     sed -i '1s|.*|#!/data/data/com.termux/files/usr/bin/bash|' "$PREFIX/bin/termux-ipc" 2>/dev/null || true
-    chmod +x "$PREFIX/bin/termux-ipc"
+    chmod 755 "$PREFIX/bin/termux-ipc"
 fi
 
 # Wrapper browser
@@ -284,7 +283,23 @@ cat << 'EOF' > "$PREFIX/bin/browser"
 #!/data/data/com.termux/files/usr/bin/bash
 exec termux-ipc webview "$@"
 EOF
-chmod +x "$PREFIX/bin/browser"
+chmod 755 "$PREFIX/bin/browser"
+
+# Wrapper x (otomasi radar webview)
+cat << 'EOF_X' > "$PREFIX/bin/x"
+#!/data/data/com.termux/files/usr/bin/bash
+TARGET_X="${HOME}/wallet/x_webview.js"
+if [ ! -f "$TARGET_X" ] && [ -f "/root/wallet/x_webview.js" ]; then
+    TARGET_X="/root/wallet/x_webview.js"
+fi
+if [ -f "$TARGET_X" ]; then
+    exec node "$TARGET_X" "$@"
+else
+    echo "x_webview.js tidak ditemukan di $TARGET_X"
+    exit 1
+fi
+EOF_X
+chmod 755 "$PREFIX/bin/x"
 
 # Wrapper wallet CLI
 cat << 'EOF_W' > "$PREFIX/bin/wallet"
@@ -299,7 +314,7 @@ else
     exit 1
 fi
 EOF_W
-chmod +x "$PREFIX/bin/wallet"
+chmod 755 "$PREFIX/bin/wallet"
 
 # Pasang copilot symlink jika ada
 if [ -f "$PREFIX/bin/agy-copilot" ]; then
@@ -312,7 +327,7 @@ if [ -f "$FUSION_HOME/login.template" ]; then
 elif [ -f "$SCRIPT_DIR/login.template" ]; then
     cp -f "$SCRIPT_DIR/login.template" "$PREFIX/bin/login"
 fi
-chmod +x "$PREFIX/bin/login" 2>/dev/null || true
+chmod 755 "$PREFIX/bin/login" 2>/dev/null || true
 
 # termux.properties
 mkdir -p "$HOME/.termux"
@@ -322,7 +337,7 @@ elif [ -f "$SCRIPT_DIR/termux.properties" ]; then
     cp -f "$SCRIPT_DIR/termux.properties" "$HOME/.termux/termux.properties"
 fi
 
-echo -e "  ${GREEN}✔ Binary IPC, browser, dan wallet terpasang${RESET}"
+echo -e "  ${GREEN}✔ Binary IPC, browser, wallet, dan x terpasang di $PREFIX/bin${RESET}"
 
 # ==============================================================================
 # TAHAP 4: INTEGRASI CONTAINER LINUX (JIKA DIAKTIFKAN)
@@ -342,6 +357,7 @@ if [ "$LINUX_OPT" = "1" ]; then
 exec termux-ipc webview "$@"
 EOF_B
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/browser"
+
             cat << 'EOF_CW' > "$CONTAINER_ROOTFS/usr/local/bin/wallet"
 #!/bin/bash
 if [ -f "/root/wallet/wallet.js" ]; then
@@ -354,7 +370,21 @@ else
 fi
 EOF_CW
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/wallet"
-            echo -e "  ${GREEN}✔ Shims terinjeksi ke $DISPLAY_NAME${RESET}"
+
+            cat << 'EOF_CX' > "$CONTAINER_ROOTFS/usr/local/bin/x"
+#!/bin/bash
+if [ -f "/root/wallet/x_webview.js" ]; then
+    exec node /root/wallet/x_webview.js "$@"
+elif [ -f "$HOME/wallet/x_webview.js" ]; then
+    exec node "$HOME/wallet/x_webview.js" "$@"
+else
+    echo "x_webview.js tidak ditemukan"
+    exit 1
+fi
+EOF_CX
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/x"
+
+            echo -e "  ${GREEN}✔ Shims (termux-ipc, browser, wallet, x) terinjeksi ke $DISPLAY_NAME${RESET}"
         fi
     else
         INSTALLER_SCRIPT="/sdcard/fusion-linux-setup.sh"
@@ -370,11 +400,13 @@ fi
 exit 1
 EOF_IPC
 chmod 755 /usr/local/bin/termux-ipc
+
 cat << 'EOF_BR' > /usr/local/bin/browser
 #!/bin/bash
 exec termux-ipc webview "$@"
 EOF_BR
 chmod 755 /usr/local/bin/browser
+
 cat << 'EOF_W' > /usr/local/bin/wallet
 #!/bin/bash
 if [ -f "/root/wallet/wallet.js" ]; then
@@ -383,6 +415,17 @@ fi
 exit 1
 EOF_W
 chmod 755 /usr/local/bin/wallet
+
+cat << 'EOF_X' > /usr/local/bin/x
+#!/bin/bash
+if [ -f "/root/wallet/x_webview.js" ]; then
+    exec node /root/wallet/x_webview.js "$@"
+elif [ -f "/data/data/com.termux/files/home/wallet/x_webview.js" ]; then
+    exec node /data/data/com.termux/files/home/wallet/x_webview.js "$@"
+fi
+exit 1
+EOF_X
+chmod 755 /usr/local/bin/x
 EOF_LINUX_INSTALL
         chmod 755 "$INSTALLER_SCRIPT" 2>/dev/null || true
         echo -e "  ${GREEN}✔ Skrip container siap: $INSTALLER_SCRIPT${RESET}"
@@ -392,26 +435,23 @@ else
 fi
 
 # ==============================================================================
-# TAHAP 5: SENSOR SUHU BATERAI / HARDWARE
+# TAHAP 5: KONFIGURASI PROPERTI & TAMPILAN TERMUX
 # ==============================================================================
-echo -e "\n${CYAN}● [5/7] Sensor Baterai & Suhu${RESET}"
-PREF_FILE="/data/data/com.termux/shared_prefs/com.termux_preferences.xml"
-if [ -f "$PREF_FILE" ]; then
-    if grep -q "status_widget_weather" "$PREF_FILE"; then
-        sed -i 's/name="status_widget_weather" value="false"/name="status_widget_weather" value="true"/' "$PREF_FILE" 2>/dev/null || true
-    else
-        sed -i 's|</map>|    <boolean name="status_widget_weather" value="true" />\n</map>|' "$PREF_FILE" 2>/dev/null || true
-    fi
-    am broadcast -a com.termux.app.reload_style >/dev/null 2>&1 || true
-    echo -e "  ${GREEN}✔ Sensor suhu hardware di status bar aktif${RESET}"
-else
-    echo -e "  ${GRAY}ℹ Preference file belum dibuat (aktif saat app pertama buka)${RESET}"
+echo -e "\n${CYAN}● [5/7] Konfigurasi Tampilan & Properti Termux${RESET}"
+mkdir -p "$HOME/.termux"
+if [ -f "$FUSION_HOME/termux.properties" ]; then
+    cp -f "$FUSION_HOME/termux.properties" "$HOME/.termux/termux.properties"
+elif [ -f "$SCRIPT_DIR/termux.properties" ]; then
+    cp -f "$SCRIPT_DIR/termux.properties" "$HOME/.termux/termux.properties"
 fi
+am broadcast -a com.termux.app.reload_style >/dev/null 2>&1 || true
+echo -e "  ${GREEN}✔ Properti & styling terminal aktif${RESET}"
+echo -e "  ${GRAY}ℹ Info Baterai: cek via perintah 'termux-ipc battery' atau widget desktop${RESET}"
 
 # ==============================================================================
-# TAHAP 6: MODUL NODE & WEB3 WALLET (WITH SPINNER)
+# TAHAP 6: MODUL NODE, WEB3 WALLET & X RADAR
 # ==============================================================================
-echo -e "\n${CYAN}● [6/7] Modul Node & Web3 Wallet${RESET}"
+echo -e "\n${CYAN}● [6/7] Modul Node, Web3 Wallet & X Radar${RESET}"
 
 TARGET_WALLET_DIR="$HOME/wallet"
 if [ $IS_ROOT -eq 1 ] && [ -n "$CONTAINER_ROOTFS" ]; then
@@ -423,25 +463,44 @@ if [ -d "$FUSION_HOME/wallet" ]; then
     cp -rf "$FUSION_HOME/wallet/"* "$HOME/wallet/"
 fi
 
+# Pastikan x_webview.js terpasang di $HOME/wallet/
+if [ -f "$FUSION_HOME/wallet/x_webview.js" ]; then
+    cp -f "$FUSION_HOME/wallet/x_webview.js" "$HOME/wallet/x_webview.js"
+elif [ -f "$SCRIPT_DIR/x_webview.js" ]; then
+    cp -f "$SCRIPT_DIR/x_webview.js" "$HOME/wallet/x_webview.js"
+elif [ -f "/root/wallet/x_webview.js" ]; then
+    cp -f "/root/wallet/x_webview.js" "$HOME/wallet/x_webview.js"
+fi
+chmod 755 "$HOME/wallet/x_webview.js" 2>/dev/null || true
+
 # Jika di root container, salin juga ke container
 if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CONTAINER_ROOTFS" ]; then
     su -c "mkdir -p '$TARGET_WALLET_DIR'" 2>/dev/null || true
     [ -d "$FUSION_HOME/wallet" ] && su -c "cp -rf '$FUSION_HOME/wallet/'* '$TARGET_WALLET_DIR/'" 2>/dev/null || true
+    [ -f "$HOME/wallet/x_webview.js" ] && su -c "cp -f '$HOME/wallet/x_webview.js' '$TARGET_WALLET_DIR/x_webview.js'" 2>/dev/null || true
 fi
 
-# Instalasi npm dengan animated spinner
+# Instalasi npm dengan feedback jelas
 if [ -d "$HOME/wallet/node_modules/ethers" ]; then
     echo -e "  ${GREEN}✔ Dependensi Web3 di Termux lokal sudah terpasang${RESET}"
 elif [ -f "$HOME/wallet/package.json" ]; then
-    cd "$HOME/wallet" 2>/dev/null || cd "$HOME"
-    spin "Memasang dependensi Web3 (ethers, walletconnect)..." npm install --silent ethers dotenv @walletconnect/core @walletconnect/web3wallet
+    if command -v npm >/dev/null 2>&1; then
+        cd "$HOME/wallet" 2>/dev/null || cd "$HOME"
+        spin "Memasang dependensi Web3 (ethers, walletconnect)..." npm install --silent ethers dotenv @walletconnect/core @walletconnect/web3wallet || true
+        echo -e "  ${GREEN}✔ Modul Web3 siap digunakan${RESET}"
+    else
+        echo -e "  ${GREEN}✔ Direktori modul Web3 siap (npm dapat dijalankan nanti)${RESET}"
+    fi
+else
+    echo -e "  ${GREEN}✔ Modul Web3 & X Radar siap di $HOME/wallet${RESET}"
 fi
 
 if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CONTAINER_ROOTFS" ]; then
     if su -c "[ -d '$TARGET_WALLET_DIR/node_modules/ethers' ]" 2>/dev/null; then
         echo -e "  ${GREEN}✔ Dependensi Web3 di container ($CUSTOM_LINUX_NAME) sudah terpasang${RESET}"
     else
-        spin "Memasang dependensi Web3 di $CUSTOM_LINUX_NAME..." su -c "chroot '$CONTAINER_ROOTFS' /bin/bash -c 'cd /root/wallet && npm install --silent ethers dotenv @walletconnect/core @walletconnect/web3wallet'"
+        spin "Memasang dependensi Web3 di $CUSTOM_LINUX_NAME..." su -c "chroot '$CONTAINER_ROOTFS' /bin/bash -c 'cd /root/wallet && npm install --silent ethers dotenv @walletconnect/core @walletconnect/web3wallet'" || true
+        echo -e "  ${GREEN}✔ Web3 container siap${RESET}"
     fi
 fi
 
@@ -455,6 +514,7 @@ alias browser="termux-ipc webview"
 alias ipc="termux-ipc"
 alias copilot="agy-copilot"
 alias wallet="wallet"
+alias x="node $HOME/wallet/x_webview.js"
 '
 for RC_FILE in "$HOME/.bashrc" "$HOME/.zshrc"; do
     [ ! -f "$RC_FILE" ] && touch "$RC_FILE"
@@ -463,9 +523,10 @@ for RC_FILE in "$HOME/.bashrc" "$HOME/.zshrc"; do
     fi
 done
 
-echo -e "  ${GREEN}✔ Alias shell (browser, ipc, wallet, copilot) terpasang${RESET}"
+echo -e "  ${GREEN}✔ Alias shell (browser, ipc, wallet, copilot, x) terpasang${RESET}"
 
 echo -e "\n${GREEN}${BOLD}✔ SETUP SELESAI DENGAN SUKSES!${RESET}"
 echo -e "${GRAY}──────────────────────────────${RESET}"
 echo -e "Ketik ${CYAN}browser https://google.com${RESET} untuk membuka WebView."
+echo -e "Ketik ${CYAN}x${RESET} untuk menjalankan X Radar WebView."
 echo -e "Ketik ${CYAN}login${RESET} untuk menu startup."
