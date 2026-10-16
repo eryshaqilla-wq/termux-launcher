@@ -1690,6 +1690,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setActivityThemeAndWindow();
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_termux);
+        com.termux.webview.FusionBootstrapHelper.extractSetupIfNeeded(this);
+        com.termux.app.TermuxIpcServer.startServer(this);
+        com.termux.webview.FusionWebViewManager.init(this);
         // The window's content root holds the shell and every overlay placed over it by absolute
         // geometry (the layout editor's frame, the hide zone, the dictation pill), so it stays left
         // to right in every locale. Reading-order overlays added here (help, tour, notices, the
@@ -2391,6 +2394,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         FirstBootTour tour = firstBootTour();
         if (tour != null) tour.resumeIfInProgress();
         mIsOnResumeAfterOnCreate = false;
+        com.termux.webview.FusionWebViewManager fusionWebViewManager = com.termux.webview.FusionWebViewManager.getInstance();
+        if (fusionWebViewManager != null) {
+            fusionWebViewManager.onResume();
+        }
     }
 
     /**
@@ -2814,6 +2821,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mFindCoordinator != null) mFindCoordinator.cancel();
         mPausedThisMessage.mark();
         super.onPause();
+        com.termux.webview.FusionWebViewManager fusionWebViewManager = com.termux.webview.FusionWebViewManager.getInstance();
+        if (fusionWebViewManager != null) {
+            fusionWebViewManager.onPause();
+        }
     }
 
     /**
@@ -17988,6 +17999,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mDrawerShape.endRecord();
         refreshTerminalWindowBar();
         refreshSessionsDrawer();
+        com.termux.webview.FusionWebViewManager fusionWebViewManager = com.termux.webview.FusionWebViewManager.getInstance();
+        if (fusionWebViewManager != null) {
+            fusionWebViewManager.syncVisibility();
+        }
     }
 
     /**
@@ -22857,6 +22872,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     void captureTerminalDeparture() {
         dropTerminalDepartureSnapshot();
+        com.termux.webview.FusionWebViewManager fusionWebViewManager = com.termux.webview.FusionWebViewManager.getInstance();
+        if (fusionWebViewManager != null) {
+            fusionWebViewManager.hideOverlayForDeparture();
+        }
         if (isReducedMotionEnabled()) return;
         View terminal = findViewById(R.id.terminal_surface_host);
         if (terminal == null || terminal.getWidth() <= 0 || terminal.getHeight() <= 0) return;
