@@ -708,9 +708,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_SOFTWARE_WALLPAPER_BACKDROP}. */
     public boolean isSoftwareWallpaperBackdropEnabled() {
-        if (isV0239EffectsPresetEnabled()) {
-            return false;
-        }
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,
             TERMUX_APP.KEY_SOFTWARE_WALLPAPER_BACKDROP, TERMUX_APP.DEFAULT_VALUE_SOFTWARE_WALLPAPER_BACKDROP);
     }
@@ -718,6 +715,17 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_SOFTWARE_WALLPAPER_BACKDROP}. */
     public void setSoftwareWallpaperBackdropEnabled(boolean value) {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_SOFTWARE_WALLPAPER_BACKDROP, value, false);
+    }
+
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_TOUCH_WOBBLE_EFFECT}. */
+    public boolean isTouchWobbleEffectEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_TOUCH_WOBBLE_EFFECT, TERMUX_APP.DEFAULT_VALUE_TOUCH_WOBBLE_EFFECT);
+    }
+
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_TOUCH_WOBBLE_EFFECT}. */
+    public void setTouchWobbleEffectEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_TOUCH_WOBBLE_EFFECT, value, false);
     }
 
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_FANCIER_GLASS}. The switch alone; whether it takes effect is the chrome's call. */

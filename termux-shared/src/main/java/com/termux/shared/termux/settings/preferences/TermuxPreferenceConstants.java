@@ -1267,12 +1267,19 @@ public final class TermuxPreferenceConstants {
 
         /**
          * Software wallpaper backdrop switch.
-         * When false (default: false), wallpaper is composited directly by the Android window manager / SurfaceFlinger
-         * in hardware (pure passthrough mode matching v0.2.39).
-         * When true, launcher decodes and software-draws wallpaper bitmaps via WallpaperBackdropView.
+         * When true (default: true), launcher displays wallpaper bitmaps via WallpaperBackdropView.
+         * When false, wallpaper is composited directly by the Android window manager / SurfaceFlinger.
          */
         public static final String KEY_SOFTWARE_WALLPAPER_BACKDROP = "software_wallpaper_backdrop";
-        public static final boolean DEFAULT_VALUE_SOFTWARE_WALLPAPER_BACKDROP = false;
+        public static final boolean DEFAULT_VALUE_SOFTWARE_WALLPAPER_BACKDROP = true;
+
+        /**
+         * Touch wobble effect switch.
+         * When true (default: true), touching/pressing terminal panes and surfaces applies an elastic
+         * spring-physics wobble and tilt response centered at the touch point.
+         */
+        public static final String KEY_TOUCH_WOBBLE_EFFECT = "touch_wobble_effect";
+        public static final boolean DEFAULT_VALUE_TOUCH_WOBBLE_EFFECT = true;
 
         /**
          * Fancier Glass: every glass surface bends the wallpaper at its rim and catches a light

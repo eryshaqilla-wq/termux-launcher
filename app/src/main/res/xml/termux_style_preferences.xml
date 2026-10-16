@@ -91,7 +91,12 @@
             app:key="software_wallpaper_backdrop"
             app:title="@string/settings_software_wallpaper_backdrop_title"
             app:summary="@string/settings_software_wallpaper_backdrop_summary"
-            android:defaultValue="false" />
+            android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="touch_wobble_effect"
+            app:title="@string/settings_touch_wobble_effect_title"
+            app:summary="@string/settings_touch_wobble_effect_summary"
+            android:defaultValue="true" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_icon_appearance_header">

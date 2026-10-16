@@ -2238,6 +2238,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (controller == null) {
             return;
         }
+        if (mPreferences != null) {
+            controller.setWobbleMode(mPreferences.isTouchWobbleEffectEnabled());
+        }
         // The drawer's open drag starts on the dock; letting the plank keep tilting under it would
         // put two owners on the same views' transforms. The press that began the drag is handed
         // back the moment the drawer engages — otherwise the springs sit frozen at their aimed
@@ -3628,11 +3631,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
 
             @Override @Nullable public Bitmap wallBehindFrame() {
-                if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled()
-                        || !mPreferences.isSoftwareWallpaperBackdropEnabled())) {
-                    mWallBehindFrame = null;
-                    return null;
-                }
                 View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
                 if (!shouldUseWallpaperPassthroughMode() || wallpaperFrame == null) return null;
                 // Radius 0 is the capture itself: the wallpaper as the wall shows it.
@@ -3934,9 +3932,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     @NonNull
     private WallpaperBackdropPolicy.Mode wallpaperBackdropMode() {
-        boolean allowSelfDrawn = mPreferences != null
-            && !mPreferences.isV0239EffectsPresetEnabled()
-            && mPreferences.isSoftwareWallpaperBackdropEnabled();
+        boolean allowSelfDrawn = mPreferences == null || mPreferences.isSoftwareWallpaperBackdropEnabled();
         return WallpaperBackdropPolicy.mode(shouldUseWallpaperPassthroughMode(),
             wallpaperPicture(), !mWallpaperReadPermissionDenied, allowSelfDrawn);
     }
@@ -3993,12 +3989,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * never tilt the surface underneath.
      */
     private void feedTerminalPlank(MotionEvent ev) {
-        if (!mTerminalGlassActive || mPaneController == null) return;
+        boolean wobble = mPreferences != null && mPreferences.isTouchWobbleEffectEnabled();
+        if ((!mTerminalGlassActive && !wobble) || mPaneController == null) return;
         if (isAppDrawerEngaged() || mSurfaceEditor.isActive() || isCommandPaletteOpen()) {
             mPaneController.cancelPaneGlassTouch();
             return;
         }
-        mPaneController.dispatchPaneGlassTouch(ev, isReducedMotionEnabled());
+        mPaneController.dispatchPaneGlassTouch(ev, isReducedMotionEnabled(), wobble);
     }
 
     /** Black dim over the wallpaper, behind every surface: 0% shows the wallpaper untouched. */
@@ -4024,12 +4021,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The self-drawn backdrop covers that background, so it carries the same dim over its own
         // frame — set here, with the root's, so the two can never read differently.
         if (mWallpaperBackdropView != null) {
-            if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled()
-                    || !mPreferences.isSoftwareWallpaperBackdropEnabled())) {
-                mWallpaperBackdropView.hide();
-            } else {
-                mWallpaperBackdropView.setDimColor(color);
-            }
+            mWallpaperBackdropView.setDimColor(color);
         }
         // Soft wallpaper's blur half rides on the same view (SPEC §3.4); its dim is in color.
         com.termux.app.surfaces.SoftWallpaper.apply(mWallpaperBackdropView, mPreferences);
@@ -7330,10 +7322,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable
     private com.termux.app.chrome.WallpaperBlurCache.FrameCapture beginWallpaperFrameCapture(
             @NonNull Rect targetRect, @NonNull View wallpaperFrame) {
-        if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled()
-                || (!mPreferences.isWallpaperBlurEnabled() && !mPreferences.isSoftwareWallpaperBackdropEnabled()))) {
-            return null;
-        }
         if (shouldUseManagedWallpaperBlurSource()) {
             Bitmap managedBackdrop = createManagedWallpaperBackdropBitmapForRect(targetRect, wallpaperFrame);
             if (managedBackdrop != null) {
@@ -9132,6 +9120,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setTheme(useWallpaperTheme ? R.style.Theme_TermuxActivity_Wallpaper : R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         TermuxThemeManager.applyThemeOverlays(this);
         Logger.logDebug(LOG_TAG, "Applied " + (useWallpaperTheme ? "wallpaper" : "normal") + " theme");
+
+        if (useWallpaperTheme) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
+        }
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);

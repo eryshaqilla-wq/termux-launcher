@@ -27,14 +27,22 @@ public final class Spring {
     public float value;
     public float target;
     public float vel;
-    public final float stiffness;
-    public final float damping;
+    public float stiffness;
+    public float damping;
 
     public Spring(float init, float stiffness, float damping) {
         this.value = init;
         this.target = init;
         this.stiffness = stiffness;
         this.damping = damping;
+    }
+
+    public void setDamping(float damping) {
+        this.damping = damping;
+    }
+
+    public void setStiffness(float stiffness) {
+        this.stiffness = stiffness;
     }
 
     public void reset(float v) {
