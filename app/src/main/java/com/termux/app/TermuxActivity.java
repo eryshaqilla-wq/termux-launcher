@@ -14674,40 +14674,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * because the plugin has renamed that class across releases and a user with an older or newer
      * build than this constant should still get the row rather than a menu that quietly drops it.
      */
-    @Nullable private static Intent sTerminalStylingIntent;
-    private static long sTerminalStylingCheckedAtMs;
-    private static final long TERMINAL_STYLING_CACHE_TTL_MS = 30_000L;
-
     @Nullable
     static Intent resolveTerminalStylingIntent(@NonNull PackageManager packageManager) {
-        long now = android.os.SystemClock.uptimeMillis();
-        if (sTerminalStylingIntent != null && (now - sTerminalStylingCheckedAtMs) < TERMINAL_STYLING_CACHE_TTL_MS) {
-            return sTerminalStylingIntent;
-        }
-        if (sTerminalStylingCheckedAtMs > 0 && sTerminalStylingIntent == null && (now - sTerminalStylingCheckedAtMs) < TERMINAL_STYLING_CACHE_TTL_MS) {
-            return null;
-        }
         String stylingPackage = TermuxConstants.TERMUX_STYLING_PACKAGE_NAME;
         String stylingActivity = TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME;
-        Intent resolved = null;
         try {
             packageManager.getActivityInfo(new ComponentName(stylingPackage, stylingActivity), 0);
             Intent stylingIntent = new Intent();
             stylingIntent.setClassName(stylingPackage, stylingActivity);
-            resolved = stylingIntent;
+            return stylingIntent;
         } catch (Exception ignored) {
             // Falls through to the launcher activity below.
         }
-        if (resolved == null) {
-            try {
-                resolved = packageManager.getLaunchIntentForPackage(stylingPackage);
-            } catch (Exception exception) {
-                Logger.logVerbose(LOG_TAG, "Termux:Styling is not installed: " + exception.getMessage());
-            }
+        try {
+            return packageManager.getLaunchIntentForPackage(stylingPackage);
+        } catch (Exception exception) {
+            Logger.logVerbose(LOG_TAG, "Termux:Styling is not installed: " + exception.getMessage());
+            return null;
         }
-        sTerminalStylingIntent = resolved;
-        sTerminalStylingCheckedAtMs = now;
-        return resolved;
     }
 
     /** Whether the Style row belongs in the terminal long-press menu on this device. */
