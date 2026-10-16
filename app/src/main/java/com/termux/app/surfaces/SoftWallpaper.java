@@ -30,8 +30,6 @@ public final class SoftWallpaper {
     public static boolean isOn(@Nullable TermuxAppSharedPreferences prefs) {
         if (prefs == null || prefs.getSharedPreferences() == null)
             return false;
-        if (prefs.isV0239EffectsPresetEnabled() || !prefs.isSoftwareWallpaperBackdropEnabled())
-            return false;
         // Through the utilities, as every getter reads: a Look the editor previews is seen here too.
         return SharedPreferenceUtils.getBoolean(prefs.getSharedPreferences(), KEY_WALLPAPER_SOFT,
             false);
@@ -45,6 +43,10 @@ public final class SoftWallpaper {
 
     /** Puts the blur on the backdrop, or takes it off; a no-op below API 31. */
     public static void apply(@Nullable View backdrop, @Nullable TermuxAppSharedPreferences prefs) {
+        if (prefs != null && (prefs.isV0239EffectsPresetEnabled() || !prefs.isSoftwareWallpaperBackdropEnabled())) {
+            apply(backdrop, false);
+            return;
+        }
         apply(backdrop, isOn(prefs));
     }
 
