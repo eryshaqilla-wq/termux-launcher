@@ -695,6 +695,17 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             TermuxPreferenceConstants.TERMUX_APP.KEY_APPEARANCE_EDITOR_LAST_GROUP, group, false);
     }
 
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_V0239_EFFECTS_PRESET}. */
+    public boolean isV0239EffectsPresetEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_V0239_EFFECTS_PRESET, TERMUX_APP.DEFAULT_VALUE_V0239_EFFECTS_PRESET);
+    }
+
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_V0239_EFFECTS_PRESET}. */
+    public void setV0239EffectsPresetEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_V0239_EFFECTS_PRESET, value, false);
+    }
+
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_FANCIER_GLASS}. The switch alone; whether it takes effect is the chrome's call. */
     public boolean isFancierGlassEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,

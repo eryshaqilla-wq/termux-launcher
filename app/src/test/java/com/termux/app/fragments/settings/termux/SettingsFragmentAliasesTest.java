@@ -80,6 +80,8 @@ public class SettingsFragmentAliasesTest {
         assertNull("bottom padding is the Layout editor's keyboard handle now",
             screen.findPreference("in_app_keyboard_bottom_padding"));
         assertNull("Lazy mode moved to App behavior", screen.findPreference("lazy_mode"));
+        assertNotNull("v0.2.39 effects preset switch is present in Visual Effects",
+            screen.findPreference("v0239_effects_preset"));
         assertNotNull("Fancier Glass switch is present in Visual Effects",
             screen.findPreference("fancier_glass"));
         assertNotNull("Wallpaper blur switch is present in Visual Effects",

@@ -101,6 +101,7 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         if (fancierGlass != null) {
             fancierGlass.setVisible(com.termux.app.chrome.FancierGlassPolicy.offered(Build.VERSION.SDK_INT));
         }
+        configureVisualEffectsPreset(context);
     }
 
     @Override
@@ -112,12 +113,37 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         Context context = getContext();
         if (context != null) {
             LauncherIconPackPreferenceController.configure(this, context);
+            configureVisualEffectsPreset(context);
         }
         configureTerminalContrastPreference();
         configureThemeTemplatesPreference();
         configureDynamicColorsHint();
         if (context != null) updateKeyboardLookEnabled(context);
         if (context != null) updateWallpaperAlignmentVisibility(context);
+    }
+
+    private void configureVisualEffectsPreset(@Nullable Context context) {
+        SwitchPreferenceCompat v0239Switch = findPreference("v0239_effects_preset");
+        if (v0239Switch == null) return;
+        TermuxAppSharedPreferences preferences = context != null ? TermuxAppSharedPreferences.build(context, true) : null;
+        boolean active = preferences != null ? preferences.isV0239EffectsPresetEnabled() : true;
+        updateVisualEffectsKnobsState(active);
+        v0239Switch.setOnPreferenceChangeListener((preference, newValue) -> {
+            boolean enabled = Boolean.TRUE.equals(newValue);
+            updateVisualEffectsKnobsState(enabled);
+            return true;
+        });
+    }
+
+    private void updateVisualEffectsKnobsState(boolean v0239PresetActive) {
+        SwitchPreferenceCompat blur = findPreference("wallpaper_blur_enabled");
+        SwitchPreferenceCompat fancier = findPreference("fancier_glass");
+        SwitchPreferenceCompat grain = findPreference("film_grain_enabled");
+        SwitchPreferenceCompat parallax = findPreference("wallpaper_parallax");
+        if (blur != null) blur.setEnabled(!v0239PresetActive);
+        if (fancier != null) fancier.setEnabled(!v0239PresetActive);
+        if (grain != null) grain.setEnabled(!v0239PresetActive);
+        if (parallax != null) parallax.setEnabled(!v0239PresetActive);
     }
 
     /**
@@ -412,6 +438,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             return;
         }
         switch(key) {
+            case "v0239_effects_preset":
+                mPreferences.setV0239EffectsPresetEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "wallpaper_blur_enabled":
                 mPreferences.setWallpaperBlurEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -503,6 +533,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (isTerminalIoToggle(key))
             return TerminalIOPreferencesDataStore.getInstance(mContext).getBoolean(key, defValue);
         switch(key) {
+            case "v0239_effects_preset":
+                return mPreferences.isV0239EffectsPresetEnabled();
             case "wallpaper_blur_enabled":
                 return mPreferences.isWallpaperBlurEnabled();
             case "film_grain_enabled":

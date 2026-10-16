@@ -1258,6 +1258,14 @@ public final class TermuxPreferenceConstants {
         public static final String DEFAULT_VALUE_APPEARANCE_EDITOR_LAST_GROUP = "SURFACE";
 
         /**
+         * Preset effect mode matching v0.2.39 (anti-lag performance mode).
+         * When enabled (default: true), heavy AGSL refraction, multi-pass realtime blurs, and parallax
+         * are bypassed so transparent terminal over wallpaper runs completely lag-free.
+         */
+        public static final String KEY_V0239_EFFECTS_PRESET = "v0239_effects_preset";
+        public static final boolean DEFAULT_VALUE_V0239_EFFECTS_PRESET = true;
+
+        /**
          * Fancier Glass: every glass surface bends the wallpaper at its rim and catches a light
          * along its edge, on top of the frost it already wears. On by default wherever it can run (every Look sets its depth). Needs Android 13
          * and a wallpaper set from inside the launcher; anywhere else the switch is offered

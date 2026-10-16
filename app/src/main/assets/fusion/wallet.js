@@ -1,6 +1,35 @@
 const path = require('path');
+const fs = require('fs');
 process.chdir(path.dirname(__filename));
-require('dotenv').config();
+
+// 🛡️ RESILIENT .ENV LOADER (Aman di lingkungan non-root meskipun modul dotenv belum terpasang)
+try {
+  require('dotenv').config();
+} catch (e) {
+  try {
+    const envPath = path.join(path.dirname(__filename), '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      content.split('\n').forEach(line => {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#')) {
+          const idx = trimmed.indexOf('=');
+          if (idx !== -1) {
+            const k = trimmed.substring(0, idx).trim();
+            let v = trimmed.substring(idx + 1).trim();
+            if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+              v = v.slice(1, -1);
+            }
+            if (process.env[k] === undefined) {
+              process.env[k] = v;
+            }
+          }
+        }
+      });
+    }
+  } catch (err) {}
+}
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; 
 const dns = require('node:dns');
 if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first'); 
@@ -8,9 +37,20 @@ if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
 // 🛡️ ANTI-WARNING: Sembunyikan teks kuning jelek di layar terminal
 process.removeAllListeners('warning');
 
-const { ethers } = require('ethers');
+let ethersModule;
+try {
+  ethersModule = require('ethers');
+} catch (e) {
+  console.log('\x1b[93m[!] Modul ethers belum terpasang. Menjalankan npm install...\x1b[0m');
+  try {
+    require('child_process').execSync('npm install --silent --no-audit --no-fund ethers dotenv @walletconnect/core @walletconnect/web3wallet', { stdio: 'inherit' });
+    ethersModule = require('ethers');
+  } catch (err) {
+    console.error('\x1b[91m[X] Gagal memasang ethers secara otomatis. Silakan jalankan: cd ' + __dirname + ' && npm install\x1b[0m');
+  }
+}
+const ethers = ethersModule ? (ethersModule.ethers || ethersModule) : null;
 const readline = require('readline');
-const fs = require('fs');
 
 let CONNECTED_RPC_URL = "Memuat...";
 

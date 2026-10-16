@@ -260,7 +260,7 @@ fi
 echo -e "\n${CYAN}● [4/8] Pasang Tools & Payload${RESET}"
 
 SYSTEM_PKGS_OK=1
-for pkg_cmd in node git curl; do
+for pkg_cmd in node npm git curl; do
     if ! command -v "$pkg_cmd" >/dev/null 2>&1; then
         SYSTEM_PKGS_OK=0
         break
@@ -276,12 +276,17 @@ fi
 if [ $SYSTEM_PKGS_OK -eq 0 ]; then
     spin "Memperbarui katalog paket..." apt-get update -y -qq
     if [ $USE_ZSH -eq 1 ]; then
-        spin "Menginstall nodejs, python, git, curl, zsh..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs python git curl zsh zsh-completions
+        spin "Menginstall nodejs, npm, python, git, curl, unzip, zsh..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs npm python git curl unzip zsh zsh-completions || apt-get install -y nodejs npm python git curl unzip zsh 2>/dev/null || pkg install -y nodejs npm python git curl unzip zsh 2>/dev/null || true
     else
-        spin "Menginstall nodejs, python, git, curl..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs python git curl
+        spin "Menginstall nodejs, npm, python, git, curl, unzip..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs npm python git curl unzip || apt-get install -y nodejs npm python git curl unzip 2>/dev/null || pkg install -y nodejs npm python git curl unzip 2>/dev/null || true
     fi
 else
-    echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, python, git, curl)${RESET}"
+    echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, npm, python, git, curl)${RESET}"
+fi
+
+# Pastikan npm tersedia untuk eksekusi web3/wallet di nonroot
+if ! command -v npm >/dev/null 2>&1; then
+    apt-get install -y npm 2>/dev/null || pkg install -y npm 2>/dev/null || true
 fi
 
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
@@ -339,9 +344,19 @@ cat << 'EOF_W' > "$PREFIX/bin/wallet"
 #!/data/data/com.termux/files/usr/bin/bash
 WALLET_DIR="${HOME}/wallet"
 if [ -f "$WALLET_DIR/wallet.js" ]; then
-    cd "$WALLET_DIR" && exec node wallet.js "$@"
+    cd "$WALLET_DIR"
+    if [ ! -d "node_modules/dotenv" ] && command -v npm >/dev/null 2>&1; then
+        echo "Menyiapkan dependensi wallet (dotenv, ethers)..."
+        npm install --silent --no-audit --no-fund dotenv ethers @walletconnect/core @walletconnect/web3wallet 2>/dev/null || true
+    fi
+    exec node wallet.js "$@"
 elif [ -f "/root/wallet/wallet.js" ]; then
-    cd "/root/wallet" && exec node wallet.js "$@"
+    cd "/root/wallet"
+    if [ ! -d "node_modules/dotenv" ] && command -v npm >/dev/null 2>&1; then
+        echo "Menyiapkan dependensi wallet (dotenv, ethers)..."
+        npm install --silent --no-audit --no-fund dotenv ethers @walletconnect/core @walletconnect/web3wallet 2>/dev/null || true
+    fi
+    exec node wallet.js "$@"
 else
     echo "GhostWallet tidak ditemukan di $WALLET_DIR atau /root/wallet"
     exit 1
@@ -580,26 +595,46 @@ if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CO
     [ -f "$HOME/.fusion_env" ] && su -c "cp -f '$HOME/.fusion_env' '$CONTAINER_ROOTFS/root/.fusion_env'" 2>/dev/null || true
 fi
 
-# Instalasi npm dengan feedback jelas
-if [ -d "$HOME/wallet/node_modules/ethers" ]; then
+# Pastikan package.json ada di folder wallet
+if [ ! -f "$HOME/wallet/package.json" ]; then
+    if [ -f "$FUSION_HOME/wallet/package.json" ]; then
+        cp -f "$FUSION_HOME/wallet/package.json" "$HOME/wallet/package.json"
+    elif [ -f "$FUSION_HOME/package.json" ]; then
+        cp -f "$FUSION_HOME/package.json" "$HOME/wallet/package.json"
+    elif [ -f "$SCRIPT_DIR/wallet/package.json" ]; then
+        cp -f "$SCRIPT_DIR/wallet/package.json" "$HOME/wallet/package.json"
+    elif [ -f "$SCRIPT_DIR/package.json" ]; then
+        cp -f "$SCRIPT_DIR/package.json" "$HOME/wallet/package.json"
+    elif [ -f "/root/wallet/package.json" ]; then
+        cp -f "/root/wallet/package.json" "$HOME/wallet/package.json"
+    fi
+fi
+
+# Instalasi npm & dependensi Web3 (ethers & dotenv) dengan feedback jelas
+if [ -d "$HOME/wallet/node_modules/ethers" ] && [ -d "$HOME/wallet/node_modules/dotenv" ]; then
     echo -e "  ${GREEN}✔ Dependensi Web3 di Termux lokal sudah terpasang${RESET}"
-elif [ -f "$HOME/wallet/package.json" ]; then
+else
+    if ! command -v npm >/dev/null 2>&1; then
+        spin "Memasang npm di Termux..." apt-get install -y npm 2>/dev/null || pkg install -y npm 2>/dev/null || true
+    fi
     if command -v npm >/dev/null 2>&1; then
         cd "$HOME/wallet" 2>/dev/null || cd "$HOME"
-        spin "Memasang dependensi Web3 (ethers, walletconnect)..." npm install --silent ethers dotenv @walletconnect/core @walletconnect/web3wallet || true
-        echo -e "  ${GREEN}✔ Modul Web3 siap digunakan${RESET}"
+        spin "Memasang dependensi Web3 (ethers, dotenv, walletconnect)..." npm install --silent --no-audit --no-fund ethers dotenv @walletconnect/core @walletconnect/web3wallet || true
+        if [ -d "$HOME/wallet/node_modules/dotenv" ]; then
+            echo -e "  ${GREEN}✔ Modul Web3 (ethers & dotenv) siap digunakan${RESET}"
+        else
+            echo -e "  ${YELLOW}⚠ Modul Web3 belum lengkap, wallet.js akan menggunakan fallback .env${RESET}"
+        fi
     else
-        echo -e "  ${GREEN}✔ Direktori modul Web3 siap (npm dapat dijalankan nanti)${RESET}"
+        echo -e "  ${YELLOW}⚠ npm belum terpasang (dapat dipasang manual via pkg install npm)${RESET}"
     fi
-else
-    echo -e "  ${GREEN}✔ Modul Web3 & X Radar siap di $HOME/wallet${RESET}"
 fi
 
 if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CONTAINER_ROOTFS" ]; then
-    if su -c "[ -d '$TARGET_WALLET_DIR/node_modules/ethers' ]" 2>/dev/null; then
+    if su -c "[ -d '$TARGET_WALLET_DIR/node_modules/ethers' ] && [ -d '$TARGET_WALLET_DIR/node_modules/dotenv' ]" 2>/dev/null; then
         echo -e "  ${GREEN}✔ Dependensi Web3 di container ($CUSTOM_LINUX_NAME) sudah terpasang${RESET}"
     else
-        spin "Memasang dependensi Web3 di $CUSTOM_LINUX_NAME..." su -c "chroot '$CONTAINER_ROOTFS' /bin/bash -c 'cd /root/wallet && npm install --silent ethers dotenv @walletconnect/core @walletconnect/web3wallet'" || true
+        spin "Memasang dependensi Web3 di $CUSTOM_LINUX_NAME..." su -c "chroot '$CONTAINER_ROOTFS' /bin/bash -c 'cd /root/wallet && npm install --silent --no-audit --no-fund ethers dotenv @walletconnect/core @walletconnect/web3wallet'" || true
         echo -e "  ${GREEN}✔ Web3 container siap${RESET}"
     fi
 fi

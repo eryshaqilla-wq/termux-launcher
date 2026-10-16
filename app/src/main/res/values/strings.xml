@@ -673,6 +673,8 @@
     <string name="settings_lazy_mode_title">Lazy mode</string>
     <string name="settings_lazy_mode_summary">Stops idle animations and slows status sampling so nothing repaints while you look.</string>
     <string name="settings_visual_effects_header">Visual Effects</string>
+    <string name="settings_v0239_effects_preset_title">v0.2.39 effects preset (anti-lag)</string>
+    <string name="settings_v0239_effects_preset_summary">Keeps terminal wallpaper transparent with ultra-light rendering matching v0.2.39 (bypasses heavy shaders and blur passes).</string>
     <string name="settings_wallpaper_blur_title">Wallpaper blur</string>
     <string name="settings_wallpaper_blur_summary">Blurs the wallpaper behind terminal and glass bars. Turn off to keep transparency with zero blur overhead.</string>
     <string name="settings_film_grain_title">Film grain</string>

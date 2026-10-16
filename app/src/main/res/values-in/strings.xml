@@ -85,6 +85,8 @@
     <string name="donate_preference_title">Donasi</string>
 
     <string name="settings_visual_effects_header">Efek Visual</string>
+    <string name="settings_v0239_effects_preset_title">Preset efek v0.2.39 (anti-lag)</string>
+    <string name="settings_v0239_effects_preset_summary">Menjaga terminal dan wallpaper transparan dengan rendering ringan mirip v0.2.39 (bebas lag tanpa shader berat &amp; blur berlebih).</string>
     <string name="settings_wallpaper_blur_title">Blur wallpaper</string>
     <string name="settings_wallpaper_blur_summary">Memburamkan wallpaper di balik bilah kaca dan terminal. Matikan untuk kaca transparan tanpa beban blur.</string>
     <string name="settings_film_grain_title">Film grain</string>

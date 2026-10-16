@@ -50,6 +50,15 @@ public class FancierGlassPreferencesTest {
     }
 
     @Test
+    public void v0239EffectsPresetSwitchTogglesCorrectly() {
+        assertTrue(preferences.isV0239EffectsPresetEnabled());
+        preferences.setV0239EffectsPresetEnabled(false);
+        assertFalse(preferences.isV0239EffectsPresetEnabled());
+        preferences.setV0239EffectsPresetEnabled(true);
+        assertTrue(preferences.isV0239EffectsPresetEnabled());
+    }
+
+    @Test
     public void wallpaperBlurSwitchTogglesCorrectly() {
         assertTrue(preferences.isWallpaperBlurEnabled());
         preferences.setWallpaperBlurEnabled(false);

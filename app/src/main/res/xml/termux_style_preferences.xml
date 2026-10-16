@@ -63,6 +63,11 @@
 
     <PreferenceCategory app:title="@string/settings_visual_effects_header">
         <SwitchPreferenceCompat
+            app:key="v0239_effects_preset"
+            app:title="@string/settings_v0239_effects_preset_title"
+            app:summary="@string/settings_v0239_effects_preset_summary"
+            android:defaultValue="true" />
+        <SwitchPreferenceCompat
             app:key="wallpaper_blur_enabled"
             app:title="@string/settings_wallpaper_blur_title"
             app:summary="@string/settings_wallpaper_blur_summary"

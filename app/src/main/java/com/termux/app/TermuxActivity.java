@@ -3589,7 +3589,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
 
             @Override public boolean isPaneGlassBlurWanted() {
-                return mPreferences != null && mPreferences.isWallpaperBlurEnabled()
+                return mPreferences != null && !mPreferences.isV0239EffectsPresetEnabled()
+                    && mPreferences.isWallpaperBlurEnabled()
                     && mPreferences.getTerminalGlassBlurRadius() > 0;
             }
 
@@ -3694,7 +3695,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
 
             @Override public int paneGlassGrainStrength() {
-                if (mPreferences != null && !mPreferences.isFilmGrainEnabled()) return 0;
+                if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled() || !mPreferences.isFilmGrainEnabled())) return 0;
                 return mPreferences != null ? mPreferences.getTerminalGlassGrain() : 0;
             }
 
@@ -3733,7 +3734,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     @Nullable
     private Bitmap obtainTerminalPaneGlassFrame() {
-        if (mPreferences != null && !mPreferences.isWallpaperBlurEnabled()) {
+        if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled() || !mPreferences.isWallpaperBlurEnabled())) {
             mPaneGlassFrame = null;
             return null;
         }
@@ -3799,8 +3800,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable
     private com.termux.app.chrome.GlassRefraction.Look currentFancierGlassLook() {
         if (mPreferences == null) return null;
-        // Lazy mode turns the refraction look off with the other effects.
-        if (isLazyModeEnabled()) return null;
+        // In v0.2.39 effects preset or lazy mode, AGSL runtime refraction is off.
+        if (mPreferences.isV0239EffectsPresetEnabled() || isLazyModeEnabled()) return null;
         if (!com.termux.app.chrome.FancierGlassPolicy.active(Build.VERSION.SDK_INT,
                 mPreferences.isFancierGlassEnabled(), shouldUseManagedWallpaperBlurSource())) {
             return null;
@@ -3832,7 +3833,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * one fixed offset — only a picture the launcher paints can move.
      */
     private boolean isWallpaperParallaxAvailable() {
-        return mPreferences != null && mPreferences.isWallpaperParallaxEnabled()
+        return mPreferences != null && !mPreferences.isV0239EffectsPresetEnabled()
+            && mPreferences.isWallpaperParallaxEnabled()
             && !isReducedMotionEnabled()
             && getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT
             && wallpaperBackdropMode() == WallpaperBackdropPolicy.Mode.SELF_DRAWN
@@ -5634,7 +5636,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * every band to its plain tint. Downstream, a radius of 0 already means "no blur".
      */
     private int getEffectiveExtraKeysBlurRadius() {
-        if (mPreferences == null || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) {
+        if (mPreferences == null || mPreferences.isV0239EffectsPresetEnabled() || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) {
             return 0;
         }
         return Math.max(0, mPreferences.getExtraKeysBlurRadius());
@@ -5642,7 +5644,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** @see #getEffectiveExtraKeysBlurRadius() */
     private int getEffectiveStatusBarBlurRadius() {
-        if (mPreferences == null || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
+        if (mPreferences == null || mPreferences.isV0239EffectsPresetEnabled() || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
         return Math.max(0, mPreferences.getStatusBarBlurRadius());
     }
 
@@ -5653,7 +5655,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * blur gate this mirrors.
      */
     private int getEffectiveInAppKeyboardBlurRadius() {
-        if (mPreferences == null || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
+        if (mPreferences == null || mPreferences.isV0239EffectsPresetEnabled() || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
         return Math.max(0, mPreferences.getInAppKeyboardBlurRadius());
     }
 
