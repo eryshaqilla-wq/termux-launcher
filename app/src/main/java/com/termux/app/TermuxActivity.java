@@ -14674,24 +14674,40 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * because the plugin has renamed that class across releases and a user with an older or newer
      * build than this constant should still get the row rather than a menu that quietly drops it.
      */
+    @Nullable private static Intent sTerminalStylingIntent;
+    private static long sTerminalStylingCheckedAtMs;
+    private static final long TERMINAL_STYLING_CACHE_TTL_MS = 30_000L;
+
     @Nullable
     static Intent resolveTerminalStylingIntent(@NonNull PackageManager packageManager) {
+        long now = android.os.SystemClock.uptimeMillis();
+        if (sTerminalStylingIntent != null && (now - sTerminalStylingCheckedAtMs) < TERMINAL_STYLING_CACHE_TTL_MS) {
+            return sTerminalStylingIntent;
+        }
+        if (sTerminalStylingCheckedAtMs > 0 && sTerminalStylingIntent == null && (now - sTerminalStylingCheckedAtMs) < TERMINAL_STYLING_CACHE_TTL_MS) {
+            return null;
+        }
         String stylingPackage = TermuxConstants.TERMUX_STYLING_PACKAGE_NAME;
         String stylingActivity = TermuxConstants.TERMUX_STYLING_APP.TERMUX_STYLING_ACTIVITY_NAME;
+        Intent resolved = null;
         try {
             packageManager.getActivityInfo(new ComponentName(stylingPackage, stylingActivity), 0);
             Intent stylingIntent = new Intent();
             stylingIntent.setClassName(stylingPackage, stylingActivity);
-            return stylingIntent;
+            resolved = stylingIntent;
         } catch (Exception ignored) {
             // Falls through to the launcher activity below.
         }
-        try {
-            return packageManager.getLaunchIntentForPackage(stylingPackage);
-        } catch (Exception exception) {
-            Logger.logVerbose(LOG_TAG, "Termux:Styling is not installed: " + exception.getMessage());
-            return null;
+        if (resolved == null) {
+            try {
+                resolved = packageManager.getLaunchIntentForPackage(stylingPackage);
+            } catch (Exception exception) {
+                Logger.logVerbose(LOG_TAG, "Termux:Styling is not installed: " + exception.getMessage());
+            }
         }
+        sTerminalStylingIntent = resolved;
+        sTerminalStylingCheckedAtMs = now;
+        return resolved;
     }
 
     /** Whether the Style row belongs in the terminal long-press menu on this device. */
@@ -22523,19 +22539,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         if (cpuRamDot != null) {
-            boolean show = cpuOn && (ramOn || weatherOn || batteryOn);
+            boolean show = cpuOn && ramOn;
             cpuRamDot.setVisibility(show ? View.VISIBLE : View.GONE);
             cpuRamDot.setColorRole(
                 com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
         }
         if (ramWeatherDot != null) {
-            boolean show = ramOn && (weatherOn || batteryOn);
+            boolean show = weatherOn && (cpuOn || ramOn);
             ramWeatherDot.setVisibility(show ? View.VISIBLE : View.GONE);
             ramWeatherDot.setColorRole(
                 com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
         }
         if (batteryDot != null) {
-            boolean show = batteryOn && (cpuOn || ramOn || weatherOn);
+            boolean show = batteryOn && (weatherOn || ramOn || cpuOn);
             batteryDot.setVisibility(show ? View.VISIBLE : View.GONE);
             batteryDot.setColorRole(
                 com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);

@@ -5615,6 +5615,28 @@ public final class SuggestionBarView extends GridLayout
         }
     }
 
+    @Nullable private static Boolean sHasShortcutHostPermission;
+    private static long sShortcutPermissionCheckedAtMs;
+    private static final long SHORTCUT_PERMISSION_TTL_MS = 30_000L;
+
+    private boolean hasShortcutHostPermission(@NonNull LauncherApps launcherApps) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return false;
+        long now = SystemClock.uptimeMillis();
+        if (sHasShortcutHostPermission != null && (now - sShortcutPermissionCheckedAtMs) < SHORTCUT_PERMISSION_TTL_MS) {
+            return sHasShortcutHostPermission;
+        }
+        try {
+            boolean has = launcherApps.hasShortcutHostPermission();
+            sHasShortcutHostPermission = has;
+            sShortcutPermissionCheckedAtMs = now;
+            return has;
+        } catch (Throwable t) {
+            sHasShortcutHostPermission = false;
+            sShortcutPermissionCheckedAtMs = now;
+            return false;
+        }
+    }
+
     @NonNull
     private List<ShortcutInfo> queryEntryShortcuts(@NonNull LauncherAppEntry entry) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N_MR1) return new ArrayList<>();
@@ -5625,7 +5647,10 @@ public final class SuggestionBarView extends GridLayout
         }
         try {
             LauncherApps launcherApps = (LauncherApps) getContext().getSystemService(Context.LAUNCHER_APPS_SERVICE);
-            if (launcherApps == null) return new ArrayList<>();
+            if (launcherApps == null || !hasShortcutHostPermission(launcherApps)) {
+                shortcutCache.put(cacheKey, Collections.emptyList());
+                return new ArrayList<>();
+            }
             LauncherApps.ShortcutQuery query = new LauncherApps.ShortcutQuery();
             query.setPackage(entry.appRef.packageName);
             if (!TextUtils.isEmpty(entry.appRef.activityName)) {
@@ -5646,6 +5671,7 @@ public final class SuggestionBarView extends GridLayout
             return new ArrayList<>(result);
         } catch (Throwable throwable) {
             Log.d(LOG_TAG, "shortcut query failed for " + entry.appRef.stableId() + ": " + throwable.getMessage());
+            shortcutCache.put(cacheKey, Collections.emptyList());
             return new ArrayList<>();
         }
     }
@@ -5653,6 +5679,7 @@ public final class SuggestionBarView extends GridLayout
     public void invalidateShortcutCache(@Nullable String packageName) {
         if (TextUtils.isEmpty(packageName)) {
             shortcutCache.clear();
+            sHasShortcutHostPermission = null;
             return;
         }
         List<String> keysToRemove = new ArrayList<>();

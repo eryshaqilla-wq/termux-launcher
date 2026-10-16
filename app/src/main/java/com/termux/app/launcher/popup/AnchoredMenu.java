@@ -258,6 +258,7 @@ public final class AnchoredMenu {
             RealtimeBlurView blurView = new RealtimeBlurView(host.getContext());
             blurView.setBlurRadius(Math.max(0f, (float) dp(theme.blurRadiusDp())));
             blurView.setOverlayColor(overlayColor);
+            blurView.refreshThenRest();
             popupRoot.addView(blurView, new FrameLayout.LayoutParams(desiredWidth, desiredHeight));
             // The dock's grain over the blur and under the rows, the same static tile every glass
             // surface lays (the plate's outline clips it).
