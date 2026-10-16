@@ -18,7 +18,7 @@ public class TermuxIpcServer {
     public static volatile boolean isRunning;
     public static TermuxActivity sActivity;
 
-    class KeyboardRunnable implements Runnable {
+    static class KeyboardRunnable implements Runnable {
         private final int mAction;
         private final TermuxActivity mActivity;
 
@@ -42,7 +42,7 @@ public class TermuxIpcServer {
         }
     }
 
-    class ToastRunnable implements Runnable {
+    static class ToastRunnable implements Runnable {
         private final Context mContext;
         private final String mText;
 
@@ -57,7 +57,7 @@ public class TermuxIpcServer {
         }
     }
 
-    class Worker extends Thread {
+    static class Worker extends Thread {
         private final LocalSocket mSocket;
 
         Worker(LocalSocket localSocket) {

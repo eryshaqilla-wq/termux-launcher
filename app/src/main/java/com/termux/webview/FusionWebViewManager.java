@@ -36,7 +36,7 @@ import java.util.ArrayList;
 import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
-public class FusionWebViewManager implements View.OnClickListener, ValueCallback {
+public class FusionWebViewManager implements View.OnClickListener, ValueCallback<String> {
     public static FusionWebViewManager sInstance;
     public WebView mActiveWebView;
     public TermuxActivity mActivity;
@@ -88,7 +88,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public int mNextTabId = 1;
     public boolean mIsDevMode = true;
 
-    public class AutoSignClick implements View.OnClickListener {
+    public static class AutoSignClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public AutoSignClick(FusionWebViewManager fusionWebViewManager) {
@@ -104,7 +104,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class BackClick implements View.OnClickListener {
+    public static class BackClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public BackClick(FusionWebViewManager fusionWebViewManager) {
@@ -120,7 +120,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class BurgerClick implements View.OnClickListener {
+    public static class BurgerClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public BurgerClick(FusionWebViewManager fusionWebViewManager) {
@@ -136,7 +136,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class ChainSelectListener implements DialogInterface.OnClickListener {
+    public static class ChainSelectListener implements DialogInterface.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public ChainSelectListener(FusionWebViewManager fusionWebViewManager) {
@@ -152,7 +152,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class ClearCacheClick implements View.OnClickListener {
+    public static class ClearCacheClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public ClearCacheClick(FusionWebViewManager fusionWebViewManager) {
@@ -168,7 +168,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class CloseClick implements View.OnClickListener {
+    public static class CloseClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public CloseClick(FusionWebViewManager fusionWebViewManager) {
@@ -184,7 +184,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class CloseMenuClick implements View.OnClickListener {
+    public static class CloseMenuClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public CloseMenuClick(FusionWebViewManager fusionWebViewManager) {
@@ -200,7 +200,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class CloseRunnable implements Runnable {
+    public static class CloseRunnable implements Runnable {
         public final FusionWebViewManager mManager;
 
         public CloseRunnable(FusionWebViewManager fusionWebViewManager) {
@@ -216,7 +216,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class CopyAddressClick implements View.OnClickListener {
+    public static class CopyAddressClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public CopyAddressClick(FusionWebViewManager fusionWebViewManager) {
@@ -234,7 +234,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class DesktopClick implements View.OnClickListener {
+    public static class DesktopClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public DesktopClick(FusionWebViewManager fusionWebViewManager) {
@@ -250,7 +250,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class EvalRunnable implements Runnable {
+    public static class EvalRunnable implements Runnable {
         public final String mJsCode;
         public final FusionWebViewManager mManager;
 
@@ -270,7 +270,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class MacroValueCallback implements ValueCallback<String> {
+    public static class MacroValueCallback implements ValueCallback<String> {
         public final FusionWebViewManager mManager;
 
         public MacroValueCallback(FusionWebViewManager fusionWebViewManager) {
@@ -286,7 +286,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class OpenRunnable implements Runnable {
+    public static class OpenRunnable implements Runnable {
         public final String mChainKey;
         public final boolean mIsAuto;
         public final boolean mIsDesktop;
@@ -319,7 +319,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class RecClick implements View.OnClickListener {
+    public static class RecClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public RecClick(FusionWebViewManager fusionWebViewManager) {
@@ -335,7 +335,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class ReloadClick implements View.OnClickListener {
+    public static class ReloadClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public ReloadClick(FusionWebViewManager fusionWebViewManager) {
@@ -352,7 +352,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class SwitchChainClick implements View.OnClickListener {
+    public static class SwitchChainClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public SwitchChainClick(FusionWebViewManager fusionWebViewManager) {
@@ -368,7 +368,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class SwitchWalletClick implements View.OnClickListener {
+    public static class SwitchWalletClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public SwitchWalletClick(FusionWebViewManager fusionWebViewManager) {
@@ -384,7 +384,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class SyncDbClick implements View.OnClickListener {
+    public static class SyncDbClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public SyncDbClick(FusionWebViewManager fusionWebViewManager) {
@@ -400,7 +400,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class TouchListener implements View.OnTouchListener {
+    public static class TouchListener implements View.OnTouchListener {
         @Override // android.view.View.OnTouchListener
         public boolean onTouch(View view, MotionEvent motionEvent) {
             if (view == null) {
@@ -418,7 +418,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class WalletSelectListener implements DialogInterface.OnClickListener {
+    public static class WalletSelectListener implements DialogInterface.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public WalletSelectListener(FusionWebViewManager fusionWebViewManager) {
@@ -434,7 +434,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public class WcClick implements View.OnClickListener {
+    public static class WcClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
 
         public WcClick(FusionWebViewManager fusionWebViewManager) {
@@ -839,7 +839,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             layoutParams7.setMargins(2, 0, 2, 0);
             this.mControlPill.addView(textView6, layoutParams7);
             this.mControlPill.setElevation(160.0f);
-            boolean z = 1;
+            boolean z = true;
             LinearLayout linearLayout4 = new LinearLayout(this.mActivity);
             this.mMenuCard = linearLayout4;
             linearLayout4.setLayerType(1, null);
@@ -859,7 +859,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             view.setOnClickListener(new FusionMenuBackdropClick(this));
             FrameLayout frameLayout3 = this.mPaneHost;
             if (frameLayout3 != null) {
-                z = -1;
                 frameLayout3.addView(view, new FrameLayout.LayoutParams(-1, -1));
             }
             LinearLayout linearLayout6 = new LinearLayout(this.mActivity);
