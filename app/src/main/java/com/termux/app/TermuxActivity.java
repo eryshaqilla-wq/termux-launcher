@@ -1988,6 +1988,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        handleTerminalIntent(intent);
         setIntent(intent);
         handleInAppKeyboardHeightAdjustIntent(intent);
         handleSurfaceEditorIntent(intent);
@@ -2021,6 +2022,68 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // HOME while already home never stops the activity, so onStart does not fire for it.
             playWeatherArrivalAnimation();
         }
+    }
+
+    public void setTouchMouseModeInternal(boolean enabled) {
+        com.termux.view.TerminalView terminalView = this.mTerminalView;
+        if (terminalView != null) {
+            terminalView.setTouchMouseMode(enabled);
+        }
+    }
+
+    public void toggleTouchMouseModeInternal() {
+        com.termux.view.TerminalView terminalView = this.mTerminalView;
+        if (terminalView != null) {
+            terminalView.setTouchMouseMode(!terminalView.isTouchMouseMode());
+        }
+    }
+
+    public boolean handleTerminalIntent(Intent intent) {
+        String action;
+        if (intent == null || (action = intent.getAction()) == null) {
+            return false;
+        }
+        if ("terminal.disable_mouse".equals(action)) {
+            setTouchMouseModeInternal(false);
+            return true;
+        }
+        if ("terminal.enable_mouse".equals(action)) {
+            setTouchMouseModeInternal(true);
+            return true;
+        }
+        if ("terminal.toggle_mouse".equals(action)) {
+            toggleTouchMouseModeInternal();
+            return true;
+        }
+        if ("terminal.hide_keyboard".equals(action) || "terminal.hide_soft_keyboard".equals(action)) {
+            if (mTerminalView != null) {
+                com.termux.shared.view.KeyboardUtils.hideSoftKeyboard(this, mTerminalView);
+            }
+            return true;
+        }
+        if ("terminal.show_keyboard".equals(action) || "terminal.show_soft_keyboard".equals(action)) {
+            if (mTerminalView != null) {
+                com.termux.shared.view.KeyboardUtils.showSoftKeyboard(this, mTerminalView);
+            }
+            return true;
+        }
+        if ("terminal.run".equals(action)) {
+            String stringExtra = intent.getStringExtra("cmd");
+            if (stringExtra == null) {
+                return true;
+            }
+            com.termux.app.TermuxIpcServer.injectCommand(this, stringExtra, true);
+            return true;
+        }
+        if (!"terminal.input".equals(action)) {
+            return false;
+        }
+        String stringExtra2 = intent.getStringExtra("text");
+        if (stringExtra2 == null) {
+            return true;
+        }
+        com.termux.app.TermuxIpcServer.injectCommand(this, stringExtra2, false);
+        return true;
     }
 
     @Override
@@ -24649,6 +24712,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         intentFilter.addAction(Intent.ACTION_DATE_CHANGED);
         intentFilter.addAction(Intent.ACTION_TIME_CHANGED);
         intentFilter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
+        intentFilter.addAction("terminal.disable_mouse");
+        intentFilter.addAction("terminal.enable_mouse");
+        intentFilter.addAction("terminal.toggle_mouse");
+        intentFilter.addAction("terminal.run");
+        intentFilter.addAction("terminal.input");
+        intentFilter.addAction("terminal.hide_keyboard");
+        intentFilter.addAction("terminal.hide_soft_keyboard");
+        intentFilter.addAction("terminal.show_keyboard");
+        intentFilter.addAction("terminal.show_soft_keyboard");
 
         if (Build.VERSION.SDK_INT >= 28 ) {
             registerReceiver(mTermuxActivityBroadcastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
@@ -25271,7 +25343,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         @Override
         public void onReceive(Context context, Intent intent) {
-            if (intent == null)
+            if (intent == null || handleTerminalIntent(intent))
                 return;
             // Before the visibility gate: Termux:Styling normally broadcasts while this activity is in
             // the background, and the user's choice of scheme must not be dropped for that.
