@@ -23,6 +23,18 @@ public class FusionChainHelper {
         return sChainDisplayNames;
     }
 
+    public static String[] getNames() {
+        return sChainDisplayNames != null ? sChainDisplayNames : sChainNames;
+    }
+
+    public static String getKeyByIndex(int i) {
+        String[] strArr = sChainKeys;
+        if (strArr == null || i < 0 || i >= strArr.length) {
+            return null;
+        }
+        return strArr[i];
+    }
+
     public static String getChainIdDec() {
         return String.valueOf(sCurrentChainId);
     }
