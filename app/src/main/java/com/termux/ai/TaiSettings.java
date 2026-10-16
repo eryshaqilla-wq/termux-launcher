@@ -49,6 +49,7 @@ public final class TaiSettings {
     public static final String KEY_API_AUTH_REQUIRED = "tai_api_auth_required";
     public static final String KEY_API_LAN_SESSION_STARTED_AT = "tai_api_lan_session_started_at";
     public static final String KEY_OPENAI_AUTO_LOAD = "tai_openai_auto_load";
+    public static final String KEY_LAUNCHERCTL_ENABLED = "launcherctl_enabled";
     // Speech-to-text: the model voice input uses, the preferred window for new downloads, how long
     // an idle speech model stays loaded, and the download that becomes the model in use once it
     // succeeds (see TaiSpeechModels).
@@ -144,6 +145,14 @@ public final class TaiSettings {
         else edit.putString(KEY_TIER_OVERRIDE, Integer.toString(tier.number()));
         edit.apply();
         TaiDeviceTier.rememberOverride(tier);
+    }
+
+    public boolean isLauncherCtlEnabled() {
+        return preferences.getBoolean(KEY_LAUNCHERCTL_ENABLED, false);
+    }
+
+    public void setLauncherCtlEnabled(boolean enabled) {
+        preferences.edit().putBoolean(KEY_LAUNCHERCTL_ENABLED, enabled).apply();
     }
 
     /** The memory limits file, beside the runtime history under {@code files/tai}; absent means relaxed. */

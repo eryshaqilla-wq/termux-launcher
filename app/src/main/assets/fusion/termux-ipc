@@ -8,7 +8,7 @@ ACTION="$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
 shift
 
 if [ -z "$ACTION" ]; then
-    echo "Usage: termux-ipc <toast|vibrate|clip-get|clip-set|run|input|mouse-on|mouse-off|disable|enable|hide|show|api|x11-start|x11-stop|x11-launch|x11-audio|webview|ping> [args...]"
+    echo "Usage: termux-ipc <toast|vibrate|clip-get|clip-set|run|input|mouse-on|mouse-off|disable|enable|hide|show|api|x11-start|x11-stop|x11-launch|x11-audio|webview|launcherctl|ping> [args...]"
     echo "Untuk kontrol WebView: termux-ipc webview --help"
     exit 1
 fi
@@ -581,6 +581,26 @@ sys.exit(res.returncode)
         ;;
     agy-stop|stop)
         handle_webview "agy-stop" "$@"
+        ;;
+    launcherctl)
+        SUB="${1:-status}"
+        case "$SUB" in
+            on|enable|start|1)
+                send_cmd "LAUNCHERCTL_ON"
+                echo "LauncherCtl API Server: AKTIF (ON)"
+                ;;
+            off|disable|stop|0)
+                send_cmd "LAUNCHERCTL_OFF"
+                echo "LauncherCtl API Server: NONAKTIF (OFF) [Default]"
+                ;;
+            status|check)
+                RES=$(send_cmd "LAUNCHERCTL_STATUS")
+                echo "LauncherCtl API Server Status: $RES"
+                ;;
+            *)
+                echo "Penggunaan: termux-ipc launcherctl [on|off|status]"
+                ;;
+        esac
         ;;
     *)
         echo "Aksi tidak dikenal: $ACTION"

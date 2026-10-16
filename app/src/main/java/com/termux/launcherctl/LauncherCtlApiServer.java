@@ -232,9 +232,10 @@ public class LauncherCtlApiServer {
     }
 
     public synchronized void ensureStartedAsync(Context context) {
-        if (!AUTO_START_ENABLED) {
-            // Disabled: the background API server is not auto-started, to prevent CPU load.
-            Logger.logInfo(LOG_TAG, "LauncherCtl API server auto-start is disabled");
+        if (context == null) return;
+        TaiSettings settings = new TaiSettings(context.getApplicationContext());
+        if (!settings.isLauncherCtlEnabled()) {
+            Logger.logInfo(LOG_TAG, "LauncherCtl API server is disabled by switch (default: off)");
             return;
         }
         if (running || starting) {
@@ -248,6 +249,30 @@ public class LauncherCtlApiServer {
         } catch (RejectedExecutionException stopped) {
             starting = false;
         }
+    }
+
+    public synchronized void setEnabled(Context context, boolean enabled) {
+        if (context == null) return;
+        Context appContext = context.getApplicationContext();
+        TaiSettings settings = new TaiSettings(appContext);
+        settings.setLauncherCtlEnabled(enabled);
+        if (enabled) {
+            if (!running && !starting) {
+                starting = true;
+                try {
+                    controlExecutor.execute(() -> start(appContext));
+                } catch (RejectedExecutionException stopped) {
+                    starting = false;
+                }
+            }
+        } else {
+            stopListening();
+        }
+    }
+
+    public synchronized boolean isEnabled(Context context) {
+        if (context == null) return false;
+        return new TaiSettings(context.getApplicationContext()).isLauncherCtlEnabled();
     }
 
     /**

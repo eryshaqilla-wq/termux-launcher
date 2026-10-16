@@ -301,6 +301,37 @@ public class FusionDrawerHelper {
         LinearLayout.LayoutParams layoutParamsDev = new LinearLayout.LayoutParams(-1, -2);
         layoutParamsDev.setMargins(0, 4, 0, 4);
         linearLayout2.addView(textViewDev, layoutParamsDev);
+
+        final TextView textViewLauncherCtl = new TextView(appCompatActivity);
+        boolean isLctlOn = com.termux.launcherctl.LauncherCtlApiServer.getInstance().isEnabled(appCompatActivity);
+        textViewLauncherCtl.setText(isLctlOn ? "LauncherCtl: ON" : "LauncherCtl: OFF");
+        if (isLctlOn) {
+            FusionUiHelper.setSolidAccentBtn(textViewLauncherCtl, -7686920, -13947597);
+        } else {
+            FusionUiHelper.setSolidBtn(textViewLauncherCtl);
+        }
+        textViewLauncherCtl.setTextSize(2, 13.0f);
+        textViewLauncherCtl.setPadding(14, 10, 14, 10);
+        textViewLauncherCtl.setClickable(true);
+        textViewLauncherCtl.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                boolean cur = com.termux.launcherctl.LauncherCtlApiServer.getInstance().isEnabled(appCompatActivity);
+                boolean next = !cur;
+                com.termux.launcherctl.LauncherCtlApiServer.getInstance().setEnabled(appCompatActivity, next);
+                textViewLauncherCtl.setText(next ? "LauncherCtl: ON" : "LauncherCtl: OFF");
+                if (next) {
+                    FusionUiHelper.setSolidAccentBtn(textViewLauncherCtl, -7686920, -13947597);
+                    android.widget.Toast.makeText(appCompatActivity, "LauncherCtl API Server: AKTIF (ON)", android.widget.Toast.LENGTH_SHORT).show();
+                } else {
+                    FusionUiHelper.setSolidBtn(textViewLauncherCtl);
+                    android.widget.Toast.makeText(appCompatActivity, "LauncherCtl API Server: NONAKTIF (OFF)", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        LinearLayout.LayoutParams layoutParamsLctl = new LinearLayout.LayoutParams(-1, -2);
+        layoutParamsLctl.setMargins(0, 4, 0, 4);
+        linearLayout2.addView(textViewLauncherCtl, layoutParamsLctl);
         TextView textView8 = new TextView(appCompatActivity);
         textView8.setText("TUTUP");
         FusionUiHelper.setSolidBtn(textView8);

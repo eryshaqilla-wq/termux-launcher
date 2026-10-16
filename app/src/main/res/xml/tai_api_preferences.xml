@@ -11,6 +11,12 @@
             app:summary="@string/termux_ai_endpoint_notice_summary"
             app:persistent="false"/>
         <androidx.preference.SwitchPreferenceCompat
+            app:key="launcherctl_enabled"
+            app:title="LauncherCtl Server Daemon"
+            app:summaryOff="Nonaktif (Hemat Baterai &amp; 0% CPU)"
+            app:summaryOn="Aktif (Daemon API Localhost Berjalan)"
+            app:defaultValue="false"/>
+        <androidx.preference.SwitchPreferenceCompat
             app:key="tai_openai_auto_load"
             app:title="@string/termux_ai_openai_auto_load_title"
             app:summaryOff="@string/termux_ai_openai_auto_load_summary_off"

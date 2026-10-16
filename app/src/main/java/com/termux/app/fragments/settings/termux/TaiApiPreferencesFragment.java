@@ -56,6 +56,7 @@ public class TaiApiPreferencesFragment extends MaterialPreferenceFragment {
         }
         configureAuthToggle(context);
         configureLanToggle(context);
+        configureLauncherCtlToggle(context);
         refreshEndpointPreferences(context);
     }
 
@@ -71,6 +72,7 @@ public class TaiApiPreferencesFragment extends MaterialPreferenceFragment {
         if (context != null) {
             refreshEndpointPreferences(context);
             refreshLanToggle(context);
+            refreshLauncherCtlToggle(context);
         }
     }
 
@@ -126,6 +128,24 @@ public class TaiApiPreferencesFragment extends MaterialPreferenceFragment {
         SwitchPreferenceCompat lanToggle = findPreference(KEY_LAN);
         if (lanToggle == null) return;
         lanToggle.setChecked(TaiSettings.BIND_MODE_LAN.equals(new TaiSettings(context).getApiBindMode()));
+    }
+
+    private void configureLauncherCtlToggle(Context context) {
+        SwitchPreferenceCompat toggle = findPreference(TaiSettings.KEY_LAUNCHERCTL_ENABLED);
+        if (toggle == null) return;
+        toggle.setChecked(LauncherCtlApiServer.getInstance().isEnabled(context));
+        toggle.setOnPreferenceChangeListener((preference, newValue) -> {
+            boolean enabled = Boolean.TRUE.equals(newValue);
+            LauncherCtlApiServer.getInstance().setEnabled(context, enabled);
+            refreshEndpointPreferences(context);
+            return true;
+        });
+    }
+
+    private void refreshLauncherCtlToggle(Context context) {
+        SwitchPreferenceCompat toggle = findPreference(TaiSettings.KEY_LAUNCHERCTL_ENABLED);
+        if (toggle == null) return;
+        toggle.setChecked(LauncherCtlApiServer.getInstance().isEnabled(context));
     }
 
     private void showLanWarningDialog(Context context, SwitchPreferenceCompat lanToggle) {

@@ -143,6 +143,22 @@ public class TermuxIpcServer {
                                 } else {
                                     FusionWebViewDispatcher.dispatch(strTrim);
                                 }
+                            } else if (strTrim.equalsIgnoreCase("LAUNCHERCTL_ON")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act != null) {
+                                    com.termux.launcherctl.LauncherCtlApiServer.getInstance().setEnabled(act, true);
+                                }
+                            } else if (strTrim.equalsIgnoreCase("LAUNCHERCTL_OFF")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act != null) {
+                                    com.termux.launcherctl.LauncherCtlApiServer.getInstance().setEnabled(act, false);
+                                }
+                            } else if (strTrim.equalsIgnoreCase("LAUNCHERCTL_STATUS")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                boolean on = act != null && com.termux.launcherctl.LauncherCtlApiServer.getInstance().isEnabled(act);
+                                outputStream.write((on ? "ON\n" : "OFF\n").getBytes());
+                                outputStream.flush();
+                                continue;
                             } else if ((strTrim.equalsIgnoreCase("KEYBOARD_SHOW") || strTrim.equalsIgnoreCase("SHOW")) && (activity = TermuxIpcServer.getActivity()) != null) {
                                 activity.runOnUiThread(new KeyboardRunnable(activity, 3));
                             } else {

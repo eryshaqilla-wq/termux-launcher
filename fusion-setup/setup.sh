@@ -742,6 +742,7 @@ _termux() {
         'vol:Atur volume audio media (0-15)'
         'wifi:Info status jaringan WiFi aktif'
         'browser:Buka atau kelola WebView Fusion'
+        'launcherctl:Saklar LauncherCtl Daemon (on, off, status)'
         'gui:Jalankan Cyberpunk Touch GUI'
         'gui-stop:Hentikan Cyberpunk Touch GUI'
         'ping:Cek koneksi socket server IPC'
@@ -749,6 +750,10 @@ _termux() {
     )
     if (( CURRENT == 2 )); then
         _describe -t commands 'perintah termux' commands
+    elif (( CURRENT == 3 )) && [[ "${words[2]}" == "launcherctl" ]]; then
+        local -a lctl_cmds
+        lctl_cmds=('on:Aktifkan LauncherCtl daemon' 'off:Matikan LauncherCtl daemon (0% CPU)' 'status:Cek status LauncherCtl')
+        _describe -t lctl_cmds 'opsi launcherctl' lctl_cmds
     fi
 }
 compdef _termux termux
