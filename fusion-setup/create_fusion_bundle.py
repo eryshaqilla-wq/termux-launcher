@@ -93,6 +93,27 @@ setup_src = "/project/termux-launcher/fusion-setup/setup.sh"
 shutil.copy2(setup_src, os.path.join(BUNDLE_DIR, "setup.sh"))
 os.chmod(os.path.join(BUNDLE_DIR, "setup.sh"), 0o755)
 
+print("--- 2c. Menyiapkan Plugin Zsh (Autosuggestions & Highlighting) ---")
+zsh_plugin_dir = os.path.join(BUNDLE_DIR, "zsh_plugins")
+os.makedirs(os.path.join(zsh_plugin_dir, "zsh-autosuggestions"), exist_ok=True)
+os.makedirs(os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting"), exist_ok=True)
+
+auto_src = "/root/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+if os.path.exists(auto_src):
+    for f in glob.glob(os.path.join(auto_src, "*.zsh")):
+        shutil.copy2(f, os.path.join(zsh_plugin_dir, "zsh-autosuggestions"))
+    if os.path.exists(os.path.join(auto_src, "src")):
+        shutil.copytree(os.path.join(auto_src, "src"), os.path.join(zsh_plugin_dir, "zsh-autosuggestions/src"), dirs_exist_ok=True)
+
+syn_src = "/root/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
+if os.path.exists(syn_src):
+    for f in glob.glob(os.path.join(syn_src, "*.zsh")):
+        shutil.copy2(f, os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting"))
+    if os.path.exists(os.path.join(syn_src, "highlighters")):
+        shutil.copytree(os.path.join(syn_src, "highlighters"), os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting/highlighters"), dirs_exist_ok=True)
+
+print("✓ Added zsh plugins to bundle")
+
 print("--- 3. Mengemas menjadi fusion_payload.tar.gz ---")
 with tarfile.open(OUTPUT_TAR, "w:gz") as tar:
     for item in os.listdir(BUNDLE_DIR):

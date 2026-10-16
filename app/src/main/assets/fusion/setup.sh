@@ -78,7 +78,7 @@ fi
 # ==============================================================================
 # TAHAP 1: DETEKSI JALUR TAKDIR SISTEM
 # ==============================================================================
-echo -e "\n${CYAN}● [1/7] Deteksi Sistem${RESET}"
+echo -e "\n${CYAN}● [1/8] Deteksi Sistem${RESET}"
 DETECTED_ROOT=0
 if command -v su >/dev/null 2>&1; then
     if su -c "id" >/dev/null 2>&1; then
@@ -113,7 +113,7 @@ mkdir -p "$PREFIX/bin"
 # ==============================================================================
 # TAHAP 2: OPSI INTEGRASI DISTRO LINUX
 # ==============================================================================
-echo -e "\n${CYAN}● [2/7] Integrasi Distro Linux${RESET}"
+echo -e "\n${CYAN}● [2/8] Integrasi Distro Linux${RESET}"
 echo -e "  1) Ya, pasang / integrasikan"
 echo -e "  2) Tidak, Termux murni saja"
 read -p "  Pilih [1/2, default: 1]: " LINUX_OPT
@@ -244,11 +244,31 @@ else
 fi
 
 # ==============================================================================
-# TAHAP 3: INSTALASI TOOLS & PAYLOAD DI TERMUX
+# TAHAP 3: KONFIGURASI SHELL & PRODUKTIVITAS
 # ==============================================================================
-echo -e "\n${CYAN}● [3/7] Pasang Tools & Payload${RESET}"
+echo -e "\n${CYAN}● [3/8] Shell & Produktivitas${RESET}"
+echo -e "  1) Zsh Modern (Autocomplete + Autosuggestions + Highlighting) [Direkomendasikan]"
+echo -e "  2) Bash Standar"
+read -p "  Pilih [1/2, default: 1]: " SHELL_CHOICE
+[ -z "$SHELL_CHOICE" ] && SHELL_CHOICE="1"
+
+if [ "$SHELL_CHOICE" = "1" ]; then
+    USE_ZSH=1
+    echo -e "  ${GREEN}➔ Shell: Zsh Modern Engine aktif${RESET}"
+else
+    USE_ZSH=0
+    echo -e "  ${GREEN}➔ Shell: Bash Standar aktif${RESET}"
+fi
+
+# ==============================================================================
+# TAHAP 4: INSTALASI TOOLS & PAYLOAD DI TERMUX
+# ==============================================================================
+echo -e "\n${CYAN}● [4/8] Pasang Tools & Payload${RESET}"
+REQUIRED_PKGS="node python git curl"
+[ $USE_ZSH -eq 1 ] && REQUIRED_PKGS="node python git curl zsh"
+
 SYSTEM_PKGS_OK=1
-for pkg_cmd in node python git curl; do
+for pkg_cmd in $REQUIRED_PKGS; do
     if ! command -v "$pkg_cmd" >/dev/null 2>&1; then
         SYSTEM_PKGS_OK=0
         break
@@ -257,13 +277,26 @@ done
 
 if [ $SYSTEM_PKGS_OK -eq 0 ]; then
     spin "Memperbarui katalog paket..." pkg update -y || apt-get update -y || true
-    spin "Menginstall nodejs, python, git, curl..." pkg install -y nodejs python git curl || pkg install -y nodejs-lts python git curl || true
+    if [ $USE_ZSH -eq 1 ]; then
+        spin "Menginstall nodejs, python, git, curl, zsh, zsh-completions..." pkg install -y nodejs python git curl zsh zsh-completions || pkg install -y nodejs-lts python git curl zsh || true
+    else
+        spin "Menginstall nodejs, python, git, curl..." pkg install -y nodejs python git curl || pkg install -y nodejs-lts python git curl || true
+    fi
 else
-    echo -e "  ${GREEN}✔ Paket sistem (Node, Python, Git, Curl) sudah lengkap${RESET}"
+    echo -e "  ${GREEN}✔ Paket sistem sudah lengkap${RESET}"
 fi
 
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
     spin "Mengekstrak aset payload tarball..." tar -xzf "$PAYLOAD_TAR" -C "$FUSION_HOME" || true
+fi
+
+# Pasang Zsh Plugins jika Zsh dipilih
+if [ $USE_ZSH -eq 1 ]; then
+    mkdir -p "$HOME/.zsh/plugins"
+    if [ -d "$FUSION_HOME/zsh_plugins" ]; then
+        cp -rf "$FUSION_HOME/zsh_plugins/"* "$HOME/.zsh/plugins/"
+        echo -e "  ${GREEN}✔ Plugin Zsh (Autosuggestions & Syntax Highlighting) disiapkan${RESET}"
+    fi
 fi
 
 # Pasang binary ke $PREFIX/bin
@@ -340,10 +373,10 @@ fi
 echo -e "  ${GREEN}✔ Binary IPC, browser, wallet, dan x terpasang di $PREFIX/bin${RESET}"
 
 # ==============================================================================
-# TAHAP 4: INTEGRASI CONTAINER LINUX (JIKA DIAKTIFKAN)
+# TAHAP 5: INTEGRASI CONTAINER LINUX (JIKA DIAKTIFKAN)
 # ==============================================================================
 if [ "$LINUX_OPT" = "1" ]; then
-    echo -e "\n${CYAN}● [4/7] Injeksi Shims ke Container${RESET}"
+    echo -e "\n${CYAN}● [5/8] Injeksi Shims ke Container${RESET}"
     if [ $IS_ROOT -eq 0 ]; then
         CONTAINER_ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
         if [ -d "$CONTAINER_ROOTFS" ]; then
@@ -431,13 +464,13 @@ EOF_LINUX_INSTALL
         echo -e "  ${GREEN}✔ Skrip container siap: $INSTALLER_SCRIPT${RESET}"
     fi
 else
-    echo -e "\n${CYAN}● [4/7] Injeksi Container dilewati (Mode Murni)${RESET}"
+    echo -e "\n${CYAN}● [5/8] Injeksi Container dilewati (Mode Murni)${RESET}"
 fi
 
 # ==============================================================================
-# TAHAP 5: KONFIGURASI PROPERTI & STATUS BAR TERMUX
+# TAHAP 6: KONFIGURASI PROPERTI & STATUS BAR TERMUX
 # ==============================================================================
-echo -e "\n${CYAN}● [5/7] Konfigurasi Properti & Status Bar${RESET}"
+echo -e "\n${CYAN}● [6/8] Konfigurasi Properti & Status Bar${RESET}"
 mkdir -p "$HOME/.termux"
 if [ -f "$FUSION_HOME/termux.properties" ]; then
     cp -f "$FUSION_HOME/termux.properties" "$HOME/.termux/termux.properties"
@@ -459,9 +492,9 @@ echo -e "  ${GREEN}✔ Properti & styling terminal aktif${RESET}"
 echo -e "  ${GREEN}✔ Sensor suhu baterai aktif di Status Bar (dapat diatur di Settings -> Status Bar)${RESET}"
 
 # ==============================================================================
-# TAHAP 6: MODUL NODE, WEB3 WALLET & X RADAR
+# TAHAP 7: MODUL NODE, WEB3 WALLET & X RADAR
 # ==============================================================================
-echo -e "\n${CYAN}● [6/7] Modul Node, Web3 Wallet & X Radar${RESET}"
+echo -e "\n${CYAN}● [7/8] Modul Node, Web3 Wallet & X Radar${RESET}"
 
 TARGET_WALLET_DIR="$HOME/wallet"
 if [ $IS_ROOT -eq 1 ] && [ -n "$CONTAINER_ROOTFS" ]; then
@@ -515,9 +548,10 @@ if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CO
 fi
 
 # ==============================================================================
-# TAHAP 7: ALIAS & FINALISASI SHELL
+# TAHAP 8: FINALISASI SHELL, AUTOCOMPLETE, SUGGESTION & ALIAS
 # ==============================================================================
-echo -e "\n${CYAN}● [7/7] Finalisasi Shell${RESET}"
+echo -e "\n${CYAN}● [8/8] Finalisasi Shell & Alias${RESET}"
+
 ALIAS_SNIPPET='
 # Project Fusion Aliases
 alias browser="termux-ipc webview"
@@ -526,12 +560,80 @@ alias copilot="agy-copilot"
 alias wallet="wallet"
 alias x="node $HOME/wallet/x_webview.js"
 '
-for RC_FILE in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    [ ! -f "$RC_FILE" ] && touch "$RC_FILE"
-    if ! grep -q "Project Fusion Aliases" "$RC_FILE" 2>/dev/null; then
-        echo "$ALIAS_SNIPPET" >> "$RC_FILE"
+
+if [ $USE_ZSH -eq 1 ]; then
+    ZSHRC_FILE="$HOME/.zshrc"
+    [ ! -f "$ZSHRC_FILE" ] && touch "$ZSHRC_FILE"
+
+    # Injeksi konfigurasi autocomplete, autosuggestion & syntax highlighting jika belum ada
+    if ! grep -q "Project Fusion Zsh Engine" "$ZSHRC_FILE" 2>/dev/null; then
+        cat << 'EOF_ZSH' >> "$ZSHRC_FILE"
+
+# ==============================================================================
+# Project Fusion Zsh Engine (Autocomplete, Autosuggestions & Syntax Highlighting)
+# ==============================================================================
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=10000
+SAVEHIST=10000
+setopt APPEND_HISTORY
+setopt INC_APPEND_HISTORY
+setopt SHARE_HISTORY
+setopt HIST_IGNORE_DUPS
+setopt HIST_IGNORE_ALL_DUPS
+setopt HIST_REDUCE_BLANKS
+
+# Smart Autocompletion
+autoload -Uz compinit
+compinit -d "$HOME/.zcompdump"
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+zstyle ':completion:*:descriptions' format '%F{yellow}-- %d --%f'
+
+# Autosuggestions (Bayangan riwayat & completion)
+if [ -f "$HOME/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+    source "$HOME/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+    ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+    ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
+elif [ -f "$PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+    source "$PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+    ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+    ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
+fi
+
+# Syntax Highlighting
+if [ -f "$HOME/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
+    source "$HOME/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+elif [ -f "$PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
+    source "$PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+fi
+
+# Keybindings: Panah atas/bawah substring search, panah kanan accept suggestion
+bindkey '^[[A' up-line-or-search
+bindkey '^[[B' down-line-or-search
+bindkey '^[[C' forward-char
+bindkey '^[OC' forward-char
+
+# Modern Minimal Prompt
+PROMPT='%F{cyan}%n%f%F{magenta}@%m%f:%F{yellow}%~%f %# '
+EOF_ZSH
     fi
-done
+
+    if ! grep -q "Project Fusion Aliases" "$ZSHRC_FILE" 2>/dev/null; then
+        echo "$ALIAS_SNIPPET" >> "$ZSHRC_FILE"
+    fi
+
+    # Set default shell ke zsh
+    chsh -s zsh 2>/dev/null || true
+    echo -e "  ${GREEN}✔ Zsh Modern Engine + Autocomplete + Autosuggestions terpasang${RESET}"
+fi
+
+# Selalu pasang alias di .bashrc sebagai fallback
+BASHRC_FILE="$HOME/.bashrc"
+[ ! -f "$BASHRC_FILE" ] && touch "$BASHRC_FILE"
+if ! grep -q "Project Fusion Aliases" "$BASHRC_FILE" 2>/dev/null; then
+    echo "$ALIAS_SNIPPET" >> "$BASHRC_FILE"
+fi
 
 echo -e "  ${GREEN}✔ Alias shell (browser, ipc, wallet, copilot, x) terpasang${RESET}"
 
