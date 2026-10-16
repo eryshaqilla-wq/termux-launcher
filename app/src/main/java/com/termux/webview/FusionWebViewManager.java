@@ -740,11 +740,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             WebView.setWebContentsDebuggingEnabled(true);
         } catch (Exception unused) {
         }
-        this.mPaneHost = (FrameLayout) r0.findViewById(2131296900);
+        this.mPaneHost = (FrameLayout) r0.findViewById(com.termux.R.id.terminal_surface_host);
         if (this.mPaneHost == null) {
-            this.mPaneHost = (FrameLayout) this.mActivity.findViewById(R.id.content);
+            this.mPaneHost = (FrameLayout) this.mActivity.findViewById(android.R.id.content);
         }
-        View viewFindViewById = this.mActivity.findViewById(2131296876);
+        View viewFindViewById = this.mActivity.findViewById(com.termux.R.id.terminal_pane_host);
         this.mTerminalPaneHost = viewFindViewById;
         if (viewFindViewById != null) {
             viewFindViewById.setLayerType(1, null);
