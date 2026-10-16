@@ -90,8 +90,6 @@ public class SettingsFragmentAliasesTest {
             screen.findPreference("film_grain_enabled"));
         assertNotNull("Wallpaper parallax switch is present in Visual Effects",
             screen.findPreference("wallpaper_parallax"));
-        assertNotNull("Software wallpaper backdrop switch is present in Visual Effects",
-            screen.findPreference("software_wallpaper_backdrop"));
         assertNotNull("Touch wobble effect switch is present in Visual Effects",
             screen.findPreference("touch_wobble_effect"));
     }

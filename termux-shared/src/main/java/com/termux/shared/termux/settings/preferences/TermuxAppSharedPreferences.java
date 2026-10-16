@@ -706,16 +706,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_V0239_EFFECTS_PRESET, value, false);
     }
 
-    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_SOFTWARE_WALLPAPER_BACKDROP}. */
-    public boolean isSoftwareWallpaperBackdropEnabled() {
-        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
-            TERMUX_APP.KEY_SOFTWARE_WALLPAPER_BACKDROP, TERMUX_APP.DEFAULT_VALUE_SOFTWARE_WALLPAPER_BACKDROP);
-    }
-
-    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_SOFTWARE_WALLPAPER_BACKDROP}. */
-    public void setSoftwareWallpaperBackdropEnabled(boolean value) {
-        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_SOFTWARE_WALLPAPER_BACKDROP, value, false);
-    }
 
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_TOUCH_WOBBLE_EFFECT}. */
     public boolean isTouchWobbleEffectEnabled() {

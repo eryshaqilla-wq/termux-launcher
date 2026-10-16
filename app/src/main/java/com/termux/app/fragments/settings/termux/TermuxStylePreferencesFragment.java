@@ -140,13 +140,11 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         SwitchPreferenceCompat fancier = findPreference("fancier_glass");
         SwitchPreferenceCompat grain = findPreference("film_grain_enabled");
         SwitchPreferenceCompat parallax = findPreference("wallpaper_parallax");
-        SwitchPreferenceCompat backdrop = findPreference("software_wallpaper_backdrop");
         SwitchPreferenceCompat touchWobble = findPreference("touch_wobble_effect");
         if (blur != null) blur.setEnabled(!v0239PresetActive);
         if (fancier != null) fancier.setEnabled(!v0239PresetActive);
         if (grain != null) grain.setEnabled(!v0239PresetActive);
         if (parallax != null) parallax.setEnabled(!v0239PresetActive);
-        if (backdrop != null) backdrop.setEnabled(true);
         if (touchWobble != null) touchWobble.setEnabled(true);
     }
 
@@ -463,10 +461,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setWallpaperParallaxEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
-            case "software_wallpaper_backdrop":
-                mPreferences.setSoftwareWallpaperBackdropEnabled(value);
-                scheduleTermuxActivityStylingSync(false);
-                break;
             case "touch_wobble_effect":
                 mPreferences.setTouchWobbleEffectEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -555,8 +549,6 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "wallpaper_parallax":
                 return mPreferences.isWallpaperParallaxEnabled();
-            case "software_wallpaper_backdrop":
-                return mPreferences.isSoftwareWallpaperBackdropEnabled();
             case "touch_wobble_effect":
                 return mPreferences.isTouchWobbleEffectEnabled();
             case "terminal_dynamic_colors_enabled":

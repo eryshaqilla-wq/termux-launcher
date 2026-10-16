@@ -62,12 +62,4 @@ public class WallpaperBackdropPolicyTest {
         assertFalse(WallpaperBackdropPolicy.alignmentSliderApplies(
             WallpaperBackdropPolicy.Mode.SELF_DRAWN));
     }
-
-    @Test
-    public void disablingAllowSelfDrawnForcesPassthroughMode() {
-        assertEquals(WallpaperBackdropPolicy.Mode.PASSTHROUGH,
-            WallpaperBackdropPolicy.mode(true, WallpaperPicture.MATCHES_SCREEN, true, false));
-        assertEquals(WallpaperBackdropPolicy.Mode.SELF_DRAWN,
-            WallpaperBackdropPolicy.mode(true, WallpaperPicture.MATCHES_SCREEN, true, true));
-    }
 }

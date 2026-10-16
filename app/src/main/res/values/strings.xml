@@ -679,10 +679,8 @@
     <string name="settings_wallpaper_blur_summary">Blurs the wallpaper behind terminal and glass bars. Turn off to keep transparency with zero blur overhead.</string>
     <string name="settings_film_grain_title">Film grain</string>
     <string name="settings_film_grain_summary">Adds subtle noise texture over glass surfaces. Turn off to reduce canvas redraw overhead.</string>
-    <string name="settings_software_wallpaper_backdrop_title">Software wallpaper backdrop</string>
-    <string name="settings_software_wallpaper_backdrop_summary">Launcher paints wallpaper bitmap directly in window. Turn off for direct WindowManager passthrough.</string>
-    <string name="settings_touch_wobble_effect_title">Touch wobble effect</string>
-    <string name="settings_touch_wobble_effect_summary">Tilts and wobbles surfaces with elastic spring physics right at the touch point.</string>
+    <string name="settings_touch_wobble_effect_title">Touch tilt &amp; wobble effect</string>
+    <string name="settings_touch_wobble_effect_summary">Tilts and wobbles surfaces when touched. Turn off for a completely solid, static touch response.</string>
     <string name="settings_fancier_glass_header">Fancier Glass</string>
     <string name="settings_fancier_glass_title">Fancier Glass</string>
     <string name="settings_fancier_glass_summary">Bends the wallpaper at glass edges. Set the wallpaper with the in-app wallpaper picker.</string>

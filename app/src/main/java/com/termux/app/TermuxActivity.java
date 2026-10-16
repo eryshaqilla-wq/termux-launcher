@@ -2238,8 +2238,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (controller == null) {
             return;
         }
-        if (mPreferences != null) {
-            controller.setWobbleMode(mPreferences.isTouchWobbleEffectEnabled());
+        if (mPreferences != null && !mPreferences.isTouchWobbleEffectEnabled()) {
+            if (mDockPlankTouchInside) {
+                mDockPlankTouchInside = false;
+                controller.releaseToNeutral();
+            }
+            return;
         }
         // The drawer's open drag starts on the dock; letting the plank keep tilting under it would
         // put two owners on the same views' transforms. The press that began the drag is handed
@@ -3932,9 +3936,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     @NonNull
     private WallpaperBackdropPolicy.Mode wallpaperBackdropMode() {
-        boolean allowSelfDrawn = mPreferences == null || mPreferences.isSoftwareWallpaperBackdropEnabled();
         return WallpaperBackdropPolicy.mode(shouldUseWallpaperPassthroughMode(),
-            wallpaperPicture(), !mWallpaperReadPermissionDenied, allowSelfDrawn);
+            wallpaperPicture(), !mWallpaperReadPermissionDenied);
     }
 
     /**
@@ -3989,13 +3992,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * never tilt the surface underneath.
      */
     private void feedTerminalPlank(MotionEvent ev) {
-        boolean wobble = mPreferences != null && mPreferences.isTouchWobbleEffectEnabled();
-        if ((!mTerminalGlassActive && !wobble) || mPaneController == null) return;
+        if (!mTerminalGlassActive || mPaneController == null) return;
+        if (mPreferences != null && !mPreferences.isTouchWobbleEffectEnabled()) {
+            mPaneController.cancelPaneGlassTouch();
+            return;
+        }
         if (isAppDrawerEngaged() || mSurfaceEditor.isActive() || isCommandPaletteOpen()) {
             mPaneController.cancelPaneGlassTouch();
             return;
         }
-        mPaneController.dispatchPaneGlassTouch(ev, isReducedMotionEnabled(), wobble);
+        mPaneController.dispatchPaneGlassTouch(ev, isReducedMotionEnabled());
     }
 
     /** Black dim over the wallpaper, behind every surface: 0% shows the wallpaper untouched. */
@@ -7015,8 +7021,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean shouldUseManagedWallpaperBlurSource() {
-        if (mPreferences == null || mPreferences.isV0239EffectsPresetEnabled()
-                || !mPreferences.isSoftwareWallpaperBackdropEnabled()) {
+        if (mPreferences == null) {
             return false;
         }
         return wallpaperSourceFacts().managedOnScreen();

@@ -1266,17 +1266,9 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_VALUE_V0239_EFFECTS_PRESET = true;
 
         /**
-         * Software wallpaper backdrop switch.
-         * When true (default: true), launcher displays wallpaper bitmaps via WallpaperBackdropView.
-         * When false, wallpaper is composited directly by the Android window manager / SurfaceFlinger.
-         */
-        public static final String KEY_SOFTWARE_WALLPAPER_BACKDROP = "software_wallpaper_backdrop";
-        public static final boolean DEFAULT_VALUE_SOFTWARE_WALLPAPER_BACKDROP = true;
-
-        /**
-         * Touch wobble effect switch.
-         * When true (default: true), touching/pressing terminal panes and surfaces applies an elastic
-         * spring-physics wobble and tilt response centered at the touch point.
+         * Touch tilt & wobble effect switch.
+         * When true (default: true), touching/pressing terminal panes and dock tilts and wobbles with built-in spring physics.
+         * When false, all physical touch tilt and wobble is completely disabled (solid/flat on touch).
          */
         public static final String KEY_TOUCH_WOBBLE_EFFECT = "touch_wobble_effect";
         public static final boolean DEFAULT_VALUE_TOUCH_WOBBLE_EFFECT = true;

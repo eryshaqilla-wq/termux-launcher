@@ -43,7 +43,7 @@ public final class SoftWallpaper {
 
     /** Puts the blur on the backdrop, or takes it off; a no-op below API 31. */
     public static void apply(@Nullable View backdrop, @Nullable TermuxAppSharedPreferences prefs) {
-        if (prefs != null && (prefs.isV0239EffectsPresetEnabled() || !prefs.isSoftwareWallpaperBackdropEnabled())) {
+        if (prefs != null && (prefs.isV0239EffectsPresetEnabled() || !prefs.isWallpaperBlurEnabled())) {
             apply(backdrop, false);
             return;
         }

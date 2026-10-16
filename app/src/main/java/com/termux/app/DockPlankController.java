@@ -44,10 +44,9 @@ public final class DockPlankController implements Choreographer.FrameCallback {
 
     // Per-instance tuning: the dock keeps the defaults; the terminal's full-screen pane uses far
     // gentler values, since 3° on a surface that tall reads as the whole screen keeling over.
-    private float mMaxTiltDeg;
-    private float mShiftDp;
-    private float mPressDip;
-    private boolean mWobbleMode = false;
+    private final float mMaxTiltDeg;
+    private final float mShiftDp;
+    private final float mPressDip;
     /** Ceiling on the dip's edge travel in px, or 0 for none. See {@link #setMaxDipTravelDp}. */
     private float mMaxDipTravelPx = NO_DIP_TRAVEL_CAP;
 
@@ -225,34 +224,6 @@ public final class DockPlankController implements Choreographer.FrameCallback {
      */
     public void setMaxDipTravelDp(float dp) {
         mMaxDipTravelPx = dp > 0f ? dp * mDensity : NO_DIP_TRAVEL_CAP;
-    }
-
-    public void setMaxTiltDeg(float deg) {
-        mMaxTiltDeg = deg;
-    }
-
-    public void setShiftDp(float dp) {
-        mShiftDp = dp;
-    }
-
-    public void setPressDip(float dip) {
-        mPressDip = dip;
-    }
-
-    public void setWobbleMode(boolean wobble) {
-        if (mWobbleMode == wobble) return;
-        mWobbleMode = wobble;
-        if (wobble) {
-            // Underdamped oscillation for a lively, bouncy elastic wobble (goyang-goyang)
-            mRx.setDamping(12.5f);
-            mRy.setDamping(12.5f);
-            mPress.setDamping(16.0f);
-        } else {
-            // Critically damped: clean settle, no overshoot
-            mRx.setDamping(26.08f);
-            mRy.setDamping(26.08f);
-            mPress.setDamping(35.78f);
-        }
     }
 
     public void setReducedMotion(boolean reduced) {

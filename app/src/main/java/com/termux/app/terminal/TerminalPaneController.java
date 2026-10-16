@@ -3095,13 +3095,10 @@ public class TerminalPaneController {
      * as the screen keeling over.
      */
     private static final float PANE_TILT_DEG = 1.1f;
-    private static final float PANE_TILT_DEG_WOBBLE = 3.2f;
     // The slide has to stay inside the pane gap: at the dock's 2dp a pressed slab crossed the
     // default 1dp gap and rode over its neighbour's rim, which read as a detached border.
     private static final float PANE_SHIFT_DP = 0.5f;
-    private static final float PANE_SHIFT_DP_WOBBLE = 3.0f;
     private static final float PANE_PRESS_DIP = 0.006f;
-    private static final float PANE_PRESS_DIP_WOBBLE = 0.018f;
     /**
      * How far the press dip may pull a pane's edge in, whatever the pane's size. A pane is most of
      * the screen, so the dock's proportional dip moved each edge more than a dozen pixels here: the
@@ -3109,7 +3106,6 @@ public class TerminalPaneController {
      * border detaching from the terminal rather than as the terminal being pressed.
      */
     private static final float PANE_DIP_TRAVEL_DP = 1f;
-    private static final float PANE_DIP_TRAVEL_DP_WOBBLE = 5f;
     /**
      * Room a pressed pane needs outside its own bounds: the plank's slide plus the perspective
      * growth of whichever edge tilts toward the finger.
@@ -3136,18 +3132,10 @@ public class TerminalPaneController {
      * so terminal scrolling, selection and the float drags all still see it.
      */
     public void dispatchPaneGlassTouch(@NonNull MotionEvent ev, boolean reducedMotion) {
-        dispatchPaneGlassTouch(ev, reducedMotion, false);
-    }
-
-    public void dispatchPaneGlassTouch(@NonNull MotionEvent ev, boolean reducedMotion, boolean wobbleEnabled) {
-        if (!paneGlassActive() && !wobbleEnabled) {
+        if (!paneGlassActive()) {
             releasePressedPlank();
             return;
         }
-        float tiltDeg = wobbleEnabled ? PANE_TILT_DEG_WOBBLE : PANE_TILT_DEG;
-        float shiftDp = wobbleEnabled ? PANE_SHIFT_DP_WOBBLE : PANE_SHIFT_DP;
-        float pressDip = wobbleEnabled ? PANE_PRESS_DIP_WOBBLE : PANE_PRESS_DIP;
-        float maxDip = wobbleEnabled ? PANE_DIP_TRAVEL_DP_WOBBLE : PANE_DIP_TRAVEL_DP;
         switch (ev.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 releasePressedPlank();
@@ -3156,18 +3144,12 @@ public class TerminalPaneController {
                 DockPlankController plank = mPanePlanks.get(frame);
                 if (plank == null) {
                     plank = new DockPlankController(frame, null, null,
-                        tiltDeg, shiftDp, pressDip);
+                        PANE_TILT_DEG, PANE_SHIFT_DP, PANE_PRESS_DIP);
                     plank.setHingeMode(false);
                     plank.setMotionEnabled(true);
-                    plank.setMaxDipTravelDp(maxDip);
+                    plank.setMaxDipTravelDp(PANE_DIP_TRAVEL_DP);
                     mPanePlanks.put(frame, plank);
-                } else {
-                    plank.setMaxTiltDeg(tiltDeg);
-                    plank.setShiftDp(shiftDp);
-                    plank.setPressDip(pressDip);
-                    plank.setMaxDipTravelDp(maxDip);
                 }
-                plank.setWobbleMode(wobbleEnabled);
                 plank.setReducedMotion(reducedMotion);
                 plank.setEnabled(true);
                 mPressedPlank = plank;
