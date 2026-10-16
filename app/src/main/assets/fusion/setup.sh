@@ -94,17 +94,17 @@ else
     DEFAULT_MODE="2"
 fi
 
-echo -e "  1) Root (NetHunter/Chroot)"
-echo -e "  2) Non-Root (Standar/PRoot)"
+echo -e "  1) Root (NetHunter/Droidspaces/Chroot) [Akses Penuh]"
+echo -e "  2) Non-Root (Termux Standar) [Cepat, Ringan, 0-Bug]"
 read -p "  Pilih [1/2, default: $DEFAULT_MODE]: " USER_MODE
 [ -z "$USER_MODE" ] && USER_MODE="$DEFAULT_MODE"
 
 if [ "$USER_MODE" = "1" ]; then
     IS_ROOT=1
-    echo -e "  ${GREEN}➔ Jalur: ROOT Engine${RESET}"
+    echo -e "  ${GREEN}➔ Jalur: ROOT Engine (Bebas tentukan lokasi container/wallet)${RESET}"
 else
     IS_ROOT=0
-    echo -e "  ${GREEN}➔ Jalur: Non-Root Engine${RESET}"
+    echo -e "  ${GREEN}➔ Jalur: Non-Root Engine (Terkunci di Sandbox Termux, 0-Bug)${RESET}"
 fi
 
 mkdir -p "$FUSION_HOME"
@@ -114,15 +114,28 @@ mkdir -p "$PREFIX/bin"
 # TAHAP 2: OPSI INTEGRASI DISTRO LINUX
 # ==============================================================================
 echo -e "\n${CYAN}● [2/8] Integrasi Distro Linux${RESET}"
-echo -e "  1) Ya, pasang / integrasikan"
-echo -e "  2) Tidak, Termux murni saja"
-read -p "  Pilih [1/2, default: 1]: " LINUX_OPT
-[ -z "$LINUX_OPT" ] && LINUX_OPT="1"
 
 DISTRO_NAME=""
 DISPLAY_NAME=""
 CUSTOM_LINUX_NAME=""
 CUSTOM_LINUX_CMD=""
+
+if [ $IS_ROOT -eq 1 ]; then
+    echo -e "  1) Ya, pasang / integrasikan Container Root"
+    echo -e "  2) Tidak, Termux murni saja (tetap dengan hak akses su)"
+    read -p "  Pilih [1/2, default: 1]: " LINUX_OPT
+    [ -z "$LINUX_OPT" ] && LINUX_OPT="1"
+else
+    echo -e "  1) Termux Murni Standar [Direkomendasikan: Super Cepat, Ringan, 0-Bug]"
+    echo -e "  2) Pasang PRoot Linux (Debian/Ubuntu/Kali) [Eksperimental]"
+    read -p "  Pilih [1/2, default: 1]: " NONROOT_OPT
+    [ -z "$NONROOT_OPT" ] && NONROOT_OPT="1"
+    if [ "$NONROOT_OPT" = "1" ]; then
+        LINUX_OPT="2" # Termux murni saja
+    else
+        LINUX_OPT="1" # Pasang PRoot
+    fi
+fi
 
 if [ "$LINUX_OPT" = "1" ]; then
     echo "1" > "$FUSION_HOME/has_linux.txt"
@@ -496,11 +509,42 @@ echo -e "  ${GREEN}✔ Sensor suhu baterai aktif di Status Bar (dapat diatur di 
 # ==============================================================================
 echo -e "\n${CYAN}● [7/8] Modul Node, Web3 Wallet & X Radar${RESET}"
 
+HOST_WALLET_DIR="$HOME/wallet"
 TARGET_WALLET_DIR="$HOME/wallet"
+
 if [ $IS_ROOT -eq 1 ] && [ -n "$CONTAINER_ROOTFS" ]; then
-    TARGET_WALLET_DIR="$CONTAINER_ROOTFS/root/wallet"
+    echo -e "  Pilih Lokasi Utama Modul Wallet & Database:"
+    echo -e "    1) Container Root ($CUSTOM_LINUX_NAME: /root/wallet) [Default]"
+    echo -e "    2) Termux Lokal ($HOME/wallet)"
+    read -p "    Pilih [1/2, def: 1]: " WALLET_LOC_CHOICE
+    [ -z "$WALLET_LOC_CHOICE" ] && WALLET_LOC_CHOICE="1"
+    if [ "$WALLET_LOC_CHOICE" = "1" ]; then
+        TARGET_WALLET_DIR="$CONTAINER_ROOTFS/root/wallet"
+        HOST_WALLET_DIR="/root/wallet"
+        echo -e "  ${GREEN}➔ Lokasi Wallet: Container Root ($HOST_WALLET_DIR)${RESET}"
+    else
+        TARGET_WALLET_DIR="$HOME/wallet"
+        HOST_WALLET_DIR="$HOME/wallet"
+        echo -e "  ${GREEN}➔ Lokasi Wallet: Termux Lokal ($HOST_WALLET_DIR)${RESET}"
+    fi
+else
+    # Non-Root: Pasti dan mutlak di Sandbox Termux ($HOME/wallet)
+    TARGET_WALLET_DIR="$HOME/wallet"
+    HOST_WALLET_DIR="$HOME/wallet"
+    echo -e "  ${GREEN}➔ Lokasi Wallet: Termux Lokal ($HOST_WALLET_DIR)${RESET}"
 fi
 
+# Simpan environment dinamis ke $HOME/.fusion_env
+cat << EOF > "$HOME/.fusion_env"
+# Project Fusion Dynamic Environment
+export FUSION_MODE="$([ $IS_ROOT -eq 1 ] && echo 'root' || echo 'nonroot')"
+export FUSION_WALLET_DIR="$HOST_WALLET_DIR"
+export FUSION_DB_DIR="$HOST_WALLET_DIR"
+EOF
+chmod 644 "$HOME/.fusion_env"
+echo -e "  ${GREEN}✔ Konfigurasi dinamis disimpan di $HOME/.fusion_env${RESET}"
+
+# Siapkan folder lokal $HOME/wallet
 mkdir -p "$HOME/wallet"
 if [ -d "$FUSION_HOME/wallet" ]; then
     cp -rf "$FUSION_HOME/wallet/"* "$HOME/wallet/"
@@ -521,6 +565,7 @@ if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CO
     su -c "mkdir -p '$TARGET_WALLET_DIR'" 2>/dev/null || true
     [ -d "$FUSION_HOME/wallet" ] && su -c "cp -rf '$FUSION_HOME/wallet/'* '$TARGET_WALLET_DIR/'" 2>/dev/null || true
     [ -f "$HOME/wallet/x_webview.js" ] && su -c "cp -f '$HOME/wallet/x_webview.js' '$TARGET_WALLET_DIR/x_webview.js'" 2>/dev/null || true
+    [ -f "$HOME/.fusion_env" ] && su -c "cp -f '$HOME/.fusion_env' '$CONTAINER_ROOTFS/root/.fusion_env'" 2>/dev/null || true
 fi
 
 # Instalasi npm dengan feedback jelas
@@ -553,12 +598,13 @@ fi
 echo -e "\n${CYAN}● [8/8] Finalisasi Shell & Alias${RESET}"
 
 ALIAS_SNIPPET='
-# Project Fusion Aliases
+# Project Fusion Dynamic Environment & Aliases
+[ -f "$HOME/.fusion_env" ] && source "$HOME/.fusion_env"
 alias browser="termux-ipc webview"
 alias ipc="termux-ipc"
 alias copilot="agy-copilot"
 alias wallet="wallet"
-alias x="node $HOME/wallet/x_webview.js"
+alias x="x"
 '
 
 if [ $USE_ZSH -eq 1 ]; then

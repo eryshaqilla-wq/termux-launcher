@@ -26,14 +26,39 @@ with open(os.path.join(BUNDLE_DIR, "bin/browser"), "w") as f:
 # Wrapper x (otomasi X Radar)
 with open(os.path.join(BUNDLE_DIR, "bin/x"), "w") as f:
     f.write("""#!/data/data/com.termux/files/usr/bin/bash
-TARGET_X="${HOME}/wallet/x_webview.js"
-if [ ! -f "$TARGET_X" ] && [ -f "/root/wallet/x_webview.js" ]; then
-    TARGET_X="/root/wallet/x_webview.js"
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_X="${FUSION_WALLET_DIR:-$HOME/wallet}/x_webview.js"
+if [ ! -f "$TARGET_X" ]; then
+    if [ -f "$HOME/wallet/x_webview.js" ]; then
+        TARGET_X="$HOME/wallet/x_webview.js"
+    elif [ -f "/root/wallet/x_webview.js" ]; then
+        TARGET_X="/root/wallet/x_webview.js"
+    fi
 fi
 if [ -f "$TARGET_X" ]; then
     exec node "$TARGET_X" "$@"
 else
     echo "x_webview.js tidak ditemukan di $TARGET_X"
+    exit 1
+fi
+""")
+
+# Wrapper wallet (Ghost Web3 Wallet Daemon)
+with open(os.path.join(BUNDLE_DIR, "bin/wallet"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+if [ ! -f "$TARGET_DIR/wallet.js" ]; then
+    if [ -f "$HOME/wallet/wallet.js" ]; then
+        TARGET_DIR="$HOME/wallet"
+    elif [ -f "/root/wallet/wallet.js" ]; then
+        TARGET_DIR="/root/wallet"
+    fi
+fi
+if [ -f "$TARGET_DIR/wallet.js" ]; then
+    cd "$TARGET_DIR" && exec node wallet.js "$@"
+else
+    echo "GhostWallet (wallet.js) tidak ditemukan di $TARGET_DIR"
     exit 1
 fi
 """)
