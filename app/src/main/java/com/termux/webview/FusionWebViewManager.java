@@ -693,6 +693,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             evalOnActiveTab("window.AgyBridge && window.AgyBridge.showRecipePicker && window.AgyBridge.showRecipePicker();");
             return;
         }
+        if (i == 5) {
+            toggleDeveloperTools();
+            return;
+        }
         if (i == 6) {
             evalOnActiveTab("window.AgyBridge && window.AgyBridge.showRecipePicker && window.AgyBridge.showRecipePicker();");
         } else if (i == 7) {
@@ -700,6 +704,41 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         } else if (i == 8) {
             evalOnActiveTab("window.AgyBridge && window.AgyBridge.showDomInspector && window.AgyBridge.showDomInspector();");
         }
+    }
+
+    public void toggleDeveloperTools() {
+        toggleDevMode();
+        evalOnActiveTab("(function(){"
+            + "if(window.eruda){"
+            + "  if(!window.eruda._isInit){try{window.eruda.init();}catch(e){}}"
+            + "  try{window.eruda.show();}catch(e){}"
+            + "  return;"
+            + "}"
+            + "var s=document.createElement('script');"
+            + "s.src='https://cdn.jsdelivr.net/npm/eruda';"
+            + "s.onload=function(){"
+            + "  try{"
+            + "    eruda.init();"
+            + "    eruda.show();"
+            + "    if(window.AgyBridge){"
+            + "      eruda.add({"
+            + "        name:'antigravity',"
+            + "        init:function($el){"
+            + "          $el.html('<div style=\"padding:12px;background:#101418;color:#00ffaa;font-family:monospace;font-size:12px;\">'+"
+            + "            '<h3 style=\"margin:0 0 8px 0;color:#60a5fa;\">🪐 Antigravity Co-Pilot</h3>'+"
+            + "            '<p style=\"color:#a0aec0;margin:0 0 10px 0;\">Status: Connected to Termux IPC</p>'+"
+            + "            '<button id=\"btn-dom-ai\" style=\"background:#2563eb;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;\">🔍 Inspect DOM</button>'+"
+            + "            '</div>');"
+            + "          $el.find('#btn-dom-ai').on('click', function(){"
+            + "            if(window.AgyBridge && window.AgyBridge.showDomInspector){ window.AgyBridge.showDomInspector(); }"
+            + "          });"
+            + "        }"
+            + "      });"
+            + "    }"
+            + "  }catch(e){}"
+            + "};"
+            + "document.body.appendChild(s);"
+            + "})();");
     }
 
     public void executeAgyPrompt(String str) {

@@ -115,6 +115,10 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.toggleDevMode();
             return;
         }
+        if (str.equals("WEBVIEW_DEVELOPER") || str.equals("WEBVIEW_DEV_TOOLS")) {
+            fusionWebViewManager.toggleDeveloperTools();
+            return;
+        }
         if (str.equals("WEBVIEW_BRIDGE")) {
             fusionWebViewManager.triggerAiDevBridge();
             return;

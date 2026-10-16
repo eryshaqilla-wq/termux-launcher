@@ -194,9 +194,9 @@ handle_webview() {
             echo "[termux-ipc] Cache tab aktif telah dibersihkan"
             return 0
             ;;
-        inspect|dev|cdp|--inspect|--dev|--cdp)
-            send_cmd "WEBVIEW_DEV_MODE"
-            echo "[termux-ipc] Dev Mode (CDP) diaktifkan."
+        developer|inspect|dev|cdp|--developer|--inspect|--dev|--cdp)
+            send_cmd "WEBVIEW_DEVELOPER"
+            echo "[termux-ipc] Mode Developer & Eruda DevTools diaktifkan."
             local PID_SOCKET=""
             if [ -f "/data/data/com.termux/files/home/.webview_cdp_socket" ]; then
                 PID_SOCKET=$(cat /data/data/com.termux/files/home/.webview_cdp_socket 2>/dev/null)

@@ -291,6 +291,16 @@ public class FusionDrawerHelper {
         LinearLayout.LayoutParams layoutParams5 = new LinearLayout.LayoutParams(-1, -2);
         layoutParams5.setMargins(0, 4, 0, 4);
         linearLayout2.addView(textView7, layoutParams5);
+        TextView textViewDev = new TextView(appCompatActivity);
+        textViewDev.setText("Developer");
+        FusionUiHelper.setSolidBtn(textViewDev);
+        textViewDev.setTextSize(2, 13.0f);
+        textViewDev.setPadding(14, 10, 14, 10);
+        textViewDev.setClickable(true);
+        textViewDev.setOnClickListener(new FusionAgyActionClick(fusionWebViewManager, 5));
+        LinearLayout.LayoutParams layoutParamsDev = new LinearLayout.LayoutParams(-1, -2);
+        layoutParamsDev.setMargins(0, 4, 0, 4);
+        linearLayout2.addView(textViewDev, layoutParamsDev);
         TextView textView8 = new TextView(appCompatActivity);
         textView8.setText("TUTUP");
         FusionUiHelper.setSolidBtn(textView8);
