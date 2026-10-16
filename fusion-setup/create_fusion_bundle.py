@@ -120,24 +120,18 @@ os.chmod(os.path.join(BUNDLE_DIR, "setup.sh"), 0o755)
 
 print("--- 2c. Menyiapkan Plugin Zsh (Autosuggestions & Highlighting) ---")
 zsh_plugin_dir = os.path.join(BUNDLE_DIR, "zsh_plugins")
-os.makedirs(os.path.join(zsh_plugin_dir, "zsh-autosuggestions"), exist_ok=True)
-os.makedirs(os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting"), exist_ok=True)
+os.makedirs(zsh_plugin_dir, exist_ok=True)
 
-auto_src = "/root/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
-if os.path.exists(auto_src):
-    for f in glob.glob(os.path.join(auto_src, "*.zsh")):
-        shutil.copy2(f, os.path.join(zsh_plugin_dir, "zsh-autosuggestions"))
-    if os.path.exists(os.path.join(auto_src, "src")):
-        shutil.copytree(os.path.join(auto_src, "src"), os.path.join(zsh_plugin_dir, "zsh-autosuggestions/src"), dirs_exist_ok=True)
+def copy_plugin_tree(src, dst):
+    if os.path.exists(src):
+        if os.path.exists(dst):
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns('.git', '.github', 'spec', 'tests', 'docs', 'images'))
 
-syn_src = "/root/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
-if os.path.exists(syn_src):
-    for f in glob.glob(os.path.join(syn_src, "*.zsh")):
-        shutil.copy2(f, os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting"))
-    if os.path.exists(os.path.join(syn_src, "highlighters")):
-        shutil.copytree(os.path.join(syn_src, "highlighters"), os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting/highlighters"), dirs_exist_ok=True)
+copy_plugin_tree("/root/.oh-my-zsh/custom/plugins/zsh-autosuggestions", os.path.join(zsh_plugin_dir, "zsh-autosuggestions"))
+copy_plugin_tree("/root/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting", os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting"))
 
-print("✓ Added zsh plugins to bundle")
+print("✓ Added full zsh plugins to bundle")
 
 print("--- 3. Mengemas menjadi fusion_payload.tar.gz ---")
 with tarfile.open(OUTPUT_TAR, "w:gz") as tar:
@@ -161,8 +155,20 @@ shutil.copy2(os.path.join(BUNDLE_DIR, "setup.sh"), os.path.join(ASSETS_DIR, "set
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc"), os.path.join(ASSETS_DIR, "termux-ipc"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/browser"), os.path.join(ASSETS_DIR, "browser"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/x"), os.path.join(ASSETS_DIR, "x"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet"), os.path.join(ASSETS_DIR, "wallet"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallet.js")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/wallet.js"), os.path.join(ASSETS_DIR, "wallet.js"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/x_webview.js")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/x_webview.js"), os.path.join(ASSETS_DIR, "x_webview.js"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), os.path.join(ASSETS_DIR, "wallets_db.json"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/chains_db.json")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/chains_db.json"), os.path.join(ASSETS_DIR, "chains_db.json"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/package.json")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/package.json"), os.path.join(ASSETS_DIR, "package.json"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), os.path.join(ASSETS_DIR, "recipes_db.json"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "termux.properties")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "termux.properties"), os.path.join(ASSETS_DIR, "termux.properties"))
 

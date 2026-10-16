@@ -276,9 +276,9 @@ fi
 if [ $SYSTEM_PKGS_OK -eq 0 ]; then
     spin "Memperbarui katalog paket..." apt-get update -y -qq
     if [ $USE_ZSH -eq 1 ]; then
-        spin "Menginstall nodejs, python, git, curl, zsh..." pkg install -y -o Dpkg::Options::="--force-confold" nodejs python git curl zsh zsh-completions
+        spin "Menginstall nodejs, python, git, curl, zsh..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs python git curl zsh zsh-completions
     else
-        spin "Menginstall nodejs, python, git, curl..." pkg install -y -o Dpkg::Options::="--force-confold" nodejs python git curl
+        spin "Menginstall nodejs, python, git, curl..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs python git curl
     fi
 else
     echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, python, git, curl)${RESET}"
@@ -291,8 +291,10 @@ fi
 # Pasang Zsh Plugins jika Zsh dipilih
 if [ $USE_ZSH -eq 1 ]; then
     mkdir -p "$HOME/.zsh/plugins"
+    mkdir -p "$HOME/.oh-my-zsh/custom/plugins"
     if [ -d "$FUSION_HOME/zsh_plugins" ]; then
-        cp -rf "$FUSION_HOME/zsh_plugins/"* "$HOME/.zsh/plugins/"
+        cp -rf "$FUSION_HOME/zsh_plugins/"* "$HOME/.zsh/plugins/" 2>/dev/null || true
+        cp -rf "$FUSION_HOME/zsh_plugins/"* "$HOME/.oh-my-zsh/custom/plugins/" 2>/dev/null || true
         echo -e "  ${GREEN}✔ Plugin Zsh (Autosuggestions & Syntax Highlighting) disiapkan${RESET}"
     fi
 fi
@@ -534,6 +536,32 @@ mkdir -p "$HOME/wallet"
 if [ -d "$FUSION_HOME/wallet" ]; then
     cp -rf "$FUSION_HOME/wallet/"* "$HOME/wallet/"
 fi
+if [ -d "$SCRIPT_DIR/wallet" ]; then
+    cp -rf "$SCRIPT_DIR/wallet/"* "$HOME/wallet/"
+fi
+
+# Fallback ekstraksi aset wallet dari APK jika belum lengkap
+if [ ! -f "$HOME/wallet/wallet.js" ]; then
+    BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
+    if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ] && command -v unzip >/dev/null 2>&1; then
+        unzip -j -o "$BASE_APK" "assets/fusion/wallet.js" -d "$HOME/wallet/" 2>/dev/null || true
+        unzip -j -o "$BASE_APK" "assets/fusion/wallets_db.json" -d "$HOME/wallet/" 2>/dev/null || true
+        unzip -j -o "$BASE_APK" "assets/fusion/chains_db.json" -d "$HOME/wallet/" 2>/dev/null || true
+        unzip -j -o "$BASE_APK" "assets/fusion/package.json" -d "$HOME/wallet/" 2>/dev/null || true
+        unzip -j -o "$BASE_APK" "assets/fusion/recipes_db.json" -d "$HOME/wallet/" 2>/dev/null || true
+        unzip -j -o "$BASE_APK" "assets/fusion/x_webview.js" -d "$HOME/wallet/" 2>/dev/null || true
+    fi
+fi
+
+# Jika masih belum ada, coba salin dari /root/wallet jika ada hak akses
+if [ ! -f "$HOME/wallet/wallet.js" ] && [ -f "/root/wallet/wallet.js" ]; then
+    cp -rf /root/wallet/* "$HOME/wallet/" 2>/dev/null || true
+fi
+
+# Pastikan default JSON tersedia
+[ ! -f "$HOME/wallet/wallets_db.json" ] && echo '{"master_index": null, "wallets": []}' > "$HOME/wallet/wallets_db.json"
+[ ! -f "$HOME/wallet/chains_db.json" ] && echo '{}' > "$HOME/wallet/chains_db.json"
+[ ! -f "$HOME/wallet/recipes_db.json" ] && echo '{}' > "$HOME/wallet/recipes_db.json"
 
 # Pastikan x_webview.js terpasang di $HOME/wallet/
 if [ -f "$FUSION_HOME/wallet/x_webview.js" ]; then
@@ -548,8 +576,7 @@ chmod 755 "$HOME/wallet/x_webview.js" 2>/dev/null || true
 # Jika di root container, salin juga ke container
 if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CONTAINER_ROOTFS" ]; then
     su -c "mkdir -p '$TARGET_WALLET_DIR'" 2>/dev/null || true
-    [ -d "$FUSION_HOME/wallet" ] && su -c "cp -rf '$FUSION_HOME/wallet/'* '$TARGET_WALLET_DIR/'" 2>/dev/null || true
-    [ -f "$HOME/wallet/x_webview.js" ] && su -c "cp -f '$HOME/wallet/x_webview.js' '$TARGET_WALLET_DIR/x_webview.js'" 2>/dev/null || true
+    [ -d "$HOME/wallet" ] && su -c "cp -rf '$HOME/wallet/'* '$TARGET_WALLET_DIR/'" 2>/dev/null || true
     [ -f "$HOME/.fusion_env" ] && su -c "cp -f '$HOME/.fusion_env' '$CONTAINER_ROOTFS/root/.fusion_env'" 2>/dev/null || true
 fi
 
@@ -580,29 +607,79 @@ fi
 # ==============================================================================
 # TAHAP 8: FINALISASI SHELL, AUTOCOMPLETE, SUGGESTION & ALIAS
 # ==============================================================================
-echo -e "\n${CYAN}● [8/8] Finalisasi Shell & Alias${RESET}"
+echo -e "\n${CYAN}● [8/8] Finalisasi Shell & Alias (Tampilan Eso)${RESET}"
 
 ALIAS_SNIPPET='
 # Project Fusion Dynamic Environment & Aliases
 [ -f "$HOME/.fusion_env" ] && source "$HOME/.fusion_env"
+alias c=clear
+alias python=python3
+alias p=python3
+alias ls="ls --color=auto"
+alias grep="grep --color=auto"
+alias fgrep="fgrep --color=auto"
+alias egrep="egrep --color=auto"
+alias diff="diff --color=auto"
+alias ip="ip --color=auto"
+alias ll="ls -l"
+alias la="ls -A"
+alias l="ls -CF"
+alias wallet="wallet"
+alias patchright="node ./wallet/patchright.js"
+alias x="x"
+alias xradar="node ~/wallet/x_webview.js"
 alias browser="termux-ipc webview"
 alias ipc="termux-ipc"
 alias copilot="agy-copilot"
-alias wallet="wallet"
-alias x="x"
 '
 
 if [ $USE_ZSH -eq 1 ]; then
     ZSHRC_FILE="$HOME/.zshrc"
     [ ! -f "$ZSHRC_FILE" ] && touch "$ZSHRC_FILE"
 
-    # Injeksi konfigurasi autocomplete, autosuggestion & syntax highlighting jika belum ada
-    if ! grep -q "Project Fusion Zsh Engine" "$ZSHRC_FILE" 2>/dev/null; then
+    # Injeksi konfigurasi Zsh lengkap ala Eso jika belum ada
+    if ! grep -q "ESO:LAUNCHER ZSH ENGINE" "$ZSHRC_FILE" 2>/dev/null; then
         cat << 'EOF_ZSH' >> "$ZSHRC_FILE"
 
 # ==============================================================================
-# Project Fusion Zsh Engine (Autocomplete, Autosuggestions & Syntax Highlighting)
+# ESO:LAUNCHER ZSH ENGINE (Restored Style & Productivity)
 # ==============================================================================
+# 1. IDENTITAS HACKER & PROMPT ESO
+typeset -g POWERLEVEL9K_CONTEXT_ROOT_TEMPLATE='%F{244}%n@%f%F{magenta}eso%f'
+typeset -g POWERLEVEL9K_CONTEXT_TEMPLATE='%F{244}%n@%f%F{magenta}eso%f'
+typeset -g POWERLEVEL9K_CONTEXT_SHOW_ON_DEFAULT=true
+typeset -g POWERLEVEL9K_CONTEXT_ROOT_SHOW_ON_DEFAULT=true
+PROMPT='%F{244}%n@%f%F{magenta}eso%f:%F{yellow}%~%f %# '
+
+# 2. FIX KEYBOARD BUGS & KEYBINDINGS
+bindkey -e                                       
+bindkey ' ' magic-space                           
+bindkey '^U' backward-kill-line                   
+bindkey '^[[3;5~' kill-word                       
+bindkey '^[[3~' delete-char                       
+bindkey '^[[1;5C' forward-word                    
+bindkey '^[[1;5D' backward-word                   
+bindkey '^[[5~' beginning-of-buffer-or-history    
+bindkey '^[[6~' end-of-buffer-or-history          
+bindkey '^[[H' beginning-of-line                  
+bindkey '^[[F' end-of-line                        
+bindkey '^[[Z' undo                               
+bindkey '^[[A' up-line-or-search
+bindkey '^[[B' down-line-or-search
+bindkey '^[[C' forward-char
+bindkey '^[OC' forward-char
+
+# 3. WARNA UNTUK LESS & MAN PAGES
+export LESS_TERMCAP_mb=$'\E[1;31m'
+export LESS_TERMCAP_md=$'\E[1;36m'
+export LESS_TERMCAP_me=$'\E[0m'
+export LESS_TERMCAP_so=$'\E[01;33m'
+export LESS_TERMCAP_se=$'\E[0m'
+export LESS_TERMCAP_us=$'\E[1;32m'
+export LESS_TERMCAP_ue=$'\E[0m'
+export MANROFFOPT="-c"
+
+# 4. HISTORY CONFIGURATION
 HISTFILE="$HOME/.zsh_history"
 HISTSIZE=10000
 SAVEHIST=10000
@@ -613,7 +690,7 @@ setopt HIST_IGNORE_DUPS
 setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_REDUCE_BLANKS
 
-# Smart Autocompletion
+# 5. SMART AUTOCOMPLETION
 autoload -Uz compinit
 compinit -d "$HOME/.zcompdump"
 zstyle ':completion:*' menu select
@@ -621,52 +698,101 @@ zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 zstyle ':completion:*:descriptions' format '%F{yellow}-- %d --%f'
 
-# Autosuggestions (Bayangan riwayat & completion)
-if [ -f "$HOME/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+# 6. ZSH PLUGINS (Autosuggestions & Syntax Highlighting)
+if [ -f "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
+    source "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+elif [ -f "$HOME/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
     source "$HOME/.zsh/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
-    ZSH_AUTOSUGGEST_STRATEGY=(history completion)
-    ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
 elif [ -f "$PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
     source "$PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
-    ZSH_AUTOSUGGEST_STRATEGY=(history completion)
-    ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
 fi
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=244'
 
-# Syntax Highlighting
-if [ -f "$HOME/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
+if [ -f "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
+    source "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+elif [ -f "$HOME/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
     source "$HOME/.zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 elif [ -f "$PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]; then
     source "$PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 fi
 
-# Keybindings: Panah atas/bawah substring search, panah kanan accept suggestion
-bindkey '^[[A' up-line-or-search
-bindkey '^[[B' down-line-or-search
-bindkey '^[[C' forward-char
-bindkey '^[OC' forward-char
+# 7. TERMUX IPC HELPER & AUTOCOMPLETION
+paste() {
+    if [ $# -eq 0 ]; then
+        termux-ipc clip-get
+    else
+        command paste "$@"
+    fi
+}
 
-# Modern Minimal Prompt
-PROMPT='%F{cyan}%n%f%F{magenta}@%m%f:%F{yellow}%~%f %# '
+_termux() {
+    local -a commands
+    commands=(
+        'kb:Kontrol soft keyboard (hide, show, on, off)'
+        'mouse:Mode touch mouse (on, off, toggle)'
+        'toast:Tampilkan popup notifikasi Android Toast'
+        'notif:Kirim notifikasi ke status bar Android'
+        'notification:Kirim notifikasi ke status bar Android'
+        'copy:Salin teks ke clipboard Android'
+        'paste:Cetak teks dari clipboard Android'
+        'torch:Kontrol lampu senter LED (on, off)'
+        'battery:Cek persentase dan status baterai'
+        'vibrate:Picu getaran haptic HP'
+        'vol:Atur volume audio media (0-15)'
+        'wifi:Info status jaringan WiFi aktif'
+        'browser:Buka atau kelola WebView Fusion'
+        'gui:Jalankan Cyberpunk Touch GUI'
+        'gui-stop:Hentikan Cyberpunk Touch GUI'
+        'ping:Cek koneksi socket server IPC'
+        'help:Tampilkan panduan bantuan termux'
+    )
+    if (( CURRENT == 2 )); then
+        _describe -t commands 'perintah termux' commands
+    fi
+}
+compdef _termux termux
+
+_kb() {
+    local -a kb_cmds
+    kb_cmds=('hide:Sembunyikan keyboard' 'show:Munculkan keyboard' 'on:Aktifkan keyboard' 'off:Matikan keyboard')
+    _describe -t kb_cmds 'opsi keyboard' kb_cmds
+}
+compdef _kb kb
+
+_mouse() {
+    local -a mouse_cmds
+    mouse_cmds=('on:Aktifkan mouse' 'off:Nonaktifkan mouse' 'toggle:Toggle mouse')
+    _describe -t mouse_cmds 'opsi mouse' mouse_cmds
+}
+compdef _mouse mouse
+
+_torch() {
+    local -a torch_cmds
+    torch_cmds=('on:Nyalakan senter' 'off:Matikan senter')
+    _describe -t torch_cmds 'opsi senter' torch_cmds
+}
+compdef _torch torch
 EOF_ZSH
     fi
 
-    if ! grep -q "Project Fusion Aliases" "$ZSHRC_FILE" 2>/dev/null; then
+    if ! grep -q "Project Fusion Dynamic Environment & Aliases" "$ZSHRC_FILE" 2>/dev/null; then
         echo "$ALIAS_SNIPPET" >> "$ZSHRC_FILE"
     fi
 
     # Set default shell ke zsh
     chsh -s zsh 2>/dev/null || true
-    echo -e "  ${GREEN}✔ Zsh Modern Engine + Autocomplete + Autosuggestions terpasang${RESET}"
+    echo -e "  ${GREEN}✔ Tampilan Zsh Eso + Keybindings + Autocomplete + Autosuggestions aktif${RESET}"
 fi
 
 # Selalu pasang alias di .bashrc sebagai fallback
 BASHRC_FILE="$HOME/.bashrc"
 [ ! -f "$BASHRC_FILE" ] && touch "$BASHRC_FILE"
-if ! grep -q "Project Fusion Aliases" "$BASHRC_FILE" 2>/dev/null; then
+if ! grep -q "Project Fusion Dynamic Environment & Aliases" "$BASHRC_FILE" 2>/dev/null; then
     echo "$ALIAS_SNIPPET" >> "$BASHRC_FILE"
 fi
 
-echo -e "  ${GREEN}✔ Alias shell (browser, ipc, wallet, copilot, x) terpasang${RESET}"
+echo -e "  ${GREEN}✔ Alias shell (browser, ipc, wallet, copilot, x, c, python) terpasang${RESET}"
 
 echo -e "\n${GREEN}${BOLD}✔ SETUP SELESAI DENGAN SUKSES!${RESET}"
 echo -e "${GRAY}──────────────────────────────${RESET}"

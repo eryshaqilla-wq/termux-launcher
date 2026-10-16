@@ -625,7 +625,7 @@
             runAccount();
         },
 
-        executeStepList: function(eventsList, curWallet, curEmail, runTitle, doneCallback) {
+        executeStepList: function(eventsList, curWallet, curEmail, runTitle, doneCallback, startIdx) {
             var self = this;
             var cfg = AgyConfig.get();
             var stepDelay = cfg.stepDelay || 1500;
@@ -646,17 +646,34 @@
 
             waitDocReady(function() {
                 if (self.isAborted) return;
-                var idx = 0;
+                var idx = (typeof startIdx === "number") ? startIdx : 0;
 
                 function runNextStep() {
-                    if (self.isAborted) return;
+                    if (self.isAborted) {
+                        try { sessionStorage.removeItem("__agy_active_recipe_run__"); } catch(_) {}
+                        return;
+                    }
                     if (idx >= eventsList.length) {
+                        try { sessionStorage.removeItem("__agy_active_recipe_run__"); } catch(_) {}
                         setTimeout(function() { doneCallback(true); }, 400);
                         return;
                     }
 
                     var ev = eventsList[idx];
                     var stepNum = idx + 1;
+
+                    // Simpan progress sebelum eksekusi agar survive saat halaman reload / berpindah URL
+                    try {
+                        sessionStorage.setItem("__agy_active_recipe_run__", JSON.stringify({
+                            runTitle: runTitle,
+                            eventsList: eventsList,
+                            idx: idx,
+                            curWallet: curWallet,
+                            curEmail: curEmail,
+                            timestamp: Date.now()
+                        }));
+                    } catch(_) {}
+
                     idx++;
 
                     if (ev.type === "wait") {
@@ -5574,10 +5591,32 @@
         if (findAndClickElement(raw)) {
             return;
         }
-
-        // 10. Jika tidak ada yang cocok sama sekali
-        updateAgyHUD("BOT: Perintah Tidak Dikenali", "'" + raw.substring(0, 25) + "' (Ketik 'help' untuk panduan)", "warning");
     }
+
+    // Auto-resume active recipe on page reload / navigation
+    (function checkAndResumeActiveRecipe() {
+        try {
+            var raw = sessionStorage.getItem("__agy_active_recipe_run__");
+            if (!raw) return;
+            var st = JSON.parse(raw);
+            if (Date.now() - st.timestamp > 120000) {
+                sessionStorage.removeItem("__agy_active_recipe_run__");
+                return;
+            }
+            if (st.eventsList && st.idx < st.eventsList.length) {
+                console.log("[AGY Co-Pilot] Melanjutkan resep setelah reload halaman ke langkah " + (st.idx + 1));
+                setTimeout(function() {
+                    updateAgyHUD(st.runTitle, "🔄 Melanjutkan langkah " + (st.idx + 1) + "/" + st.eventsList.length + "...", "running");
+                    AgyBatchRunner.executeStepList(st.eventsList, st.curWallet, st.curEmail, st.runTitle, function(ok) {
+                        sessionStorage.removeItem("__agy_active_recipe_run__");
+                        updateAgyHUD(st.runTitle, ok ? "✅ Resep Selesai!" : "⚠️ Resep Berhenti", ok ? "success" : "warning");
+                    }, st.idx);
+                }, 1000);
+            } else {
+                sessionStorage.removeItem("__agy_active_recipe_run__");
+            }
+        } catch(e) {}
+    })();
 
     window.AgyRecorder = AgyRecorder;
     console.log("[AGY Co-Pilot] Smart Shield, Step Editor, Batch Runner & Settings Hub v3.2 Initialized.");

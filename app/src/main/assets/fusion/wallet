@@ -1,0 +1,16 @@
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+if [ ! -f "$TARGET_DIR/wallet.js" ]; then
+    if [ -f "$HOME/wallet/wallet.js" ]; then
+        TARGET_DIR="$HOME/wallet"
+    elif [ -f "/root/wallet/wallet.js" ]; then
+        TARGET_DIR="/root/wallet"
+    fi
+fi
+if [ -f "$TARGET_DIR/wallet.js" ]; then
+    cd "$TARGET_DIR" && exec node wallet.js "$@"
+else
+    echo "GhostWallet (wallet.js) tidak ditemukan di $TARGET_DIR"
+    exit 1
+fi

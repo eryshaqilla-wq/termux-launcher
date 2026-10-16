@@ -20,11 +20,17 @@ public class FusionBootstrapRunnable implements Runnable {
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/termux-ipc", "/data/data/com.termux/files/usr/bin/termux-ipc", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/browser", "/data/data/com.termux/files/usr/bin/browser", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/x", "/data/data/com.termux/files/usr/bin/x", true, true);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/wallet", "/data/data/com.termux/files/usr/bin/wallet", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/setup.sh", "/data/data/com.termux/files/usr/bin/setup", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/setup.sh", "/data/data/com.termux/files/home/setup", true, true);
 
-            // Salin x_webview.js ke wallet
+            // Salin modul wallet, x_webview.js dan database ke $HOME/wallet/
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/wallet.js", "/data/data/com.termux/files/home/wallet/wallet.js", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/x_webview.js", "/data/data/com.termux/files/home/wallet/x_webview.js", true, true);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/wallets_db.json", "/data/data/com.termux/files/home/wallet/wallets_db.json", false, false);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/chains_db.json", "/data/data/com.termux/files/home/wallet/chains_db.json", false, false);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/package.json", "/data/data/com.termux/files/home/wallet/package.json", false, false);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/recipes_db.json", "/data/data/com.termux/files/home/wallet/recipes_db.json", false, false);
 
             // Salin payload tarball dan termux.properties
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/fusion_payload.tar.gz", "/data/data/com.termux/files/home/fusion_payload.tar.gz", false, false);

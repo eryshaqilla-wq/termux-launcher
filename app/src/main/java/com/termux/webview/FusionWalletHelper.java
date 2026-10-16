@@ -89,7 +89,50 @@ public class FusionWalletHelper {
                 return parent;
             }
         }
-        return new File("/data/data/com.termux/files/home/wallet/wallets_db.json").exists() ? "/data/data/com.termux/files/home/wallet" : "/root/wallet";
+
+        // 1. Baca konfigurasi dinamis dari .fusion_env jika tersedia
+        try {
+            File envFile = new File("/data/data/com.termux/files/home/.fusion_env");
+            if (envFile.exists() && envFile.canRead()) {
+                FileInputStream fis = new FileInputStream(envFile);
+                byte[] b = new byte[(int) envFile.length()];
+                int readBytes = fis.read(b);
+                fis.close();
+                if (readBytes > 0) {
+                    String content = new String(b, 0, readBytes, "UTF-8");
+                    for (String line : content.split("\n")) {
+                        if (line.startsWith("export FUSION_WALLET_DIR=")) {
+                            String dir = line.substring(25).replace("\"", "").replace("'", "").trim();
+                            if (dir.length() > 0) {
+                                return dir;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 2. Utamakan folder wallet lokal Termux
+        File localWallet = new File("/data/data/com.termux/files/home/wallet");
+        if (localWallet.exists()) {
+            return "/data/data/com.termux/files/home/wallet";
+        }
+
+        // 3. Cek Kali NetHunter Chroot (jika ada)
+        File nhWallet = new File("/data/local/nhsystem/kali-arm64/root/wallet");
+        if (nhWallet.exists()) {
+            return "/data/local/nhsystem/kali-arm64/root/wallet";
+        }
+
+        // 4. Cek /root/wallet hanya jika ada dan bisa dibaca (root mode)
+        File rootWallet = new File("/root/wallet");
+        if (rootWallet.exists() && rootWallet.canRead()) {
+            return "/root/wallet";
+        }
+
+        // Default mutlak non-root
+        return "/data/data/com.termux/files/home/wallet";
     }
 
     public static void init(Context context) {
