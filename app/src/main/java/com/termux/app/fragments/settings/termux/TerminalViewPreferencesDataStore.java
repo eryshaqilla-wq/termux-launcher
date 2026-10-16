@@ -63,6 +63,10 @@ class TerminalViewPreferencesDataStore extends PreferenceDataStore {
                 // TermuxActivity#reloadActivityStyling and #applyPaddingFillPolicyToVisiblePanes.
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
+            case "terminal_cursor_trail":
+                mPreferences.setTerminalCursorTrailEnabled(value);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
+                break;
             default:
                 break;
         }
@@ -112,6 +116,8 @@ class TerminalViewPreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isTerminalMarginAdjustmentEnabled();
             case "terminal_padding_fill":
                 return mPreferences.isTerminalPaddingFillEnabled();
+            case "terminal_cursor_trail":
+                return mPreferences.isTerminalCursorTrailEnabled();
             default:
                 return defValue;
         }

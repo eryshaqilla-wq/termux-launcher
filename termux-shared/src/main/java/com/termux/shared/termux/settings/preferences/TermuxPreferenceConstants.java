@@ -1266,6 +1266,14 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_FANCIER_GLASS = "fancier_glass";
         public static final boolean DEFAULT_VALUE_FANCIER_GLASS = true;
 
+        /** Whether wallpaper blur is enabled for glass surfaces. When disabled, surfaces render transparent without blur passes. */
+        public static final String KEY_WALLPAPER_BLUR_ENABLED = "wallpaper_blur_enabled";
+        public static final boolean DEFAULT_VALUE_WALLPAPER_BLUR_ENABLED = true;
+
+        /** Whether film grain texture is drawn on glass surfaces. */
+        public static final String KEY_FILM_GRAIN_ENABLED = "film_grain_enabled";
+        public static final boolean DEFAULT_VALUE_FILM_GRAIN_ENABLED = true;
+
         /**
          * How far the wallpaper is bent under a glass rim, in dp of displacement. The three
          * refraction knobs are global: one look for every glass surface, never per surface. Their

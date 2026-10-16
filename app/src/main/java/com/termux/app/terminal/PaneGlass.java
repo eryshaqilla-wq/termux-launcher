@@ -131,6 +131,9 @@ public final class PaneGlass {
         // few rows tall and the window's radius would be half of it.
         float radiusPx = PaneShape.radiusForBounds(requestedRadiusPx,
             frame.getWidth(), frame.getHeight());
+        if (!style.isPaneGlassBlurWanted()) {
+            backdrop.clearGlassFrame();
+        }
         backdrop.setGlass(style.paneGlassBlurFrame(), style.paneGlassBlurFrameRect(),
             style.paneGlassTintColor(), style.paneGlassGrainLayer(),
             style.paneGlassGrainStrength(), radiusPx, style.paneGlassFrostFilter(),

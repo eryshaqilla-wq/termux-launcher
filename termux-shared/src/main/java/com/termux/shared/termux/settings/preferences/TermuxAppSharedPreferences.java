@@ -706,6 +706,26 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_FANCIER_GLASS, value, false);
     }
 
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_WALLPAPER_BLUR_ENABLED}. */
+    public boolean isWallpaperBlurEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_WALLPAPER_BLUR_ENABLED, TERMUX_APP.DEFAULT_VALUE_WALLPAPER_BLUR_ENABLED);
+    }
+
+    public void setWallpaperBlurEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_WALLPAPER_BLUR_ENABLED, value, false);
+    }
+
+    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_FILM_GRAIN_ENABLED}. */
+    public boolean isFilmGrainEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_FILM_GRAIN_ENABLED, TERMUX_APP.DEFAULT_VALUE_FILM_GRAIN_ENABLED);
+    }
+
+    public void setFilmGrainEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_FILM_GRAIN_ENABLED, value, false);
+    }
+
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_FANCIER_GLASS_BEND}. Clamped, in dp. */
     public int getFancierGlassBendDp() {
         return DataUtils.clamp(SharedPreferenceUtils.getInt(mSharedPreferences,

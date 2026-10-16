@@ -106,7 +106,9 @@
     <string name="settings_adjust_keyboard_summary">Try if the Android keyboard covers terminal content. Turn off if it causes gaps or jumpy resizing.</string>
     <string name="settings_show_recents_title">Show in Recents when not the default launcher</string>
     <string name="settings_show_recents_summary">Keeps the launcher available from the Recents screen when another home app is active.</string>
-    <string name="settings_terminal_cursor_trail_style_title">Cursor trail</string>
+    <string name="settings_terminal_cursor_trail_title">Cursor trail</string>
+    <string name="settings_terminal_cursor_trail_summary">Animate the cursor trail while typing or moving.</string>
+    <string name="settings_terminal_cursor_trail_style_title">Cursor trail style</string>
     <string name="settings_terminal_retro_effect_title">Terminal effect</string>
     <string name="settings_terminal_padding_fill_title">Extend edge colors</string>
     <string name="settings_terminal_padding_fill_summary">Match pane padding to nearby terminal colors.</string>
@@ -670,6 +672,11 @@
     <string name="settings_lazy_mode_header">Battery</string>
     <string name="settings_lazy_mode_title">Lazy mode</string>
     <string name="settings_lazy_mode_summary">Stops idle animations and slows status sampling so nothing repaints while you look.</string>
+    <string name="settings_visual_effects_header">Visual Effects</string>
+    <string name="settings_wallpaper_blur_title">Wallpaper blur</string>
+    <string name="settings_wallpaper_blur_summary">Blurs the wallpaper behind terminal and glass bars. Turn off to keep transparency with zero blur overhead.</string>
+    <string name="settings_film_grain_title">Film grain</string>
+    <string name="settings_film_grain_summary">Adds subtle noise texture over glass surfaces. Turn off to reduce canvas redraw overhead.</string>
     <string name="settings_fancier_glass_header">Fancier Glass</string>
     <string name="settings_fancier_glass_title">Fancier Glass</string>
     <string name="settings_fancier_glass_summary">Bends the wallpaper at glass edges. Set the wallpaper with the in-app wallpaper picker.</string>

@@ -80,8 +80,14 @@ public class SettingsFragmentAliasesTest {
         assertNull("bottom padding is the Layout editor's keyboard handle now",
             screen.findPreference("in_app_keyboard_bottom_padding"));
         assertNull("Lazy mode moved to App behavior", screen.findPreference("lazy_mode"));
-        assertNull("Fancier Glass is owned by each Look now, with no switch",
+        assertNotNull("Fancier Glass switch is present in Visual Effects",
             screen.findPreference("fancier_glass"));
+        assertNotNull("Wallpaper blur switch is present in Visual Effects",
+            screen.findPreference("wallpaper_blur_enabled"));
+        assertNotNull("Film grain switch is present in Visual Effects",
+            screen.findPreference("film_grain_enabled"));
+        assertNotNull("Wallpaper parallax switch is present in Visual Effects",
+            screen.findPreference("wallpaper_parallax"));
     }
 
     @Test

@@ -50,6 +50,24 @@ public class FancierGlassPreferencesTest {
     }
 
     @Test
+    public void wallpaperBlurSwitchTogglesCorrectly() {
+        assertTrue(preferences.isWallpaperBlurEnabled());
+        preferences.setWallpaperBlurEnabled(false);
+        assertFalse(preferences.isWallpaperBlurEnabled());
+        preferences.setWallpaperBlurEnabled(true);
+        assertTrue(preferences.isWallpaperBlurEnabled());
+    }
+
+    @Test
+    public void filmGrainSwitchTogglesCorrectly() {
+        assertTrue(preferences.isFilmGrainEnabled());
+        preferences.setFilmGrainEnabled(false);
+        assertFalse(preferences.isFilmGrainEnabled());
+        preferences.setFilmGrainEnabled(true);
+        assertTrue(preferences.isFilmGrainEnabled());
+    }
+
+    @Test
     public void theKnobsDefaultToTheDocksOwnRefraction() {
         // GlassRefraction.Look.DEFAULT is built from these same three numbers; see its test.
         assertEquals(9, preferences.getFancierGlassBendDp());

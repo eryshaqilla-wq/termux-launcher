@@ -83,4 +83,13 @@
     <string name="termux_plugin_error_notifications_enabled_on">Menampilkan lampu flash dan notifikasi untuk kesalahan plugin. (Default)</string>
     <string name="termux_plugin_error_notifications_enabled_off">Nonaktifkan lampu flash dan notifikasi untuk kesalahan plugin.</string>
     <string name="donate_preference_title">Donasi</string>
+
+    <string name="settings_visual_effects_header">Efek Visual</string>
+    <string name="settings_wallpaper_blur_title">Blur wallpaper</string>
+    <string name="settings_wallpaper_blur_summary">Memburamkan wallpaper di balik bilah kaca dan terminal. Matikan untuk kaca transparan tanpa beban blur.</string>
+    <string name="settings_film_grain_title">Film grain</string>
+    <string name="settings_film_grain_summary">Menambahkan tekstur butiran halus pada permukaan kaca. Matikan untuk meringankan beban canvas.</string>
+    <string name="settings_terminal_cursor_trail_title">Jejak kursor</string>
+    <string name="settings_terminal_cursor_trail_summary">Animasi jejak kursor saat mengetik atau bergerak di terminal.</string>
+    <string name="settings_terminal_cursor_trail_style_title">Gaya jejak kursor</string>
 </resources>

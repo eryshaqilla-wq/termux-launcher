@@ -245,6 +245,10 @@ public class RealtimeBlurView extends View {
      */
     private void applyRenderEffect(float radiusPx) {
         if (!BLUR_ON_GPU) return;
+        if (radiusPx <= 0f) {
+            clearRenderEffect();
+            return;
+        }
         float radius = Math.max(0.1f, radiusPx);
         if (mAppliedEffectRadius == radius) return;
         setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP));
@@ -320,7 +324,7 @@ public class RealtimeBlurView extends View {
             boolean stale = !mHasCapture || mDirty;
             // Every blur view hooks the window's pre-draw, hidden or not; a hidden one, or one
             // resting on a capture that is still good, has nothing to do on this frame.
-            if (decor == null || (mUpdatesPaused && !stale) || getVisibility() != VISIBLE) {
+            if (decor == null || (mUpdatesPaused && !stale) || getVisibility() != VISIBLE || mBlurRadius <= 0) {
                 return true;
             }
             int[] locations = mLocations;

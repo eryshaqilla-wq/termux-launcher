@@ -21,6 +21,8 @@ public interface PaneSurfaceStyle {
      * the terminal. Off, the pages wear a rim only as part of their glass.
      */
     default boolean paneBorderEnabled() { return false; }
+    /** True while wallpaper blur is enabled for this pane. */
+    default boolean isPaneGlassBlurWanted() { return true; }
     /** The shared pre-blurred wallpaper frame at the configured radius, or null for none. */
     @Nullable android.graphics.Bitmap paneGlassBlurFrame();
     /** That frame's rect in screen coordinates. */

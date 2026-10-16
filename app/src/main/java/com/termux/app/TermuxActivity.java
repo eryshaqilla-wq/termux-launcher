@@ -3588,6 +3588,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return mPreferences != null && mPreferences.isTerminalBorderEnabled();
             }
 
+            @Override public boolean isPaneGlassBlurWanted() {
+                return mPreferences != null && mPreferences.isWallpaperBlurEnabled()
+                    && mPreferences.getTerminalGlassBlurRadius() > 0;
+            }
+
             @Override @Nullable public Bitmap paneGlassBlurFrame() {
                 return obtainTerminalPaneGlassFrame();
             }
@@ -3689,6 +3694,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
 
             @Override public int paneGlassGrainStrength() {
+                if (mPreferences != null && !mPreferences.isFilmGrainEnabled()) return 0;
                 return mPreferences != null ? mPreferences.getTerminalGlassGrain() : 0;
             }
 
@@ -3727,6 +3733,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     @Nullable
     private Bitmap obtainTerminalPaneGlassFrame() {
+        if (mPreferences != null && !mPreferences.isWallpaperBlurEnabled()) {
+            mPaneGlassFrame = null;
+            return null;
+        }
         int radiusDp = mPreferences != null ? mPreferences.getTerminalGlassBlurRadius() : 0;
         View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
         if (radiusDp <= 0 || wallpaperFrame == null || !isTerminalPaneGlassActive()
@@ -5624,7 +5634,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * every band to its plain tint. Downstream, a radius of 0 already means "no blur".
      */
     private int getEffectiveExtraKeysBlurRadius() {
-        if (mPreferences == null || !wallpaperPicture().blurs()) {
+        if (mPreferences == null || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) {
             return 0;
         }
         return Math.max(0, mPreferences.getExtraKeysBlurRadius());
@@ -5632,7 +5642,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** @see #getEffectiveExtraKeysBlurRadius() */
     private int getEffectiveStatusBarBlurRadius() {
-        if (mPreferences == null || !wallpaperPicture().blurs()) return 0;
+        if (mPreferences == null || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
         return Math.max(0, mPreferences.getStatusBarBlurRadius());
     }
 
@@ -5643,7 +5653,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * blur gate this mirrors.
      */
     private int getEffectiveInAppKeyboardBlurRadius() {
-        if (mPreferences == null || !wallpaperPicture().blurs()) return 0;
+        if (mPreferences == null || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
         return Math.max(0, mPreferences.getInAppKeyboardBlurRadius());
     }
 

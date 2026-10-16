@@ -97,6 +97,10 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         configureDynamicColorsHint();
         updateKeyboardLookEnabled(context);
         configureWallpaperAlignment(context);
+        SwitchPreferenceCompat fancierGlass = findPreference("fancier_glass");
+        if (fancierGlass != null) {
+            fancierGlass.setVisible(com.termux.app.chrome.FancierGlassPolicy.offered(Build.VERSION.SDK_INT));
+        }
     }
 
     @Override
@@ -404,9 +408,18 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
             return;
         if (isTerminalIoToggle(key)) {
             TerminalIOPreferencesDataStore.getInstance(mContext).putBoolean(key, value);
+            scheduleTermuxActivityStylingSync(false);
             return;
         }
         switch(key) {
+            case "wallpaper_blur_enabled":
+                mPreferences.setWallpaperBlurEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
+            case "film_grain_enabled":
+                mPreferences.setFilmGrainEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "use_system_wallpaper":
                 TermuxActivity.setWallpaperModeEnabled(mContext, value);
                 break;
@@ -490,6 +503,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
         if (isTerminalIoToggle(key))
             return TerminalIOPreferencesDataStore.getInstance(mContext).getBoolean(key, defValue);
         switch(key) {
+            case "wallpaper_blur_enabled":
+                return mPreferences.isWallpaperBlurEnabled();
+            case "film_grain_enabled":
+                return mPreferences.isFilmGrainEnabled();
             case "use_system_wallpaper":
                 return mPreferences.isUseSystemWallpaperEnabled();
             case "wallpaper_parallax":

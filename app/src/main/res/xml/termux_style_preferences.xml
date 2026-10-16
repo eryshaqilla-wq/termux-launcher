@@ -51,11 +51,6 @@
             app:title="@string/settings_wallpaper_title"
             app:summary="@string/termux_use_system_wallpaper_summary"
             android:defaultValue="true" />
-        <SwitchPreferenceCompat
-            app:key="wallpaper_parallax"
-            app:title="@string/settings_wallpaper_parallax_title"
-            app:summary="@string/settings_wallpaper_parallax_summary"
-            android:defaultValue="true" />
         <com.termux.app.fragments.settings.SliderPreference
             app:key="wallpaper_render_zoom"
             app:title="@string/settings_wallpaper_alignment_title"
@@ -64,6 +59,29 @@
             app:min="90"
             android:max="120"
             android:defaultValue="100" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/settings_visual_effects_header">
+        <SwitchPreferenceCompat
+            app:key="wallpaper_blur_enabled"
+            app:title="@string/settings_wallpaper_blur_title"
+            app:summary="@string/settings_wallpaper_blur_summary"
+            android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="fancier_glass"
+            app:title="@string/settings_fancier_glass_title"
+            app:summary="@string/settings_fancier_glass_summary"
+            android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="film_grain_enabled"
+            app:title="@string/settings_film_grain_title"
+            app:summary="@string/settings_film_grain_summary"
+            android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="wallpaper_parallax"
+            app:title="@string/settings_wallpaper_parallax_title"
+            app:summary="@string/settings_wallpaper_parallax_summary"
+            android:defaultValue="true" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_icon_appearance_header">

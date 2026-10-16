@@ -225,6 +225,20 @@ public final class PaneGlassBackdropView extends View {
     }
 
     /**
+     * Clears the current frame and shader immediately, so the pane renders tint-only with no blur.
+     */
+    public void clearGlassFrame() {
+        if (mFrame != null || mFrameShader != null) {
+            mFrame = null;
+            mFrameShader = null;
+            mPreviousFrame = null;
+            mPreviousFrameShader = null;
+            mFramePaint.setShader(null);
+            invalidate();
+        }
+    }
+
+    /**
      * The preset's rim on this slab, cut at {@code radiusPx} ({@link PaneGlass#NO_RIM} for none),
      * built by {@code style} only when the radius or the presence changes. Idempotent, so every
      * dress may restate it.
