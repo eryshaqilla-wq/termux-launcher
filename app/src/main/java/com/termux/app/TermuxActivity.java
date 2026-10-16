@@ -558,6 +558,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** Trailing CPU/RAM/weather widgets, their data controllers, and the shared detail card host. */
     @Nullable private com.termux.app.statusbar.SystemStatsController mStatsController;
     @Nullable private com.termux.app.statusbar.AiIndicatorController mAiIndicatorController;
+    @Nullable private com.termux.app.launcher.widget.builtin.BatterySource mBatterySource;
+    @Nullable private com.termux.app.launcher.widget.builtin.BatterySource.Listener mBatteryListener;
     @Nullable private com.termux.app.statusbar.SystemStatsCardView mStatsCardView;
     /**
      * Presentation smoothing for the two bar readings only. One controller feeds both surfaces, and
@@ -8585,6 +8587,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mKeybindHintPresenter.hideNow(false);
         if (mStatsController != null) mStatsController.stop();
         if (mAiIndicatorController != null) mAiIndicatorController.stop();
+        if (mBatterySource != null && mBatteryListener != null) {
+            mBatterySource.release(mBatteryListener);
+        }
         // Sampling stops here, so the smoothed history stops meaning anything. Dropped now rather
         // than aged out on resume: the first reading the user sees again has to be the true one.
         mBarCpuSmoother.reset();
@@ -20706,7 +20711,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mark.setOnClickListener(v -> toggleMouseMode());
         }
         boolean anyStatBefore = mPreferences != null && (mPreferences.isStatusWidgetCpuEnabled()
-            || mPreferences.isStatusWidgetRamEnabled() || mPreferences.isStatusWidgetWeatherEnabled());
+            || mPreferences.isStatusWidgetRamEnabled() || mPreferences.isStatusWidgetWeatherEnabled()
+            || mPreferences.isStatusWidgetBatteryEnabled());
         mark.setVisibility(mFrameContent.isMouseMode() ? View.VISIBLE : View.GONE);
         dot.setVisibility(mFrameContent.isMouseMode() && anyStatBefore
             ? View.VISIBLE : View.GONE);
@@ -22343,12 +22349,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** The status widgets and their dots, in the order the row lays them out. */
     private static final int[] STATUS_INK_WIDGET_IDS = {
         R.id.terminal_status_widget_cpu, R.id.terminal_status_widget_ram,
-        R.id.terminal_status_widget_weather, R.id.terminal_status_widget_ai,
-        R.id.terminal_status_widget_mouse,
+        R.id.terminal_status_widget_weather, R.id.terminal_status_widget_battery,
+        R.id.terminal_status_widget_ai, R.id.terminal_status_widget_mouse,
     };
 
     private static final int[] STATUS_INK_DOT_IDS = {
         R.id.terminal_status_dot_cpu_ram, R.id.terminal_status_dot_ram_weather,
+        R.id.terminal_status_dot_battery,
         R.id.terminal_status_dot_ai, R.id.terminal_status_dot_mouse,
     };
 
@@ -22452,13 +22459,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         com.termux.app.statusbar.StatusBarWidgetView cpu = findViewById(R.id.terminal_status_widget_cpu);
         com.termux.app.statusbar.StatusBarWidgetView ram = findViewById(R.id.terminal_status_widget_ram);
         com.termux.app.statusbar.StatusBarWidgetView weather = findViewById(R.id.terminal_status_widget_weather);
+        com.termux.app.statusbar.StatusBarWidgetView battery = findViewById(R.id.terminal_status_widget_battery);
         com.termux.app.statusbar.MaterialDotSeparatorView cpuRamDot =
             findViewById(R.id.terminal_status_dot_cpu_ram);
         com.termux.app.statusbar.MaterialDotSeparatorView ramWeatherDot =
             findViewById(R.id.terminal_status_dot_ram_weather);
+        com.termux.app.statusbar.MaterialDotSeparatorView batteryDot =
+            findViewById(R.id.terminal_status_dot_battery);
         boolean cpuOn = mPreferences != null && mPreferences.isStatusWidgetCpuEnabled();
         boolean ramOn = mPreferences != null && mPreferences.isStatusWidgetRamEnabled();
         boolean weatherOn = mPreferences != null && mPreferences.isStatusWidgetWeatherEnabled();
+        boolean batteryOn = mPreferences != null && mPreferences.isStatusWidgetBatteryEnabled();
         View widgetSlot = findViewById(R.id.terminal_top_widget_area);
         if (widgetSlot instanceof com.termux.app.statusbar.TopPaneWidgetSlot) {
             ((com.termux.app.statusbar.TopPaneWidgetSlot) widgetSlot).setMediaEnabled(
@@ -22471,7 +22482,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             cpu.setIconGlyph("\uf4bc");   // nf-oct-cpu
             // Seeded from the smoother every pass: onStatsUpdated skips hidden widgets, so a value
             // published while this one was off or covered is otherwise only repainted when the
-            // reading next changes \u2014 and before the first sample this is what puts "--" on screen
+            // reading next changes — and before the first sample this is what puts "--" on screen
             // instead of an empty slot.
             if (cpuOn) cpu.setValue(mBarCpuSmoother.text());
             if (cpu.getTag() == null) {
@@ -22500,21 +22511,33 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 weather.setOnClickListener(v -> toggleWeatherCard(v));
             }
         }
+        if (battery != null) {
+            battery.setVisibility(batteryOn ? View.VISIBLE : View.GONE);
+            battery.setColorRole(com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
+            battery.setIconGlyph("\uf2c9");   // nf-fa-thermometer_half
+            if (battery.getTag() == null) {
+                battery.setTag("wired");
+                battery.setValue("--");
+                battery.setOnClickListener(v -> showBatteryDetailsToast());
+            }
+        }
 
         if (cpuRamDot != null) {
-            boolean show = com.termux.app.statusbar.StatusStatsClusterPolicy
-                .cpuRamDotVisible(cpuOn, ramOn, weatherOn);
+            boolean show = cpuOn && (ramOn || weatherOn || batteryOn);
             cpuRamDot.setVisibility(show ? View.VISIBLE : View.GONE);
-            // The dot takes the tier it leads into: RAM, or the weather when RAM is off. Both are
-            // secondary now, so AI alone carries the tertiary role.
             cpuRamDot.setColorRole(
                 com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
         }
         if (ramWeatherDot != null) {
-            boolean show = com.termux.app.statusbar.StatusStatsClusterPolicy
-                .ramWeatherDotVisible(ramOn, weatherOn);
+            boolean show = ramOn && (weatherOn || batteryOn);
             ramWeatherDot.setVisibility(show ? View.VISIBLE : View.GONE);
             ramWeatherDot.setColorRole(
+                com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
+        }
+        if (batteryDot != null) {
+            boolean show = batteryOn && (cpuOn || ramOn || weatherOn);
+            batteryDot.setVisibility(show ? View.VISIBLE : View.GONE);
+            batteryDot.setColorRole(
                 com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
         }
 
@@ -22533,9 +22556,63 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mWeatherController.stop();
         }
 
+        if (batteryOn) {
+            ensureBatteryMonitoring();
+        } else if (mBatterySource != null && mBatteryListener != null) {
+            mBatterySource.release(mBatteryListener);
+        }
+
         ensureAiIndicatorController();
         // The tiers just moved, and a tier is which hue this widget's ink is toned from.
         syncStatusBarInk();
+    }
+
+    private void ensureBatteryMonitoring() {
+        if (mBatterySource == null) {
+            mBatterySource = com.termux.app.launcher.widget.builtin.BatterySource.get(this);
+        }
+        if (mBatteryListener == null) {
+            mBatteryListener = new com.termux.app.launcher.widget.builtin.BatterySource.Listener() {
+                @Override
+                public void onBatteryChanged(@NonNull com.termux.app.launcher.widget.builtin.BatterySource.State state) {
+                    com.termux.app.statusbar.StatusBarWidgetView bView = findViewById(R.id.terminal_status_widget_battery);
+                    if (bView != null && bView.getVisibility() == View.VISIBLE) {
+                        if (state.temperatureTenths != Integer.MIN_VALUE && state.temperatureTenths > 0) {
+                            int deg = Math.round(state.temperatureTenths / 10.0f);
+                            bView.setValue(deg + "°C");
+                        } else if (state.level >= 0) {
+                            bView.setValue(state.level + "%");
+                        } else {
+                            bView.setValue("--");
+                        }
+                    }
+                }
+            };
+        }
+        mBatterySource.acquire(mBatteryListener);
+        com.termux.app.launcher.widget.builtin.BatterySource.State latest = mBatterySource.latest();
+        if (latest != null) {
+            mBatteryListener.onBatteryChanged(latest);
+        }
+    }
+
+    private void showBatteryDetailsToast() {
+        if (mBatterySource == null) {
+            mBatterySource = com.termux.app.launcher.widget.builtin.BatterySource.get(this);
+        }
+        com.termux.app.launcher.widget.builtin.BatterySource.State state = mBatterySource.latest();
+        if (state != null) {
+            String tempStr = (state.temperatureTenths != Integer.MIN_VALUE && state.temperatureTenths > 0)
+                ? (state.temperatureTenths / 10.0f) + "°C" : "N/A";
+            String plugStr = state.charging ? "⚡ Mengisi Daya" : (state.full ? "🔋 Penuh" : "🔋 Baterai");
+            String info = "Suhu Baterai: " + tempStr + "\nLevel: " + (state.level >= 0 ? state.level + "%" : "--") + " (" + plugStr + ")";
+            if (state.voltageMv > 0) {
+                info += "\nTegangan: " + (state.voltageMv / 1000.0f) + " V";
+            }
+            android.widget.Toast.makeText(this, info, android.widget.Toast.LENGTH_SHORT).show();
+        } else {
+            android.widget.Toast.makeText(this, "Membaca status baterai...", android.widget.Toast.LENGTH_SHORT).show();
+        }
     }
 
     /**

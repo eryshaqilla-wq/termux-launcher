@@ -435,18 +435,28 @@ else
 fi
 
 # ==============================================================================
-# TAHAP 5: KONFIGURASI PROPERTI & TAMPILAN TERMUX
+# TAHAP 5: KONFIGURASI PROPERTI & STATUS BAR TERMUX
 # ==============================================================================
-echo -e "\n${CYAN}● [5/7] Konfigurasi Tampilan & Properti Termux${RESET}"
+echo -e "\n${CYAN}● [5/7] Konfigurasi Properti & Status Bar${RESET}"
 mkdir -p "$HOME/.termux"
 if [ -f "$FUSION_HOME/termux.properties" ]; then
     cp -f "$FUSION_HOME/termux.properties" "$HOME/.termux/termux.properties"
 elif [ -f "$SCRIPT_DIR/termux.properties" ]; then
     cp -f "$SCRIPT_DIR/termux.properties" "$HOME/.termux/termux.properties"
 fi
+
+PREF_FILE="/data/data/com.termux/shared_prefs/com.termux_preferences.xml"
+if [ -f "$PREF_FILE" ]; then
+    if grep -q "status_widget_battery" "$PREF_FILE"; then
+        sed -i 's/name="status_widget_battery" value="false"/name="status_widget_battery" value="true"/' "$PREF_FILE" 2>/dev/null || true
+    else
+        sed -i 's|</map>|    <boolean name="status_widget_battery" value="true" />\n</map>|' "$PREF_FILE" 2>/dev/null || true
+    fi
+fi
+
 am broadcast -a com.termux.app.reload_style >/dev/null 2>&1 || true
 echo -e "  ${GREEN}✔ Properti & styling terminal aktif${RESET}"
-echo -e "  ${GRAY}ℹ Info Baterai: cek via perintah 'termux-ipc battery' atau widget desktop${RESET}"
+echo -e "  ${GREEN}✔ Sensor suhu baterai aktif di Status Bar (dapat diatur di Settings -> Status Bar)${RESET}"
 
 # ==============================================================================
 # TAHAP 6: MODUL NODE, WEB3 WALLET & X RADAR
