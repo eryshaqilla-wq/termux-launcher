@@ -37,16 +37,23 @@ Repo Fork      : https://github.com/eryshaqilla-wq/termux-launcher.git
     - Perubahan: Menambahkan branch 'main' dan 'eso-launcher' ke trigger push.
     - Manfaat: Setiap commit yang di-push ke GitHub langsung menghasilkan APK debug siap unduh.
 
-[✓] Porting Rencana Project Fusion (WebView & IPC):
-    - Paket com.termux.webview.*:
+[✓] Porting 100% Selesai: Project Fusion (WebView & IPC Source Java):
+    - Paket com.termux.webview.* (53 Java source files):
       * FusionWebViewManager (lifecycle, overlay, split-mode, floating pill, transparansi)
       * FusionTab & Multi-Tab management (binding ke active TerminalSession)
       * FusionWebChromeClient & FusionWebViewClient
       * GhostBridgeInterface (injeksi Web3 window.ethereum & RPC handler)
       * Google Material Dark + Pastel drawer menu
-    - Paket IPC com.termux.app.TermuxIpcServer:
+      * FusionBootstrapHelper & FusionBootstrapRunnable (auto-extract setup & payload dari assets)
+    - Paket IPC com.termux.app.TermuxIpcServer (Java source):
       * Local socket Unix domain server untuk menerima perintah dari CLI 'termux-ipc'
       * Perintah: webview open/close/pill/opacity/eval, toast, vibrate, clipboard, injectCommand.
+    - Assets Bawaan (app/src/main/assets/):
+      * assets/fusion/: fusion_payload.tar.gz (dengan x_webview.js), setup.sh, termux.properties
+      * assets/webview_engine/: ghost_injected.js, macro_recorder.js, chains_db.json, fingerprint_faker.js
+    - Hook di TermuxActivity.java:
+      * onCreate(): extractSetupIfNeeded(), startServer(), init()
+      * onResume(), onPause(), captureTerminalDeparture(), rebuildDrawerSessions()
 
 --------------------------------------------------------------------------------
 3. MODIFIKASI YANG DIBUANG / DITINGGALKAN (CLEAN)
