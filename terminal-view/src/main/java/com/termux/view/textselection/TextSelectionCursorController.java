@@ -78,7 +78,10 @@ public class TextSelectionCursorController implements CursorController {
         mEndHandle.hide();
         if (mActionMode != null) {
             // This will hide the TextSelectionCursorController
-            mActionMode.finish();
+            try {
+                mActionMode.finish();
+            } catch (Exception ignored) {}
+            mActionMode = null;
         }
         mSelX1 = mSelY1 = mSelX2 = mSelY2 = -1;
         mIsSelectingText = false;
@@ -274,6 +277,7 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public void onDestroyActionMode(ActionMode mode) {
+                mActionMode = null;
             }
         };
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
@@ -300,24 +304,39 @@ public class TextSelectionCursorController implements CursorController {
 
             @Override
             public void onDestroyActionMode(ActionMode mode) {
-                // Ignore.
+                mActionMode = null;
             }
 
             @Override
             public void onGetContentRect(ActionMode mode, View view, Rect outRect) {
                 int horizontalOffset = Math.round(terminalView.getHorizontalContentOffset());
-                int x1 = horizontalOffset + Math.round(mSelX1 * terminalView.mRenderer.getFontWidth());
-                int x2 = horizontalOffset + Math.round(mSelX2 * terminalView.mRenderer.getFontWidth());
-                int y1 = Math.round((mSelY1 - terminalView.getTopRow()) * terminalView.mRenderer.getFontLineSpacing());
-                int y2 = Math.round((mSelY2 + 1 - terminalView.getTopRow()) * terminalView.mRenderer.getFontLineSpacing());
+                float fontWidth = terminalView.mRenderer != null ? terminalView.mRenderer.getFontWidth() : 10f;
+                float fontLineSpacing = terminalView.mRenderer != null ? terminalView.mRenderer.getFontLineSpacing() : 20f;
+                int minWidth = Math.max(1, Math.round(fontWidth));
+                int minHeight = Math.max(1, Math.round(fontLineSpacing));
+
+                int x1 = horizontalOffset + Math.round(mSelX1 * fontWidth);
+                int x2 = horizontalOffset + Math.round((mSelX2 + 1) * fontWidth);
+                int y1 = Math.round((mSelY1 - terminalView.getTopRow()) * fontLineSpacing);
+                int y2 = Math.round((mSelY2 + 1 - terminalView.getTopRow()) * fontLineSpacing);
                 if (x1 > x2) {
                     int tmp = x1;
                     x1 = x2;
                     x2 = tmp;
                 }
-                int[] span = clampToView(y1 + terminalView.mRenderer.getFontLineSpacingAndAscent(),
+                if (x2 - x1 < minWidth) {
+                    x2 = x1 + minWidth;
+                }
+                float ascent = terminalView.mRenderer != null ? terminalView.mRenderer.getFontLineSpacingAndAscent() : 0f;
+                int[] span = clampToView(y1 + Math.round(ascent),
                     y2 + mHandleHeight, terminalView.getHeight());
-                outRect.set(x1, span[0], x2, span[1]);
+                if (span[1] <= span[0]) {
+                    span[1] = Math.min(terminalView.getHeight(), span[0] + minHeight);
+                    if (span[1] <= span[0]) {
+                        span[0] = Math.max(0, span[1] - minHeight);
+                    }
+                }
+                outRect.set(x1, span[0], Math.max(x1 + 1, x2), Math.max(span[0] + 1, span[1]));
             }
         }, ActionMode.TYPE_FLOATING);
     }
@@ -443,6 +462,18 @@ public class TextSelectionCursorController implements CursorController {
 
     @Override
     public void onDetached() {
+        if (mStartHandle != null) mStartHandle.hide();
+        if (mEndHandle != null) mEndHandle.hide();
+        if (mActionMode != null) {
+            try {
+                mActionMode.finish();
+            } catch (Exception ignored) {}
+            mActionMode = null;
+        }
+    }
+
+    public long getShowStartTime() {
+        return mShowStartTime;
     }
 
     @Override
@@ -490,14 +521,14 @@ public class TextSelectionCursorController implements CursorController {
      * @return true if this controller is currently used to move the start selection.
      */
     public boolean isSelectionStartDragged() {
-        return mStartHandle.isDragging();
+        return mStartHandle != null && mStartHandle.isDragging();
     }
 
     /**
      * @return true if this controller is currently used to move the end selection.
      */
     public boolean isSelectionEndDragged() {
-        return mEndHandle.isDragging();
+        return mEndHandle != null && mEndHandle.isDragging();
     }
 
     /**

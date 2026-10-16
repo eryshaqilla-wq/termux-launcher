@@ -86,6 +86,8 @@ public class TextSelectionHandleView extends View {
         mHandle = new PopupWindow(terminalView.getContext(), null, android.R.attr.textSelectHandleWindowStyle);
         mHandle.setSplitTouchEnabled(true);
         mHandle.setClippingEnabled(false);
+        mHandle.setFocusable(false);
+        mHandle.setOutsideTouchable(false);
         mHandle.setWidth(ViewGroup.LayoutParams.WRAP_CONTENT);
         mHandle.setHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
         mHandle.setBackgroundDrawable(null);
@@ -142,14 +144,21 @@ public class TextSelectionHandleView extends View {
         terminalView.getLocationInWindow(coords);
         coords[0] += mPointX;
         coords[1] += mPointY;
-        if (mHandle != null)
-            mHandle.showAtLocation(terminalView, Gravity.TOP | Gravity.LEFT, coords[0], coords[1]);
+        if (mHandle != null) {
+            try {
+                mHandle.showAtLocation(terminalView, Gravity.TOP | Gravity.LEFT, coords[0], coords[1]);
+            } catch (Exception ignored) {
+            }
+        }
     }
 
     public void hide() {
         mIsDragging = false;
         if (mHandle != null) {
-            mHandle.dismiss();
+            try {
+                mHandle.dismiss();
+            } catch (Exception ignored) {
+            }
             // We remove handle from its parent, otherwise it may still be shown in some cases even after the dismiss call
             removeFromParent();
             // garbage collect the handle

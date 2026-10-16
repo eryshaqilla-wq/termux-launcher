@@ -199,10 +199,8 @@ public final class TaiReadAloud {
     public static boolean isAvailable(@NonNull Context context) {
         Context app = context.getApplicationContext();
         if (!availabilityKnown) {
-            // Nothing to answer from yet; a guess would hide Read aloud on the first long press,
-            // or keep offering it after its model was deleted.
-            checkAvailability(app);
-            return available;
+            refreshAvailabilityAsync(app);
+            return false;
         }
         if (SystemClock.elapsedRealtime() - availabilityCheckedAt >= AVAILABILITY_CACHE_MS)
             refreshAvailabilityAsync(app);

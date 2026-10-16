@@ -2437,7 +2437,10 @@ public final class TerminalView extends View {
             return true;
         }
         if (isSelectingText()) {
-            updateFloatingToolbarVisibility(event);
+            if (mTextSelectionCursorController != null &&
+                (mTextSelectionCursorController.isSelectionStartDragged() || mTextSelectionCursorController.isSelectionEndDragged())) {
+                updateFloatingToolbarVisibility(event);
+            }
             mGestureRecognizer.onTouchEvent(event);
             return true;
         } else if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
@@ -4433,6 +4436,10 @@ public final class TerminalView extends View {
     }
 
     public void stopTextSelectionMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            removeCallbacks(mShowFloatingToolbar);
+            mFloatingToolbarHidden = false;
+        }
         if (hideTextSelectionCursors()) {
             mClient.copyModeChanged(isSelectingText());
             invalidate();
@@ -4576,6 +4583,8 @@ public final class TerminalView extends View {
     /**
      * Define functions required for long hold toolbar.
      */
+    private boolean mFloatingToolbarHidden = false;
+
     private final Runnable mShowFloatingToolbar = new Runnable() {
 
         @RequiresApi(api = Build.VERSION_CODES.M)
@@ -4583,29 +4592,42 @@ public final class TerminalView extends View {
         public void run() {
             if (getTextSelectionActionMode() != null) {
                 // hide off.
-                getTextSelectionActionMode().hide(0);
+                try {
+                    getTextSelectionActionMode().hide(0);
+                } catch (Exception ignored) {
+                }
+                mFloatingToolbarHidden = false;
             }
         }
     };
 
     @RequiresApi(api = Build.VERSION_CODES.M)
-    private void showFloatingToolbar() {
-        if (getTextSelectionActionMode() != null) {
+    public void showFloatingToolbar() {
+        if (getTextSelectionActionMode() != null && mFloatingToolbarHidden) {
+            removeCallbacks(mShowFloatingToolbar);
             int delay = ViewConfiguration.getDoubleTapTimeout();
             postDelayed(mShowFloatingToolbar, delay);
         }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.M)
-    void hideFloatingToolbar() {
-        if (getTextSelectionActionMode() != null) {
+    public void hideFloatingToolbar() {
+        if (getTextSelectionActionMode() != null && !mFloatingToolbarHidden) {
             removeCallbacks(mShowFloatingToolbar);
-            getTextSelectionActionMode().hide(-1);
+            try {
+                getTextSelectionActionMode().hide(-1);
+                mFloatingToolbarHidden = true;
+            } catch (Exception ignored) {
+            }
         }
     }
 
     public void updateFloatingToolbarVisibility(MotionEvent event) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && getTextSelectionActionMode() != null) {
+            if (mTextSelectionCursorController != null &&
+                System.currentTimeMillis() - mTextSelectionCursorController.getShowStartTime() < 300) {
+                return;
+            }
             switch(event.getActionMasked()) {
                 case MotionEvent.ACTION_MOVE:
                     hideFloatingToolbar();
