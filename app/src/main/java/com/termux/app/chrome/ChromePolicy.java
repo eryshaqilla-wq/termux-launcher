@@ -147,15 +147,28 @@ public final class ChromePolicy {
     public static void applyWallpaperModePreferences(@NonNull TermuxAppSharedPreferences preferences,
                                                      boolean enabled) {
         if (enabled) {
-            // Already in wallpaper mode: a new wallpaper applied over the old one, not a switch
-            // into the mode. The live values are the user's Look as it stands; the remembered
-            // ones are from the last time the mode was off (or the install's first values) and
-            // would put a stale blur and opacity over a Look picked since. Nothing to restore.
-            if (preferences.isUseSystemWallpaperEnabled()) return;
+            if (preferences.isUseSystemWallpaperEnabled()) {
+                // If already enabled, ensure opacity is not stuck at fully opaque 100%
+                if (preferences.getTerminalBackgroundOpacity() >= 100) {
+                    int defaultTerminal = preferences.getWallpaperEnabledTerminalBackgroundOpacity();
+                    if (defaultTerminal >= 100) {
+                        defaultTerminal = com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY;
+                    }
+                    preferences.setSurfaceValueExact(TermuxAppSharedPreferences.SurfaceSlot.CANVAS,
+                        TermuxAppSharedPreferences.SurfaceProperty.OPACITY, defaultTerminal);
+                }
+                return;
+            }
             preferences.setUseSystemWallpaperEnabled(true);
             int terminal = preferences.getWallpaperEnabledTerminalBackgroundOpacity();
             int appBar = preferences.getWallpaperEnabledAppBarOpacity();
             int blur = preferences.getWallpaperEnabledExtraKeysBlurRadius();
+            if (terminal >= 100) {
+                terminal = com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY;
+            }
+            if (appBar >= 100) {
+                appBar = com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_WALLPAPER_ENABLED_APP_BAR_OPACITY;
+            }
             // Restore the shared layer first, so every surface that was following it comes back
             // with it, then place the surfaces that remembered something different. Writing these
             // through the plain setters would have made each one overwrite the last, because while
@@ -171,8 +184,14 @@ public final class ChromePolicy {
             preferences.setSurfaceValueExact(TermuxAppSharedPreferences.SurfaceSlot.DOCK,
                 TermuxAppSharedPreferences.SurfaceProperty.BLUR, blur);
         } else {
-            preferences.setWallpaperEnabledTerminalBackgroundOpacity(preferences.getTerminalBackgroundOpacity());
-            preferences.setWallpaperEnabledAppBarOpacity(preferences.getAppBarOpacity());
+            int currentTerminal = preferences.getTerminalBackgroundOpacity();
+            if (currentTerminal < 100) {
+                preferences.setWallpaperEnabledTerminalBackgroundOpacity(currentTerminal);
+            }
+            int currentAppBar = preferences.getAppBarOpacity();
+            if (currentAppBar < 100) {
+                preferences.setWallpaperEnabledAppBarOpacity(currentAppBar);
+            }
             preferences.setWallpaperEnabledExtraKeysBlurRadius(preferences.getExtraKeysBlurRadius());
             preferences.setUseSystemWallpaperEnabled(false);
             // Opaque and unblurred is a uniform state, so it belongs on the shared layer: every

@@ -3561,9 +3561,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     private boolean isTerminalGlassConfigured() {
         return mPreferences != null
-            && shouldUseWallpaperPassthroughMode()
-            && (mPreferences.getTerminalGlassBlurRadius() > 0
-                || mPreferences.getTerminalGlassGrain() > 0);
+            && shouldUseWallpaperPassthroughMode();
     }
 
     /**
@@ -3960,7 +3958,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Bitmap frame = mChrome.blurCache().obtain(0, wallpaperFrame);
         boolean crossfade = mChrome.blurCache().isCrossfadedRadius(0) && !ReducedMotion.isEnabled(this);
         Rect captureRect = getWallpaperCaptureFrameRect();
-        backdrop.showFrame(frame, captureRect, wallGroundColor(), crossfade);
+        backdrop.showFrame(frame, captureRect, resolveWallpaperBackdropDimColor(), crossfade);
     }
 
     /**
@@ -4027,7 +4025,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The self-drawn backdrop covers that background, so it carries the same dim over its own
         // frame — set here, with the root's, so the two can never read differently.
         if (mWallpaperBackdropView != null) {
-            mWallpaperBackdropView.setDimColor(color);
+            mWallpaperBackdropView.setDimColor(shouldUseWallpaperPassthroughMode()
+                ? resolveWallpaperBackdropDimColor() : color);
         }
         // Soft wallpaper's blur half rides on the same view (SPEC §3.4); its dim is in color.
         com.termux.app.surfaces.SoftWallpaper.apply(mWallpaperBackdropView, mPreferences);
@@ -8067,6 +8066,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         mTerminalView.setUseTransparentFrameClear(false);
+        if (shouldUseWallpaperPassthroughMode() && mPreferences != null) {
+            mPreferences.healWallpaperModeOpacities();
+        }
     }
 
     private boolean shouldEnableSeamlessStatusBackground() {

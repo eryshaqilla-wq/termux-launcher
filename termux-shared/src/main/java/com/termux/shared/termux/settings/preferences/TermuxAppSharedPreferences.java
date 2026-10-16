@@ -2852,6 +2852,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         if (SharedPreferenceUtils.getBoolean(mSharedPreferences,
                 TERMUX_APP.KEY_SURFACE_INHERITANCE_MIGRATED, false)) {
             healKeyboardOpacitySentinel();
+            healWallpaperModeOpacities();
             foldKeyboardGlassKeys();
             return;
         }
@@ -2883,6 +2884,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences,
             TERMUX_APP.KEY_SURFACE_INHERITANCE_MIGRATED, true, true);
         healKeyboardOpacitySentinel();
+        healWallpaperModeOpacities();
         foldKeyboardGlassKeys();
     }
 
@@ -2938,6 +2940,27 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
         SharedPreferenceUtils.setBoolean(mSharedPreferences,
             TERMUX_APP.KEY_KEYBOARD_OPACITY_SENTINEL_HEALED, true, true);
+    }
+
+    /**
+     * Heals any wallpaper-mode opacity values stuck at 100% (fully opaque black screen).
+     */
+    public void healWallpaperModeOpacities() {
+        if (!isUseSystemWallpaperEnabled()) return;
+        if (getWallpaperEnabledTerminalBackgroundOpacity() >= 100) {
+            setWallpaperEnabledTerminalBackgroundOpacity(
+                TERMUX_APP.DEFAULT_VALUE_WALLPAPER_ENABLED_TERMINAL_BACKGROUND_OPACITY);
+        }
+        if (getWallpaperEnabledAppBarOpacity() >= 100) {
+            setWallpaperEnabledAppBarOpacity(
+                TERMUX_APP.DEFAULT_VALUE_WALLPAPER_ENABLED_APP_BAR_OPACITY);
+        }
+        if (getTerminalBackgroundOpacity() >= 100) {
+            setTerminalBackgroundOpacity(getWallpaperEnabledTerminalBackgroundOpacity());
+        }
+        if (getAppBarOpacity() >= 100) {
+            setAppBarOpacity(getWallpaperEnabledAppBarOpacity());
+        }
     }
 
     /**
