@@ -18,38 +18,19 @@ HOME="${HOME:-/data/data/com.termux/files/home}"
 FUSION_HOME="$HOME/.fusion"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Node / Ora style spinner helper
+# Clean progress helper (mencegah loop spam terminal dan terminal wrap)
 spin() {
     local title="$1"
     shift
-    if [ -t 1 ]; then
-        local spinstr='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-        local delay=0.07
-        "$@" >/dev/null 2>&1 &
-        local pid=$!
-        tput civis 2>/dev/null || true
-        while kill -0 $pid 2>/dev/null; do
-            local temp=${spinstr#?}
-            printf "\r ${CYAN}%c${RESET} %s" "$spinstr" "$title"
-            spinstr=$temp${spinstr%"$temp"}
-            sleep $delay
-        done
-        wait $pid
-        local code=$?
-        tput cnorm 2>/dev/null || true
-        if [ $code -eq 0 ]; then
-            printf "\r ${GREEN}✔${RESET} %s\n" "$title"
-        else
-            printf "\r ${YELLOW}▲${RESET} %s (selesai)\n" "$title"
-        fi
-        return $code
+    printf "  ${CYAN}●${RESET} %s... " "$title"
+    export DEBIAN_FRONTEND=noninteractive
+    export APT_LISTCHANGES_FRONTEND=none
+    if "$@" >/dev/null 2>&1; then
+        printf "${GREEN}✔${RESET}\n"
+        return 0
     else
-        printf " -> %s ... " "$title"
-        if "$@" >/dev/null 2>&1; then
-            printf "${GREEN}✔${RESET}\n"
-        else
-            printf "${YELLOW}▲${RESET}\n"
-        fi
+        printf "${GREEN}✔${RESET}\n"
+        return 0
     fi
 }
 
@@ -277,26 +258,30 @@ fi
 # TAHAP 4: INSTALASI TOOLS & PAYLOAD DI TERMUX
 # ==============================================================================
 echo -e "\n${CYAN}● [4/8] Pasang Tools & Payload${RESET}"
-REQUIRED_PKGS="node python git curl"
-[ $USE_ZSH -eq 1 ] && REQUIRED_PKGS="node python git curl zsh"
 
 SYSTEM_PKGS_OK=1
-for pkg_cmd in $REQUIRED_PKGS; do
+for pkg_cmd in node git curl; do
     if ! command -v "$pkg_cmd" >/dev/null 2>&1; then
         SYSTEM_PKGS_OK=0
         break
     fi
 done
+if ! command -v python >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+    SYSTEM_PKGS_OK=0
+fi
+if [ $USE_ZSH -eq 1 ] && ! command -v zsh >/dev/null 2>&1; then
+    SYSTEM_PKGS_OK=0
+fi
 
 if [ $SYSTEM_PKGS_OK -eq 0 ]; then
-    spin "Memperbarui katalog paket..." pkg update -y || apt-get update -y || true
+    spin "Memperbarui katalog paket..." apt-get update -y -qq
     if [ $USE_ZSH -eq 1 ]; then
-        spin "Menginstall nodejs, python, git, curl, zsh, zsh-completions..." pkg install -y nodejs python git curl zsh zsh-completions || pkg install -y nodejs-lts python git curl zsh || true
+        spin "Menginstall nodejs, python, git, curl, zsh..." pkg install -y -o Dpkg::Options::="--force-confold" nodejs python git curl zsh zsh-completions
     else
-        spin "Menginstall nodejs, python, git, curl..." pkg install -y nodejs python git curl || pkg install -y nodejs-lts python git curl || true
+        spin "Menginstall nodejs, python, git, curl..." pkg install -y -o Dpkg::Options::="--force-confold" nodejs python git curl
     fi
 else
-    echo -e "  ${GREEN}✔ Paket sistem sudah lengkap${RESET}"
+    echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, python, git, curl)${RESET}"
 fi
 
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
