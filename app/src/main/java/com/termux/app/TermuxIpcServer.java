@@ -223,11 +223,10 @@ public class TermuxIpcServer {
         }
     }
 
-    /* JADX WARN: Type inference failed for: r0v0, types: [android.content.Context, com.termux.app.TermuxActivity] */
     public static void showToast(String str) {
         try {
-            ?? r0 = sActivity;
-            if (r0 != 0 && str != null) {
+            TermuxActivity r0 = sActivity;
+            if (r0 != null && str != null) {
                 r0.runOnUiThread(new ToastRunnable(r0, str));
             }
         } catch (Throwable unused) {
