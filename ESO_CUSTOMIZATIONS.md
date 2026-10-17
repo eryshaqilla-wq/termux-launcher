@@ -60,6 +60,10 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
      - `TermuxActivity.java` (`startEmbeddedDisplayNow`) dan `X11CliInstaller.java` (`forPrefix`) secara otomatis mengarahkan `-xstartup` ke launcher desktop chroot aktif saat route chroot dipilih.
   5. **Integrasi App Drawer**:
      - `LinuxAppCatalog.java` mendaftarkan `ChrootDistro.installed()` sehingga seluruh file `.desktop` dari NetHunter dan Droidspaces otomatis muncul di App Drawer Linux Apps.
+  6. **Auto Bind-Mount Socket X11 & Peluncuran Sesi Desktop Penuh**:
+     - `ChrootDistro.java` secara otomatis melakukan bind-mount socket X11 host `/data/data/com.termux/files/usr/tmp/.X11-unix` ke `<rootfs>/tmp/.X11-unix` sebelum chroot dijalankan (`mountpoint -q ... || mount -o bind ...`).
+     - Peluncuran desktop chroot diarahkan ke `dbus-run-session xfce4-session` sehingga seluruh subsistem desktop (`xfwm4`, `xfce4-panel`, `xfdesktop` dengan wallpaper naga Kali) langsung aktif tanpa layar hitam Openbox polos.
+     - `X11CliInstaller.writeWindowManagerScript()` otomatis dipanggil saat route diubah dan saat "Start display" ditekan agar `termux-x11-wm` selalu sinkron.
 
 ---
 

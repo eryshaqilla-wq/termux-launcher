@@ -269,7 +269,7 @@ public final class X11CliInstaller {
      * @return whether a wrapper is now in place
      */
     @VisibleForTesting
-    boolean writeWindowManagerScript() {
+    public boolean writeWindowManagerScript() {
         File prefixDir = binDir.getParentFile();
         if (prefixDir == null) return false;
         String command = X11WindowManager.startCommand(windowManager, prefixDir);

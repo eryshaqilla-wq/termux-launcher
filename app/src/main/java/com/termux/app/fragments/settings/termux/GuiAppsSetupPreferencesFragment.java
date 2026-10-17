@@ -148,6 +148,8 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
             applyRouteRows(route.getValue(), edition);
             route.setOnPreferenceChangeListener((preference, value) -> {
                 applyRouteRows(String.valueOf(value), edition);
+                Context ctx = getContext();
+                if (ctx != null) com.termux.app.x11.X11CliInstaller.forPrefix(ctx).writeWindowManagerScript();
                 return true;
             });
         }
@@ -255,6 +257,8 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
             applyCustomChrootVisibility(selected.getValue());
             selected.setOnPreferenceChangeListener((pref, val) -> {
                 applyCustomChrootVisibility(String.valueOf(val));
+                Context c = getContext();
+                if (c != null) com.termux.app.x11.X11CliInstaller.forPrefix(c).writeWindowManagerScript();
                 return true;
             });
         }

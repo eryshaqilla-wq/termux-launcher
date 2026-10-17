@@ -20501,6 +20501,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 wm = com.termux.app.x11.ChrootDistro.getDesktopCommand(chrootEnv);
             }
         }
+        com.termux.app.x11.X11CliInstaller.forPrefix(this).writeWindowManagerScript();
         String[] argv = com.termux.app.x11.X11StartCommand.argv(mPreferences.getX11DisplayCommand(),
             mPreferences.getX11DisplayDpi(), mPreferences.isX11LegacyDrawingEnabled(),
             mPreferences.isX11ForceBgraEnabled(),
