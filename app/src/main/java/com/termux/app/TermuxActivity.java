@@ -2404,7 +2404,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         reconcileEmbeddedDisplay(null);
         if (sPendingAppDrawerReloadOnNextResume) {
             sPendingAppDrawerReloadOnNextResume = false;
-            if (mAppDrawerController != null) mAppDrawerController.onPreferencesReloaded();
+            refreshLinuxApps(true);
+            if (mAppDrawerController != null) {
+                mAppDrawerController.onPreferencesReloaded();
+                mAppDrawerController.onAppCatalogChanged();
+            }
+            if (mSuggestionBarView != null) {
+                mSuggestionBarView.refreshAllApps(null);
+            }
         }
         if (mTermuxTerminalSessionActivityClient != null)
             mTermuxTerminalSessionActivityClient.onResume();
@@ -25632,8 +25639,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         return;
                     case TERMUX_ACTIVITY.ACTION_RELOAD_APP_DRAWER:
                         sPendingAppDrawerReloadOnNextResume = false;
-                        if (mAppDrawerController != null)
+                        refreshLinuxApps(true);
+                        if (mAppDrawerController != null) {
                             mAppDrawerController.onPreferencesReloaded();
+                            mAppDrawerController.onAppCatalogChanged();
+                        }
+                        if (mSuggestionBarView != null) {
+                            mSuggestionBarView.refreshAllApps(null);
+                        }
                         return;
                     case TERMUX_ACTIVITY.ACTION_REQUEST_PERMISSIONS:
                         Logger.logDebug(LOG_TAG, "Received intent to request storage permissions");

@@ -10,9 +10,12 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 /**
  * The Linux apps installed in the prefix and in every {@code proot-distro} container, read from
@@ -290,11 +293,80 @@ public final class LinuxAppCatalog {
      * An application root keeps today's rules byte for byte: nothing that appears in the drawer
      * now stops appearing.
      */
+    private static final Set<String> SUPPRESSED_DESKTOP_FILES = new HashSet<>(Arrays.asList(
+        "xfce4-session-logout", "panel-desktop-handler", "panel-preferences",
+        "thunar-bulk-rename", "thunar-settings", "thunar-volman-settings",
+        "user-dirs-update-gtk", "xdg-desktop-portal-gtk", "display-im7.q16",
+        "picom", "rofi-theme-selector", "tint2conf", "qt5ct", "qt6ct",
+        "shares", "time", "users", "kali-hidpi-mode", "kali-clang",
+        "kali-clang++", "python2.7", "python3.14", "xfce4-screenshooter",
+        "nm-applet", "org.opensc.notify", "xfce4-notifyd-config",
+        "xfce4-terminal-settings", "org.xfce.mousepad-settings", "vim",
+        "texdoctk", "gcr-prompter", "gcr-viewer"
+    ));
+
+    private static final Set<String> SUPPRESSED_CATEGORIES = new HashSet<>(Arrays.asList(
+        "settings", "desktopsettings", "hardwaresettings",
+        "x-xfce-settingsdialog", "x-xfce-personalsettings",
+        "x-xfce-hardwaresettings", "x-xfce-systemsettings",
+        "x-gnome-networksettings", "x-gnome-settings-panel",
+        "kali-kali-offsec-links", "trayicon", "screensaver"
+    ));
+
+    private static boolean isSuppressedApp(@NonNull String desktopFile,
+                                           @NonNull String exec,
+                                           @NonNull String categories,
+                                           @NonNull String onlyShowIn,
+                                           @NonNull String notShowIn) {
+        String lowerFile = desktopFile.toLowerCase(Locale.ROOT);
+        if (SUPPRESSED_DESKTOP_FILES.contains(lowerFile)) return true;
+
+        if (exec.contains("http://") || exec.contains("https://")) return true;
+
+        if (!categories.isEmpty()) {
+            for (String cat : categories.split(";")) {
+                if (SUPPRESSED_CATEGORIES.contains(cat.trim().toLowerCase(Locale.ROOT))) {
+                    return true;
+                }
+            }
+        }
+
+        if (!onlyShowIn.isEmpty()) {
+            boolean allowsTermux = false;
+            for (String target : onlyShowIn.split(";")) {
+                String t = target.trim();
+                if (t.equalsIgnoreCase("Termux") || t.equalsIgnoreCase("X-Termux") || t.equalsIgnoreCase("All")) {
+                    allowsTermux = true;
+                    break;
+                }
+            }
+            if (!allowsTermux) return true;
+        }
+
+        if (!notShowIn.isEmpty()) {
+            for (String target : notShowIn.split(";")) {
+                String t = target.trim();
+                if (t.equalsIgnoreCase("Termux") || t.equalsIgnoreCase("X-Termux")) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Read one desktop file. Null when it is not an application, asks not to be shown ({@code
+     * NoDisplay}/{@code Hidden} — the author saying "not in a menu"), or names a binary that is
+     * not installed. {@code Terminal=true} (D5) is kept and carried on {@link LinuxApp#terminal}
+     * rather than dropped: it is a real menu entry that wants a terminal pane instead of a window.
+     */
     @Nullable
     static LinuxApp parse(@NonNull ProotDistro.Container container, @NonNull String desktopFile,
                           @NonNull File file, boolean sessions) {
         String type = "", name = "", exec = "", icon = "", comment = "", tryExec = "";
         String startupWmClass = "", desktopNames = "";
+        String categories = "", onlyShowIn = "", notShowIn = "";
         boolean noDisplay = false, hidden = false, terminal = false, inEntry = false;
         try (BufferedReader reader = new BufferedReader(new FileReader(container.readable(file)))) {
             String line;
@@ -319,6 +391,9 @@ public final class LinuxAppCatalog {
                     case "Comment": comment = value; break;
                     case "StartupWMClass": startupWmClass = value; break;
                     case "DesktopNames": desktopNames = value; break;
+                    case "Categories": categories = value; break;
+                    case "OnlyShowIn": onlyShowIn = value; break;
+                    case "NotShowIn": notShowIn = value; break;
                     case "NoDisplay": noDisplay = "true".equalsIgnoreCase(value); break;
                     case "Hidden": hidden = "true".equalsIgnoreCase(value); break;
                     case "Terminal": terminal = "true".equalsIgnoreCase(value); break;
@@ -330,6 +405,7 @@ public final class LinuxAppCatalog {
         }
         if (!typeIsLaunchable(type, sessions) || name.isEmpty() || exec.isEmpty()) return null;
         if (noDisplay || hidden) return null;
+        if (!sessions && isSuppressedApp(desktopFile, exec, categories, onlyShowIn, notShowIn)) return null;
         if (!tryExec.isEmpty() && !executableExists(container, tryExec, file)) return null;
         String command = stripFieldCodes(exec);
         if (sessions) {

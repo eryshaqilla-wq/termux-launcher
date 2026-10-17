@@ -80,16 +80,23 @@ public final class HiddenAppsPreferencesFragment extends MaterialPreferenceFragm
         super.onDestroy();
     }
 
+    @Override
+    public void onPause() {
+        Context context = getContext();
+        if (context != null) {
+            com.termux.app.TermuxActivity.requestAppDrawerReloadOnNextResume(context.getApplicationContext());
+        }
+        super.onPause();
+    }
+
     /** The catalogue walk is blocking; keep it off the fragment-creation thread. */
     private void loadAsync(@NonNull Context appContext) {
         loadExecutor.execute(() -> {
-            // Linux apps only: this screen exists to keep a distro's menu out of the drawer, and a
-            // distro with a desktop installed brings dozens of entries at once. Android apps have
-            // the system's own ways of being tidied and are left out of it.
+            LauncherAppDataProvider.getInstance(appContext).hiddenApps().reload();
             List<LauncherAppEntry> apps = new ArrayList<>();
             for (LauncherAppEntry entry : LauncherAppDataProvider.getInstance(appContext)
                     .getAllAppsIncludingHiddenBlocking()) {
-                if (com.termux.app.x11.X11Apps.isLinuxApp(entry.appRef)) apps.add(entry);
+                apps.add(entry);
             }
             apps.sort(Comparator.comparing((LauncherAppEntry entry) -> entry.label,
                 String.CASE_INSENSITIVE_ORDER));
@@ -125,11 +132,27 @@ public final class HiddenAppsPreferencesFragment extends MaterialPreferenceFragm
             row.setKey("hidden_app:" + stableId);
             row.setPersistent(false);
             row.setTitle(app.label);
-            if (app.icon != null) row.setIcon(app.icon);
+
+            if (com.termux.app.x11.X11Apps.isLinuxApp(app.appRef)) {
+                String cName = com.termux.app.x11.X11Apps.containerOf(com.termux.app.x11.X11Apps.desktopId(app.appRef));
+                row.setSummary(cName.isEmpty() ? "Linux (Host)" : "Linux (" + cName + ")");
+                android.graphics.drawable.Drawable icon = LauncherAppDataProvider.getInstance(appContext).icons().artwork(app);
+                if (icon != null) row.setIcon(icon);
+            } else {
+                row.setSummary("Android");
+                if (app.icon != null) {
+                    row.setIcon(app.icon);
+                } else {
+                    android.graphics.drawable.Drawable icon = LauncherAppDataProvider.getInstance(appContext).icons().artwork(app);
+                    if (icon != null) row.setIcon(icon);
+                }
+            }
+
             row.setChecked(!hiddenApps.isHidden(stableId));
             row.setOnPreferenceChangeListener((preference, newValue) -> {
                 boolean shown = Boolean.TRUE.equals(newValue);
                 hiddenApps.setHidden(stableId, !shown);
+                com.termux.app.TermuxActivity.requestAppDrawerReloadOnNextResume(appContext);
                 return true;
             });
             screen.addPreference(row);

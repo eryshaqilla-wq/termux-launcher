@@ -77,6 +77,11 @@ public final class LauncherHiddenAppsStore {
         setHidden(ref.stableId(), hidden);
     }
 
+    public synchronized void reload() {
+        loaded = false;
+        ensureLoaded();
+    }
+
     private void ensureLoaded() {
         if (loaded) return;
         loaded = true;

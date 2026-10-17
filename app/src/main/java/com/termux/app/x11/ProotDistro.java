@@ -154,8 +154,6 @@ public final class ProotDistro {
             if (kind == Kind.CHROOT) {
                 File chrootAppsDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot/" + name);
                 if (chrootAppsDir.isDirectory()) dirs.add(chrootAppsDir);
-                File commonChrootAppsDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot");
-                if (commonChrootAppsDir.isDirectory()) dirs.add(commonChrootAppsDir);
             }
             dirs.add(new File(root, "usr/share/applications"));
             dirs.add(new File(root, "usr/local/share/applications"));

@@ -30,4 +30,10 @@
     <com.termux.app.fragments.settings.termux.CategorySortProgressPreference
         app:key="app_launcher_category_refresh"
         app:title="@string/settings_app_drawer_category_refresh_title" />
+
+    <Preference
+        app:key="app_launcher_hidden_apps"
+        app:title="@string/settings_x11_hidden_apps_title"
+        app:summary="@string/settings_x11_hidden_apps_summary"
+        app:fragment="com.termux.app.fragments.settings.termux.HiddenAppsPreferencesFragment" />
 </PreferenceScreen>

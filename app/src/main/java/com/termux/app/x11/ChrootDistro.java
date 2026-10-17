@@ -326,7 +326,9 @@ public final class ChrootDistro {
         if (!isRootAvailable()) return;
         new Thread(() -> {
             try {
-                String cmd = "for root in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs /data/local/Droidspaces/Containers/*/rootfs; do "
+                String cmd = "rm -rf /data/data/com.termux/files/usr/share/applications/chroot/kalifs 2>/dev/null; "
+                    + "for root in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs /data/local/Droidspaces/Containers/*/rootfs; do "
+                    + "[ -L \"$root\" ] && continue; "
                     + "if [ -d \"$root/usr/share/applications\" ]; then "
                     + "cname=$(basename \"$(dirname \"$root\")\"); [ \"$cname\" = \"nhsystem\" ] && cname=$(basename \"$root\"); "
                     + "out=\"/data/data/com.termux/files/usr/share/applications/chroot/$cname\"; "
