@@ -372,13 +372,16 @@ public final class ChrootDistro {
         if (RunnerType.DROIDSPACES.name().equals(type)) {
             String cName = container.name;
             String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
-            return "su -c 'if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; then "
-                + "sed -i \"s/enable_termux_x11=1/enable_termux_x11=0/\" \"" + configPath + "\" 2>/dev/null || true; "
-                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; "
-                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; fi; sleep 2; fi; "
-                + "/data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" run /bin/sh -c "
-                + ProotDistro.singleQuote("export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe VTEST_SOCKET_NAME=/tmp/.virgl_test; " + command)
-                + "'";
+            String runCmd = "export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe VTEST_SOCKET_NAME=/tmp/.virgl_test; " + command;
+            return "su -c \"if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw '" + cName + "'; then "
+                + "sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' '" + configPath + "' 2>/dev/null || true; "
+                + "if [ -f '" + configPath + "' ]; then /data/local/Droidspaces/bin/droidspaces --config='" + configPath + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; "
+                + "else /data/local/Droidspaces/bin/droidspaces --name='" + cName + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; fi; sleep 2; "
+                + "else "
+                + "mkdir -p /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
+                + "(mountpoint /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix >/dev/null 2>&1 || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true); "
+                + "fi; "
+                + "/data/local/Droidspaces/bin/droidspaces --name='" + cName + "' run /bin/sh -c " + ProotDistro.singleQuote(runCmd) + "\"";
         } else if (RunnerType.CUSTOM.name().equals(type) && container.customRunner != null
                 && !container.customRunner.trim().isEmpty()) {
             return container.customRunner
@@ -420,20 +423,74 @@ public final class ChrootDistro {
         return getDesktopCommand(env, (DesktopEntry) null);
     }
 
+    public static final String DROIDSPACES_DESKTOP_SCRIPT_NAME = "termux-droidspaces-desktop";
+
+    public static void writeDroidspacesDesktopScript(@NonNull String cName, @NonNull String innerCmd) {
+        String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_DESKTOP_SCRIPT_NAME;
+        String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Droidspaces Desktop Runner for Termux Launcher\n\n"
+            + "CNAME=\"" + cName + "\"\n"
+            + "CONFIG_PATH=\"/data/local/Droidspaces/Containers/$CNAME/container.config\"\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n\n"
+            + "mkdir -p \"$X11_DIR\" 2>/dev/null || true\n"
+            + "chmod 777 \"$X11_DIR\" 2>/dev/null || true\n\n"
+            + "if [ -f \"$CONFIG_PATH\" ]; then\n"
+            + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
+            + "fi\n\n"
+            + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "    if [ -f \"$CONFIG_PATH\" ]; then\n"
+            + "        /data/local/Droidspaces/bin/droidspaces --config=\"$CONFIG_PATH\" -B \"$X11_DIR\":/tmp/.X11-unix start\n"
+            + "    else\n"
+            + "        /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" -B \"$X11_DIR\":/tmp/.X11-unix start\n"
+            + "    fi\n"
+            + "    sleep 2\n"
+            + "else\n"
+            + "    mkdir -p /data/local/Droidspaces/Containers/\"$CNAME\"/rootfs/tmp/.X11-unix 2>/dev/null || true\n"
+            + "    mountpoint /data/local/Droidspaces/Containers/\"$CNAME\"/rootfs/tmp/.X11-unix >/dev/null 2>&1 || mount -o bind \"$X11_DIR\" /data/local/Droidspaces/Containers/\"$CNAME\"/rootfs/tmp/.X11-unix 2>/dev/null || true\n"
+            + "fi\n\n"
+            + "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do\n"
+            + "    [ -S \"$X11_DIR/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n\n"
+            + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
+            + "/data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
+            + "export DISPLAY=:0\n"
+            + "export PULSE_SERVER=tcp:127.0.0.1:4713\n"
+            + "export GALLIUM_DRIVER=virpipe\n"
+            + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n\n"
+            + "for j in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do\n"
+            + "    xdpyinfo >/dev/null 2>&1 && break\n"
+            + "    sleep 0.1\n"
+            + "done\n\n"
+            + "if ! pgrep -x bspwm >/dev/null 2>&1; then\n"
+            + "    " + innerCmd + "\n"
+            + "fi\n"
+            + "'\n\n"
+            + "while /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; do\n"
+            + "    sleep 3\n"
+            + "done\n";
+
+        File scriptFile = new File(scriptPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            java.nio.file.Files.write(scriptFile.toPath(), scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write droidspaces desktop script: " + e.getMessage());
+        }
+    }
+
     @NonNull
     public static String getDesktopCommand(@Nullable ChrootEnvironment env, @Nullable DesktopEntry de) {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
             String cName = env.containerName;
-            String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
             String inner = (de != null) ? de.getDroidspacesInnerCommand() : "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || dbus-run-session xfce4-session";
-            return "su -c 'if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; then "
-                + "sed -i \"s/enable_termux_x11=1/enable_termux_x11=0/\" \"" + configPath + "\" 2>/dev/null || true; "
-                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; "
-                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; fi; sleep 2; fi; "
-                + "/data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" run /bin/sh -c "
-                + ProotDistro.singleQuote("export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe VTEST_SOCKET_NAME=/tmp/.virgl_test; "
-                    + "if ! pgrep -f \"bspwm|xfce4|plasma|gnome|mate|lxde|openbox|i3\" >/dev/null 2>&1; then " + inner + " & fi") + "; "
-                + "while /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; do sleep 3; done'";
+            writeDroidspacesDesktopScript(cName, inner);
+            return "su -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_DESKTOP_SCRIPT_NAME;
         } else if (env != null && env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
             String inner = (de != null) ? de.getChrootInnerCommand() : "exec dbus-launch --exit-with-session startxfce4";
             return env.customRunner
