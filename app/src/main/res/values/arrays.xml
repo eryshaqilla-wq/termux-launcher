@@ -324,10 +324,12 @@
     <string-array name="gui_apps_route_entries">
         <item>Termux X11 repo</item>
         <item>proot distro</item>
+        <item>Chroot distro</item>
     </string-array>
     <string-array name="gui_apps_route_values">
         <item>x11</item>
         <item>distro</item>
+        <item>chroot</item>
     </string-array>
     <string-array name="gui_apps_distro_entries">
         <item>Debian (recommended)</item>

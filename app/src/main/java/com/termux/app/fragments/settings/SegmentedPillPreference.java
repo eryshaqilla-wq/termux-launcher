@@ -51,6 +51,7 @@ public final class SegmentedPillPreference extends Preference {
     private CharSequence[] mLabelText = {null, null};
     private static final int MAX_SEGMENTS = 4;
     private String mValue = VALUE_DEFAULT;
+    private final java.util.Set<String> mDisabledValues = new java.util.HashSet<>();
     /** True once a label did not fit on two lines side by side: the segments then stack full-width
      *  so no label is cut or shrunk. Reset when the segment set changes. */
     private boolean mStacked;
@@ -147,6 +148,16 @@ public final class SegmentedPillPreference extends Preference {
         notifyChanged();
     }
 
+    public void setSegmentEnabled(@NonNull String value, boolean enabled) {
+        if (enabled) mDisabledValues.remove(value);
+        else mDisabledValues.add(value);
+        notifyChanged();
+    }
+
+    public boolean isSegmentEnabled(@NonNull String value) {
+        return isEnabled() && !mDisabledValues.contains(value);
+    }
+
     /** How many segments the current set has — a test's way of confirming a portrait/landscape
      *  segment swap actually took, without reaching into the bound view. */
     @VisibleForTesting
@@ -182,7 +193,9 @@ public final class SegmentedPillPreference extends Preference {
             button.setVisibility(View.VISIBLE);
             if (mLabelText[i] != null) button.setText(mLabelText[i]);
             else if (mLabelResIds[i] != 0) button.setText(mLabelResIds[i]);
-            button.setEnabled(isEnabled());
+            boolean segmentEnabled = isEnabled() && !mDisabledValues.contains(mValues[i]);
+            button.setEnabled(segmentEnabled);
+            button.setAlpha(segmentEnabled ? 1.0f : 0.38f);
         }
         group.setContentDescription(getTitle());
         applyStacking(group, buttons, mStacked);
@@ -197,6 +210,13 @@ public final class SegmentedPillPreference extends Preference {
             int index = indexOfButton(buttons, checkedId);
             if (index < 0 || index >= mValues.length) return;
             String normalized = normalize(mValues[index]);
+            if (mDisabledValues.contains(normalized)) {
+                // Disabled segment clicked: veto and restore previous selection
+                int previous = selectedIndex();
+                if (previous < 0) g.clearChecked();
+                else g.check(buttons[previous].getId());
+                return;
+            }
             if (normalized.equals(mValue)) return;
             if (!callChangeListener(normalized)) {
                 // Vetoed: put the group back on the stored value.

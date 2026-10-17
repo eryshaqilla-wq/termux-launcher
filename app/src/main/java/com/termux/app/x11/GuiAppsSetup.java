@@ -67,12 +67,14 @@ public final class GuiAppsSetup {
 
     private GuiAppsSetup() {}
 
-    /** Which of the two ways to a graphical app the user picked. */
+    /** Which of the ways to a graphical app the user picked. */
     public enum Route {
         /** Termux's own X11 packages, installed straight into the prefix. */
         X11_REPO("x11"),
         /** A distro container, with its own package manager and its own account. */
-        DISTRO("distro");
+        DISTRO("distro"),
+        /** A root-level chroot or container (NetHunter, Droidspaces, Custom). */
+        CHROOT("chroot");
 
         /** The value this route is stored under, so a stored choice survives a rename. */
         @NonNull public final String key;
@@ -91,22 +93,11 @@ public final class GuiAppsSetup {
 
     /**
      * The routes {@code edition} offers on the "Get GUI apps" screen, in menu order.
-     *
-     * <p>Decision D1 (user, 2026-09-20), reversed (user, 2026-09-21): VAJ's own apt repository
-     * (repo.pathayam.xyz, aarch64) now carries {@code xkeyboard-config}, {@code pcmanfm},
-     * {@code mousepad}, {@code thunar} and {@code xfce4-terminal}, so its X11 route works there
-     * after all and is offered again alongside the distro route — see
-     * {@link #command(Route, Distro, Set, TourEdition)} for the two things that route drops for
-     * VAJ (the separate {@code x11-repo} step, which that repo has no equivalent of, and the
-     * browser, which it ships none of). Decision (user, 2026-09-20): the nix edition offers
-     * neither route — graphical apps there come from nixpkgs and {@code home.nix}, a third way
-     * this class does not build a command for, so an empty list here is what tells the screen to
-     * show neither a route choice nor a command to copy.
      */
     @NonNull
     public static List<Route> routesFor(@NonNull TourEdition edition) {
         if (edition == TourEdition.NIX) return Collections.emptyList();
-        return Collections.unmodifiableList(Arrays.asList(Route.X11_REPO, Route.DISTRO));
+        return Collections.unmodifiableList(Arrays.asList(Route.X11_REPO, Route.DISTRO, Route.CHROOT));
     }
 
     /**
@@ -323,6 +314,7 @@ public final class GuiAppsSetup {
     @NonNull
     public static String command(@NonNull Route route, @NonNull Distro distro,
                                  @NonNull Set<StarterApp> starters, @NonNull TourEdition edition) {
+        if (route == Route.CHROOT) return "echo 'Chroot environment selected.'";
         return route == Route.X11_REPO
             ? x11Command(starters, edition) : distroCommand(distro, starters);
     }

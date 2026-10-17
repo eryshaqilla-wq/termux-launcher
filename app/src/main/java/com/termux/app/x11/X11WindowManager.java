@@ -195,7 +195,10 @@ public final class X11WindowManager {
         if (profile != null) {
             return NixProfile.under(prefixDir, profile, "bin/" + binary).canExecute();
         }
-        return new File(prefixDir, "bin/" + binary).canExecute();
+        if (new File(prefixDir, "bin/" + binary).canExecute()) return true;
+        if (new File("/system/bin/" + binary).canExecute()) return true;
+        if (new File("/system/xbin/" + binary).canExecute()) return true;
+        return false;
     }
 
     /**

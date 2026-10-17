@@ -42,6 +42,25 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
   3. **`measuredUnderPillStripHeightPx` & `buildDecorNavBarBackdropTargetRect`**: Menggunakan `realMetrics.heightPixels` dari display hardware agar perhitungan tinggi tidak terpotong oleh sistem insets.
   4. **`updateDecorNavBarBackdrop`**: Menambahkan overscan bawah ke `targetBackdropHeight` pada layout params backdrop.
 
+### D. Dukungan Native Chroot Distro (NetHunter, Droidspaces, Custom Rootfs) & Integrasi X11 Canvas
+- **Konteks & Kebutuhan**:
+  - Di menu Setup Linux Apps sebelumnya hanya ada 2 opsi route: `Termux X11 repo` dan `proot distro`.
+  - Tuan Eso membutuhkan opsi ke-3 yaitu `Chroot distro` yang tidak di-hardcode ke satu OS saja, melainkan dinamis mendukung **Kali NetHunter**, **Droidspaces**, maupun **Custom rootfs**.
+- **Solusi & Arsitektur**:
+  1. **Route Ketiga di Settings**: Menambahkan `Chroot distro` (`chroot`) di `arrays.xml`, `GuiAppsSetup.java`, dan `gui_apps_setup_preferences.xml`.
+  2. **Non-Root Guard**:
+     - `SegmentedPillPreference` diperluas dengan method `setSegmentEnabled(String value, boolean enabled)`.
+     - Pada perangkat non-root (`!ChrootDistro.isRootAvailable()`), tombol `Chroot distro` otomatis menjadi abu-abu (alpha 0.38f) dan dinonaktifkan (tidak bisa diklik).
+  3. **Auto-Scan `/data/local` (`ChrootDistro.java`)**:
+     - Tombol **Scan /data/local** memindai container secara otomatis:
+       - **Kali NetHunter**: `/data/local/nhsystem/kali-arm64` (runner `su -mm -c "chroot ..."`).
+       - **Droidspaces**: `/data/local/Droidspaces/Containers/<Nama>/rootfs` (runner `su -c '/data/local/Droidspaces/bin/droidspaces --name="<Nama>" enter ...'`).
+       - **Custom Rootfs**: Membuka input teks bebas untuk path rootfs dan custom command template (`%ROOTFS%`, `%COMMAND%`).
+  4. **Koneksi Tombol Start di Canvas Kanan**:
+     - `TermuxActivity.java` (`startEmbeddedDisplayNow`) dan `X11CliInstaller.java` (`forPrefix`) secara otomatis mengarahkan `-xstartup` ke launcher desktop chroot aktif saat route chroot dipilih.
+  5. **Integrasi App Drawer**:
+     - `LinuxAppCatalog.java` mendaftarkan `ChrootDistro.installed()` sehingga seluruh file `.desktop` dari NetHunter dan Droidspaces otomatis muncul di App Drawer Linux Apps.
+
 ---
 
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)

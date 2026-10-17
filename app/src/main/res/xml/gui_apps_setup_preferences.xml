@@ -29,6 +29,31 @@
         app:entries="@array/gui_apps_distro_entries"
         app:entryValues="@array/gui_apps_distro_values" />
 
+    <PreferenceCategory
+        app:key="gui_apps_chroot_category"
+        app:title="@string/settings_gui_apps_chroot_category">
+        <Preference
+            app:key="gui_apps_chroot_detect"
+            app:title="@string/settings_gui_apps_chroot_detect_title"
+            app:summary="@string/settings_gui_apps_chroot_detect_summary"
+            app:persistent="false" />
+        <ListPreference
+            app:key="gui_apps_chroot_selected"
+            app:title="@string/settings_gui_apps_chroot_selected_title"
+            android:defaultValue="nethunter"
+            app:useSimpleSummaryProvider="true" />
+        <EditTextPreference
+            app:key="gui_apps_chroot_custom_path"
+            app:title="@string/settings_gui_apps_chroot_custom_path_title"
+            android:defaultValue="/data/local/nhsystem/kali-arm64"
+            app:useSimpleSummaryProvider="true" />
+        <EditTextPreference
+            app:key="gui_apps_chroot_custom_runner"
+            app:title="@string/settings_gui_apps_chroot_custom_runner_title"
+            android:defaultValue="su -c 'chroot %ROOTFS% /bin/sh -c %COMMAND%'"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
     <!-- Only the two apps that are worth a choice. A text editor and a terminal were dropped
          (user, 2026-09-22): the phone already has the terminal this command is pasted into, and
          the launcher's own editor is a tap away. Their StarterApp entries stay in the command

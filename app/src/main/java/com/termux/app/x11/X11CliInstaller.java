@@ -121,9 +121,19 @@ public final class X11CliInstaller {
     static X11CliInstaller forPrefix(@NonNull Context context) {
         Context app = context.getApplicationContext();
         TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(app);
+        android.content.SharedPreferences defaultPrefs = app.getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            Context.MODE_PRIVATE);
+        String route = defaultPrefs.getString("gui_apps_route", "x11");
+        String wm = preferences == null ? "" : preferences.getX11WindowManager();
+        if (GuiAppsSetup.Route.CHROOT.key.equals(route)) {
+            ChrootDistro.ChrootEnvironment env = ChrootDistro.getActiveEnvironment(app);
+            if (env != null) {
+                wm = ChrootDistro.getDesktopCommand(env);
+            }
+        }
         return new X11CliInstaller(new File(BIN_DIR), new File(LIBEXEC_DIR), app.getPackageName(),
-            name -> app.getAssets().open(name),
-            preferences == null ? "" : preferences.getX11WindowManager());
+            name -> app.getAssets().open(name), wm);
     }
 
     // ---- The static face the launcher uses -------------------------------------------------

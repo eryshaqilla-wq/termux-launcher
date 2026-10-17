@@ -66,7 +66,9 @@ public final class ProotDistro {
             /** One {@code proot-distro} container: a whole distro filesystem. */
             DISTRO,
             /** The nix edition's profile: a tree of store links, resolved by {@link NixProfile}. */
-            NIX
+            NIX,
+            /** A root-level chroot or container (NetHunter, Droidspaces, Custom). */
+            CHROOT
         }
 
         /** The prefix: the launcher's own Linux, and the only one there was before containers. */
@@ -84,24 +86,36 @@ public final class ProotDistro {
         @NonNull public final String user;
         /** That user's home inside the container, absolute there; empty for the prefix and nix. */
         @NonNull public final String home;
-        /** Which of the three this is. */
+        /** Which of the kinds this is. */
         @NonNull public final Kind kind;
         /** For {@link Kind#NIX}, the resolved profile directory; null otherwise. */
         @Nullable public final File profile;
+        /** For {@link Kind#CHROOT}, the runner type name (NETHUNTER, DROIDSPACES, CUSTOM). */
+        @Nullable public final String runnerType;
+        /** For {@link Kind#CHROOT}, custom runner template command if configured. */
+        @Nullable public final String customRunner;
 
         Container(@NonNull String name, @NonNull File root, @NonNull String user,
                   @NonNull String home) {
-            this(name.isEmpty() ? Kind.PREFIX : Kind.DISTRO, name, root, user, home, null);
+            this(name.isEmpty() ? Kind.PREFIX : Kind.DISTRO, name, root, user, home, null, null, null);
         }
 
-        private Container(@NonNull Kind kind, @NonNull String name, @NonNull File root,
-                          @NonNull String user, @NonNull String home, @Nullable File profile) {
+        Container(@NonNull Kind kind, @NonNull String name, @NonNull File root,
+                  @NonNull String user, @NonNull String home, @Nullable File profile,
+                  @Nullable String runnerType, @Nullable String customRunner) {
             this.kind = kind;
             this.name = name;
             this.root = root;
             this.user = user;
             this.home = home;
             this.profile = profile;
+            this.runnerType = runnerType;
+            this.customRunner = customRunner;
+        }
+
+        private Container(@NonNull Kind kind, @NonNull String name, @NonNull File root,
+                          @NonNull String user, @NonNull String home, @Nullable File profile) {
+            this(kind, name, root, user, home, profile, null, null);
         }
 
         /**
@@ -426,6 +440,9 @@ public final class ProotDistro {
         if (container.kind == Container.Kind.NIX) {
             return new File(container.root, "bin/login").getPath() + " sh -c "
                 + singleQuote(command);
+        }
+        if (container.kind == Container.Kind.CHROOT) {
+            return ChrootDistro.buildRunner(container, command);
         }
         StringBuilder line = new StringBuilder("proot-distro login ");
         line.append(container.name);

@@ -12,10 +12,12 @@ import android.os.Looper;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import com.termux.app.fragments.settings.SegmentedPillPreference;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceManager;
 import androidx.preference.TwoStatePreference;
+import com.termux.app.fragments.settings.SegmentedPillPreference;
+import com.termux.app.x11.ChrootDistro;
 
 import com.termux.R;
 import com.termux.app.activities.SettingsActivity;
@@ -36,16 +38,11 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * "Get GUI apps": the two ways to have an app with a window on this phone, and the one command
+ * "Get GUI apps": the ways to have an app with a window on this phone, and the one command
  * that takes whichever the user picked.
  *
  * <p>The screen installs nothing itself. It builds a command with {@link GuiAppsSetup}, puts it on
- * the clipboard and steps out of the way, and the user pastes it into the terminal. That is the
- * whole design: the work is minutes of downloading and one password typed in, and a terminal shows
- * both far better than a progress bar that can only say "wait" and "sorry".
- *
- * <p>The choices are ordinary preferences in the launcher's own preferences file, so coming back
- * to the screen finds what was picked last time rather than the defaults again.
+ * the clipboard and steps out of the way, and the user pastes it into the terminal.
  */
 @Keep
 public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFragment {
@@ -53,6 +50,11 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
     static final String KEY_HINT = "gui_apps_hint";
     static final String KEY_ROUTE = "gui_apps_route";
     static final String KEY_DISTRO = "gui_apps_distro";
+    static final String KEY_CHROOT_CATEGORY = "gui_apps_chroot_category";
+    static final String KEY_CHROOT_DETECT = "gui_apps_chroot_detect";
+    static final String KEY_CHROOT_SELECTED = "gui_apps_chroot_selected";
+    static final String KEY_CHROOT_CUSTOM_PATH = "gui_apps_chroot_custom_path";
+    static final String KEY_CHROOT_CUSTOM_RUNNER = "gui_apps_chroot_custom_runner";
     static final String KEY_STARTERS_CATEGORY = "gui_apps_starters_category";
     static final String KEY_COPY = "gui_apps_copy";
     static final String KEY_NIX_DOCS = "gui_apps_nix_docs";
@@ -122,6 +124,14 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
             }
             return;
         }
+        boolean rootAvailable = ChrootDistro.isRootAvailable();
+        if (route != null) {
+            route.setSegmentEnabled(GuiAppsSetup.Route.CHROOT.key, rootAvailable);
+            if (!rootAvailable && GuiAppsSetup.Route.CHROOT.key.equals(route.getValue())) {
+                route.setValue(GuiAppsSetup.Route.X11_REPO.key);
+            }
+        }
+
         if (routes.size() == 1) {
             // Nothing to choose: hide the row, and force the stored value to the one route this
             // edition offers, so a choice stored before the gate existed cannot build a command
@@ -189,10 +199,94 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
 
     /** Everything on the screen that the chosen source decides, in one place. */
     private void applyRouteRows(@Nullable String route, @NonNull TourEdition edition) {
+        boolean isChroot = GuiAppsSetup.Route.CHROOT.key.equals(route);
         applyDistroRow(route);
+        applyChrootCategory(isChroot);
         applyBrowserRowVisibility(route, edition);
+        Preference starters = findPreference(KEY_STARTERS_CATEGORY);
+        if (starters != null) starters.setVisible(!isChroot);
+        Preference copy = findPreference(KEY_COPY);
+        if (copy != null) copy.setVisible(!isChroot);
+        Preference hint = findPreference(KEY_HINT);
+        if (hint != null) {
+            if (isChroot) {
+                boolean root = ChrootDistro.isRootAvailable();
+                hint.setSummary(root ? R.string.settings_gui_apps_chroot_detect_summary
+                    : R.string.settings_gui_apps_chroot_non_root_hint);
+            } else {
+                hint.setSummary(R.string.settings_gui_apps_hint);
+            }
+        }
         SegmentedPillPreference distro = findPreference(KEY_DISTRO);
         applyStarterHints(route, distro == null ? null : distro.getValue());
+    }
+
+    private void applyChrootCategory(boolean visible) {
+        Preference category = findPreference(KEY_CHROOT_CATEGORY);
+        if (category != null) category.setVisible(visible);
+        if (!visible) return;
+
+        ListPreference selected = findPreference(KEY_CHROOT_SELECTED);
+        Preference detect = findPreference(KEY_CHROOT_DETECT);
+
+        refreshChrootList(selected);
+
+        if (detect != null) {
+            detect.setOnPreferenceClickListener(pref -> {
+                Context ctx = getContext();
+                if (ctx != null) {
+                    AppNotice.show(ctx.getApplicationContext(), R.string.settings_gui_apps_chroot_detect_scanning);
+                }
+                probeExecutor.execute(() -> {
+                    List<ChrootDistro.ChrootEnvironment> envs = ChrootDistro.scan();
+                    probeHandler.post(() -> {
+                        if (!isAdded()) return;
+                        refreshChrootList(selected);
+                        if (ctx != null) {
+                            AppNotice.show(ctx.getApplicationContext(), "Scan complete. Found " + envs.size() + " environment(s).");
+                        }
+                    });
+                });
+                return true;
+            });
+        }
+
+        if (selected != null) {
+            applyCustomChrootVisibility(selected.getValue());
+            selected.setOnPreferenceChangeListener((pref, val) -> {
+                applyCustomChrootVisibility(String.valueOf(val));
+                return true;
+            });
+        }
+    }
+
+    private void refreshChrootList(@Nullable ListPreference selected) {
+        if (selected == null) return;
+        List<ChrootDistro.ChrootEnvironment> envs = ChrootDistro.scan();
+        List<String> entries = new java.util.ArrayList<>();
+        List<String> values = new java.util.ArrayList<>();
+
+        for (ChrootDistro.ChrootEnvironment env : envs) {
+            entries.add(env.name);
+            values.add(env.id);
+        }
+        entries.add("Custom Rootfs Path");
+        values.add(ChrootDistro.ID_CUSTOM);
+
+        selected.setEntries(entries.toArray(new CharSequence[0]));
+        selected.setEntryValues(values.toArray(new CharSequence[0]));
+
+        if (selected.getValue() == null || selected.getValue().isEmpty()) {
+            selected.setValue(values.get(0));
+        }
+    }
+
+    private void applyCustomChrootVisibility(@Nullable String value) {
+        boolean isCustom = ChrootDistro.ID_CUSTOM.equals(value);
+        Preference customPath = findPreference(KEY_CHROOT_CUSTOM_PATH);
+        Preference customRunner = findPreference(KEY_CHROOT_CUSTOM_RUNNER);
+        if (customPath != null) customPath.setVisible(isCustom);
+        if (customRunner != null) customRunner.setVisible(isCustom);
     }
 
     /**

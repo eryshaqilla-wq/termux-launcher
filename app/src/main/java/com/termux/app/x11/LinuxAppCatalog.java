@@ -182,6 +182,9 @@ public final class LinuxAppCatalog {
         for (ProotDistro.Container container : ProotDistro.installed()) {
             roots.addAll(rootsOf(container));
         }
+        for (ProotDistro.Container container : ChrootDistro.installed()) {
+            roots.addAll(rootsOf(container));
+        }
         return roots;
     }
 
