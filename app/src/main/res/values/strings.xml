@@ -352,6 +352,10 @@
     <string name="settings_gui_apps_chroot_custom_path_title">Custom Rootfs Path</string>
     <string name="settings_gui_apps_chroot_custom_runner_title">Custom Runner Command</string>
     <string name="settings_gui_apps_chroot_non_root_hint">Root access (su) is required for Chroot distro environments.</string>
+    <string name="settings_gui_apps_desktop_category">Desktop Environment</string>
+    <string name="settings_gui_apps_selected_de_title">Active Desktop</string>
+    <string name="settings_gui_apps_selected_de_summary">Choose which installed desktop environment to run on the display.</string>
+    <string name="settings_gui_apps_selected_de_none">No desktop environment detected</string>
     <string name="settings_x11_display_title">Display</string>
     <string name="settings_x11_display_summary">Show a Linux desktop or X11 apps beside the terminal.</string>
     <string name="permission_x11_display_label">Run a Linux display</string>

@@ -20491,17 +20491,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void startEmbeddedDisplayNow() {
         if (mTermuxService == null || mPreferences == null || !isX11DisplayEnabled()) return;
-        String wm = mPreferences.getX11WindowManager();
-        android.content.SharedPreferences defaultPrefs = getSharedPreferences(
-            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
-            MODE_PRIVATE);
-        String route = defaultPrefs.getString("gui_apps_route", "x11");
-        if (com.termux.app.x11.GuiAppsSetup.Route.CHROOT.key.equals(route)) {
-            com.termux.app.x11.ChrootDistro.ChrootEnvironment chrootEnv =
-                com.termux.app.x11.ChrootDistro.getActiveEnvironment(this);
-            if (chrootEnv != null) {
-                wm = com.termux.app.x11.ChrootDistro.getDesktopCommand(chrootEnv);
-            }
+        String wm = com.termux.app.x11.ChrootDistro.resolveActiveDesktopCommand(this);
+        if (wm == null || wm.isEmpty()) {
+            wm = mPreferences.getX11WindowManager();
         }
         com.termux.app.x11.X11CliInstaller.forPrefix(this).writeWindowManagerScript();
         String[] argv = com.termux.app.x11.X11StartCommand.argv(mPreferences.getX11DisplayCommand(),

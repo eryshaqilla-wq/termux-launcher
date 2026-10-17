@@ -54,6 +54,17 @@
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 
+    <PreferenceCategory
+        app:key="gui_apps_desktop_category"
+        app:title="@string/settings_gui_apps_desktop_category">
+        <ListPreference
+            app:key="gui_apps_selected_de"
+            app:title="@string/settings_gui_apps_selected_de_title"
+            app:summary="@string/settings_gui_apps_selected_de_summary"
+            android:defaultValue="auto"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
     <!-- Only the two apps that are worth a choice. A text editor and a terminal were dropped
          (user, 2026-09-22): the phone already has the terminal this command is pasted into, and
          the launcher's own editor is a tap away. Their StarterApp entries stay in the command

@@ -293,6 +293,8 @@ public final class X11LinuxAppRunner {
     /** The window manager the user has configured, or empty when there is none. */
     @NonNull
     private String configuredWindowManager() {
+        String wm = ChrootDistro.resolveActiveDesktopCommand(context);
+        if (wm != null && !wm.isEmpty()) return wm;
         TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context);
         return preferences == null ? "" : preferences.getX11WindowManager();
     }

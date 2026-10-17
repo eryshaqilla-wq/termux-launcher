@@ -9,9 +9,12 @@ import androidx.annotation.Nullable;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants;
 
+import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
+
 import java.io.File;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -27,6 +30,147 @@ public final class ChrootDistro {
     public static final String KEY_CHROOT_SELECTED = "gui_apps_chroot_selected";
     public static final String KEY_CHROOT_CUSTOM_PATH = "gui_apps_chroot_custom_path";
     public static final String KEY_CHROOT_CUSTOM_RUNNER = "gui_apps_chroot_custom_runner";
+    public static final String KEY_SELECTED_DE = "gui_apps_selected_de";
+
+    public static final class DesktopDef {
+        @NonNull public final String id;
+        @NonNull public final String displayName;
+        @NonNull public final List<String> candidateBinaries;
+
+        public DesktopDef(@NonNull String id, @NonNull String displayName, @NonNull List<String> candidateBinaries) {
+            this.id = id;
+            this.displayName = displayName;
+            this.candidateBinaries = candidateBinaries;
+        }
+    }
+
+    public static final List<DesktopDef> SUPPORTED_DESKTOPS = Collections.unmodifiableList(Arrays.asList(
+        new DesktopDef("xfce4", "XFCE 4", Arrays.asList("startxfce4", "xfce4-session")),
+        new DesktopDef("gnome", "GNOME", Arrays.asList("gnome-session")),
+        new DesktopDef("plasma", "KDE Plasma", Arrays.asList("startplasma-x11", "plasma-desktop")),
+        new DesktopDef("mate", "MATE", Arrays.asList("mate-session")),
+        new DesktopDef("lxde", "LXDE", Arrays.asList("startlxde", "lxsession")),
+        new DesktopDef("lxqt", "LXQt", Arrays.asList("startlxqt")),
+        new DesktopDef("cinnamon", "Cinnamon", Arrays.asList("cinnamon-session")),
+        new DesktopDef("openbox", "Openbox", Arrays.asList("openbox-session", "openbox")),
+        new DesktopDef("i3", "i3 Window Manager", Arrays.asList("i3")),
+        new DesktopDef("awesome", "Awesome WM", Arrays.asList("awesome")),
+        new DesktopDef("bspwm", "bspwm", Arrays.asList("bspwm")),
+        new DesktopDef("fluxbox", "Fluxbox", Arrays.asList("startfluxbox", "fluxbox"))
+    ));
+
+    public static final class DesktopEntry {
+        @NonNull public final String id;
+        @NonNull public final String displayName;
+        @NonNull public final String detectedBinary;
+        @NonNull public final List<String> candidateBinaries;
+
+        public DesktopEntry(@NonNull String id, @NonNull String displayName,
+                            @NonNull String detectedBinary,
+                            @NonNull List<String> candidateBinaries) {
+            this.id = id;
+            this.displayName = displayName;
+            this.detectedBinary = detectedBinary;
+            this.candidateBinaries = candidateBinaries;
+        }
+
+        @NonNull
+        public String getChrootInnerCommand() {
+            switch (id) {
+                case "gnome":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; export XDG_SESSION_TYPE=x11; exec dbus-launch --exit-with-session gnome-session";
+                case "plasma":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session " + detectedBinary;
+                case "mate":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session mate-session";
+                case "lxde":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session " + detectedBinary;
+                case "lxqt":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startlxqt";
+                case "cinnamon":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session cinnamon-session";
+                case "openbox":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
+                case "i3":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec i3";
+                case "awesome":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec awesome";
+                case "bspwm":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec bspwm";
+                case "fluxbox":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
+                case "xfce4":
+                default:
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session " + detectedBinary;
+            }
+        }
+
+        @NonNull
+        public String getDroidspacesInnerCommand() {
+            switch (id) {
+                case "gnome":
+                    return "export XDG_SESSION_TYPE=x11 && dbus-run-session gnome-session";
+                case "plasma":
+                    return "dbus-run-session " + detectedBinary;
+                case "mate":
+                    return "dbus-run-session mate-session";
+                case "lxde":
+                    return "dbus-run-session " + detectedBinary;
+                case "lxqt":
+                    return "dbus-run-session startlxqt";
+                case "cinnamon":
+                    return "dbus-run-session cinnamon-session";
+                case "openbox":
+                    return detectedBinary;
+                case "i3":
+                    return "i3";
+                case "awesome":
+                    return "awesome";
+                case "bspwm":
+                    return "bspwm";
+                case "fluxbox":
+                    return detectedBinary;
+                case "xfce4":
+                default:
+                    return "dbus-run-session " + ("startxfce4".equals(detectedBinary) ? "xfce4-session" : detectedBinary);
+            }
+        }
+
+        @NonNull
+        public String getHostCommand() {
+            File dbusBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "dbus-launch");
+            boolean hasDbus = dbusBin.canExecute();
+            switch (id) {
+                case "gnome":
+                    return hasDbus ? "env XDG_SESSION_TYPE=x11 dbus-launch --exit-with-session gnome-session"
+                                   : "env XDG_SESSION_TYPE=x11 gnome-session";
+                case "plasma":
+                    return hasDbus ? "dbus-launch --exit-with-session " + detectedBinary : detectedBinary;
+                case "mate":
+                    return hasDbus ? "dbus-launch --exit-with-session mate-session" : "mate-session";
+                case "lxde":
+                    return hasDbus ? "dbus-launch --exit-with-session " + detectedBinary : detectedBinary;
+                case "lxqt":
+                    return hasDbus ? "dbus-launch --exit-with-session startlxqt" : "startlxqt";
+                case "cinnamon":
+                    return hasDbus ? "dbus-launch --exit-with-session cinnamon-session" : "cinnamon-session";
+                case "openbox":
+                    File rc = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/xdg/openbox/rc.xml");
+                    return rc.exists() ? "openbox --config-file " + rc.getAbsolutePath() : "openbox";
+                case "i3":
+                    return "i3";
+                case "awesome":
+                    return "awesome";
+                case "bspwm":
+                    return "bspwm";
+                case "fluxbox":
+                    return detectedBinary;
+                case "xfce4":
+                default:
+                    return hasDbus ? "dbus-launch --exit-with-session " + detectedBinary : detectedBinary;
+            }
+        }
+    }
 
     public static final String ID_NETHUNTER = "nethunter";
     public static final String ID_CUSTOM = "custom";
@@ -257,16 +401,26 @@ public final class ChrootDistro {
      */
     @NonNull
     public static String getDesktopCommand(@Nullable ChrootEnvironment env) {
+        return getDesktopCommand(env, (DesktopEntry) null);
+    }
+
+    @NonNull
+    public static String getDesktopCommand(@Nullable ChrootEnvironment env, @Nullable DesktopEntry de) {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
+            String inner = (de != null) ? de.getDroidspacesInnerCommand() : "dbus-run-session xfce4-session";
             return "su -c '/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
-                + "\" --termux-x11 --virgl enter -- /bin/sh -c \\\"export DISPLAY=:0 && dbus-run-session xfce4-session\\\"'";
+                + "\" --termux-x11 --virgl enter -- /bin/sh -c \\\"export DISPLAY=:0 && " + inner + "\\\"'";
         } else if (env != null && env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
+            String inner = (de != null) ? de.getChrootInnerCommand() : "exec dbus-launch --exit-with-session startxfce4";
             return env.customRunner
                 .replace("%ROOTFS%", env.rootfs.getAbsolutePath())
-                .replace("%COMMAND%", "'export DISPLAY=:0 && dbus-run-session xfce4-session'");
+                .replace("%COMMAND%", "'export DISPLAY=:0 && " + inner + "'");
         }
 
         String rootPath = (env != null) ? env.rootfs.getAbsolutePath() : "/data/local/nhsystem/kali-arm64";
+        String inner = (de != null) ? de.getChrootInnerCommand()
+            : "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4";
+
         return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
             + "(mountpoint -q " + rootPath + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null); "
             + "chroot " + rootPath + " /usr/bin/env -i "
@@ -278,7 +432,224 @@ public final class ChrootDistro {
             + "PULSE_SERVER=tcp:127.0.0.1:4713 "
             + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
             + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
-            + "/bin/bash -c '/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4'\"";
+            + "/bin/bash -c " + ProotDistro.singleQuote(inner) + "\"";
+    }
+
+    /**
+     * Resolves the startup command for the active desktop environment across
+     * Chroot, PRoot, or native Termux X11.
+     */
+    @NonNull
+    public static String resolveActiveDesktopCommand(@NonNull Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            Context.MODE_PRIVATE);
+        String route = prefs.getString("gui_apps_route", "x11");
+        String selectedDeId = prefs.getString(KEY_SELECTED_DE, "auto");
+
+        List<DesktopEntry> installed = detectInstalledDesktops(context);
+        DesktopEntry selectedEntry = null;
+
+        if (!installed.isEmpty()) {
+            for (DesktopEntry entry : installed) {
+                if (entry.id.equals(selectedDeId)) {
+                    selectedEntry = entry;
+                    break;
+                }
+            }
+            if (selectedEntry == null) {
+                for (DesktopEntry entry : installed) {
+                    if ("xfce4".equals(entry.id)) {
+                        selectedEntry = entry;
+                        break;
+                    }
+                }
+                if (selectedEntry == null) {
+                    selectedEntry = installed.get(0);
+                }
+            }
+        }
+
+        if (GuiAppsSetup.Route.CHROOT.key.equals(route)) {
+            ChrootEnvironment env = getActiveEnvironment(context);
+            return getDesktopCommand(env, selectedEntry);
+        } else if (GuiAppsSetup.Route.DISTRO.key.equals(route)) {
+            String distro = prefs.getString("gui_apps_distro", "debian");
+            String inner = (selectedEntry != null) ? selectedEntry.getChrootInnerCommand()
+                : "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4";
+            return "proot-distro login " + distro + " --shared-x11 -e DISPLAY=${DISPLAY:-:0} -- /bin/bash -c "
+                + ProotDistro.singleQuote(inner);
+        } else {
+            // Route X11 (native)
+            if (selectedEntry != null) {
+                return selectedEntry.getHostCommand();
+            }
+            TermuxAppSharedPreferences appPrefs = TermuxAppSharedPreferences.build(context);
+            String customWm = appPrefs != null ? appPrefs.getX11WindowManager() : null;
+            return (customWm != null && !customWm.trim().isEmpty()) ? customWm : "openbox";
+        }
+    }
+
+    /**
+     * Scans and returns ONLY the Desktop Environments / Window Managers that are actually installed
+     * in the currently active environment (Chroot / PRoot / Host X11).
+     */
+    @NonNull
+    public static List<DesktopEntry> detectInstalledDesktops(@NonNull Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            Context.MODE_PRIVATE);
+        String route = prefs.getString("gui_apps_route", "x11");
+
+        List<DesktopEntry> results = new ArrayList<>();
+
+        if (GuiAppsSetup.Route.CHROOT.key.equals(route)) {
+            ChrootEnvironment env = getActiveEnvironment(context);
+            if (env != null) {
+                if (env.runnerType == RunnerType.DROIDSPACES) {
+                    detectDesktopsDroidspaces(env, results);
+                } else {
+                    detectDesktopsChroot(env, results);
+                }
+            }
+        } else if (GuiAppsSetup.Route.DISTRO.key.equals(route)) {
+            String distro = prefs.getString("gui_apps_distro", "debian");
+            detectDesktopsProot(distro, results);
+        } else {
+            detectDesktopsHost(results);
+        }
+
+        return results;
+    }
+
+    private static void detectDesktopsChroot(@NonNull ChrootEnvironment env,
+                                            @NonNull List<DesktopEntry> results) {
+        File rootfs = env.rootfs;
+        String rootPath = rootfs.getAbsolutePath();
+
+        for (DesktopDef def : SUPPORTED_DESKTOPS) {
+            for (String bin : def.candidateBinaries) {
+                if (new File(rootfs, "usr/bin/" + bin).exists()
+                        || new File(rootfs, "bin/" + bin).exists()
+                        || new File(rootfs, "usr/local/bin/" + bin).exists()) {
+                    results.add(new DesktopEntry(def.id, def.displayName + " (" + bin + ")", bin, def.candidateBinaries));
+                    break;
+                }
+            }
+        }
+
+        if (results.isEmpty() && isRootAvailable()) {
+            StringBuilder checkCmd = new StringBuilder("for b in");
+            for (DesktopDef def : SUPPORTED_DESKTOPS) {
+                for (String bin : def.candidateBinaries) {
+                    checkCmd.append(" ").append(bin);
+                }
+            }
+            checkCmd.append("; do if [ -x ").append(rootPath).append("/usr/bin/$b ] || [ -x ")
+                    .append(rootPath).append("/bin/$b ]; then echo $b; fi; done");
+
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", checkCmd.toString()});
+                List<String> foundBins = new ArrayList<>();
+                try (java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(p.getInputStream()))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        line = line.trim();
+                        if (!line.isEmpty()) foundBins.add(line);
+                    }
+                }
+                p.waitFor();
+
+                for (DesktopDef def : SUPPORTED_DESKTOPS) {
+                    for (String bin : def.candidateBinaries) {
+                        if (foundBins.contains(bin)) {
+                            results.add(new DesktopEntry(def.id, def.displayName + " (" + bin + ")", bin, def.candidateBinaries));
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private static void detectDesktopsDroidspaces(@NonNull ChrootEnvironment env,
+                                                 @NonNull List<DesktopEntry> results) {
+        File rootfs = env.rootfs;
+        for (DesktopDef def : SUPPORTED_DESKTOPS) {
+            for (String bin : def.candidateBinaries) {
+                if (new File(rootfs, "usr/bin/" + bin).exists()
+                        || new File(rootfs, "bin/" + bin).exists()) {
+                    results.add(new DesktopEntry(def.id, def.displayName + " (" + bin + ")", bin, def.candidateBinaries));
+                    break;
+                }
+            }
+        }
+
+        if (results.isEmpty() && isRootAvailable()) {
+            StringBuilder checkCmd = new StringBuilder(
+                "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName + "\" enter -- /bin/sh -c \"for b in");
+            for (DesktopDef def : SUPPORTED_DESKTOPS) {
+                for (String bin : def.candidateBinaries) {
+                    checkCmd.append(" ").append(bin);
+                }
+            }
+            checkCmd.append("; do if [ -x /usr/bin/\\$b ] || [ -x /bin/\\$b ]; then echo \\$b; fi; done\"");
+
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", checkCmd.toString()});
+                List<String> foundBins = new ArrayList<>();
+                try (java.io.BufferedReader r = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(p.getInputStream()))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        line = line.trim();
+                        if (!line.isEmpty()) foundBins.add(line);
+                    }
+                }
+                p.waitFor();
+
+                for (DesktopDef def : SUPPORTED_DESKTOPS) {
+                    for (String bin : def.candidateBinaries) {
+                        if (foundBins.contains(bin)) {
+                            results.add(new DesktopEntry(def.id, def.displayName + " (" + bin + ")", bin, def.candidateBinaries));
+                            break;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private static void detectDesktopsProot(@NonNull String distro,
+                                           @NonNull List<DesktopEntry> results) {
+        File rootfs = new File("/data/data/com.termux/files/usr/var/lib/proot-distro/installed-rootfs/" + distro);
+        if (!rootfs.isDirectory()) return;
+
+        for (DesktopDef def : SUPPORTED_DESKTOPS) {
+            for (String bin : def.candidateBinaries) {
+                if (new File(rootfs, "usr/bin/" + bin).exists()
+                        || new File(rootfs, "bin/" + bin).exists()
+                        || new File(rootfs, "usr/local/bin/" + bin).exists()) {
+                    results.add(new DesktopEntry(def.id, def.displayName + " (" + bin + ")", bin, def.candidateBinaries));
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void detectDesktopsHost(@NonNull List<DesktopEntry> results) {
+        File binDir = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH);
+        if (!binDir.isDirectory()) return;
+
+        for (DesktopDef def : SUPPORTED_DESKTOPS) {
+            for (String bin : def.candidateBinaries) {
+                if (new File(binDir, bin).exists()) {
+                    results.add(new DesktopEntry(def.id, def.displayName + " (" + bin + ")", bin, def.candidateBinaries));
+                    break;
+                }
+            }
+        }
     }
 
     public static final String DE_PROCESS_PATTERN =

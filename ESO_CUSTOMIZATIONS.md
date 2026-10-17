@@ -79,6 +79,40 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
        - **Proteksi Droidspaces**: Hanya membunuh proses DE di dalam container (`droidspaces enter -- pkill`), tanpa membunuh container Droidspaces itu sendiri.
        - **Pembersihan Bersih**: Menghentikan server `termux-x11`, menghapus socket & pid file, serta mereset tampilan canvas kanan seketika kembali ke state *"No display is running / Start display"*.
 
+### E. Pemilihan Desktop Environment Dinamis (Metode C) & Multi-DE Switching
+- **Konteks & Kebutuhan**:
+  - Tuan Eso menginginkan kemampuan memilih Desktop Environment / Window Manager (misal XFCE, GNOME, Openbox, KDE Plasma, MATE, LXDE, LXQt, i3, dll.) melalui dropdown menu di pengaturan (*Setup Linux apps*).
+  - Menu dropdown tersebut **hanya membaca dan menampilkan DE/WM yang benar-benar ter-install** di environment aktif (NetHunter Chroot / Droidspaces / PRoot / Termux Host X11).
+  - Ketika DE dipilih (misalnya beralih dari XFCE ke GNOME), peluncuran canvas kanan langsung mengeksekusi DE yang dipilih tersebut, dan Emergency Stop tetap mampu menghentikan seluruh prosesnya secara bersih.
+- **Solusi & Arsitektur**:
+  1. **Dynamic Scanner (`ChrootDistro.detectInstalledDesktops`)**:
+     - Memindai biner eksekusi dari daftar katalog DE yang didukung (`SUPPORTED_DESKTOPS`):
+       - `xfce4` (`startxfce4`, `xfce4-session`)
+       - `gnome` (`gnome-session`)
+       - `plasma` (`startplasma-x11`, `plasma-desktop`)
+       - `mate` (`mate-session`)
+       - `lxde` (`startlxde`, `lxsession`)
+       - `lxqt` (`startlxqt`)
+       - `cinnamon` (`cinnamon-session`)
+       - `openbox` (`openbox-session`, `openbox`)
+       - `i3` (`i3`)
+       - `awesome` (`awesome`)
+       - `bspwm` (`bspwm`)
+       - `fluxbox` (`startfluxbox`, `fluxbox`)
+     - Deteksi bekerja otomatis untuk semua rute: Chroot NetHunter / Custom (`<rootfs>/usr/bin`), Droidspaces container (`droidspaces enter -- which`), PRoot distro (`installed-rootfs/<distro>/usr/bin`), dan Termux host (`$PREFIX/bin`).
+  2. **Dropdown Menu di Setup Linux Apps (`GuiAppsSetupPreferencesFragment.java` & `gui_apps_setup_preferences.xml`)**:
+     - Ditambahkan `PreferenceCategory` *Desktop Environment* dengan `ListPreference` `gui_apps_selected_de`.
+     - Dropdown hanya diisi oleh entri yang lolos deteksi (misal di Kali NetHunter Tuan Eso terdeteksi `XFCE 4`, `GNOME`, dan `Openbox`).
+     - Jika rute, container chroot, atau distro proot diubah, dropdown otomatis melakukan re-scan di background thread (`probeExecutor`) dan memperbarui entri seketika.
+  3. **Penyusunan Perintah Eksekusi Dinamis (`ChrootDistro.resolveActiveDesktopCommand`)**:
+     - Menyatukan resolusi perintah desktop untuk `TermuxActivity.startEmbeddedDisplayNow`, `X11CliInstaller.forPrefix`, dan `X11LinuxAppRunner.configuredWindowManager`.
+     - Setiap DE memiliki penanganan runner khusus:
+       - **GNOME**: `export XDG_SESSION_TYPE=x11; exec dbus-launch --exit-with-session gnome-session` (mencegah GNOME mencoba Wayland dalam chroot).
+       - **XFCE**: `exec dbus-launch --exit-with-session startxfce4` dengan D-Bus system bus fix untuk battery meter.
+       - **Openbox**: `exec openbox-session` / `exec openbox`.
+       - **Droidspaces**: Disesuaikan dengan session runner Droidspaces `dbus-run-session ...`.
+     - Memanggil `X11CliInstaller.writeWindowManagerScript()` seketika saat pilihan DE diubah sehingga script `termux-x11-wm` selalu sinkron tanpa perlu restart aplikasi.
+
 ---
 
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)

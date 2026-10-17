@@ -56,6 +56,8 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
     static final String KEY_CHROOT_CUSTOM_PATH = "gui_apps_chroot_custom_path";
     static final String KEY_CHROOT_CUSTOM_RUNNER = "gui_apps_chroot_custom_runner";
     static final String KEY_STARTERS_CATEGORY = "gui_apps_starters_category";
+    static final String KEY_DESKTOP_CATEGORY = "gui_apps_desktop_category";
+    static final String KEY_SELECTED_DE = ChrootDistro.KEY_SELECTED_DE;
     static final String KEY_COPY = "gui_apps_copy";
     static final String KEY_NIX_DOCS = "gui_apps_nix_docs";
     static final String KEY_GRAPHICS_CATEGORY = "gui_apps_graphics_category";
@@ -108,6 +110,8 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
             if (distro != null) distro.setVisible(false);
             Preference starters = findPreference(KEY_STARTERS_CATEGORY);
             if (starters != null) starters.setVisible(false);
+            Preference desktopCat = findPreference(KEY_DESKTOP_CATEGORY);
+            if (desktopCat != null) desktopCat.setVisible(false);
             Preference copy = findPreference(KEY_COPY);
             if (copy != null) copy.setVisible(false);
             Preference graphics = findPreference(KEY_GRAPHICS_CATEGORY);
@@ -150,6 +154,7 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                 applyRouteRows(String.valueOf(value), edition);
                 Context ctx = getContext();
                 if (ctx != null) com.termux.app.x11.X11CliInstaller.forPrefix(ctx).writeWindowManagerScript();
+                populateInstalledDesktops();
                 return true;
             });
         }
@@ -160,9 +165,13 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                 SegmentedPillPreference current = findPreference(KEY_ROUTE);
                 applyStarterHints(current == null ? null : current.getValue(),
                     String.valueOf(value));
+                populateInstalledDesktops();
+                Context ctx = getContext();
+                if (ctx != null) com.termux.app.x11.X11CliInstaller.forPrefix(ctx).writeWindowManagerScript();
                 return true;
             });
         }
+        setupDesktopPreference();
         Preference copy = findPreference(KEY_COPY);
         if (copy != null) copy.setOnPreferenceClickListener(preference -> {
             copyCommand(preference.getContext());
@@ -221,6 +230,94 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
         }
         SegmentedPillPreference distro = findPreference(KEY_DISTRO);
         applyStarterHints(route, distro == null ? null : distro.getValue());
+        populateInstalledDesktops();
+    }
+
+    private void setupDesktopPreference() {
+        ListPreference dePref = findPreference(KEY_SELECTED_DE);
+        if (dePref == null) return;
+        dePref.setOnPreferenceChangeListener((pref, newVal) -> {
+            String selectedId = String.valueOf(newVal);
+            CharSequence[] entryValues = dePref.getEntryValues();
+            CharSequence[] entries = dePref.getEntries();
+            if (entries != null && entryValues != null) {
+                for (int i = 0; i < entryValues.length; i++) {
+                    if (entryValues[i].equals(selectedId)) {
+                        dePref.setSummary(entries[i]);
+                        break;
+                    }
+                }
+            }
+            Context c = getContext();
+            if (c != null) {
+                android.content.SharedPreferences prefs = c.getSharedPreferences(
+                    TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+                    Context.MODE_PRIVATE);
+                prefs.edit().putString(KEY_SELECTED_DE, selectedId).commit();
+                com.termux.app.x11.X11CliInstaller.forPrefix(c).writeWindowManagerScript();
+            }
+            return true;
+        });
+        populateInstalledDesktops();
+    }
+
+    private void populateInstalledDesktops() {
+        ListPreference dePref = findPreference(KEY_SELECTED_DE);
+        if (dePref == null) return;
+        Context ctx = getContext();
+        if (ctx == null) return;
+
+        probeExecutor.execute(() -> {
+            List<ChrootDistro.DesktopEntry> des = ChrootDistro.detectInstalledDesktops(ctx);
+            probeHandler.post(() -> {
+                if (!isAdded()) return;
+                List<String> entries = new java.util.ArrayList<>();
+                List<String> values = new java.util.ArrayList<>();
+
+                if (des.isEmpty()) {
+                    entries.add(getString(R.string.settings_gui_apps_selected_de_none));
+                    values.add("none");
+                    dePref.setEntries(entries.toArray(new CharSequence[0]));
+                    dePref.setEntryValues(values.toArray(new CharSequence[0]));
+                    dePref.setValue("none");
+                    dePref.setSummary(R.string.settings_gui_apps_selected_de_none);
+                    dePref.setEnabled(false);
+                } else {
+                    for (ChrootDistro.DesktopEntry de : des) {
+                        entries.add(de.displayName);
+                        values.add(de.id);
+                    }
+                    dePref.setEntries(entries.toArray(new CharSequence[0]));
+                    dePref.setEntryValues(values.toArray(new CharSequence[0]));
+                    dePref.setEnabled(true);
+
+                    String currentVal = dePref.getValue();
+                    boolean matched = false;
+                    for (String val : values) {
+                        if (val.equals(currentVal)) {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    if (!matched) {
+                        String targetVal = values.contains("xfce4") ? "xfce4" : values.get(0);
+                        dePref.setValue(targetVal);
+                        currentVal = targetVal;
+                        android.content.SharedPreferences prefs = ctx.getSharedPreferences(
+                            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+                            Context.MODE_PRIVATE);
+                        prefs.edit().putString(KEY_SELECTED_DE, currentVal).apply();
+                    }
+
+                    for (int i = 0; i < values.size(); i++) {
+                        if (values.get(i).equals(currentVal)) {
+                            dePref.setSummary(entries.get(i));
+                            break;
+                        }
+                    }
+                }
+            });
+        });
     }
 
     private void applyChrootCategory(boolean visible) {
@@ -244,6 +341,7 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                     probeHandler.post(() -> {
                         if (!isAdded()) return;
                         refreshChrootList(selected);
+                        populateInstalledDesktops();
                         if (ctx != null) {
                             AppNotice.show(ctx.getApplicationContext(), "Scan complete. Found " + envs.size() + " environment(s).");
                         }
@@ -259,6 +357,7 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                 applyCustomChrootVisibility(String.valueOf(val));
                 Context c = getContext();
                 if (c != null) com.termux.app.x11.X11CliInstaller.forPrefix(c).writeWindowManagerScript();
+                populateInstalledDesktops();
                 return true;
             });
         }
@@ -289,7 +388,13 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
         boolean isCustom = ChrootDistro.ID_CUSTOM.equals(value);
         Preference customPath = findPreference(KEY_CHROOT_CUSTOM_PATH);
         Preference customRunner = findPreference(KEY_CHROOT_CUSTOM_RUNNER);
-        if (customPath != null) customPath.setVisible(isCustom);
+        if (customPath != null) {
+            customPath.setVisible(isCustom);
+            customPath.setOnPreferenceChangeListener((pref, val) -> {
+                probeHandler.postDelayed(this::populateInstalledDesktops, 200);
+                return true;
+            });
+        }
         if (customRunner != null) customRunner.setVisible(isCustom);
     }
 
