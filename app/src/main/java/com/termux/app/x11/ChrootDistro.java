@@ -236,15 +236,18 @@ public final class ChrootDistro {
         }
 
         // Default: NetHunter chroot with mount namespace (-mm) and auto-mounted X11 unix socket
-        return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix && "
+        return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
             + "(mountpoint -q " + rootPath + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null); "
             + "chroot " + rootPath + " /usr/bin/env -i "
             + "HOME=/root "
-            + "TERM=xterm-256color "
-            + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
             + "USER=root "
             + "LOGNAME=root "
+            + "TERM=xterm-256color "
+            + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
             + "DISPLAY=${DISPLAY:-:0} "
+            + "PULSE_SERVER=tcp:127.0.0.1:4713 "
+            + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
+            + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
             + "DISABLE_AUTO_TITLE=true "
             + "/bin/sh -c " + ProotDistro.singleQuote(command) + "\"";
     }
@@ -254,33 +257,27 @@ public final class ChrootDistro {
      */
     @NonNull
     public static String getDesktopCommand(@Nullable ChrootEnvironment env) {
-        if (env == null) {
-            String defaultRoot = "/data/local/nhsystem/kali-arm64";
-            return "su -mm -c \"mkdir -p " + defaultRoot + "/tmp/.X11-unix && "
-                + "(mountpoint -q " + defaultRoot + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + defaultRoot + "/tmp/.X11-unix 2>/dev/null); "
-                + "chroot " + defaultRoot + " /usr/bin/env -i "
-                + "HOME=/root TERM=xterm-256color "
-                + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
-                + "USER=root LOGNAME=root DISPLAY=${DISPLAY:-:0} "
-                + "/usr/bin/dbus-run-session /usr/bin/xfce4-session\"";
-        }
-
-        if (env.runnerType == RunnerType.DROIDSPACES) {
+        if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
             return "su -c '/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
                 + "\" --termux-x11 --virgl enter -- /bin/sh -c \\\"export DISPLAY=:0 && dbus-run-session xfce4-session\\\"'";
-        } else if (env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
+        } else if (env != null && env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
             return env.customRunner
                 .replace("%ROOTFS%", env.rootfs.getAbsolutePath())
                 .replace("%COMMAND%", "'export DISPLAY=:0 && dbus-run-session xfce4-session'");
         }
 
-        String rootPath = env.rootfs.getAbsolutePath();
-        return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix && "
+        String rootPath = (env != null) ? env.rootfs.getAbsolutePath() : "/data/local/nhsystem/kali-arm64";
+        return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
             + "(mountpoint -q " + rootPath + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null); "
             + "chroot " + rootPath + " /usr/bin/env -i "
-            + "HOME=/root TERM=xterm-256color "
+            + "HOME=/root "
+            + "USER=root "
+            + "TERM=xterm-256color "
             + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
-            + "USER=root LOGNAME=root DISPLAY=${DISPLAY:-:0} "
-            + "/usr/bin/dbus-run-session /usr/bin/xfce4-session\"";
+            + "DISPLAY=${DISPLAY:-:0} "
+            + "PULSE_SERVER=tcp:127.0.0.1:4713 "
+            + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
+            + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
+            + "/bin/bash -c '/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4'\"";
     }
 }

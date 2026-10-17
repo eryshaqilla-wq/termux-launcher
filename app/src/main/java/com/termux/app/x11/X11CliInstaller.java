@@ -118,7 +118,7 @@ public final class X11CliInstaller {
 
     /** The installer for this launcher's own prefix. */
     @NonNull
-    static X11CliInstaller forPrefix(@NonNull Context context) {
+    public static X11CliInstaller forPrefix(@NonNull Context context) {
         Context app = context.getApplicationContext();
         TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(app);
         android.content.SharedPreferences defaultPrefs = app.getSharedPreferences(

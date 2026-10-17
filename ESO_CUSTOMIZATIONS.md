@@ -62,8 +62,14 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
      - `LinuxAppCatalog.java` mendaftarkan `ChrootDistro.installed()` sehingga seluruh file `.desktop` dari NetHunter dan Droidspaces otomatis muncul di App Drawer Linux Apps.
   6. **Auto Bind-Mount Socket X11 & Peluncuran Sesi Desktop Penuh**:
      - `ChrootDistro.java` secara otomatis melakukan bind-mount socket X11 host `/data/data/com.termux/files/usr/tmp/.X11-unix` ke `<rootfs>/tmp/.X11-unix` sebelum chroot dijalankan (`mountpoint -q ... || mount -o bind ...`).
-     - Peluncuran desktop chroot diarahkan ke `dbus-run-session xfce4-session` sehingga seluruh subsistem desktop (`xfwm4`, `xfce4-panel`, `xfdesktop` dengan wallpaper naga Kali) langsung aktif tanpa layar hitam Openbox polos.
+     - Peluncuran desktop chroot diarahkan ke sesi XFCE4 yang lengkap dengan `LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1` dan `dbus-launch --exit-with-session startxfce4` persis seperti `x11-start` bawaan Kali NetHunter.
      - `X11CliInstaller.writeWindowManagerScript()` otomatis dipanggil saat route diubah dan saat "Start display" ditekan agar `termux-x11-wm` selalu sinkron.
+  7. **Perbaikan Sesi Manager & Indikator Baterai (NetHunter Proper Setup)**:
+     - **Masalah**: Sesi manager dan widget baterai di panel XFCE NetHunter sempat tidak akurat / error karena UPower tidak dapat berkomunikasi dengan sistem bus.
+     - **Solusi**:
+       - Memulai daemon System D-Bus dengan `/etc/init.d/dbus start` sebelum session diluncurkan (tanpa ini, `/var/run/dbus/system_bus_socket` tidak tersedia, sehingga `upower` dan `xfce4-power-manager` putus).
+       - Menetapkan environment lengkap: `DISPLAY=${DISPLAY:-:0}`, `PULSE_SERVER=tcp:127.0.0.1:4713`, `XKB_CONFIG_ROOT=/usr/share/X11/xkb`, dan `LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1`.
+       - Memperbaiki visibilitas `X11CliInstaller.forPrefix(Context)` menjadi `public` agar dapat dipanggil dari `TermuxActivity` dan preferences fragment tanpa error kompilasi.
 
 ---
 
