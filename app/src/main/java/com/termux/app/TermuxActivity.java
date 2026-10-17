@@ -20660,6 +20660,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mDisplaySystemKeyboardUp = false;
         com.termux.x11.LorieView display = displayView();
         if (display != null) display.setKeyboardVisible(false);
+        View focus = getCurrentFocus();
+        com.termux.shared.view.KeyboardUtils.hideSoftKeyboard(this,
+            focus != null ? focus : getWindow().getDecorView());
         applyDisplayImeRoom(0);
     }
 
@@ -20844,16 +20847,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean reduced = isReducedMotionEnabled();
         // The pad and the clipboard panel stand in the same frame; the pad's arrival puts the
         // panel away first, so the two never stack.
-        if (wanted && mClipboardPanel != null) mClipboardPanel.hide();
-        // The keyboard is the frame both contents stand in: it has to be up for either to have a
-        // size, and it stays up across a swap so the X screen is never resized to make room.
-        if (ours && !mInAppKeyboard.isVisible()) {
-            raiseDisplayFrameKeyboard();
-            mFrameContent.onFrameRaisedForPad();
+        View container = findViewById(R.id.inapp_keyboard_container);
+        if (wanted) {
+            if (container != null) container.setVisibility(View.VISIBLE);
+            if (host != null) host.setVisibility(View.VISIBLE);
+            if (ours && mInAppKeyboard != null && mInAppKeyboard.isEnabled() && !mInAppKeyboard.isVisible()) {
+                raiseDisplayFrameKeyboard();
+                mFrameContent.onFrameRaisedForPad();
+            }
         }
         if (!wanted) {
             releaseDisplayTouchpadWait();
             mDisplayTouchpadWaitRound = 0;
+            if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
+                container.setVisibility(View.GONE);
+            }
             if (pad == null) return;
             final com.termux.app.x11.DisplayTouchpadView leaving = pad;
             mDisplayTouchpad = null;
@@ -21083,8 +21091,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Keyboard2View keys = inGap ? (Keyboard2View) keyboardView : null;
         pad.setInSplitGap(inGap, keys == null ? 0f : keys.getKeyCapRadiusPx(),
             keys == null ? 0 : keys.getKeyCapColor());
+        int height = keyboardView != null && keyboardView.getHeight() > 0
+            ? keyboardView.getHeight()
+            : Math.round(240f * (density > 0f ? density : 1f));
         return com.termux.app.x11.DisplayTouchpadPlacement.padParams(gap, seat,
-            keyboardView == null ? 0 : keyboardView.getHeight(), density);
+            height, density);
     }
 
     private void createWidgetPaneController() {

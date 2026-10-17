@@ -282,6 +282,22 @@ public final class DisplayTouchpadView extends View {
     }
 
     @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+        int widthSize = MeasureSpec.getSize(widthMeasureSpec);
+        int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+        int heightSize = MeasureSpec.getSize(heightMeasureSpec);
+
+        int width = widthMode == MeasureSpec.EXACTLY ? widthSize
+            : (widthSize > 0 ? widthSize : getSuggestedMinimumWidth());
+        int defaultHeight = Math.round(240f * getResources().getDisplayMetrics().density);
+        int height = heightMode == MeasureSpec.EXACTLY ? heightSize
+            : (heightMode == MeasureSpec.AT_MOST && heightSize > 0 ? Math.min(defaultHeight, heightSize) : defaultHeight);
+
+        setMeasuredDimension(width, height);
+    }
+
+    @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         layOutPanel(w, h);
