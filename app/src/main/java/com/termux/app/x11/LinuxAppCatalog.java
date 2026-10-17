@@ -370,6 +370,9 @@ public final class LinuxAppCatalog {
     /** Whether {@code binary} — a {@code TryExec} value, or an {@code Exec}'s first word — is there. */
     private static boolean executableExists(@NonNull ProotDistro.Container container,
                                             @NonNull String binary, @NonNull File desktopFile) {
+        if (container.kind == ProotDistro.Container.Kind.CHROOT) {
+            return true;
+        }
         // Absolute inside a container means absolute in the container's world, not Android's.
         if (binary.startsWith("/")) return container.inside(binary).canExecute();
         if (container.kind == ProotDistro.Container.Kind.NIX) {

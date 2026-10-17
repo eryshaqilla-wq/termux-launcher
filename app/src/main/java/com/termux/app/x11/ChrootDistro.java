@@ -317,12 +317,42 @@ public final class ChrootDistro {
         return envs;
     }
 
+    private static volatile boolean sBridgeSyncStarted = false;
+
+    /**
+     * Synchronizes chroot .desktop files and icons into Termux's accessible prefix bridge directory.
+     */
+    public static void syncChrootBridge() {
+        if (!isRootAvailable()) return;
+        new Thread(() -> {
+            try {
+                String cmd = "for root in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs /data/local/Droidspaces/Containers/*/rootfs; do "
+                    + "if [ -d \"$root/usr/share/applications\" ]; then "
+                    + "cname=$(basename \"$(dirname \"$root\")\"); [ \"$cname\" = \"nhsystem\" ] && cname=$(basename \"$root\"); "
+                    + "out=\"/data/data/com.termux/files/usr/share/applications/chroot/$cname\"; "
+                    + "mkdir -p \"$out\" \"/data/data/com.termux/files/usr/share/applications/chroot/icons\"; "
+                    + "cp -u \"$root\"/usr/share/applications/*.desktop \"$out/\" 2>/dev/null || true; "
+                    + "cp -ru \"$root\"/usr/share/pixmaps/* \"/data/data/com.termux/files/usr/share/applications/chroot/icons/\" 2>/dev/null || true; "
+                    + "uid=$(stat -c '%u' /data/data/com.termux/files/home 2>/dev/null || id -u); "
+                    + "chown -R \"$uid:$uid\" \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
+                    + "chmod -R 755 \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
+                    + "fi; done";
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                p.waitFor();
+            } catch (Exception ignored) {}
+        }, "chroot-bridge-sync").start();
+    }
+
     /**
      * Returns installed chroot environments as ProotDistro.Container items for LinuxAppCatalog scanning.
      */
     @NonNull
     public static List<ProotDistro.Container> installed() {
         if (!isRootAvailable()) return Collections.emptyList();
+        if (!sBridgeSyncStarted) {
+            sBridgeSyncStarted = true;
+            syncChrootBridge();
+        }
         List<ProotDistro.Container> containers = new ArrayList<>();
         List<ChrootEnvironment> envs = scan();
         for (ChrootEnvironment env : envs) {

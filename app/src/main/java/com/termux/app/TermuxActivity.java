@@ -20720,8 +20720,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * the terminal's alone and the keyboard is nobody's but the user's.
      */
     private boolean isDisplayTouchpadFrame() {
-        return mFrameContent.isMouseMode() && isDisplayPageShowing() && isEmbeddedDisplayRunning()
-            && mInAppKeyboard != null && findViewById(R.id.inapp_keyboard_view_host) != null;
+        return mFrameContent.isMouseMode()
+            && findViewById(R.id.inapp_keyboard_view_host) != null;
     }
 
     /**

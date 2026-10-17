@@ -161,6 +161,22 @@ public final class LinuxAppIcons {
             return file.isFile() && isSupportedIcon(file) ? file : null;
         }
         String name = stripKnownExtension(iconName);
+        if (container != null && container.kind == ProotDistro.Container.Kind.CHROOT) {
+            String[] searchDirs = {
+                TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/share/applications/chroot/" + container.name + "/icons",
+                TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/share/applications/chroot/icons",
+                TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/share/pixmaps"
+            };
+            for (String sDir : searchDirs) {
+                File d = new File(sDir);
+                if (d.isDirectory()) {
+                    for (String ext : ICON_EXTENSIONS) {
+                        File f = new File(d, name + ext);
+                        if (f.isFile()) return f;
+                    }
+                }
+            }
+        }
         for (String theme : THEMES) {
             for (String size : HICOLOR_SIZES) {
                 for (String ext : ICON_EXTENSIONS) {

@@ -151,6 +151,12 @@ public final class ProotDistro {
                 dirs.add(new File(root, "local/share/applications"));
                 return dirs;
             }
+            if (kind == Kind.CHROOT) {
+                File chrootAppsDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot/" + name);
+                if (chrootAppsDir.isDirectory()) dirs.add(chrootAppsDir);
+                File commonChrootAppsDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot");
+                if (commonChrootAppsDir.isDirectory()) dirs.add(commonChrootAppsDir);
+            }
             dirs.add(new File(root, "usr/share/applications"));
             dirs.add(new File(root, "usr/local/share/applications"));
             if (!home.isEmpty()) dirs.add(inside(home + "/.local/share/applications"));
@@ -194,6 +200,12 @@ public final class ProotDistro {
         @NonNull
         public File iconPrefix() {
             if (kind == Kind.NIX) return profile != null ? profile : root;
+            if (kind == Kind.CHROOT) {
+                File chrootIconDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot/" + name + "/icons");
+                if (chrootIconDir.isDirectory()) return chrootIconDir;
+                File commonIconDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot/icons");
+                if (commonIconDir.isDirectory()) return commonIconDir;
+            }
             return isPrefix() ? root : new File(root, "usr");
         }
 
