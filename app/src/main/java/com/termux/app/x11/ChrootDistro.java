@@ -96,7 +96,7 @@ public final class ChrootDistro {
                 case "awesome":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec awesome";
                 case "bspwm":
-                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec bspwm";
+                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || (/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-run-session -- bspwm)";
                 case "fluxbox":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
                 case "xfce4":
