@@ -4728,6 +4728,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int targetHeight = ViewGroup.LayoutParams.MATCH_PARENT;
         int targetLeftMargin = 0;
         int targetRightMargin = 0;
+        int targetBottomMargin = 0;
         boolean capsuleSurface = viewId == R.id.accessory_surface_host && isRoundedDockStyle();
         ViewParent parent = view.getParent();
         if (parent instanceof View) {
