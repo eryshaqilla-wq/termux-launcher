@@ -8,7 +8,9 @@ corner radius and edge gap.
 The rest of this document exists so you can change it without breaking the parts people already
 rely on. Treat it as good defaults, not scripture — the developer's stated preference overrides
 anything here, and if a rule fights the task in front of you, say so out loud rather than quietly
-working around it.
+> [!IMPORTANT]
+> **Fork Maintenance & Customizations Guide**:
+> Refer to [`ESO_CUSTOMIZATIONS.md`](ESO_CUSTOMIZATIONS.md) for custom features, zero-lag preferences, wallpaper & dock overscan fixes, upstream sync procedures, and deployment workflows specific to this fork (`eso-launcher`).
 
 ## What we can never compromise on
 
