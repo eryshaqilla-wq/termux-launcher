@@ -371,8 +371,14 @@ public final class ChrootDistro {
 
         if (RunnerType.DROIDSPACES.name().equals(type)) {
             String cName = container.name;
-            return "su -c '/data/local/Droidspaces/bin/droidspaces --name=\"" + cName
-                + "\" enter -- /bin/sh -c " + ProotDistro.singleQuote(command) + "'";
+            String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
+            return "su -c 'if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; then "
+                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" start; "
+                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" start; fi; sleep 2; fi; "
+                + "am start -n com.termux.x11/.MainActivity 2>/dev/null; "
+                + "/data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" run /bin/sh -c "
+                + ProotDistro.singleQuote("export DISPLAY=:5 PULSE_SERVER=unix:/tmp/.pulse-socket GALLIUM_DRIVER=virpipe; " + command)
+                + "'";
         } else if (RunnerType.CUSTOM.name().equals(type) && container.customRunner != null
                 && !container.customRunner.trim().isEmpty()) {
             return container.customRunner
@@ -417,9 +423,17 @@ public final class ChrootDistro {
     @NonNull
     public static String getDesktopCommand(@Nullable ChrootEnvironment env, @Nullable DesktopEntry de) {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
-            String inner = (de != null) ? de.getDroidspacesInnerCommand() : "dbus-run-session xfce4-session";
-            return "su -c '/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
-                + "\" --termux-x11 --virgl enter -- /bin/sh -c \\\"export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 && " + inner + "\\\"'";
+            String cName = env.containerName;
+            String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
+            String inner = (de != null) ? de.getDroidspacesInnerCommand() : "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || dbus-run-session xfce4-session";
+            return "su -c 'if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; then "
+                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" start; "
+                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" start; fi; sleep 2; fi; "
+                + "am start -n com.termux.x11/.MainActivity 2>/dev/null; "
+                + "/data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" run /bin/sh -c "
+                + ProotDistro.singleQuote("export DISPLAY=:5 PULSE_SERVER=unix:/tmp/.pulse-socket GALLIUM_DRIVER=virpipe; "
+                    + "if ! pgrep -f \"bspwm|xfce4|plasma|gnome|mate|lxde|openbox|i3\" >/dev/null 2>&1; then " + inner + " & fi") + "; "
+                + "while /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; do sleep 3; done'";
         } else if (env != null && env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
             String inner = (de != null) ? de.getChrootInnerCommand() : "exec dbus-launch --exit-with-session startxfce4";
             return env.customRunner
@@ -619,7 +633,7 @@ public final class ChrootDistro {
 
         if (results.isEmpty() && isRootAvailable()) {
             StringBuilder checkCmd = new StringBuilder(
-                "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName + "\" enter -- /bin/sh -c \"for b in");
+                "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName + "\" run /bin/sh -c \"for b in");
             for (DesktopDef def : SUPPORTED_DESKTOPS) {
                 for (String bin : def.candidateBinaries) {
                     checkCmd.append(" ").append(bin);
@@ -793,9 +807,10 @@ public final class ChrootDistro {
             List<ChrootEnvironment> envs = scan();
             for (ChrootEnvironment env : envs) {
                 if (env.runnerType == RunnerType.DROIDSPACES) {
-                    // Kill DE inside Droidspaces container without killing the Droidspaces container itself
+                    // Stop Droidspaces container and kill lingering DE processes
                     String dsKillCmd = "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
-                        + "\" enter -- /bin/sh -c 'pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true'";
+                        + "\" run /bin/sh -c 'pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true'; "
+                        + "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName + "\" stop 2>/dev/null || true";
                     try {
                         Runtime.getRuntime().exec(new String[]{"su", "-c", dsKillCmd}).waitFor();
                     } catch (Exception ignored) {}
