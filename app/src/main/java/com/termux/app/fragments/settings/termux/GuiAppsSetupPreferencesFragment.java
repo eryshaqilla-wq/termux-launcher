@@ -238,16 +238,6 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
         if (dePref == null) return;
         dePref.setOnPreferenceChangeListener((pref, newVal) -> {
             String selectedId = String.valueOf(newVal);
-            CharSequence[] entryValues = dePref.getEntryValues();
-            CharSequence[] entries = dePref.getEntries();
-            if (entries != null && entryValues != null) {
-                for (int i = 0; i < entryValues.length; i++) {
-                    if (entryValues[i].equals(selectedId)) {
-                        dePref.setSummary(entries[i]);
-                        break;
-                    }
-                }
-            }
             Context c = getContext();
             if (c != null) {
                 android.content.SharedPreferences prefs = c.getSharedPreferences(
@@ -280,7 +270,6 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                     dePref.setEntries(entries.toArray(new CharSequence[0]));
                     dePref.setEntryValues(values.toArray(new CharSequence[0]));
                     dePref.setValue("none");
-                    dePref.setSummary(R.string.settings_gui_apps_selected_de_none);
                     dePref.setEnabled(false);
                 } else {
                     for (ChrootDistro.DesktopEntry de : des) {
@@ -307,13 +296,6 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                             TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
                             Context.MODE_PRIVATE);
                         prefs.edit().putString(KEY_SELECTED_DE, currentVal).apply();
-                    }
-
-                    for (int i = 0; i < values.size(); i++) {
-                        if (values.get(i).equals(currentVal)) {
-                            dePref.setSummary(entries.get(i));
-                            break;
-                        }
                     }
                 }
             });

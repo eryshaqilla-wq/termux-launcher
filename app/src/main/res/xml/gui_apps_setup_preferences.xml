@@ -60,7 +60,6 @@
         <ListPreference
             app:key="gui_apps_selected_de"
             app:title="@string/settings_gui_apps_selected_de_title"
-            app:summary="@string/settings_gui_apps_selected_de_summary"
             android:defaultValue="auto"
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
