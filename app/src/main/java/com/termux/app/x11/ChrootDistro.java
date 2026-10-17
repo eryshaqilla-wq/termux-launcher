@@ -280,4 +280,70 @@ public final class ChrootDistro {
             + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
             + "/bin/bash -c '/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4'\"";
     }
+
+    public static final String DE_PROCESS_PATTERN =
+        "xfce4|gnome|plasma|kwin|mate|lxde|lxqt|openbox|fluxbox|cinnamon|dbus-launch|dbus-run-session|(\\<i3\\>)|(\\<bspwm\\>)|(\\<awesome\\>)";
+
+    /**
+     * Dynamically stops and kills desktop environments and window managers across
+     * NetHunter, Droidspaces, PRoot, and custom chroot distributions,
+     * without killing the Droidspaces container itself.
+     */
+    public static void killDesktopEnvironment(@NonNull Context context) {
+        if (isRootAvailable()) {
+            List<ChrootEnvironment> envs = scan();
+            for (ChrootEnvironment env : envs) {
+                if (env.runnerType == RunnerType.DROIDSPACES) {
+                    // Kill DE inside Droidspaces container without killing the Droidspaces container itself
+                    String dsKillCmd = "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
+                        + "\" enter -- /bin/sh -c 'pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true'";
+                    try {
+                        Runtime.getRuntime().exec(new String[]{"su", "-c", dsKillCmd}).waitFor();
+                    } catch (Exception ignored) {}
+                } else {
+                    // NetHunter or custom chroot: kill DE inside chroot, stop dbus, unmount X11 socket
+                    String rootPath = env.rootfs.getAbsolutePath();
+                    String chrootKillCmd = "chroot " + rootPath + " /usr/bin/pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true; "
+                        + "if [ -x " + rootPath + "/etc/init.d/dbus ]; then chroot " + rootPath + " /etc/init.d/dbus stop 2>/dev/null || true; fi; "
+                        + "(mountpoint -q " + rootPath + "/tmp/.X11-unix && umount " + rootPath + "/tmp/.X11-unix 2>/dev/null || true)";
+                    try {
+                        Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", chrootKillCmd}).waitFor();
+                    } catch (Exception ignored) {}
+                }
+            }
+            // Root-level cleanup of termux-x11 and lingering socket/pid
+            try {
+                Runtime.getRuntime().exec(new String[]{"su", "-c",
+                    "killall -9 termux-x11 2>/dev/null || pkill -9 -f termux-x11 2>/dev/null; "
+                    + "rm -f /data/data/com.termux/files/usr/tmp/termux-x11-wm.pid 2>/dev/null; "
+                    + "rm -rf /data/data/com.termux/files/usr/tmp/.X11-unix 2>/dev/null"}).waitFor();
+            } catch (Exception ignored) {}
+        }
+
+        // Host-level cleanup (for PRoot / native termux x11)
+        try {
+            Runtime.getRuntime().exec(new String[]{"/data/data/com.termux/files/usr/bin/pkill", "-9", "-f", DE_PROCESS_PATTERN}).waitFor();
+        } catch (Exception ignored) {}
+        try {
+            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", DE_PROCESS_PATTERN}).waitFor();
+        } catch (Exception ignored) {}
+        try {
+            Runtime.getRuntime().exec(new String[]{"/data/data/com.termux/files/usr/bin/pkill", "-9", "-f", "termux-x11"}).waitFor();
+        } catch (Exception ignored) {}
+        try {
+            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", "termux-x11"}).waitFor();
+        } catch (Exception ignored) {}
+    }
+
+    /**
+     * Executes {@link #killDesktopEnvironment(Context)} asynchronously off the main thread.
+     */
+    public static void killDesktopEnvironmentAsync(@NonNull Context context, @Nullable Runnable onComplete) {
+        new Thread(() -> {
+            killDesktopEnvironment(context);
+            if (onComplete != null) {
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
+            }
+        }, "DE-Killer").start();
+    }
 }

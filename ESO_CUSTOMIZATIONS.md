@@ -70,6 +70,14 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
        - Memulai daemon System D-Bus dengan `/etc/init.d/dbus start` sebelum session diluncurkan (tanpa ini, `/var/run/dbus/system_bus_socket` tidak tersedia, sehingga `upower` dan `xfce4-power-manager` putus).
        - Menetapkan environment lengkap: `DISPLAY=${DISPLAY:-:0}`, `PULSE_SERVER=tcp:127.0.0.1:4713`, `XKB_CONFIG_ROOT=/usr/share/X11/xkb`, dan `LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1`.
        - Memperbaiki visibilitas `X11CliInstaller.forPrefix(Context)` menjadi `public` agar dapat dipanggil dari `TermuxActivity` dan preferences fragment tanpa error kompilasi.
+  8. **Tombol Emergency Stop & Dynamic DE Killer di Status Bar Canvas Kanan (Opsi A)**:
+     - **Masalah**: Layar hitam dapat terjadi jika DE/WM hang atau crash sebelum sempat menggambar jendela X11. Saat itu, `mDisplayWindows` kosong sehingga status bar tidak memiliki tombol apapun untuk menghentikan display.
+     - **Solusi**:
+       - `TermuxActivity.syncWindowBarItems` selalu menyisipkan chip root display session (`NetHunter`, `Droidspaces`, `PRoot`, atau `X11 Display`) pada index 0 saat display aktif di canvas kanan.
+       - **Two-Step Confirmation**: Klik pertama pada chip membuka tombol `[×]` (close). Klik pada `[×]` mengeksekusi pembersihan total. Klik di luar chip membatalkan (dismiss) tombol `[×]`.
+       - **Dynamic DE Killer (`ChrootDistro.killDesktopEnvironmentAsync`)**: Menargetkan seluruh DE/WM populer (`xfce4`, `gnome`, `plasma`, `kwin`, `mate`, `lxde`, `lxqt`, `openbox`, `fluxbox`, `cinnamon`, `i3`, `bspwm`, `awesome`, dll.) secara dinamis tanpa di-hardcode ke XFCE saja.
+       - **Proteksi Droidspaces**: Hanya membunuh proses DE di dalam container (`droidspaces enter -- pkill`), tanpa membunuh container Droidspaces itu sendiri.
+       - **Pembersihan Bersih**: Menghentikan server `termux-x11`, menghapus socket & pid file, serta mereset tampilan canvas kanan seketika kembali ke state *"No display is running / Start display"*.
 
 ---
 

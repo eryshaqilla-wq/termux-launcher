@@ -20346,6 +20346,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         ? null : mPaneWallController.displayPage();
                     if (frame != null) frame.applyRunning(false);
                     syncPlaceBar();
+                    refreshTerminalWindowBar();
                 }
             });
         mX11Display.setTextFocusKeyboard(new com.termux.app.x11.DisplayTextFocusPolicy.Keyboard() {
@@ -20393,6 +20394,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 ? null : mPaneWallController.displayPage();
             if (frame != null) frame.applyRunning(running);
             syncPlaceBar();
+            refreshTerminalWindowBar();
             syncDisplayTouchpad();
             syncDisplayEnvironment();
             if (mLinuxApps != null) mLinuxApps.onDisplayRunningChanged(running);
@@ -21211,6 +21213,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void selectWindowFromStatusBar(int index) {
         if (!isSplitPanesEnabled()) return;
         if (isDisplayPageShowing()) {
+            if (isEmbeddedDisplayRunning()) {
+                if (index == 0) return;
+                index--;
+            }
             // On the Display place the chips are the display's apps: a tap brings one to the front.
             if (mX11Windows != null && index >= 0 && index < mDisplayWindows.size()) {
                 mX11Windows.activate(mDisplayWindows.get(index).id);
@@ -21223,17 +21229,43 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
+     * Emergency / manual stop: dynamically terminates all desktop environments,
+     * window managers, D-Bus sessions, and X11 services across NetHunter, Droidspaces,
+     * PRoot, and Termux host without killing the Droidspaces container itself,
+     * and resets the display UI.
+     */
+    private void stopAndKillAllDisplayServices() {
+        android.widget.Toast.makeText(this, "Stopping X11 Display & DE...", android.widget.Toast.LENGTH_SHORT).show();
+        com.termux.app.x11.ChrootDistro.killDesktopEnvironmentAsync(this, () -> {
+            killEmbeddedDisplayServer();
+            com.termux.app.x11.X11PaneFrame displayFrame = mPaneWallController == null
+                ? null : mPaneWallController.displayPage();
+            if (displayFrame != null) {
+                displayFrame.applyRunning(false);
+            }
+            refreshPlaceBar();
+            refreshTerminalWindowBar();
+            android.widget.Toast.makeText(this, "X11 Display & DE stopped", android.widget.Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    /**
      * The × on a window chip was tapped. The chips stand for whatever the place in front of the
      * user is showing, so the close goes the same way {@link #syncWindowBarItems} filled them: an
      * app on the display asks that app to close itself, a terminal window takes its panes with it.
      */
     private void closeWindowFromStatusBar(int index) {
-        if (!isSplitPanesEnabled()) return;
         if (isDisplayPageShowing()) {
+            if (isEmbeddedDisplayRunning() && index == 0) {
+                stopAndKillAllDisplayServices();
+                return;
+            }
+            int windowIndex = isEmbeddedDisplayRunning() ? index - 1 : index;
             // The app shows its own "save before closing?" when it has something to ask.
-            closeDisplayWindow(index);
+            closeDisplayWindow(windowIndex);
             return;
         }
+        if (!isSplitPanesEnabled()) return;
         if (mPaneController == null || mCurrentWSession == null
             || index < 0 || index >= mCurrentWSession.windows.size()) return;
         if (windowHasForegroundJob(index)) confirmCloseWindow(index);
@@ -21906,6 +21938,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // shared with the other places, which fill it with something else entirely.
         boolean terminalWindows = false;
         if (isDisplayPageShowing()) {
+            boolean running = isEmbeddedDisplayRunning();
+            if (running) {
+                String route = getSharedPreferences(
+                    TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+                    MODE_PRIVATE).getString("gui_apps_route", "x11");
+                String rootLabel = "X11 Display";
+                if ("chroot".equals(route)) {
+                    com.termux.app.x11.ChrootDistro.ChrootEnvironment chrootEnv =
+                        com.termux.app.x11.ChrootDistro.getActiveEnvironment(this);
+                    if (chrootEnv != null) {
+                        rootLabel = chrootEnv.runnerType == com.termux.app.x11.ChrootDistro.RunnerType.DROIDSPACES
+                            ? "Droidspaces" : (com.termux.app.x11.ChrootDistro.ID_NETHUNTER.equals(chrootEnv.id) ? "NetHunter" : chrootEnv.name);
+                    } else {
+                        rootLabel = "NetHunter";
+                    }
+                } else if ("proot".equals(route)) {
+                    rootLabel = "PRoot Distro";
+                }
+                items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem(rootLabel, rootLabel));
+            }
             // The display's apps, front one selected; the terminal's marks (busy, attention,
             // done) have no meaning for them.
             com.termux.app.x11.X11WindowIconResolver icons = displayWindowIcons();
@@ -21917,7 +21969,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem(label, label)
                     .withIcon(icons == null ? null : icons.iconFor(window.wmClass)));
             }
-            selected = mDisplayActiveWindow;
+            if (running) {
+                selected = mDisplayActiveWindow >= 0 ? mDisplayActiveWindow + 1 : 0;
+            } else {
+                selected = mDisplayActiveWindow;
+            }
         } else if (isWidgetsPageShowing()) {
             // The Widgets place has no chips: the row is bare there and the widgets speak for
             // themselves.
