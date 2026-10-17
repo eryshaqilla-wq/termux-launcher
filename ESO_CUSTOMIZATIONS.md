@@ -149,6 +149,42 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
      - Menghentikan daemon `pulseaudio` (`pulseaudio --kill` dan fallback `pkill -9 -f pulseaudio`).
      - Menghapus lingering sockets dan temporary files di Termux host tmp.
      - Dipanggil baik saat tombol Emergency Stop `[×]` ditekan (`stopAndKillAllDisplayServices`), maupun saat display server dimatikan secara normal (`killEmbeddedDisplayServer`).
+  5. **Konfigurasi Environment Shell Interaktif NetHunter (`/etc/environment` & `~/.zshrc`)**:
+     - Agar sesi terminal manual di luar launcher otomatis mengenali VirGL:
+       ```bash
+       export GALLIUM_DRIVER=virpipe
+       export MESA_GL_VERSION_OVERRIDE=4.3COMPAT
+       export MESA_GLES_VERSION_OVERRIDE=3.2
+       export MESA_NO_ERROR=1
+       export LIBGL_DRI3_DISABLE=1
+       export VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test
+       export PULSE_SERVER=tcp:127.0.0.1:4713
+       ```
+  6. **Catatan Teknis Pengujian Akselerasi (GLX vs EGL)**:
+     - **Isu `glxinfo` & `glmark2` (Desktop GLX)**: Utilitas GLX klasik menuntut GLX FB config desktop PC dan pemanggilan X11 `X_GetImage` (opcode 73) yang tidak didukung langsung oleh server Xwayland Termux-X11 di Android. Jika dipanggil tanpa EGL visual config, Mesa otomatis fallback ke CPU software rasterizer (`llvmpipe` / `Accelerated: no`).
+     - **Cara Uji Valid VirGL di Android (`glmark2-es2`)**:
+       Gunakan utilitas berbasis OpenGL ES / EGL:
+       ```bash
+       DISPLAY=:0 glmark2-es2 --visual-config id=0x21
+       # atau
+       DISPLAY=:0 es2gears_x11
+       ```
+       Output yang terverifikasi berhasil:
+       ```text
+       GL_VENDOR:      Mesa
+       GL_RENDERER:    virgl (ANGLE (ARM, Mali-G77 MC9, OpenGL ES 3.2 v1.r32p1-01e...)
+       GL_VERSION:     OpenGL ES 3.1 Mesa 26.0.4-1
+       ```
+     - **Verifikasi Kernel Driver Hardware**:
+       ```bash
+       ls -l /proc/$(pgrep -f virgl_test_server_android | tail -n1)/fd | grep mali
+       # Menghasilkan fd -> /dev/mali0 (GPU fisik MediaTek Dimensity 1200 aktif memproses render)
+       ```
+     - **Verifikasi Audio PulseAudio**:
+       ```bash
+       netstat -tlpn | grep 4713
+       # Menghasilkan port 4713 LISTEN dan koneksi ESTABLISHED dari plugin panel XFCE (libpulseaudio-plugin.so)
+       ```
 
 ---
 
