@@ -5625,7 +5625,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         );
     }
 
+    private boolean isTouchpadShown() {
+        if (mDisplayTouchpad != null && mDisplayTouchpad.getVisibility() == View.VISIBLE) {
+            return true;
+        }
+        return mFrameContent.isMouseMode()
+            && mFrameContent.content() == com.termux.app.x11.DisplayFrameContentPolicy.Content.PAD;
+    }
+
     private boolean isInAppKeyboardShown() {
+        if (isTouchpadShown()) {
+            return true;
+        }
         View keyboardContainer = findViewById(R.id.inapp_keyboard_container);
         if (mInAppKeyboard != null) {
             return mInAppKeyboard.isVisible();
@@ -20771,6 +20782,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // exactly what it opened and the user is not left with a keyboard to dismiss.
         if (decision.releaseFrame) lowerDisplayFrameKeyboard();
         syncMouseModeMark();
+        mKeyboardGeometry.markHeightDirty();
+        setTerminalToolbarHeight(false);
+        mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD,
+            GeometryScheduler.ResizePolicy.NOW);
+        mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
         if (mX11Display == null) return;
         switch (decision.intent) {
             case PIN:
@@ -20849,8 +20865,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // panel away first, so the two never stack.
         View container = findViewById(R.id.inapp_keyboard_container);
         if (wanted) {
-            if (container != null) container.setVisibility(View.VISIBLE);
-            if (host != null) host.setVisibility(View.VISIBLE);
+            if (container != null) {
+                container.setVisibility(View.VISIBLE);
+                if (container.getLayoutParams() != null) {
+                    container.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                }
+            }
+            if (host != null) {
+                host.setVisibility(View.VISIBLE);
+                if (host.getLayoutParams() != null) {
+                    host.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                }
+            }
             if (ours && mInAppKeyboard != null && mInAppKeyboard.isEnabled() && !mInAppKeyboard.isVisible()) {
                 raiseDisplayFrameKeyboard();
                 mFrameContent.onFrameRaisedForPad();
@@ -20875,6 +20901,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (leaving.getParent() instanceof ViewGroup) {
                     ((ViewGroup) leaving.getParent()).removeView(leaving);
                 }
+                mKeyboardGeometry.markHeightDirty();
+                setTerminalToolbarHeight(false);
+                mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD,
+                    GeometryScheduler.ResizePolicy.NOW);
+                mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
             };
             leaving.animate().cancel();
             if (reduced) detach.run();
@@ -21091,9 +21122,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Keyboard2View keys = inGap ? (Keyboard2View) keyboardView : null;
         pad.setInSplitGap(inGap, keys == null ? 0f : keys.getKeyCapRadiusPx(),
             keys == null ? 0 : keys.getKeyCapColor());
+        int fallback = mKeyboardGeometry != null && mKeyboardGeometry.desiredHeightPx() > 0
+            ? mKeyboardGeometry.desiredHeightPx()
+            : Math.round(240f * (density > 0f ? density : 1f));
         int height = keyboardView != null && keyboardView.getHeight() > 0
             ? keyboardView.getHeight()
-            : Math.round(240f * (density > 0f ? density : 1f));
+            : fallback;
         return com.termux.app.x11.DisplayTouchpadPlacement.padParams(gap, seat,
             height, density);
     }

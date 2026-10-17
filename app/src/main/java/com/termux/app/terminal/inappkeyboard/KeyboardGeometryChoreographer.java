@@ -266,6 +266,9 @@ public final class KeyboardGeometryChoreographer {
             View.MeasureSpec.makeMeasureSpec(Math.max(0, width), View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(Math.max(0, availableHeight), View.MeasureSpec.AT_MOST));
         mDesiredHeightPx = Math.max(0, keyboardContainer.getMeasuredHeight());
+        if (mDesiredHeightPx <= 0 && keyboardContainer.getVisibility() != View.GONE) {
+            mDesiredHeightPx = Math.round(240f * metrics.density);
+        }
         mMeasureWidthPx = width;
         mAvailableHeightPx = availableHeight;
         mHeightDirty = false;
@@ -274,6 +277,12 @@ public final class KeyboardGeometryChoreographer {
 
     /** The last measured desired height, without re-measuring. */
     public int desiredHeightPx() {
+        if (mDesiredHeightPx <= 0) {
+            View keyboardContainer = mSurface.findView(R.id.inapp_keyboard_container);
+            if (keyboardContainer != null && keyboardContainer.getVisibility() != View.GONE) {
+                return Math.round(240f * mSurface.displayMetrics().density);
+            }
+        }
         return mDesiredHeightPx;
     }
 
