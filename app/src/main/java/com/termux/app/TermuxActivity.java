@@ -19720,6 +19720,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 new String[]{"-f", "termux-x11 " + getPackageName()}, null,
                 TermuxConstants.TERMUX_HOME_DIR_PATH);
         }
+        com.termux.app.x11.ChrootDistro.killDesktopEnvironmentAsync(this, null);
         syncPlaceBar();
     }
 
@@ -20491,6 +20492,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void startEmbeddedDisplayNow() {
         if (mTermuxService == null || mPreferences == null || !isX11DisplayEnabled()) return;
+        com.termux.app.x11.ChrootDistro.startAudioAndGraphicsServices(this);
         String wm = com.termux.app.x11.ChrootDistro.resolveActiveDesktopCommand(this);
         if (wm == null || wm.isEmpty()) {
             wm = mPreferences.getX11WindowManager();

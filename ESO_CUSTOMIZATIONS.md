@@ -115,6 +115,43 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 
 ---
 
+### F. Otomatisasi VirGL (Hardware Acceleration) & PulseAudio (Audio) untuk Chroot, PRoot, & Native
+- **Konteks & Kebutuhan**:
+  - Tuan Eso menggunakan SoC **MediaTek Dimensity 1200 (MT6893)** dengan GPU **ARM Mali-G77 MC9**.
+  - Menjalankan VirGL server (`virgl_test_server_android --angle-gl`) dan PulseAudio (`pulseaudio`) secara manual via terminal sangat merepotkan.
+  - Tuan Eso menginginkan agar saat **Start display** ditekan di Canvas Kanan, VirGL server dan PulseAudio otomatis menyala di latar belakang, soketnya otomatis di-bind mount ke Chroot (NetHunter), serta env vars VirGL dan PulseAudio disuntikkan secara otomatis.
+  - Saat tombol Emergency Stop `[×]` ditekan di Canvas Kanan, seluruh service X11, DE/WM, soket mounts, server VirGL, dan PulseAudio otomatis dimatikan dan dibersihkan secara tuntas.
+- **Solusi & Arsitektur**:
+  1. **Auto-Start Audio & Grafis (`ChrootDistro.startAudioAndGraphicsServices`)**:
+     - **PulseAudio**: Mendeteksi `/data/data/com.termux/files/usr/bin/pulseaudio`. Jika belum berjalan, menyalakan server PulseAudio TCP di port `4713` dengan module native protocol (`--load="module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1" --exit-idle-time=-1`).
+     - **VirGL Server**: Mendeteksi `/data/data/com.termux/files/usr/bin/virgl_test_server_android`. Jika belum berjalan, membuat direktori soket `/data/data/com.termux/files/usr/tmp/.virgl/` dengan izin `0777`. Mendeteksi ketersediaan ANGLE (library `libEGL_angle.so`) untuk menyuntikkan flag `--angle-gl`, lalu menjalankan `virgl_test_server_android` dengan opsi `--socket-path /data/data/com.termux/files/usr/tmp/.virgl/.virgl_test` dan membuat symlink di `$TMPDIR/.virgl_test`.
+     - Dipanggil otomatis pada `TermuxActivity.startEmbeddedDisplayNow()` sesaat sebelum display X11 dinyalakan.
+  2. **Auto-Mount Soket & Inject Environment di Chroot (NetHunter)**:
+     - Folder soket `.virgl` otomatis di-bind mount: `mkdir -p <rootfs>/tmp/.virgl && mount -o bind /data/data/com.termux/files/usr/tmp/.virgl <rootfs>/tmp/.virgl`.
+     - Symlink `<rootfs>/tmp/.virgl_test -> /tmp/.virgl/.virgl_test` dibuat di dalam chroot.
+     - Environment variabel VirGL dan PulseAudio otomatis disuntikkan:
+       - `PULSE_SERVER=tcp:127.0.0.1:4713`
+       - `GALLIUM_DRIVER=virpipe`
+       - `MESA_GL_VERSION_OVERRIDE=4.3COMPAT`
+       - `MESA_GLES_VERSION_OVERRIDE=3.2`
+       - `MESA_NO_ERROR=1`
+       - `LIBGL_DRI3_DISABLE=1`
+       - `VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test`
+     - Bekerja baik untuk peluncuran sesi desktop penuh (`getDesktopCommand`) maupun peluncuran aplikasi mandiri dari App Drawer (`buildRunner`).
+  3. **Auto-Forward di PRoot & Native Route**:
+     - PRoot (`resolveActiveDesktopCommand` route DISTRO): menambahkan `--shared-tmp` dan menyuntikkan env vars VirGL + `PULSE_SERVER=tcp:127.0.0.1:4713`.
+     - Droidspaces: menyuntikkan `PULSE_SERVER=tcp:127.0.0.1:4713` dan flag `--virgl`.
+     - Route Native: menyuntikkan env vars VirGL dan `PULSE_SERVER=tcp:127.0.0.1:4713`.
+  4. **Pembersihan Bersih / Auto-Cleanup (`ChrootDistro.killDesktopEnvironment`)**:
+     - Mematikan proses DE dan D-Bus di seluruh container dan chroot.
+     - Melakukan unmount bersih untuk soket `.virgl` dan `.X11-unix` di dalam chroot (`umount <rootfs>/tmp/.virgl` dan `umount <rootfs>/tmp/.X11-unix`).
+     - Menghentikan daemon `virgl_test_server_android` (`killall -9 virgl_test_server_android`).
+     - Menghentikan daemon `pulseaudio` (`pulseaudio --kill` dan fallback `pkill -9 -f pulseaudio`).
+     - Menghapus lingering sockets dan temporary files di Termux host tmp.
+     - Dipanggil baik saat tombol Emergency Stop `[×]` ditekan (`stopAndKillAllDisplayServices`), maupun saat display server dimatikan secara normal (`killEmbeddedDisplayServer`).
+
+---
+
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)
 
 Jika upstream (`PickleHik3/termux-launcher`) merilis update baru dan Tuan Eso meminta sync, **JANGAN PERNAH reset atau clone ulang dari 0**. Ikuti langkah standar berikut:

@@ -379,9 +379,12 @@ public final class ChrootDistro {
                 .replace("%COMMAND%", ProotDistro.singleQuote(command));
         }
 
-        // Default: NetHunter chroot with mount namespace (-mm) and auto-mounted X11 unix socket
+        // Default: NetHunter chroot with mount namespace (-mm) and auto-mounted X11 & VirGL unix sockets
         return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
             + "(mountpoint -q " + rootPath + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null); "
+            + "mkdir -p " + rootPath + "/tmp/.virgl 2>/dev/null; "
+            + "(mountpoint -q " + rootPath + "/tmp/.virgl || mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null); "
+            + "ln -sf /tmp/.virgl/.virgl_test " + rootPath + "/tmp/.virgl_test 2>/dev/null || true; "
             + "chroot " + rootPath + " /usr/bin/env -i "
             + "HOME=/root "
             + "USER=root "
@@ -390,6 +393,12 @@ public final class ChrootDistro {
             + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
             + "DISPLAY=${DISPLAY:-:0} "
             + "PULSE_SERVER=tcp:127.0.0.1:4713 "
+            + "GALLIUM_DRIVER=virpipe "
+            + "MESA_GL_VERSION_OVERRIDE=4.3COMPAT "
+            + "MESA_GLES_VERSION_OVERRIDE=3.2 "
+            + "MESA_NO_ERROR=1 "
+            + "LIBGL_DRI3_DISABLE=1 "
+            + "VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test "
             + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
             + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
             + "DISABLE_AUTO_TITLE=true "
@@ -409,12 +418,12 @@ public final class ChrootDistro {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
             String inner = (de != null) ? de.getDroidspacesInnerCommand() : "dbus-run-session xfce4-session";
             return "su -c '/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
-                + "\" --termux-x11 --virgl enter -- /bin/sh -c \\\"export DISPLAY=:0 && " + inner + "\\\"'";
+                + "\" --termux-x11 --virgl enter -- /bin/sh -c \\\"export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 && " + inner + "\\\"'";
         } else if (env != null && env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
             String inner = (de != null) ? de.getChrootInnerCommand() : "exec dbus-launch --exit-with-session startxfce4";
             return env.customRunner
                 .replace("%ROOTFS%", env.rootfs.getAbsolutePath())
-                .replace("%COMMAND%", "'export DISPLAY=:0 && " + inner + "'");
+                .replace("%COMMAND%", "'export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 MESA_NO_ERROR=1 LIBGL_DRI3_DISABLE=1 VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test && " + inner + "'");
         }
 
         String rootPath = (env != null) ? env.rootfs.getAbsolutePath() : "/data/local/nhsystem/kali-arm64";
@@ -423,13 +432,23 @@ public final class ChrootDistro {
 
         return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
             + "(mountpoint -q " + rootPath + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null); "
+            + "mkdir -p " + rootPath + "/tmp/.virgl 2>/dev/null; "
+            + "(mountpoint -q " + rootPath + "/tmp/.virgl || mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null); "
+            + "ln -sf /tmp/.virgl/.virgl_test " + rootPath + "/tmp/.virgl_test 2>/dev/null || true; "
             + "chroot " + rootPath + " /usr/bin/env -i "
             + "HOME=/root "
             + "USER=root "
+            + "LOGNAME=root "
             + "TERM=xterm-256color "
             + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
             + "DISPLAY=${DISPLAY:-:0} "
             + "PULSE_SERVER=tcp:127.0.0.1:4713 "
+            + "GALLIUM_DRIVER=virpipe "
+            + "MESA_GL_VERSION_OVERRIDE=4.3COMPAT "
+            + "MESA_GLES_VERSION_OVERRIDE=3.2 "
+            + "MESA_NO_ERROR=1 "
+            + "LIBGL_DRI3_DISABLE=1 "
+            + "VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test "
             + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
             + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
             + "/bin/bash -c " + ProotDistro.singleQuote(inner) + "\"";
@@ -477,16 +496,27 @@ public final class ChrootDistro {
             String distro = prefs.getString("gui_apps_distro", "debian");
             String inner = (selectedEntry != null) ? selectedEntry.getChrootInnerCommand()
                 : "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4";
-            return "proot-distro login " + distro + " --shared-x11 -e DISPLAY=${DISPLAY:-:0} -- /bin/bash -c "
-                + ProotDistro.singleQuote(inner);
+            return "proot-distro login " + distro + " --shared-x11 --shared-tmp"
+                + " -e DISPLAY=${DISPLAY:-:0}"
+                + " -e PULSE_SERVER=tcp:127.0.0.1:4713"
+                + " -e GALLIUM_DRIVER=virpipe"
+                + " -e MESA_GL_VERSION_OVERRIDE=4.3COMPAT"
+                + " -e MESA_GLES_VERSION_OVERRIDE=3.2"
+                + " -e MESA_NO_ERROR=1"
+                + " -e LIBGL_DRI3_DISABLE=1"
+                + " -e VTEST_SOCKET_NAME=/tmp/.virgl_test"
+                + " -- /bin/bash -c " + ProotDistro.singleQuote(inner);
         } else {
             // Route X11 (native)
+            String baseCmd;
             if (selectedEntry != null) {
-                return selectedEntry.getHostCommand();
+                baseCmd = selectedEntry.getHostCommand();
+            } else {
+                TermuxAppSharedPreferences appPrefs = TermuxAppSharedPreferences.build(context);
+                String customWm = appPrefs != null ? appPrefs.getX11WindowManager() : null;
+                baseCmd = (customWm != null && !customWm.trim().isEmpty()) ? customWm : "openbox";
             }
-            TermuxAppSharedPreferences appPrefs = TermuxAppSharedPreferences.build(context);
-            String customWm = appPrefs != null ? appPrefs.getX11WindowManager() : null;
-            return (customWm != null && !customWm.trim().isEmpty()) ? customWm : "openbox";
+            return "env PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 MESA_NO_ERROR=1 LIBGL_DRI3_DISABLE=1 VTEST_SOCKET_NAME=/data/data/com.termux/files/usr/tmp/.virgl/.virgl_test " + baseCmd;
         }
     }
 
@@ -652,6 +682,102 @@ public final class ChrootDistro {
         }
     }
 
+    /**
+     * Starts background audio (PulseAudio TCP server on 127.0.0.1:4713) and graphics
+     * hardware acceleration (VirGL test server with ANGLE fallback) if their binaries are installed in Termux.
+     */
+    public static void startAudioAndGraphicsServices(@NonNull Context context) {
+        new Thread(() -> {
+            startAudioAndGraphicsServicesSync(context);
+        }, "Media-Graphics-Starter").start();
+    }
+
+    public static void startAudioAndGraphicsServicesSync(@NonNull Context context) {
+        File pulseBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "pulseaudio");
+        File virglBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "virgl_test_server_android");
+        File tmpDir = new File(TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH);
+        File virglDir = new File(tmpDir, ".virgl");
+
+        // 1. Start PulseAudio if installed and not running
+        if (pulseBin.canExecute()) {
+            try {
+                Process checkP = Runtime.getRuntime().exec(new String[]{
+                    TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pgrep", "-f", "pulseaudio"
+                });
+                if (checkP.waitFor() != 0) {
+                    Logger.logInfo(LOG_TAG, "Starting PulseAudio TCP server on port 4713...");
+                    String[] cmd = new String[]{
+                        pulseBin.getAbsolutePath(),
+                        "--start",
+                        "--load=module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1",
+                        "--exit-idle-time=-1"
+                    };
+                    String[] envp = new String[]{
+                        "HOME=" + TermuxConstants.TERMUX_HOME_DIR_PATH,
+                        "TMPDIR=" + TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH,
+                        "PATH=" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":/system/bin"
+                    };
+                    Runtime.getRuntime().exec(cmd, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+                }
+            } catch (Exception e) {
+                Logger.logWarn(LOG_TAG, "Failed to start PulseAudio: " + e.getMessage());
+            }
+        }
+
+        // 2. Start VirGL Server if installed and not running
+        if (virglBin.canExecute()) {
+            try {
+                if (!virglDir.exists()) {
+                    virglDir.mkdirs();
+                }
+                virglDir.setReadable(true, false);
+                virglDir.setWritable(true, false);
+                virglDir.setExecutable(true, false);
+
+                Process checkV = Runtime.getRuntime().exec(new String[]{
+                    TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pgrep", "-f", "virgl_test_server_android"
+                });
+                if (checkV.waitFor() != 0) {
+                    Logger.logInfo(LOG_TAG, "Starting VirGL renderer server...");
+                    File socketFile = new File(virglDir, ".virgl_test");
+                    if (socketFile.exists()) {
+                        socketFile.delete();
+                    }
+
+                    boolean hasAngle = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/opt/angle-android/gl/libEGL_angle.so").exists()
+                        || new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/lib/libEGL_angle.so").exists();
+
+                    List<String> virglArgs = new ArrayList<>();
+                    virglArgs.add(virglBin.getAbsolutePath());
+                    if (hasAngle) {
+                        virglArgs.add("--angle-gl");
+                    }
+                    virglArgs.add("--socket-path");
+                    virglArgs.add(socketFile.getAbsolutePath());
+
+                    String[] envp = new String[]{
+                        "HOME=" + TermuxConstants.TERMUX_HOME_DIR_PATH,
+                        "TMPDIR=" + TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH,
+                        "PATH=" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":/system/bin"
+                    };
+                    Runtime.getRuntime().exec(virglArgs.toArray(new String[0]), envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+
+                    // Create symlink in /tmp/.virgl_test as well for backward compatibility
+                    try {
+                        File legacySocket = new File(tmpDir, ".virgl_test");
+                        if (!legacySocket.exists()) {
+                            Runtime.getRuntime().exec(new String[]{
+                                "ln", "-sf", socketFile.getAbsolutePath(), legacySocket.getAbsolutePath()
+                            }).waitFor();
+                        }
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception e) {
+                Logger.logWarn(LOG_TAG, "Failed to start VirGL: " + e.getMessage());
+            }
+        }
+    }
+
     public static final String DE_PROCESS_PATTERN =
         "xfce4|gnome|plasma|kwin|mate|lxde|lxqt|openbox|fluxbox|cinnamon|dbus-launch|dbus-run-session|(\\<i3\\>)|(\\<bspwm\\>)|(\\<awesome\\>)";
 
@@ -659,6 +785,7 @@ public final class ChrootDistro {
      * Dynamically stops and kills desktop environments and window managers across
      * NetHunter, Droidspaces, PRoot, and custom chroot distributions,
      * without killing the Droidspaces container itself.
+     * Also stops VirGL and PulseAudio servers and cleans up their socket bindings.
      */
     public static void killDesktopEnvironment(@NonNull Context context) {
         if (isRootAvailable()) {
@@ -672,37 +799,43 @@ public final class ChrootDistro {
                         Runtime.getRuntime().exec(new String[]{"su", "-c", dsKillCmd}).waitFor();
                     } catch (Exception ignored) {}
                 } else {
-                    // NetHunter or custom chroot: kill DE inside chroot, stop dbus, unmount X11 socket
+                    // NetHunter or custom chroot: kill DE inside chroot, stop dbus, unmount sockets
                     String rootPath = env.rootfs.getAbsolutePath();
                     String chrootKillCmd = "chroot " + rootPath + " /usr/bin/pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true; "
                         + "if [ -x " + rootPath + "/etc/init.d/dbus ]; then chroot " + rootPath + " /etc/init.d/dbus stop 2>/dev/null || true; fi; "
-                        + "(mountpoint -q " + rootPath + "/tmp/.X11-unix && umount " + rootPath + "/tmp/.X11-unix 2>/dev/null || true)";
+                        + "(mountpoint -q " + rootPath + "/tmp/.virgl && umount " + rootPath + "/tmp/.virgl 2>/dev/null || true); "
+                        + "(mountpoint -q " + rootPath + "/tmp/.X11-unix && umount " + rootPath + "/tmp/.X11-unix 2>/dev/null || true); "
+                        + "rm -f " + rootPath + "/tmp/.virgl_test 2>/dev/null || true";
                     try {
                         Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", chrootKillCmd}).waitFor();
                     } catch (Exception ignored) {}
                 }
             }
-            // Root-level cleanup of termux-x11 and lingering socket/pid
+            // Root-level cleanup of termux-x11, virgl, and lingering socket/pid
             try {
                 Runtime.getRuntime().exec(new String[]{"su", "-c",
                     "killall -9 termux-x11 2>/dev/null || pkill -9 -f termux-x11 2>/dev/null; "
+                    + "killall -9 virgl_test_server_android 2>/dev/null || pkill -9 -f virgl_test_server_android 2>/dev/null; "
                     + "rm -f /data/data/com.termux/files/usr/tmp/termux-x11-wm.pid 2>/dev/null; "
+                    + "rm -rf /data/data/com.termux/files/usr/tmp/.virgl 2>/dev/null; "
+                    + "rm -f /data/data/com.termux/files/usr/tmp/.virgl_test 2>/dev/null; "
                     + "rm -rf /data/data/com.termux/files/usr/tmp/.X11-unix 2>/dev/null"}).waitFor();
             } catch (Exception ignored) {}
         }
 
-        // Host-level cleanup (for PRoot / native termux x11)
+        // Host-level cleanup (PulseAudio, VirGL, PRoot / native termux x11)
         try {
-            Runtime.getRuntime().exec(new String[]{"/data/data/com.termux/files/usr/bin/pkill", "-9", "-f", DE_PROCESS_PATTERN}).waitFor();
+            Runtime.getRuntime().exec(new String[]{
+                TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pulseaudio", "--kill"
+            }).waitFor();
         } catch (Exception ignored) {}
         try {
-            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", DE_PROCESS_PATTERN}).waitFor();
+            Runtime.getRuntime().exec(new String[]{
+                TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pkill", "-9", "-f", "virgl_test_server_android|pulseaudio|" + DE_PROCESS_PATTERN + "|termux-x11"
+            }).waitFor();
         } catch (Exception ignored) {}
         try {
-            Runtime.getRuntime().exec(new String[]{"/data/data/com.termux/files/usr/bin/pkill", "-9", "-f", "termux-x11"}).waitFor();
-        } catch (Exception ignored) {}
-        try {
-            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", "termux-x11"}).waitFor();
+            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", "virgl_test_server_android|pulseaudio|" + DE_PROCESS_PATTERN + "|termux-x11"}).waitFor();
         } catch (Exception ignored) {}
     }
 
