@@ -13,6 +13,7 @@ import androidx.annotation.Nullable;
 
 import com.caverock.androidsvg.SVG;
 import com.caverock.androidsvg.SVGParseException;
+import com.termux.shared.termux.TermuxConstants;
 
 import java.io.File;
 import java.io.FileInputStream;
