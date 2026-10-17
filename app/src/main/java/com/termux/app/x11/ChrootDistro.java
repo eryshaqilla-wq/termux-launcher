@@ -127,7 +127,7 @@ public final class ChrootDistro {
                 case "awesome":
                     return "awesome";
                 case "bspwm":
-                    return "bspwm";
+                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || dbus-run-session bspwm";
                 case "fluxbox":
                     return detectedBinary;
                 case "xfce4":
@@ -162,7 +162,8 @@ public final class ChrootDistro {
                 case "awesome":
                     return "awesome";
                 case "bspwm":
-                    return "bspwm";
+                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || "
+                        + (hasDbus ? "exec dbus-run-session -- bspwm" : "exec bspwm");
                 case "fluxbox":
                     return detectedBinary;
                 case "xfce4":
@@ -779,7 +780,7 @@ public final class ChrootDistro {
     }
 
     public static final String DE_PROCESS_PATTERN =
-        "xfce4|gnome|plasma|kwin|mate|lxde|lxqt|openbox|fluxbox|cinnamon|dbus-launch|dbus-run-session|(\\<i3\\>)|(\\<bspwm\\>)|(\\<awesome\\>)";
+        "xfce4|gnome|plasma|kwin|mate|lxde|lxqt|openbox|fluxbox|cinnamon|dbus-launch|dbus-run-session|polybar|sxhkd|picom|(\\<i3\\>)|(\\<bspwm\\>)|(\\<awesome\\>)";
 
     /**
      * Dynamically stops and kills desktop environments and window managers across
