@@ -377,17 +377,12 @@ public final class X11CliInstaller {
         if (!binDir.isDirectory()) return Result.NO_PREFIX;
         linkKeyboardData();
         writeWindowManagerScript();
-        if (isForeignCommand()) {
-            Logger.logInfo(LOG_TAG, "Backing up foreign termux-x11 and installing launcher version");
-            File foreignBackup = new File(binDir, "termux-x11.foreign");
-            if (serverScript().renameTo(foreignBackup)) {
-                if (markerFile().exists()) markerFile().delete();
-            } else {
-                serverScript().delete();
-            }
-        }
         String marker = MARKER_PREAMBLE + " v" + VERSION + " " + applicationId + "\n";
-        if (marker.equals(read(markerFile())) && serverScript().exists() && !isForeignCommand()) return Result.UP_TO_DATE;
+        if (marker.equals(read(markerFile()))) return Result.UP_TO_DATE;
+        if (isForeignCommand()) {
+            Logger.logInfo(LOG_TAG, "Leaving a termux-x11 we did not write alone");
+            return Result.FOREIGN_COMMAND;
+        }
         try {
             if (!libexecDir.isDirectory() && !libexecDir.mkdirs()) {
                 throw new IOException("Failed to create " + libexecDir);
