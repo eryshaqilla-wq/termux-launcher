@@ -817,12 +817,15 @@ public final class ChrootDistro {
         File virglDir = new File(tmpDir, ".virgl");
 
         // 1. Start PulseAudio if installed and not running
-        if (pulseBin.canExecute()) {
-            try {
-                Process checkP = Runtime.getRuntime().exec(new String[]{
-                    TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pgrep", "-f", "pulseaudio"
-                });
-                if (checkP.waitFor() != 0) {
+        if (pulseBin.exists()) {
+            pulseBin.setExecutable(true);
+            boolean isRunning = false;
+            try (java.net.Socket s = new java.net.Socket("127.0.0.1", 4713)) {
+                isRunning = true;
+            } catch (Exception ignored) {}
+
+            if (!isRunning) {
+                try {
                     Logger.logInfo(LOG_TAG, "Starting PulseAudio TCP server on port 4713...");
                     String[] cmd = new String[]{
                         pulseBin.getAbsolutePath(),
@@ -835,15 +838,17 @@ public final class ChrootDistro {
                         "TMPDIR=" + TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH,
                         "PATH=" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":/system/bin"
                     };
-                    Runtime.getRuntime().exec(cmd, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+                    Process p = Runtime.getRuntime().exec(cmd, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
+                    p.waitFor();
+                } catch (Exception e) {
+                    Logger.logWarn(LOG_TAG, "Failed to start PulseAudio: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                Logger.logWarn(LOG_TAG, "Failed to start PulseAudio: " + e.getMessage());
             }
         }
 
         // 2. Start VirGL Server if installed and not running
-        if (virglBin.canExecute()) {
+        if (virglBin.exists()) {
+            virglBin.setExecutable(true);
             try {
                 if (!virglDir.exists()) {
                     virglDir.mkdirs();

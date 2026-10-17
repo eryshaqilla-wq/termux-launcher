@@ -541,7 +541,26 @@ fi
 EOF_CX
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/x"
 
-            echo -e "  ${GREEN}✔ Shims (termux-ipc, browser, wallet, x) terinjeksi ke $DISPLAY_NAME${RESET}"
+            # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
+            if [ -d "$CONTAINER_ROOTFS/etc/pulse" ]; then
+                sed -i 's/^; default-server =.*/default-server = 127.0.0.1:4713/' "$CONTAINER_ROOTFS/etc/pulse/client.conf" 2>/dev/null || true
+                sed -i 's/^; autospawn =.*/autospawn = no/' "$CONTAINER_ROOTFS/etc/pulse/client.conf" 2>/dev/null || true
+            fi
+            if [ -d "$CONTAINER_ROOTFS/etc" ]; then
+                cat << 'EOF_PALSA' > "$CONTAINER_ROOTFS/etc/asound.conf"
+pcm.!default {
+    type pulse
+    fallback "sysdefault"
+}
+ctl.!default {
+    type pulse
+    fallback "sysdefault"
+}
+EOF_PALSA
+                chmod 644 "$CONTAINER_ROOTFS/etc/asound.conf" 2>/dev/null || true
+            fi
+
+            echo -e "  ${GREEN}✔ Shims & Audio Bridge terinjeksi ke $DISPLAY_NAME${RESET}"
         fi
     else
         # Root Mode: Siapkan shims langsung di rootfs container jika path diketahui
@@ -553,8 +572,17 @@ EOF_CX
                 echo -e '#!/bin/bash\nif [ -f /root/wallet/wallet.js ]; then\n  cd /root/wallet && exec node wallet.js \"\$@\"\nfi' > '$CONTAINER_ROOTFS/usr/local/bin/wallet'
                 echo -e '#!/bin/bash\nif [ -f /root/wallet/x_webview.js ]; then\n  exec node /root/wallet/x_webview.js \"\$@\"\nfi' > '$CONTAINER_ROOTFS/usr/local/bin/x'
                 chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/'*
+                # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
+                if [ -d '$CONTAINER_ROOTFS/etc/pulse' ]; then
+                    sed -i 's/^; default-server =.*/default-server = 127.0.0.1:4713/' '$CONTAINER_ROOTFS/etc/pulse/client.conf' 2>/dev/null || true
+                    sed -i 's/^; autospawn =.*/autospawn = no/' '$CONTAINER_ROOTFS/etc/pulse/client.conf' 2>/dev/null || true
+                fi
+                if [ -d '$CONTAINER_ROOTFS/etc' ]; then
+                    echo -e 'pcm.!default {\n    type pulse\n    fallback \"sysdefault\"\n}\nctl.!default {\n    type pulse\n    fallback \"sysdefault\"\n}' > '$CONTAINER_ROOTFS/etc/asound.conf' 2>/dev/null || true
+                    chmod 644 '$CONTAINER_ROOTFS/etc/asound.conf' 2>/dev/null || true
+                fi
             "
-            echo -e "  ${GREEN}✔ Shims terinjeksi langsung ke $CUSTOM_LINUX_NAME (/usr/local/bin/)${RESET}"
+            echo -e "  ${GREEN}✔ Shims & Audio Bridge terinjeksi langsung ke $CUSTOM_LINUX_NAME (/usr/local/bin/)${RESET}"
         fi
 
         # Jalankan termux-ipc-bridge jika Droidspaces container digunakan

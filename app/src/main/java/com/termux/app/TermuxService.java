@@ -152,6 +152,7 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
 
     /** The "Start the display with the launcher" opt-in: a background task, as if typed. */
     private void autostartEmbeddedDisplay() {
+        com.termux.app.x11.ChrootDistro.startAudioAndGraphicsServices(this);
         String[] argv = com.termux.app.x11.X11Autostart.commandToRun(this);
         if (argv == null) return;
         createTermuxTask(argv[0], java.util.Arrays.copyOfRange(argv, 1, argv.length), null,
