@@ -317,7 +317,15 @@ public final class ChrootDistro {
         return envs;
     }
 
-    private static volatile boolean sBridgeSyncStarted = false;
+    private static volatile long sLastBridgeSync = 0;
+    private static volatile Runnable sOnSyncCompleted = null;
+
+    /**
+     * Registers a callback invoked whenever chroot bridge sync finishes.
+     */
+    public static void setOnSyncCompleted(@Nullable Runnable callback) {
+        sOnSyncCompleted = callback;
+    }
 
     /**
      * Synchronizes chroot .desktop files and icons into Termux's accessible prefix bridge directory.
@@ -350,7 +358,10 @@ public final class ChrootDistro {
                     + "chown -R \"$uid:$uid\" \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
                     + "chmod -R 755 \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; ";
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-                p.waitFor();
+                int exit = p.waitFor();
+                if (exit == 0 && sOnSyncCompleted != null) {
+                    sOnSyncCompleted.run();
+                }
             } catch (Exception ignored) {}
         }, "chroot-bridge-sync").start();
     }
@@ -361,8 +372,9 @@ public final class ChrootDistro {
     @NonNull
     public static List<ProotDistro.Container> installed() {
         if (!isRootAvailable()) return Collections.emptyList();
-        if (!sBridgeSyncStarted) {
-            sBridgeSyncStarted = true;
+        long now = System.currentTimeMillis();
+        if (now - sLastBridgeSync > 15_000) {
+            sLastBridgeSync = now;
             syncChrootBridge();
         }
         List<ProotDistro.Container> containers = new ArrayList<>();
@@ -421,7 +433,8 @@ public final class ChrootDistro {
                 + "else /data/local/Droidspaces/bin/droidspaces --name='" + cName + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; fi; sleep 2; "
                 + "else "
                 + "mkdir -p /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
-                + "(mountpoint /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix >/dev/null 2>&1 || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true); "
+                + "umount -l /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
+                + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
                 + "fi; "
                 + "/data/local/Droidspaces/bin/droidspaces --name='" + cName + "' run /bin/sh -c " + ProotDistro.singleQuote(runCmd) + "\"";
         } else if (RunnerType.CUSTOM.name().equals(type) && container.customRunner != null
@@ -433,9 +446,11 @@ public final class ChrootDistro {
 
         // Default: NetHunter chroot with mount namespace (-mm) and auto-mounted X11 & VirGL unix sockets
         return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
-            + "(mountpoint -q " + rootPath + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null); "
+            + "umount -l " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
+            + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
             + "mkdir -p " + rootPath + "/tmp/.virgl 2>/dev/null; "
-            + "(mountpoint -q " + rootPath + "/tmp/.virgl || mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null); "
+            + "umount -l " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
+            + "mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
             + "ln -sf /tmp/.virgl/.virgl_test " + rootPath + "/tmp/.virgl_test 2>/dev/null || true; "
             + "chroot " + rootPath + " /usr/bin/env -i "
             + "HOME=/root "
@@ -531,7 +546,8 @@ public final class ChrootDistro {
             + "fi\n\n"
             + "# 3. Pastikan socket X11 ter-mount ke rootfs Droidspaces\n"
             + "mkdir -p \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
-            + "mountpoint \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" >/dev/null 2>&1 || mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "umount -l \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
             + "# 4. Pastikan Termux IPC bridge daemon aktif\n"
             + "if [ -x \"/data/data/com.termux/files/usr/bin/termux-ipc-bridge\" ]; then\n"
             + "    pgrep -f termux-ipc-bridge >/dev/null 2>&1 || /data/data/com.termux/files/usr/bin/termux-ipc-bridge </dev/null >/dev/null 2>&1 &\n"
@@ -590,9 +606,11 @@ public final class ChrootDistro {
             : "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4";
 
         return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
-            + "(mountpoint -q " + rootPath + "/tmp/.X11-unix || mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null); "
+            + "umount -l " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
+            + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
             + "mkdir -p " + rootPath + "/tmp/.virgl 2>/dev/null; "
-            + "(mountpoint -q " + rootPath + "/tmp/.virgl || mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null); "
+            + "umount -l " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
+            + "mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
             + "ln -sf /tmp/.virgl/.virgl_test " + rootPath + "/tmp/.virgl_test 2>/dev/null || true; "
             + "chroot " + rootPath + " /usr/bin/env -i "
             + "HOME=/root "
@@ -969,11 +987,11 @@ public final class ChrootDistro {
                     String rootPath = env.rootfs.getAbsolutePath();
                     String chrootKillCmd = "chroot " + rootPath + " /usr/bin/pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true; "
                         + "if [ -x " + rootPath + "/etc/init.d/dbus ]; then chroot " + rootPath + " /etc/init.d/dbus stop 2>/dev/null || true; fi; "
-                        + "(mountpoint -q " + rootPath + "/tmp/.virgl && umount " + rootPath + "/tmp/.virgl 2>/dev/null || true); "
-                        + "(mountpoint -q " + rootPath + "/tmp/.X11-unix && umount " + rootPath + "/tmp/.X11-unix 2>/dev/null || true); "
+                        + "umount -l " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
+                        + "umount -l " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
                         + "rm -f " + rootPath + "/tmp/.virgl_test 2>/dev/null || true";
                     try {
-                        Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", chrootKillCmd}).waitFor();
+                        Runtime.getRuntime().exec(new String[]{"su", "-c", chrootKillCmd}).waitFor();
                     } catch (Exception ignored) {}
                 }
             }
@@ -983,6 +1001,8 @@ public final class ChrootDistro {
                     "killall -9 termux-x11 2>/dev/null || pkill -9 -f termux-x11 2>/dev/null; "
                     + "killall -9 virgl_test_server_android 2>/dev/null || pkill -9 -f virgl_test_server_android 2>/dev/null; "
                     + "rm -f /data/data/com.termux/files/usr/tmp/termux-x11-wm.pid 2>/dev/null; "
+                    + "umount -l /data/local/nhsystem/kali-arm64/tmp/.X11-unix 2>/dev/null || true; "
+                    + "umount -l /data/local/nhsystem/kali-arm64/tmp/.virgl 2>/dev/null || true; "
                     + "rm -rf /data/data/com.termux/files/usr/tmp/.virgl 2>/dev/null; "
                     + "rm -f /data/data/com.termux/files/usr/tmp/.virgl_test 2>/dev/null; "
                     + "rm -rf /data/data/com.termux/files/usr/tmp/.X11-unix 2>/dev/null"}).waitFor();

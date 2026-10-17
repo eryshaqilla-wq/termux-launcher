@@ -1695,6 +1695,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         com.termux.webview.FusionBootstrapHelper.extractSetupIfNeeded(this);
         com.termux.app.TermuxIpcServer.startServer(this);
         com.termux.webview.FusionWebViewManager.init(this);
+        com.termux.app.x11.ChrootDistro.setOnSyncCompleted(() -> runOnUiThread(() -> refreshLinuxApps(true)));
         // The window's content root holds the shell and every overlay placed over it by absolute
         // geometry (the layout editor's frame, the hide zone, the dictation pill), so it stays left
         // to right in every locale. Reading-order overlays added here (help, tour, notices, the
@@ -8787,6 +8788,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void onDestroy() {
         super.onDestroy();
         Logger.logDebug(LOG_TAG, "onDestroy");
+        com.termux.app.x11.ChrootDistro.setOnSyncCompleted(null);
         // First: what follows (the keyboard's teardown among it) must not book passes or holds
         // on the main looper for a window that is going away.
         mGeometry.dispose();

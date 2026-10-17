@@ -288,6 +288,27 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 
 ---
 
+### L. Penanganan Black Screen Sesi Desktop & Sinkronisasi Otomatis Aplikasi Chroot
+- **Akar Masalah Black Screen**:
+  - Saat Termux atau X11 server di-restart, direktori socket `/data/data/com.termux/files/usr/tmp/.X11-unix` dibuat baru dengan socket `X0` baru.
+  - Sebelumnya, perintah launch sesi NetHunter/Droidspaces di `ChrootDistro.java` menggunakan conditional check:
+    `(mountpoint -q $ROOT/tmp/.X11-unix || mount -o bind ...)`
+  - Karena mountpoint lama masih tersisa di tabel mount kernel (`/proc/mounts`), `mountpoint -q` mengembalikan nilai `0` (true) sehingga perintah bind mount dilewati.
+  - Akibatnya, `/tmp/.X11-unix` di dalam chroot menjadi kosong (stale mount point mengarah ke direktori lama yang sudah terhapus) dan tidak ada socket `X0`.
+  - Script `bspwm-session` mengecek `xdpyinfo -display :0` hingga 10 detik, gagal menemukan X server (`No X server found on :0 after 10s`), lalu keluar (`exit 1`). Window manager mati dan layar X11 menjadi blank/hitam.
+- **Solusi & Rekayasa**:
+  1. **Force Lazy Remount Socket (`ChrootDistro.java`)**:
+     - Mengganti pengecekan `mountpoint -q` menjadi pembersihan unmount malas (`umount -l`) yang dilanjutkan dengan bind mount segar setiap kali sesi atau aplikasi dijalankan:
+       `umount -l $ROOT/tmp/.X11-unix 2>/dev/null || true; mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix $ROOT/tmp/.X11-unix 2>/dev/null || true;`
+       Hal yang sama diterapkan pada socket hardware acceleration `/tmp/.virgl`.
+     - Pada `killDesktopEnvironment()`, unmount juga dieksekusi di root namespace global (`su -c`) bukan hanya namespace lokal `su -mm`.
+  2. **Sinkronisasi Otomatis Aplikasi Baru Chroot (`syncChrootBridge`)**:
+     - `ChrootDistro.installed()` kini memicu `syncChrootBridge()` di background secara berkala (dibatasi throttling 15 detik) setiap kali daftar aplikasi dipindai atau App Drawer dibuka.
+     - `TermuxActivity` meregistrasikan callback `ChrootDistro.setOnSyncCompleted(() -> runOnUiThread(() -> refreshLinuxApps(true)))`.
+     - Setiap ada aplikasi Linux baru yang di-install di dalam chroot, file `.desktop` dan ikon resolusi tinggi (Papirus, hicolor, pixmaps) akan otomatis disalin ke jembatan `$PREFIX/share/applications/chroot/` dan langsung muncul di launcher tanpa perlu me-restart Termux!
+
+---
+
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)
 
 Jika upstream (`PickleHik3/termux-launcher`) merilis update baru dan Tuan Eso meminta sync, **JANGAN PERNAH reset atau clone ulang dari 0**. Ikuti langkah standar berikut:
