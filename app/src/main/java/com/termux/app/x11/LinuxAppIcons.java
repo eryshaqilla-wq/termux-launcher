@@ -46,10 +46,12 @@ public final class LinuxAppIcons {
     };
 
     /**
-     * The icon themes searched, in order. {@code locolor} is the small-screen theme a few old X
-     * programs still ship instead of a hicolor one, and nixpkgs carries them as they are.
+     * The icon themes searched, in order. Freedesktop standard themes like Papirus, Adwaita, gnome,
+     * Tango, and locolor are searched alongside hicolor.
      */
-    private static final String[] THEMES = {"hicolor", "locolor"};
+    private static final String[] THEMES = {
+        "hicolor", "Papirus", "Papirus-Dark", "Papirus-Light", "Adwaita", "gnome", "Tango", "locolor"
+    };
 
     /** Checked in this order at every candidate location: a PNG at a size beats an SVG at it. */
     private static final String[] ICON_EXTENSIONS = {".png", ".svg"};
@@ -101,7 +103,14 @@ public final class LinuxAppIcons {
     @Nullable
     public static File find(@NonNull LinuxAppCatalog.LinuxApp app) {
         File own = find(app.icon, app.container);
-        if (own != null || !app.session) return own;
+        if (own != null) return own;
+        if (!app.session) {
+            if (!app.desktopFile.isEmpty()) {
+                File byFile = find(app.desktopFile, app.container);
+                if (byFile != null) return byFile;
+            }
+            return null;
+        }
         for (String name : desktopIconNames(app)) {
             File file = find(name, app.container);
             if (file != null) return file;
@@ -184,7 +193,15 @@ public final class LinuxAppIcons {
                     File file = under(container, prefix,
                         "share/icons/" + theme + "/" + size + "/apps/" + name + ext);
                     if (file.isFile()) return file;
+                    File catFile = under(container, prefix,
+                        "share/icons/" + theme + "/" + size + "/categories/" + name + ext);
+                    if (catFile.isFile()) return catFile;
                 }
+            }
+            for (String ext : ICON_EXTENSIONS) {
+                File scalable = under(container, prefix,
+                    "share/icons/" + theme + "/scalable/apps/" + name + ext);
+                if (scalable.isFile()) return scalable;
             }
         }
         for (String ext : ICON_EXTENSIONS) {

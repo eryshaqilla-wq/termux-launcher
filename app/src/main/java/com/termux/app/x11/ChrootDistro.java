@@ -334,7 +334,7 @@ public final class ChrootDistro {
                     + "out=\"/data/data/com.termux/files/usr/share/applications/chroot/$cname\"; "
                     + "mkdir -p \"$out\" \"/data/data/com.termux/files/usr/share/applications/chroot/icons\"; "
                     + "cp -u \"$root\"/usr/share/applications/*.desktop \"$out/\" 2>/dev/null || true; "
-                    + "cp -ru \"$root\"/usr/share/pixmaps/* \"/data/data/com.termux/files/usr/share/applications/chroot/icons/\" 2>/dev/null || true; "
+                    + "cp -ruL \"$root\"/usr/share/pixmaps/* \"/data/data/com.termux/files/usr/share/applications/chroot/icons/\" 2>/dev/null || true; "
                     + "uid=$(stat -c '%u' /data/data/com.termux/files/home 2>/dev/null || id -u); "
                     + "chown -R \"$uid:$uid\" \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
                     + "chmod -R 755 \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "

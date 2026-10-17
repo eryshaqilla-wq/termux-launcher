@@ -198,12 +198,6 @@ public final class ProotDistro {
         @NonNull
         public File iconPrefix() {
             if (kind == Kind.NIX) return profile != null ? profile : root;
-            if (kind == Kind.CHROOT) {
-                File chrootIconDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot/" + name + "/icons");
-                if (chrootIconDir.isDirectory()) return chrootIconDir;
-                File commonIconDir = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH, "share/applications/chroot/icons");
-                if (commonIconDir.isDirectory()) return commonIconDir;
-            }
             return isPrefix() ? root : new File(root, "usr");
         }
 
