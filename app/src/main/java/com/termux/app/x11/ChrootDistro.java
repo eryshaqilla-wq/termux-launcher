@@ -373,11 +373,11 @@ public final class ChrootDistro {
             String cName = container.name;
             String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
             return "su -c 'if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; then "
-                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" start; "
-                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" start; fi; sleep 2; fi; "
-                + "am start -n com.termux.x11/.MainActivity 2>/dev/null; "
+                + "sed -i \"s/enable_termux_x11=1/enable_termux_x11=0/\" \"" + configPath + "\" 2>/dev/null || true; "
+                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; "
+                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; fi; sleep 2; fi; "
                 + "/data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" run /bin/sh -c "
-                + ProotDistro.singleQuote("export DISPLAY=:5 PULSE_SERVER=unix:/tmp/.pulse-socket GALLIUM_DRIVER=virpipe; " + command)
+                + ProotDistro.singleQuote("export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe VTEST_SOCKET_NAME=/tmp/.virgl_test; " + command)
                 + "'";
         } else if (RunnerType.CUSTOM.name().equals(type) && container.customRunner != null
                 && !container.customRunner.trim().isEmpty()) {
@@ -427,11 +427,11 @@ public final class ChrootDistro {
             String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
             String inner = (de != null) ? de.getDroidspacesInnerCommand() : "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || dbus-run-session xfce4-session";
             return "su -c 'if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; then "
-                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" start; "
-                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" start; fi; sleep 2; fi; "
-                + "am start -n com.termux.x11/.MainActivity 2>/dev/null; "
+                + "sed -i \"s/enable_termux_x11=1/enable_termux_x11=0/\" \"" + configPath + "\" 2>/dev/null || true; "
+                + "if [ -f \"" + configPath + "\" ]; then /data/local/Droidspaces/bin/droidspaces --config=\"" + configPath + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; "
+                + "else /data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; fi; sleep 2; fi; "
                 + "/data/local/Droidspaces/bin/droidspaces --name=\"" + cName + "\" run /bin/sh -c "
-                + ProotDistro.singleQuote("export DISPLAY=:5 PULSE_SERVER=unix:/tmp/.pulse-socket GALLIUM_DRIVER=virpipe; "
+                + ProotDistro.singleQuote("export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe VTEST_SOCKET_NAME=/tmp/.virgl_test; "
                     + "if ! pgrep -f \"bspwm|xfce4|plasma|gnome|mate|lxde|openbox|i3\" >/dev/null 2>&1; then " + inner + " & fi") + "; "
                 + "while /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"" + cName + "\"; do sleep 3; done'";
         } else if (env != null && env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
