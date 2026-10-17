@@ -20657,7 +20657,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * this activity is the one that raised it, so a place that never asked for it is untouched.
      */
     private void hideDisplaySystemKeyboard() {
-        if (!mDisplaySystemKeyboardUp) return;
         mDisplaySystemKeyboardUp = false;
         com.termux.x11.LorieView display = displayView();
         if (display != null) display.setKeyboardVisible(false);
@@ -20761,6 +20760,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @NonNull com.termux.app.x11.DisplayFrameContentPolicy.Decision decision) {
         if (!decision.taken) return;
         if (mPaneController != null) mPaneController.setTouchMouseMode(decision.mouseMode());
+        if (decision.mouseMode()) {
+            hideDisplaySystemKeyboard();
+        }
         syncDisplayTouchpad();
         // The frame the pad raised for itself goes down with the pad, so the mouse key closes
         // exactly what it opened and the user is not left with a keyboard to dismiss.
@@ -20961,7 +20963,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mRaisingDisplayFrameKeyboard = true;
         try {
             mInAppKeyboard.show(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard
-                .ShowReason.KEYBOARD_ACTION);
+                .ShowReason.PAD_FRAME);
         } finally {
             mRaisingDisplayFrameKeyboard = false;
         }

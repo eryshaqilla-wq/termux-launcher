@@ -58,7 +58,9 @@ public final class TermuxInAppKeyboard {
         /** A person asked, through {@code keyboard.show} on a key, a chord or the palette. */
         TOOL,
         /** Something on screen took text focus and the keyboard was opened for it. */
-        FOCUS
+        FOCUS,
+        /** Frame raised exclusively for touchpad placement in mouse mode. */
+        PAD_FRAME
     }
 
     public enum HideReason {
@@ -477,9 +479,10 @@ public final class TermuxInAppKeyboard {
         if (!mEnabled || mDestroyed)
             return;
         // Switched off, nothing raises it — not a tap, not a focus signal, not a key that meant
-        // to. Whoever turns it back on goes through setTurnedOff first. The height editor is the
-        // one exception: it has to show the rows it is resizing.
-        if (mPreferences.isKeyboardTurnedOff() && reason != ShowReason.HEIGHT_ADJUSTMENT)
+        // to. Whoever turns it back on goes through setTurnedOff first. The height editor and
+        // touchpad frame are the exceptions: they need the frame view to size/hold content.
+        if (mPreferences.isKeyboardTurnedOff() && reason != ShowReason.HEIGHT_ADJUSTMENT
+                && reason != ShowReason.PAD_FRAME)
             return;
         if (!gateForHardwareKeyboard(reason))
             return;
