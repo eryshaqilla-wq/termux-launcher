@@ -1,0 +1,122 @@
+==============================================================================
+⚡ BLUEPRINT & IDE DESAIN: REFAKTORISASI SETUP, LOGIN & BASHNH (PROJECT FUSION)
+==============================================================================
+Author  : Hamba Setia Tuan Eso
+Target  : ./setup, login (login.template), bashnh, & Offline Bundle Zsh/P10k
+Tanggal : 17 Oktober 2026
+
+------------------------------------------------------------------------------
+1. LATAR BELAKANG & PERMASALAHAN SAAT INI (PAIN POINTS)
+------------------------------------------------------------------------------
+a. UX Setup Ambigu pada Deteksi Root:
+   - Jika HP Non-Root, `./setup` masih menanyakan "Pilih Takdir: 1) Root 2) Non-Root".
+   - Padahal perangkat non-root tidak memiliki binary `su`, sehingga memilih opsi 1
+     akan selalu gagal dan menimbulkan kebingungan ("takdirnya terkurung di situ").
+
+b. Input Manual Container Root Rawan Typo & Hardcoded "Debian":
+   - Pada HP Root, `./setup` meminta user mengetikkan nama distro Droidspaces
+     dengan default "Debian".
+   - Fakta di lapangan: di Poco M3 nama containernya adalah "Ubuntu", sedangkan di
+     Infinix containernya adalah Kali NetHunter ("kali-arm64").
+   - Akibatnya, konfigurasi sering salah dan `login` gagal merakit entrypoint.
+
+c. Gagal Merakit & Delay di `login.template`:
+   - Di `login.template` baris 271 terdapat fallback statis:
+     `su -c '/data/local/Droidspaces/bin/droidspaces --name="Debian" enter'`
+     Jika container di perangkat bernama "Ubuntu", fallback ini gagal total.
+   - Setiap kali menu `login` dipilih, terdapat eksekusi `su -c` berulang untuk
+     menginjeksi shims (`browser`, `termux-ipc`, `x`). Ini memperlambat startup terminal
+     dan berisiko membuat terminal hang/lag.
+
+d. Keterbatasan Script `bashnh`:
+   - Saat ini `bashnh` di-hardcode ke path Kali NetHunter `/data/local/nhsystem/kali-arm64`.
+   - Di Poco M3 atau sistem dengan Droidspaces, `bashnh` tidak dapat digunakan.
+   - Perlu ditingkatkan menjadi Universal Linux Launcher yang adaptif.
+
+e. Dependensi Online untuk Zsh & Styling:
+   - Konfigurasi Zsh autosuggestions, history, dan tema Powerlevel10k (p10k)
+     masih bergantung pada repo eksternal / belum 100% offline di dalam bundle payload.
+
+------------------------------------------------------------------------------
+2. RENCANA ARSITEKTUR & PERUBAHAN SISTEM
+------------------------------------------------------------------------------
+
+A. PERBAIKAN ./setup (fusion-setup/setup.sh):
+   1. Deteksi Takdir Otomatis:
+      - Cek ketersediaan `su` dan izin root (`su -c id`).
+      - Jika Non-Root (DETECTED_ROOT=0):
+        -> Langsung kunci IS_ROOT=0 tanpa menampilkan pertanyaan takdir.
+        -> Berikan info jelas: "Perangkat Non-Root: Menggunakan Sandbox Termux (Cepat, Ringan, 0-Bug)".
+      - Jika Root (DETECTED_ROOT=1):
+        -> Jalankan auto-detect container cerdas:
+           * Scan Droidspaces: Cek `/data/local/Droidspaces/Containers/*` dan
+             `/data/local/Droidspaces/spaces/*`.
+           * Scan NetHunter: Cek `/data/local/nhsystem/kali-arm64` dan
+             `/data/local/nhsystem/kalifs`.
+        -> Jika terdeteksi, jadikan container tersebut pilihan DEFAULT [1] (Auto-Detect).
+           User cukup menekan Enter untuk langsung menyambungkannya secara akurat!
+        -> Tetap sediakan opsi [2] Custom/Manual bagi Tuan jika ingin konfigurasi khusus.
+
+   2. Injeksi Shims Pindah ke Waktu Setup (Bukan Saat Login):
+      - Seluruh shims (`termux-ipc`, `browser`, `wallet`, `x`) diinjeksi ke container
+        pada saat `./setup` berjalan.
+      - Dengan demikian, skrip `login` menjadi sangat ringan, bersih, dan instan.
+
+   3. Integrasi Zsh Modern, History & Powerlevel10k Offline:
+      - Seluruh plugin (`zsh-autosuggestions`, `zsh-syntax-highlighting`), theme
+        `powerlevel10k`, dan config `.p10k.zsh` (tema hacker Catppuccin eso@eso)
+        diekstrak langsung dari bundle payload lokal `fusion_payload.tar.gz`.
+      - Setup Zsh history lengkap:
+        * HISTSIZE=10000, SAVEHIST=10000, SHARE_HISTORY, HIST_IGNORE_DUPS,
+          HIST_IGNORE_ALL_DUPS, HIST_REDUCE_BLANKS.
+      - 100% Offline Installer tanpa memerlukan unduhan internet tambahan saat setup.
+
+B. PERBAIKAN LOGIN SCRIPT (fusion-setup/login.template):
+   1. Hapus Hardcoded "Debian":
+      - Gunakan variabel dinamis `$LINUX_NAME` dari konfigurasi `$FUSION_DIR/linux_name.txt`.
+      - Fallback eksekusi menggunakan skrip entry yang sudah dirakit `$FUSION_DIR/linux_entry.sh`
+        atau auto-detect container aktif.
+   2. Hilangkan Loop Shims yang Berat:
+      - Menghapus pengecekan dan pembuatan file shim berulang di rootfs saat runtime `login`.
+      - Startup terminal menjadi instan (<0.1 detik) tanpa lag input.
+   3. Fallback Cerdas & Aman:
+      - Jika Linux container gagal masuk (exit code != 0), terminal otomatis kembali
+        ke menu atau membuka Zsh/Bash Termux lokal dengan pesan ramah, tanpa crash.
+
+C. PERBAIKAN BASHNH (Universal Linux Launcher):
+   1. Adaptif Multi-Container:
+      - Jika argumen diberikan (contoh: `bashnh ubuntu` atau `bashnh nethunter`),
+        langsung masuk ke container yang dituju.
+      - Jika tanpa argumen:
+        * Cek apakah ada config `$HOME/.fusion/linux_entry.sh` -> jalankan.
+        * Jika tidak ada, scan path NetHunter (`/data/local/nhsystem/kali-arm64`).
+        * Jika tidak ada NetHunter, scan Droidspaces (`/data/local/Droidspaces/bin/droidspaces enter`).
+   2. Lingkungan Eksekusi Bersih:
+      - Pertahankan `unset LD_PRELOAD` dan `unset LD_LIBRARY_PATH`.
+      - Pertahankan `su -mm -c` (global mount namespace).
+      - Set terminal title dan auto-title prevention agar tab Termux tetap rapi.
+
+D. BUNDLE OFFLINE PAYLOAD (create_fusion_bundle.py):
+   1. Struktur Payload Tambahan:
+      - `bundle/zsh_plugins/zsh-autosuggestions/`
+      - `bundle/zsh_plugins/zsh-syntax-highlighting/`
+      - `bundle/zsh_themes/powerlevel10k/`
+      - `bundle/configs/.p10k.zsh` (Konfigurasi Pure/Catppuccin eso@eso yang ada di HP Tuan)
+      - `bundle/configs/.zshrc` (Konfigurasi lengkap Zsh Eso)
+   2. Repack `fusion_payload.tar.gz` sehingga menjadi paket mandiri yang siap pasang
+      kapan saja dan di mana saja.
+
+------------------------------------------------------------------------------
+3. LANGKAH EKSEKUSI TAHAP DEMI TAHAP
+------------------------------------------------------------------------------
+[x] Langkah 1: Dokumentasikan blueprint ini di `ide setup.txt`.
+[ ] Langkah 2: Perbarui `create_fusion_bundle.py` untuk mengemas aset Zsh, P10k, dan configs.
+[ ] Langkah 3: Bangun ulang tarball offline `fusion_payload.tar.gz`.
+[ ] Langkah 4: Refaktor `fusion-setup/setup.sh` (Auto-detect root & container, offline zsh).
+[ ] Langkah 5: Refaktor `fusion-setup/login.template` (Hapus hardcode, instan startup).
+[ ] Langkah 6: Refaktor `/root/project/bashnh` menjadi Universal Linux Launcher.
+[ ] Langkah 7: Pengujian lokal di Poco M3 (`10.92.4.57:41383`) dan verifikasi kelancaran.
+
+PENTING: Tidak ada tindakan `git push` atau gradle build APK sampai seluruh skrip
+lokal teruji dan disetujui oleh Tuan Eso!
+==============================================================================

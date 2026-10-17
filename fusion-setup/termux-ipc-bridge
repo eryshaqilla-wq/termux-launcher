@@ -1,0 +1,95 @@
+#!/data/data/com.termux/files/usr/bin/python3
+# ==============================================================================
+# ⚡ ESO:LAUNCHER - TERMUX IPC BRIDGE DAEMON
+# ==============================================================================
+# Menjembatani IPC abstract domain socket (\0termux_ipc) di Host Android ke dalam
+# Droidspaces Container (isolated network namespace) via filesystem pathname socket.
+# ==============================================================================
+import os, sys, socket, threading, glob, time, signal
+
+# Cari lokasi rootfs Droidspaces secara dinamis
+TARGET_SOCKETS = [
+    "/data/data/com.termux/files/usr/tmp/termux_ipc.sock",
+    "/data/data/com.termux/files/usr/tmp/.X11-unix/termux_ipc.sock",
+    "/data/local/tmp/termux_ipc.sock"
+]
+
+# Scan kontainer Droidspaces yang ada
+for ds_root in glob.glob("/data/local/Droidspaces/Containers/*/rootfs"):
+    var_tmp = os.path.join(ds_root, "var/tmp")
+    if os.path.isdir(var_tmp):
+        TARGET_SOCKETS.append(os.path.join(var_tmp, "termux_ipc.sock"))
+
+for ds_root in glob.glob("/data/local/Droidspaces/spaces/*/rootfs"):
+    var_tmp = os.path.join(ds_root, "var/tmp")
+    if os.path.isdir(var_tmp):
+        TARGET_SOCKETS.append(os.path.join(var_tmp, "termux_ipc.sock"))
+
+active_servers = []
+
+def cleanup(*args):
+    for s, p in active_servers:
+        try:
+            s.close()
+            if os.path.exists(p):
+                os.unlink(p)
+        except Exception:
+            pass
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, cleanup)
+signal.signal(signal.SIGTERM, cleanup)
+
+def handle_client(client_sock):
+    upstream = None
+    try:
+        upstream = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        upstream.settimeout(3.0)
+        upstream.connect("\0termux_ipc")
+        
+        data = client_sock.recv(8192)
+        if data:
+            upstream.sendall(data)
+            resp = upstream.recv(8192)
+            if resp:
+                client_sock.sendall(resp)
+    except Exception:
+        pass
+    finally:
+        if upstream:
+            try: upstream.close()
+            except Exception: pass
+        try: client_sock.close()
+        except Exception: pass
+
+def start_listener(sock_path):
+    try:
+        dir_name = os.path.dirname(sock_path)
+        os.makedirs(dir_name, exist_ok=True)
+        if os.path.exists(sock_path):
+            try: os.unlink(sock_path)
+            except Exception: pass
+
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(sock_path)
+        try:
+            os.chmod(sock_path, 0o777)
+        except Exception:
+            pass
+        server.listen(32)
+        active_servers.append((server, sock_path))
+
+        while True:
+            client, _ = server.accept()
+            t = threading.Thread(target=handle_client, args=(client,), daemon=True)
+            t.start()
+    except Exception:
+        pass
+
+for p in set(TARGET_SOCKETS):
+    t = threading.Thread(target=start_listener, args=(p,), daemon=True)
+    t.start()
+
+# Loop utama
+while True:
+    time.sleep(3600)

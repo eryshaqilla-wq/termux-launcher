@@ -55,7 +55,7 @@ public final class ChrootDistro {
         new DesktopDef("openbox", "Openbox", Arrays.asList("openbox-session", "openbox")),
         new DesktopDef("i3", "i3 Window Manager", Arrays.asList("i3")),
         new DesktopDef("awesome", "Awesome WM", Arrays.asList("awesome")),
-        new DesktopDef("bspwm", "bspwm", Arrays.asList("bspwm")),
+        new DesktopDef("bspwm", "bspwm", Arrays.asList("bspwm", "bspwm-session")),
         new DesktopDef("fluxbox", "Fluxbox", Arrays.asList("startfluxbox", "fluxbox"))
     ));
 
@@ -109,30 +109,30 @@ public final class ChrootDistro {
         public String getDroidspacesInnerCommand() {
             switch (id) {
                 case "gnome":
-                    return "export XDG_SESSION_TYPE=x11 && dbus-run-session gnome-session";
+                    return "export XDG_SESSION_TYPE=x11 && exec dbus-run-session gnome-session";
                 case "plasma":
-                    return "dbus-run-session " + detectedBinary;
+                    return "exec dbus-run-session " + detectedBinary;
                 case "mate":
-                    return "dbus-run-session mate-session";
+                    return "exec dbus-run-session mate-session";
                 case "lxde":
-                    return "dbus-run-session " + detectedBinary;
+                    return "exec dbus-run-session " + detectedBinary;
                 case "lxqt":
-                    return "dbus-run-session startlxqt";
+                    return "exec dbus-run-session startlxqt";
                 case "cinnamon":
-                    return "dbus-run-session cinnamon-session";
+                    return "exec dbus-run-session cinnamon-session";
                 case "openbox":
-                    return detectedBinary;
+                    return "exec " + detectedBinary;
                 case "i3":
-                    return "i3";
+                    return "exec i3";
                 case "awesome":
-                    return "awesome";
+                    return "exec awesome";
                 case "bspwm":
-                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || dbus-run-session bspwm";
+                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session bspwm";
                 case "fluxbox":
-                    return detectedBinary;
+                    return "exec " + detectedBinary;
                 case "xfce4":
                 default:
-                    return "dbus-run-session " + ("startxfce4".equals(detectedBinary) ? "xfce4-session" : detectedBinary);
+                    return "exec dbus-run-session " + ("startxfce4".equals(detectedBinary) ? "xfce4-session" : detectedBinary);
             }
         }
 
@@ -425,47 +425,92 @@ public final class ChrootDistro {
 
     public static final String DROIDSPACES_DESKTOP_SCRIPT_NAME = "termux-droidspaces-desktop";
 
+    @NonNull
+    public static String getDroidspacesAutoDesktopCommand() {
+        return "if [ -x /usr/bin/startxfce4 ] || [ -x /usr/bin/xfce4-session ]; then\n"
+            + "    exec dbus-run-session xfce4-session\n"
+            + "elif [ -x /usr/local/bin/bspwm-session ]; then\n"
+            + "    exec /usr/local/bin/bspwm-session\n"
+            + "elif [ -x /usr/bin/bspwm ]; then\n"
+            + "    exec dbus-run-session bspwm\n"
+            + "elif [ -x /usr/bin/mate-session ]; then\n"
+            + "    exec dbus-run-session mate-session\n"
+            + "elif [ -x /usr/bin/startlxde ]; then\n"
+            + "    exec dbus-run-session startlxde\n"
+            + "elif [ -x /usr/bin/startlxqt ]; then\n"
+            + "    exec dbus-run-session startlxqt\n"
+            + "elif [ -x /usr/bin/gnome-session ]; then\n"
+            + "    export XDG_SESSION_TYPE=x11 && exec dbus-run-session gnome-session\n"
+            + "elif [ -x /usr/bin/startplasma-x11 ]; then\n"
+            + "    exec dbus-run-session startplasma-x11\n"
+            + "elif [ -x /usr/bin/cinnamon-session ]; then\n"
+            + "    exec dbus-run-session cinnamon-session\n"
+            + "elif [ -x /usr/bin/openbox ]; then\n"
+            + "    exec openbox\n"
+            + "elif [ -x /usr/bin/i3 ]; then\n"
+            + "    exec i3\n"
+            + "elif [ -x /usr/bin/awesome ]; then\n"
+            + "    exec awesome\n"
+            + "elif [ -x /usr/bin/fluxbox ]; then\n"
+            + "    exec fluxbox\n"
+            + "else\n"
+            + "    exec xterm\n"
+            + "fi";
+    }
+
     public static void writeDroidspacesDesktopScript(@NonNull String cName, @NonNull String innerCmd) {
         String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_DESKTOP_SCRIPT_NAME;
         String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
         String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
             + "# Droidspaces Desktop Runner for Termux Launcher\n\n"
             + "CNAME=\"" + cName + "\"\n"
-            + "CONFIG_PATH=\"/data/local/Droidspaces/Containers/$CNAME/container.config\"\n"
             + "X11_DIR=\"" + x11Dir + "\"\n\n"
+            + "# 1. Auto-detect nama container jika belum diatur atau kosong\n"
+            + "if [ -z \"$CNAME\" ] || [ ! -d \"/data/local/Droidspaces/Containers/$CNAME\" ]; then\n"
+            + "    AUTO_C=$(ls -1 /data/local/Droidspaces/Containers/ 2>/dev/null | grep -v '^\\.' | head -n1)\n"
+            + "    [ -n \"$AUTO_C\" ] && CNAME=\"$AUTO_C\"\n"
+            + "fi\n\n"
+            + "CONFIG_PATH=\"/data/local/Droidspaces/Containers/$CNAME/container.config\"\n\n"
             + "mkdir -p \"$X11_DIR\" 2>/dev/null || true\n"
             + "chmod 777 \"$X11_DIR\" 2>/dev/null || true\n\n"
             + "if [ -f \"$CONFIG_PATH\" ]; then\n"
             + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "fi\n\n"
-            + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
-            + "    if [ -f \"$CONFIG_PATH\" ]; then\n"
-            + "        /data/local/Droidspaces/bin/droidspaces --config=\"$CONFIG_PATH\" -B \"$X11_DIR\":/tmp/.X11-unix start\n"
-            + "    else\n"
-            + "        /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" -B \"$X11_DIR\":/tmp/.X11-unix start\n"
-            + "    fi\n"
-            + "    sleep 2\n"
-            + "else\n"
-            + "    mkdir -p /data/local/Droidspaces/Containers/\"$CNAME\"/rootfs/tmp/.X11-unix 2>/dev/null || true\n"
-            + "    mountpoint /data/local/Droidspaces/Containers/\"$CNAME\"/rootfs/tmp/.X11-unix >/dev/null 2>&1 || mount -o bind \"$X11_DIR\" /data/local/Droidspaces/Containers/\"$CNAME\"/rootfs/tmp/.X11-unix 2>/dev/null || true\n"
+            + "# 2. Cek apakah container Droidspaces sudah berjalan. Jika belum, start dulu agar tidak layar hitam!\n"
+            + "DS_RUNNING=0\n"
+            + "if /data/local/Droidspaces/bin/droidspaces pid --name=\"$CNAME\" >/dev/null 2>&1; then\n"
+            + "    DS_RUNNING=1\n"
+            + "elif /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "    DS_RUNNING=1\n"
             + "fi\n\n"
-            + "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50; do\n"
+            + "if [ $DS_RUNNING -eq 0 ]; then\n"
+            + "    /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" start >/dev/null 2>&1 || true\n"
+            + "    sleep 2\n"
+            + "fi\n\n"
+            + "# 3. Pastikan socket X11 ter-mount ke rootfs Droidspaces\n"
+            + "mkdir -p \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mountpoint \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" >/dev/null 2>&1 || mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "# 4. Pastikan Termux IPC bridge daemon aktif\n"
+            + "if [ -x \"/data/data/com.termux/files/usr/bin/termux-ipc-bridge\" ]; then\n"
+            + "    pgrep -f termux-ipc-bridge >/dev/null 2>&1 || /data/data/com.termux/files/usr/bin/termux-ipc-bridge </dev/null >/dev/null 2>&1 &\n"
+            + "fi\n\n"
+            + "# 5. Tunggu sampai socket X0 muncul\n"
+            + "for i in $(seq 1 50); do\n"
             + "    [ -S \"$X11_DIR/X0\" ] && break\n"
             + "    sleep 0.1\n"
-            + "done\n\n"
+            + "done\n"
             + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
+            + "# 6. Jalankan Desktop Environment di dalam container Droidspaces\n"
             + "/data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
             + "export DISPLAY=:0\n"
             + "export PULSE_SERVER=tcp:127.0.0.1:4713\n"
             + "export GALLIUM_DRIVER=virpipe\n"
             + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n\n"
-            + "for j in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do\n"
+            + "for j in $(seq 1 20); do\n"
             + "    xdpyinfo >/dev/null 2>&1 && break\n"
             + "    sleep 0.1\n"
             + "done\n\n"
-            + "if ! pgrep -x bspwm >/dev/null 2>&1; then\n"
-            + "    " + innerCmd + "\n"
-            + "fi\n"
+            + innerCmd + "\n"
             + "'\n\n"
             + "while /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; do\n"
             + "    sleep 3\n"
@@ -488,7 +533,7 @@ public final class ChrootDistro {
     public static String getDesktopCommand(@Nullable ChrootEnvironment env, @Nullable DesktopEntry de) {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
             String cName = env.containerName;
-            String inner = (de != null) ? de.getDroidspacesInnerCommand() : "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || dbus-run-session xfce4-session";
+            String inner = (de != null) ? de.getDroidspacesInnerCommand() : getDroidspacesAutoDesktopCommand();
             writeDroidspacesDesktopScript(cName, inner);
             return "su -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_DESKTOP_SCRIPT_NAME;
         } else if (env != null && env.runnerType == RunnerType.CUSTOM && !env.customRunner.trim().isEmpty()) {
@@ -648,7 +693,7 @@ public final class ChrootDistro {
                 }
             }
             checkCmd.append("; do if [ -x ").append(rootPath).append("/usr/bin/$b ] || [ -x ")
-                    .append(rootPath).append("/bin/$b ]; then echo $b; fi; done");
+                    .append(rootPath).append("/bin/$b ] || [ -x ").append(rootPath).append("/usr/local/bin/$b ]; then echo $b; fi; done");
 
             try {
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", checkCmd.toString()});
@@ -681,7 +726,8 @@ public final class ChrootDistro {
         for (DesktopDef def : SUPPORTED_DESKTOPS) {
             for (String bin : def.candidateBinaries) {
                 if (new File(rootfs, "usr/bin/" + bin).exists()
-                        || new File(rootfs, "bin/" + bin).exists()) {
+                        || new File(rootfs, "bin/" + bin).exists()
+                        || new File(rootfs, "usr/local/bin/" + bin).exists()) {
                     results.add(new DesktopEntry(def.id, def.displayName + " (" + bin + ")", bin, def.candidateBinaries));
                     break;
                 }
@@ -696,7 +742,7 @@ public final class ChrootDistro {
                     checkCmd.append(" ").append(bin);
                 }
             }
-            checkCmd.append("; do if [ -x /usr/bin/\\$b ] || [ -x /bin/\\$b ]; then echo \\$b; fi; done\"");
+            checkCmd.append("; do if [ -x /usr/bin/\\$b ] || [ -x /bin/\\$b ] || [ -x /usr/local/bin/\\$b ]; then echo \\$b; fi; done\"");
 
             try {
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", checkCmd.toString()});

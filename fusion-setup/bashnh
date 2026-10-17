@@ -1,0 +1,179 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# ==============================================================================
+# ⚡ ESO:LAUNCHER - UNIVERSAL LINUX LAUNCHER (BASHNH)
+# ==============================================================================
+# Mendukung Kali NetHunter, Droidspaces (Ubuntu/Debian), dan PRoot Distro
+# Otomatis mendeteksi container aktif tanpa perlu konfigurasi statis manual.
+# ==============================================================================
+
+# 1. Bersihkan intervensi library Termux untuk mencegah segfault / version mismatch
+unset LD_PRELOAD
+unset LD_LIBRARY_PATH
+
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+HOME="${HOME:-/data/data/com.termux/files/home}"
+FUSION_DIR="$HOME/.fusion"
+
+# 2. Pertahankan tab terminal tetap bernama 'home'
+printf "\033]0;home\007"
+printf "\033]2;home\007"
+
+# Cek hak akses root
+HAS_SU=0
+if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
+    HAS_SU=1
+fi
+
+TARGET_DISTRO="$1"
+[ -n "$TARGET_DISTRO" ] && shift
+
+# ------------------------------------------------------------------------------
+# FUNGSI LUNCURKAN NETHUNTER CHROOT
+# ------------------------------------------------------------------------------
+launch_nethunter() {
+    local nh_path="$1"
+    [ -z "$nh_path" ] && nh_path="/data/local/nhsystem/kali-arm64"
+    if [ ! -d "$nh_path" ] && su -c "[ -d '/data/local/nhsystem/kalifs' ]" 2>/dev/null; then
+        nh_path="/data/local/nhsystem/kalifs"
+    fi
+
+    exec su -mm -c "chroot $nh_path /usr/bin/env -i \
+        HOME=/root \
+        TERM=xterm-256color \
+        PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+        USER=root \
+        LOGNAME=root \
+        MAIL=/var/mail/root \
+        DISABLE_AUTO_TITLE=true \
+        YOU_KNOW_WHAT=THIS_IS_KALI_LINUX_NETHUNTER_FROM_JAVA_BINKY \
+        /bin/zsh -l"
+}
+
+# ------------------------------------------------------------------------------
+# FUNGSI LUNCURKAN DROIDSPACES CONTAINER
+# ------------------------------------------------------------------------------
+launch_droidspaces() {
+    local ds_name="$1"
+    shift
+    local ds_bin="/data/local/Droidspaces/bin/droidspaces"
+
+    if [ ! -x "$ds_bin" ]; then
+        if su -c "[ -x '$ds_bin' ]" 2>/dev/null; then
+            :
+        else
+            return 1
+        fi
+    fi
+
+    # Pastikan daemon IPC bridge aktif di host agar container bisa akses termux-ipc
+    if [ -x "$PREFIX/bin/termux-ipc-bridge" ]; then
+        if ! pgrep -f termux-ipc-bridge >/dev/null 2>&1; then
+            "$PREFIX/bin/termux-ipc-bridge" </dev/null >/dev/null 2>&1 &
+        fi
+    fi
+
+    # Pastikan container sudah running, jika belum nyalakan terlebih dahulu
+    if ! su -c "$ds_bin pid --name='$ds_name' >/dev/null 2>&1"; then
+        echo -e "\e[38;2;139;233;253m● Menyalakan container $ds_name...\e[0m"
+        su -c "$ds_bin --name='$ds_name' start" >/dev/null 2>&1 || true
+    fi
+
+    if [ -n "$*" ]; then
+        exec su -c "$ds_bin --name=\"$ds_name\" run -- $*"
+    else
+        exec su -c "$ds_bin --name=\"$ds_name\" enter"
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# JIKA PARAMETER SPESIFIK DIBERIKAN (CONTOH: bashnh ubuntu, bashnh kali)
+# ------------------------------------------------------------------------------
+if [ -n "$TARGET_DISTRO" ]; then
+    case "$TARGET_DISTRO" in
+        kali|nethunter|nh)
+            launch_nethunter "/data/local/nhsystem/kali-arm64"
+            ;;
+        *)
+            # Asumsikan nama container Droidspaces
+            launch_droidspaces "$TARGET_DISTRO" "$@"
+            ;;
+    esac
+fi
+
+# ------------------------------------------------------------------------------
+# TANPA PARAMETER: AUTO-DETECT CONTAINER
+# ------------------------------------------------------------------------------
+
+# 1. Gunakan konfigurasi entrypoint dari ./setup jika tersedia
+if [ -f "$FUSION_DIR/linux_entry.sh" ] && [ -x "$FUSION_DIR/linux_entry.sh" ]; then
+    # Validasi apakah entrypoint bukan Debian hardcoded yang hilang
+    ENTRY_CMD=$(grep -E "^exec " "$FUSION_DIR/linux_entry.sh" 2>/dev/null | head -n1)
+    if [[ "$ENTRY_CMD" =~ --name=\"([^\"]+)\" ]]; then
+        CHECK_NAME="${BASH_REMATCH[1]}"
+        # Verifikasi folder container Droidspaces ada
+        if su -c "[ -d '/data/local/Droidspaces/Containers/$CHECK_NAME' ] || [ -d '/data/local/Droidspaces/spaces/$CHECK_NAME' ]" 2>/dev/null; then
+            exec "$FUSION_DIR/linux_entry.sh" "$@"
+        fi
+    else
+        exec "$FUSION_DIR/linux_entry.sh" "$@"
+    fi
+fi
+
+# 2. Deteksi Container Droidspaces secara dinamis dari filesystem
+if [ $HAS_SU -eq 1 ]; then
+    DS_FOUND=""
+    # Scan /data/local/Droidspaces/Containers/
+    DS_CONTAINERS=$(su -c "ls -1 /data/local/Droidspaces/Containers/ 2>/dev/null || true")
+    for c in $DS_CONTAINERS; do
+        if [ "$c" != "." ] && [ "$c" != ".." ]; then
+            DS_FOUND="$c"
+            break
+        fi
+    done
+
+    # Scan /data/local/Droidspaces/spaces/ jika belum ketemu
+    if [ -z "$DS_FOUND" ]; then
+        DS_SPACES=$(su -c "ls -1 /data/local/Droidspaces/spaces/ 2>/dev/null || true")
+        for c in $DS_SPACES; do
+            if [ "$c" != "." ] && [ "$c" != ".." ]; then
+                DS_FOUND="$c"
+                break
+            fi
+        done
+    fi
+
+    if [ -n "$DS_FOUND" ]; then
+        launch_droidspaces "$DS_FOUND" "$@"
+    fi
+
+    # 3. Deteksi Kali NetHunter
+    if su -c "[ -d '/data/local/nhsystem/kali-arm64' ]" 2>/dev/null; then
+        launch_nethunter "/data/local/nhsystem/kali-arm64"
+    elif su -c "[ -d '/data/local/nhsystem/kalifs' ]" 2>/dev/null; then
+        launch_nethunter "/data/local/nhsystem/kalifs"
+    fi
+fi
+
+# 4. Deteksi Non-Root PRoot Distro
+if command -v proot-distro >/dev/null 2>&1; then
+    PROOT_NAME=""
+    [ -f "$FUSION_DIR/distro_slug.txt" ] && PROOT_NAME=$(cat "$FUSION_DIR/distro_slug.txt" 2>/dev/null | tr -d '[:space:]')
+    if [ -z "$PROOT_NAME" ]; then
+        PROOT_INSTALLED=$(proot-distro list 2>/dev/null | awk '/installed/ {print $2}' | head -n1)
+        [ -n "$PROOT_INSTALLED" ] && PROOT_NAME="$PROOT_INSTALLED"
+    fi
+    if [ -n "$PROOT_NAME" ]; then
+        exec proot-distro login "$PROOT_NAME"
+    fi
+fi
+
+# 5. Fallback Terakhir: Masuk ke Root shell atau Termux lokal
+if [ $HAS_SU -eq 1 ]; then
+    exec su
+else
+    if [ -x "$PREFIX/bin/zsh" ]; then
+        exec -a "-zsh" "$PREFIX/bin/zsh" "$@"
+    else
+        exec -a "-bash" "$PREFIX/bin/bash" "$@"
+    fi
+fi

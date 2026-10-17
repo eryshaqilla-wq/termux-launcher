@@ -25,17 +25,22 @@ send_cmd() {
     if [ -n "$py_cmd" ]; then
         "$py_cmd" -c "
 import socket, sys
-try:
-    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    s.settimeout(2.0)
-    s.connect('\0termux_ipc')
-    s.sendall(sys.argv[1].encode() + b'\n')
-    resp = s.recv(4096).decode(errors='ignore').strip()
-    if resp:
-        print(resp)
-    s.close()
-except Exception:
-    pass
+payload = sys.argv[1].encode() + b'\n'
+targets = ['\0termux_ipc', '/var/tmp/termux_ipc.sock', '/tmp/termux_ipc.sock']
+resp = ''
+for target in targets:
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(2.5)
+        s.connect(target)
+        s.sendall(payload)
+        resp = s.recv(4096).decode(errors='ignore').strip()
+        s.close()
+        break
+    except Exception:
+        pass
+if resp:
+    print(resp)
 " "$payload"
     fi
 }

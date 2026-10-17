@@ -15,6 +15,7 @@ FUSION_DIR="$HOME/.fusion"
 LINUX_CONF="$FUSION_DIR/linux_entry.sh"
 LINUX_NAME_CONF="$FUSION_DIR/linux_name.txt"
 HAS_LINUX_CONF="$FUSION_DIR/has_linux.txt"
+LINUX_ROOTFS_CONF="$FUSION_DIR/linux_rootfs.txt"
 
 # Cek apakah integrasi Linux diaktifkan
 HAS_LINUX="1"
@@ -22,14 +23,32 @@ if [ -f "$HAS_LINUX_CONF" ]; then
     HAS_LINUX=$(cat "$HAS_LINUX_CONF" 2>/dev/null | tr -d '[:space:]')
 fi
 
-# Nama Linux jika aktif
-LINUX_NAME="Linux"
+# Nama Linux jika aktif (dengan auto-detect fallback jika belum disetup)
+LINUX_NAME=""
 if [ -f "$LINUX_NAME_CONF" ]; then
-    LINUX_NAME=$(cat "$LINUX_NAME_CONF" 2>/dev/null | head -n1)
-    [ -z "$LINUX_NAME" ] && LINUX_NAME="Linux"
+    LINUX_NAME=$(cat "$LINUX_NAME_CONF" 2>/dev/null | head -n1 | tr -d '\r\n')
 fi
 
-LINUX_ROOTFS_CONF="$FUSION_DIR/linux_rootfs.txt"
+# Auto-detect nama container jika kosong atau masih default generik
+if [ -z "$LINUX_NAME" ] || [ "$LINUX_NAME" = "Linux" ]; then
+    if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
+        # Cek Droidspaces container
+        DS_FOUND=$(su -c "ls -1 /data/local/Droidspaces/Containers/ 2>/dev/null || ls -1 /data/local/Droidspaces/spaces/ 2>/dev/null || true" | grep -v '^\.' | head -n1)
+        if [ -n "$DS_FOUND" ]; then
+            LINUX_NAME="$DS_FOUND"
+        elif su -c "[ -d '/data/local/nhsystem/kali-arm64' ] || [ -d '/data/local/nhsystem/kalifs' ]" 2>/dev/null; then
+            LINUX_NAME="NetHunter"
+        else
+            LINUX_NAME="Linux"
+        fi
+    elif command -v proot-distro >/dev/null 2>&1; then
+        PR_FOUND=$(proot-distro list 2>/dev/null | awk '/installed/ {print $2}' | head -n1)
+        [ -n "$PR_FOUND" ] && LINUX_NAME="$PR_FOUND" || LINUX_NAME="PRoot"
+    else
+        LINUX_NAME="Linux"
+    fi
+fi
+
 LINUX_ROOTFS=""
 if [ -f "$LINUX_ROOTFS_CONF" ]; then
     LINUX_ROOTFS=$(cat "$LINUX_ROOTFS_CONF" 2>/dev/null | tr -d '[:space:]')
@@ -75,7 +94,6 @@ fi
 # ==========================================
 while true; do
 
-    trigger_agy=0
     action_clean=0
 
     printf "\033]0;home\007"
@@ -93,7 +111,6 @@ while true; do
     fi
 
     echo ""
-    printf "Tekan \e[1;35m<\e[0m untuk membuka Antigravity\n"
     printf "Tekan \e[1;35mESC\e[0m untuk Clear RAM\n"
 
     selected=${selected:-1}
@@ -148,14 +165,12 @@ while true; do
                         'A') [ $selected -gt 1 ] && selected=$((selected - 1)) ;;
                         'B') [ $selected -lt 2 ] && selected=$((selected + 1)) ;;
                         'C') break ;; # Kanan = Enter
-                        'D') trigger_agy=1; break ;; # Kiri = Agy
                     esac
                 elif [ -z "$key2" ]; then
                     action_clean=1
                     break
                 fi
                 ;;
-            "<") trigger_agy=1; break ;;
             "1") selected=1; break ;;
             "2") selected=2; break ;;
             "c"|"C") action_clean=1; break ;;
@@ -190,41 +205,6 @@ while true; do
         CLEAN_TOAST="$toast_msg" exec "$0"
     fi
 
-    # Trigger Antigravity via Shortcut (<)
-    if [ $trigger_agy -eq 1 ]; then
-        ipc_send MOUSE_ON
-        ipc_send KEYBOARD_ENABLE
-        printf "\e[?1000l\e[?1006l\e[2J\e[3J\e[H"
-        stty echo 2>/dev/null; printf "\e[?25h\033]0;home\007"
-        
-        if [ -x "$FUSION_DIR/run_agy.sh" ]; then
-            "$FUSION_DIR/run_agy.sh"
-        elif command -v agy >/dev/null 2>&1; then
-            agy
-        else
-            echo "Antigravity Assistant..."
-            if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
-                unset LD_PRELOAD
-                if [ -n "$LINUX_ROOTFS" ]; then
-                    su -c "chroot '$LINUX_ROOTFS' /bin/bash -l -i -c 'agy'" 2>/dev/null || su -c "chroot /data/local/nhsystem/kali-arm64 /bin/zsh -l -i -c 'agy'" 2>/dev/null || agy
-                else
-                    su -c "chroot /data/local/nhsystem/kali-arm64 /bin/zsh -l -i -c 'agy'" 2>/dev/null || agy
-                fi
-            else
-                agy 2>/dev/null || echo "AGY belum terinstall di lingkungan ini."
-            fi
-        fi
-        
-        echo -e "\n\e[90m[ Antigravity Ditutup. Tekan sembarang tombol untuk kembali ]\e[0m"
-        read -rsn1
-        stty sane 2>/dev/null; stty -echo 2>/dev/null
-        ipc_send MOUSE_OFF
-        ipc_send KEYBOARD_HIDE
-        printf "\e[?1000l\e[?1006l\e[?25l"
-        while read -rsn1 -t 0.05 _discard; do :; done
-        exec "$0"
-    fi
-
     # Keluar loop untuk eksekusi pilihan
     break
 
@@ -245,15 +225,7 @@ if [ $selected -eq 1 ]; then
     unset LD_PRELOAD
     unset LD_LIBRARY_PATH
 
-    if [ -n "$LINUX_ROOTFS" ] && su -c "[ ! -f '$LINUX_ROOTFS/usr/local/bin/browser' ] || [ ! -s '$LINUX_ROOTFS/usr/local/bin/browser' ]" 2>/dev/null; then
-        su -c "mkdir -p '$LINUX_ROOTFS/usr/local/bin' && (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$LINUX_ROOTFS/usr/local/bin/termux-ipc' && echo -e '#!/bin/bash\nexec termux-ipc webview \"\$@\"' > '$LINUX_ROOTFS/usr/local/bin/browser' && echo -e '#!/bin/bash\nif [ -f /root/wallet/x_webview.js ]; then\n  exec node /root/wallet/x_webview.js \"\$@\"\nelif [ -f /data/data/com.termux/files/home/wallet/x_webview.js ]; then\n  exec node /data/data/com.termux/files/home/wallet/x_webview.js \"\$@\"\nfi' > '$LINUX_ROOTFS/usr/local/bin/x' && chmod 755 '$LINUX_ROOTFS/usr/local/bin/termux-ipc' '$LINUX_ROOTFS/usr/local/bin/browser' '$LINUX_ROOTFS/usr/local/bin/x'" 2>/dev/null || true
-    fi
-
-    # Cek apakah installer container tersedia di /sdcard untuk injeksi jika diperlukan
-    if [ -f "/sdcard/fusion-linux-setup.sh" ] && [ -x "/data/local/Droidspaces/bin/droidspaces" ]; then
-        su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$LINUX_NAME\" run -- [ -f /usr/local/bin/termux-ipc ] || /bin/bash /sdcard/fusion-linux-setup.sh" >/dev/null 2>&1 || true
-    fi
-
+    # Jalankan konfigurasi entrypoint yang sudah disiapkan saat setup
     if [ -x "$LINUX_CONF" ]; then
         "$LINUX_CONF" "$@"
         EXIT_CODE=$?
@@ -262,15 +234,35 @@ if [ $selected -eq 1 ]; then
             echo -e "\e[90mBeralih ke Termux shell...\e[0m"
             sleep 1
         fi
+    elif [ -x "$PREFIX/bin/bashnh" ]; then
+        exec "$PREFIX/bin/bashnh" "$@"
     elif command -v bashnh >/dev/null 2>&1; then
         exec bashnh "$@"
     else
-        echo "Menjalankan Linux..."
+        # Auto-fallback cerdas tanpa hardcoded Debian
+        echo "Menjalankan Linux ($LINUX_NAME)..."
         if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
             unset LD_PRELOAD
-            su -c '/data/local/Droidspaces/bin/droidspaces --name="Debian" enter'
+            if [ -x "/data/local/Droidspaces/bin/droidspaces" ] && [ -n "$LINUX_NAME" ] && [ "$LINUX_NAME" != "NetHunter" ]; then
+                if [ -x "$PREFIX/bin/termux-ipc-bridge" ]; then
+                    if ! pgrep -f termux-ipc-bridge >/dev/null 2>&1; then
+                        "$PREFIX/bin/termux-ipc-bridge" </dev/null >/dev/null 2>&1 &
+                    fi
+                fi
+                if ! su -c "/data/local/Droidspaces/bin/droidspaces pid --name='$LINUX_NAME' >/dev/null 2>&1"; then
+                    echo -e "\e[38;2;139;233;253m● Menyalakan container $LINUX_NAME...\e[0m"
+                    su -c "/data/local/Droidspaces/bin/droidspaces --name='$LINUX_NAME' start" >/dev/null 2>&1 || true
+                fi
+                su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$LINUX_NAME\" enter"
+            elif su -c "[ -d '/data/local/nhsystem/kali-arm64' ]" 2>/dev/null; then
+                su -mm -c "chroot /data/local/nhsystem/kali-arm64 /usr/bin/env -i HOME=/root TERM=xterm-256color PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin USER=root LOGNAME=root DISABLE_AUTO_TITLE=true /bin/zsh -l"
+            else
+                su
+            fi
         else
-            proot-distro login debian 2>/dev/null || true
+            SLUG_NAME="$LINUX_NAME"
+            [ -f "$FUSION_DIR/distro_slug.txt" ] && SLUG_NAME=$(cat "$FUSION_DIR/distro_slug.txt" 2>/dev/null | tr -d '[:space:]')
+            proot-distro login "${SLUG_NAME:-debian}" 2>/dev/null || true
         fi
     fi
 fi

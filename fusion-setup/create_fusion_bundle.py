@@ -8,6 +8,7 @@ if os.path.exists(BUNDLE_DIR):
     shutil.rmtree(BUNDLE_DIR)
 os.makedirs(os.path.join(BUNDLE_DIR, "bin"), exist_ok=True)
 os.makedirs(os.path.join(BUNDLE_DIR, "wallet"), exist_ok=True)
+os.makedirs(os.path.join(BUNDLE_DIR, "configs"), exist_ok=True)
 
 print("--- 1. Menyiapkan Binary & Tools ke bundle/bin ---")
 # Cari termux-ipc
@@ -18,6 +19,22 @@ for candidate in ["/project/termux-launcher/fusion-setup/termux-ipc", "/project/
         break
 if ipc_source:
     shutil.copy2(ipc_source, os.path.join(BUNDLE_DIR, "bin/termux-ipc"))
+
+# Salin termux-ipc-bridge (Bridge untuk Droidspaces IPC)
+bridge_src = "/project/termux-launcher/fusion-setup/termux-ipc-bridge"
+if os.path.exists(bridge_src):
+    shutil.copy2(bridge_src, os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge"))
+    os.chmod(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge"), 0o755)
+    print("✓ Added termux-ipc-bridge to bundle/bin")
+
+# Salin bashnh (Universal Linux Launcher)
+bashnh_src = "/project/termux-launcher/fusion-setup/bashnh"
+if not os.path.exists(bashnh_src):
+    bashnh_src = "/root/project/bashnh"
+if os.path.exists(bashnh_src):
+    shutil.copy2(bashnh_src, os.path.join(BUNDLE_DIR, "bin/bashnh"))
+    os.chmod(os.path.join(BUNDLE_DIR, "bin/bashnh"), 0o755)
+    print("✓ Added universal bashnh to bundle/bin")
 
 # Wrapper browser
 with open(os.path.join(BUNDLE_DIR, "bin/browser"), "w") as f:
@@ -118,20 +135,40 @@ setup_src = "/project/termux-launcher/fusion-setup/setup.sh"
 shutil.copy2(setup_src, os.path.join(BUNDLE_DIR, "setup.sh"))
 os.chmod(os.path.join(BUNDLE_DIR, "setup.sh"), 0o755)
 
-print("--- 2c. Menyiapkan Plugin Zsh (Autosuggestions & Highlighting) ---")
+print("--- 2c. Menyiapkan Plugin Zsh & Powerlevel10k Offline ---")
 zsh_plugin_dir = os.path.join(BUNDLE_DIR, "zsh_plugins")
+zsh_theme_dir = os.path.join(BUNDLE_DIR, "zsh_themes")
 os.makedirs(zsh_plugin_dir, exist_ok=True)
+os.makedirs(zsh_theme_dir, exist_ok=True)
 
-def copy_plugin_tree(src, dst):
+def copy_tree_clean(src, dst):
     if os.path.exists(src):
         if os.path.exists(dst):
             shutil.rmtree(dst)
-        shutil.copytree(src, dst, ignore=shutil.ignore_patterns('.git', '.github', 'spec', 'tests', 'docs', 'images'))
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns('.git', '.github', 'spec', 'tests', 'docs', 'images', '*.zwc'))
 
-copy_plugin_tree("/root/.oh-my-zsh/custom/plugins/zsh-autosuggestions", os.path.join(zsh_plugin_dir, "zsh-autosuggestions"))
-copy_plugin_tree("/root/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting", os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting"))
+# Plugins: Autosuggestions & Syntax Highlighting
+copy_tree_clean("/root/.oh-my-zsh/custom/plugins/zsh-autosuggestions", os.path.join(zsh_plugin_dir, "zsh-autosuggestions"))
+copy_tree_clean("/root/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting", os.path.join(zsh_plugin_dir, "zsh-syntax-highlighting"))
 
-print("✓ Added full zsh plugins to bundle")
+# Theme: Powerlevel10k
+p10k_src = "/root/.oh-my-zsh/custom/themes/powerlevel10k"
+if os.path.exists(p10k_src):
+    copy_tree_clean(p10k_src, os.path.join(zsh_theme_dir, "powerlevel10k"))
+    print("✓ Added Powerlevel10k theme to bundle")
+
+# Configs: .p10k.zsh & zshrc.template
+p10k_conf = "/project/termux-launcher/fusion-setup/p10k.zsh"
+if not os.path.exists(p10k_conf):
+    p10k_conf = "/root/.p10k.zsh"
+if os.path.exists(p10k_conf):
+    shutil.copy2(p10k_conf, os.path.join(BUNDLE_DIR, "configs/.p10k.zsh"))
+
+zshrc_tmpl = "/project/termux-launcher/fusion-setup/zshrc.template"
+if os.path.exists(zshrc_tmpl):
+    shutil.copy2(zshrc_tmpl, os.path.join(BUNDLE_DIR, "configs/.zshrc"))
+
+print("✓ Added full zsh offline plugins, theme & configs to bundle")
 
 print("--- 3. Mengemas menjadi fusion_payload.tar.gz ---")
 with tarfile.open(OUTPUT_TAR, "w:gz") as tar:
@@ -153,8 +190,12 @@ shutil.copy2(OUTPUT_TAR, os.path.join(FUSION_SETUP_DIR, "fusion_payload.tar.gz")
 # 2. Standalone files di assets agar bisa langsung disalin Java saat pertama buka
 shutil.copy2(os.path.join(BUNDLE_DIR, "setup.sh"), os.path.join(ASSETS_DIR, "setup.sh"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc"), os.path.join(ASSETS_DIR, "termux-ipc"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge"), os.path.join(ASSETS_DIR, "termux-ipc-bridge"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/browser"), os.path.join(ASSETS_DIR, "browser"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/x"), os.path.join(ASSETS_DIR, "x"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/bashnh")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/bashnh"), os.path.join(ASSETS_DIR, "bashnh"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet"), os.path.join(ASSETS_DIR, "wallet"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallet.js")):
