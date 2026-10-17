@@ -4748,16 +4748,28 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int horizontalMargin = getDockLayout().horizontalInsetPx;
             targetLeftMargin = horizontalMargin;
             targetRightMargin = horizontalMargin;
+            if (!capsuleSurface && bounds == null) {
+                int containerPaddingBottom = 0;
+                if (parent instanceof View) {
+                    containerPaddingBottom = ((View) parent).getPaddingBottom();
+                }
+                float density = getResources().getDisplayMetrics().density;
+                int bottomOverscan = Math.max(12, Math.round(density * 4f));
+                targetBottomMargin = -(containerPaddingBottom + bottomOverscan);
+                if (targetHeight > 0 && targetHeight != ViewGroup.LayoutParams.MATCH_PARENT) {
+                    targetHeight += containerPaddingBottom + bottomOverscan;
+                }
+            }
         }
         applyDockSurfaceShape(view, capsuleSurface, targetHeight,
             viewId == R.id.accessory_surface_host, viewId == R.id.accessory_surface_host);
         if (params.leftMargin != targetLeftMargin || params.topMargin != targetTop ||
-            params.rightMargin != targetRightMargin || params.bottomMargin != 0 ||
+            params.rightMargin != targetRightMargin || params.bottomMargin != targetBottomMargin ||
             params.width != targetWidth || params.height != targetHeight) {
             params.leftMargin = targetLeftMargin;
             params.topMargin = targetTop;
             params.rightMargin = targetRightMargin;
-            params.bottomMargin = 0;
+            params.bottomMargin = targetBottomMargin;
             params.width = targetWidth;
             params.height = targetHeight;
             view.setLayoutParams(params);
@@ -5992,9 +6004,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) layoutParams;
-        int targetHeight = visible ? resolveDecorNavBarSurfaceHeightPx() : 0;
+        int baseHeight = visible ? resolveDecorNavBarSurfaceHeightPx() : 0;
         int targetHorizontalMargin = 0;
-        int targetBottomMargin = 0;
+        float density = getResources().getDisplayMetrics().density;
+        int bottomOverscanPx = (visible && baseHeight > 0) ? Math.max(12, Math.round(density * 4f)) : 0;
+        int targetHeight = baseHeight + bottomOverscanPx;
+        int targetBottomMargin = -bottomOverscanPx;
         applyDockSurfaceShape(overlay, false, targetHeight, false, false);
         if (params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
             params.height != targetHeight ||
@@ -6132,10 +6147,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         decorView.getLocationOnScreen(mTmpParentLocation);
+        DisplayMetrics realMetrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(realMetrics);
+        int physicalBottom = Math.max(decorHeight, realMetrics.heightPixels);
         int horizontalMargin = 0;
         int bottomMargin = 0;
-        int surfaceHeight = Math.min(Math.max(1, resolveDecorNavBarSurfaceHeightPx()), decorHeight);
-        int bottom = mTmpParentLocation[1] + decorHeight - bottomMargin;
+        int surfaceHeight = Math.min(Math.max(1, resolveDecorNavBarSurfaceHeightPx()), physicalBottom);
+        int bottom = mTmpParentLocation[1] + physicalBottom - bottomMargin;
         // Overscan the crop UPWARD past the strip top (the seam with the dock/keyboard) so the
         // refraction edge band lands above the visible strip; the dock overscans down by the same
         // amount, so their blurred wallpaper meets seamlessly at the seam.
@@ -6204,6 +6222,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         decorView.getLocationOnScreen(decorLoc);
         content.getLocationOnScreen(contentLoc);
         int screenBottom = decorLoc[1] + decorView.getHeight();
+        DisplayMetrics realMetrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(realMetrics);
+        screenBottom = Math.max(screenBottom, realMetrics.heightPixels);
         int contentBottom = contentLoc[1] + content.getHeight();
         int height = screenBottom - contentBottom;
         // Guard against transient layouts that would collapse or overshoot the strip.
@@ -6910,7 +6931,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (backdrop.getLayoutParams() instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams bp = (FrameLayout.LayoutParams) backdrop.getLayoutParams();
             int surfaceHeight = Math.max(1, resolveDecorNavBarSurfaceHeightPx());
-            int targetBackdropHeight = surfaceHeight + Math.max(0, topOverscanPx);
+            float density = getResources().getDisplayMetrics().density;
+            int bottomOverscanPx = Math.max(12, Math.round(density * 4f));
+            int targetBackdropHeight = surfaceHeight + Math.max(0, topOverscanPx) + bottomOverscanPx;
             if (bp.height != targetBackdropHeight || bp.topMargin != -topOverscanPx) {
                 bp.height = targetBackdropHeight;
                 bp.width = FrameLayout.LayoutParams.MATCH_PARENT;
