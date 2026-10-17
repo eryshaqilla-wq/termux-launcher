@@ -168,7 +168,9 @@ public final class LinuxAppIcons {
         if (iconName.isEmpty()) return null;
         if (iconName.startsWith("/")) {
             File file = container == null ? new File(iconName) : container.inside(iconName);
-            return file.isFile() && isSupportedIcon(file) ? file : null;
+            if (file.isFile() && isSupportedIcon(file)) return file;
+            String base = new File(iconName).getName();
+            return find(base, prefix, container);
         }
         String name = stripKnownExtension(iconName);
         if (container != null && container.kind == ProotDistro.Container.Kind.CHROOT) {
@@ -182,7 +184,9 @@ public final class LinuxAppIcons {
                 if (d.isDirectory()) {
                     for (String ext : ICON_EXTENSIONS) {
                         File f = new File(d, name + ext);
-                        if (f.isFile()) return f;
+                        if (f.isFile() && isSupportedIcon(f)) return f;
+                        File fLower = new File(d, name.toLowerCase(Locale.ROOT) + ext);
+                        if (fLower.isFile() && isSupportedIcon(fLower)) return fLower;
                     }
                 }
             }

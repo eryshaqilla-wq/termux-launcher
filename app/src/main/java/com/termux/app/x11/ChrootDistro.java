@@ -327,18 +327,28 @@ public final class ChrootDistro {
         new Thread(() -> {
             try {
                 String cmd = "rm -rf /data/data/com.termux/files/usr/share/applications/chroot/kalifs 2>/dev/null; "
+                    + "icons_dir=\"/data/data/com.termux/files/usr/share/applications/chroot/icons\"; "
+                    + "mkdir -p \"$icons_dir\"; "
                     + "for root in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs /data/local/Droidspaces/Containers/*/rootfs; do "
                     + "[ -L \"$root\" ] && continue; "
                     + "if [ -d \"$root/usr/share/applications\" ]; then "
                     + "cname=$(basename \"$(dirname \"$root\")\"); [ \"$cname\" = \"nhsystem\" ] && cname=$(basename \"$root\"); "
                     + "out=\"/data/data/com.termux/files/usr/share/applications/chroot/$cname\"; "
-                    + "mkdir -p \"$out\" \"/data/data/com.termux/files/usr/share/applications/chroot/icons\"; "
+                    + "mkdir -p \"$out\"; "
                     + "cp -u \"$root\"/usr/share/applications/*.desktop \"$out/\" 2>/dev/null || true; "
-                    + "cp -ruL \"$root\"/usr/share/pixmaps/* \"/data/data/com.termux/files/usr/share/applications/chroot/icons/\" 2>/dev/null || true; "
+                    + "for tdir in \"$root\"/usr/share/icons/hicolor/scalable/apps "
+                    + "\"$root\"/usr/share/icons/hicolor/256x256/apps "
+                    + "\"$root\"/usr/share/icons/hicolor/128x128/apps "
+                    + "\"$root\"/usr/share/icons/hicolor/64x64/apps "
+                    + "\"$root\"/usr/share/icons/hicolor/48x48/apps "
+                    + "\"$root\"/usr/share/icons/Papirus/128x128/apps "
+                    + "\"$root\"/usr/share/pixmaps; do "
+                    + "[ -d \"$tdir\" ] && cp -unL \"$tdir\"/* \"$icons_dir/\" 2>/dev/null || true; "
+                    + "done; "
+                    + "fi; done; "
                     + "uid=$(stat -c '%u' /data/data/com.termux/files/home 2>/dev/null || id -u); "
                     + "chown -R \"$uid:$uid\" \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
-                    + "chmod -R 755 \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
-                    + "fi; done";
+                    + "chmod -R 755 \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; ";
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
                 p.waitFor();
             } catch (Exception ignored) {}

@@ -96,7 +96,9 @@ public final class HiddenAppsPreferencesFragment extends MaterialPreferenceFragm
             List<LauncherAppEntry> apps = new ArrayList<>();
             for (LauncherAppEntry entry : LauncherAppDataProvider.getInstance(appContext)
                     .getAllAppsIncludingHiddenBlocking()) {
-                apps.add(entry);
+                if (com.termux.app.x11.X11Apps.isLinuxApp(entry.appRef)) {
+                    apps.add(entry);
+                }
             }
             apps.sort(Comparator.comparing((LauncherAppEntry entry) -> entry.label,
                 String.CASE_INSENSITIVE_ORDER));
@@ -133,20 +135,10 @@ public final class HiddenAppsPreferencesFragment extends MaterialPreferenceFragm
             row.setPersistent(false);
             row.setTitle(app.label);
 
-            if (com.termux.app.x11.X11Apps.isLinuxApp(app.appRef)) {
-                String cName = com.termux.app.x11.X11Apps.containerOf(com.termux.app.x11.X11Apps.desktopId(app.appRef));
-                row.setSummary(cName.isEmpty() ? "Linux (Host)" : "Linux (" + cName + ")");
-                android.graphics.drawable.Drawable icon = LauncherAppDataProvider.getInstance(appContext).icons().artwork(app);
-                if (icon != null) row.setIcon(icon);
-            } else {
-                row.setSummary("Android");
-                if (app.icon != null) {
-                    row.setIcon(app.icon);
-                } else {
-                    android.graphics.drawable.Drawable icon = LauncherAppDataProvider.getInstance(appContext).icons().artwork(app);
-                    if (icon != null) row.setIcon(icon);
-                }
-            }
+            String cName = com.termux.app.x11.X11Apps.containerOf(com.termux.app.x11.X11Apps.desktopId(app.appRef));
+            row.setSummary(cName.isEmpty() ? "Linux (Host)" : "Linux (" + cName + ")");
+            android.graphics.drawable.Drawable icon = LauncherAppDataProvider.getInstance(appContext).icons().artwork(app);
+            if (icon != null) row.setIcon(icon);
 
             row.setChecked(!hiddenApps.isHidden(stableId));
             row.setOnPreferenceChangeListener((preference, newValue) -> {
