@@ -263,16 +263,16 @@ public class GuiAppsSetupTest {
 
     // --- which routes an edition offers -------------------------------------------------------
 
-    @Test public void termuxOffersBothRoutes() {
-        assertEquals(Arrays.asList(Route.X11_REPO, Route.DISTRO),
+    @Test public void termuxOffersRoutes() {
+        assertEquals(Arrays.asList(Route.X11_REPO, Route.DISTRO, Route.CHROOT),
             GuiAppsSetup.routesFor(TourEdition.TERMUX));
         assertEquals(Route.X11_REPO, GuiAppsSetup.defaultRoute(TourEdition.TERMUX));
     }
 
-    @Test public void vajOffersBothRoutesLikeTermux() {
+    @Test public void vajOffersRoutesLikeTermux() {
         // Reversed 2026-09-21: repo.pathayam.xyz now carries xkeyboard-config and the x11 apps,
         // so VAJ's X11 route works there too.
-        assertEquals(Arrays.asList(Route.X11_REPO, Route.DISTRO),
+        assertEquals(Arrays.asList(Route.X11_REPO, Route.DISTRO, Route.CHROOT),
             GuiAppsSetup.routesFor(TourEdition.VAJ));
         assertEquals(Route.X11_REPO, GuiAppsSetup.defaultRoute(TourEdition.VAJ));
     }
@@ -324,6 +324,7 @@ public class GuiAppsSetupTest {
         assertEquals(Route.X11_REPO, Route.of(null));
         assertEquals(Route.X11_REPO, Route.of("nonsense"));
         assertEquals(Route.DISTRO, Route.of("distro"));
+        assertEquals(Route.CHROOT, Route.of("chroot"));
         assertEquals(Distro.DEBIAN, Distro.of(null));
         assertEquals(Distro.DEBIAN, Distro.of("nonsense"));
         assertEquals(Distro.ARCH, Distro.of("arch"));
