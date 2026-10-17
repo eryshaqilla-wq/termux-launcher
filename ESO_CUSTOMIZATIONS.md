@@ -9,8 +9,9 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 - **Branch Kerja Utama**: `eso-launcher` (dan disinkronkan ke `main` untuk trigger CI build nightly).
 - **Upstream Original**: `https://github.com/PickleHik3/termux-launcher`
 - **Origin Fork**: `https://github.com/eryshaqilla-wq/termux-launcher`
-- **Lingkungan Kerja**: Linux / Termux zsh (`~/.zshrc`), folder kerja `/project` (symlink ke `/root/project`).
-- **Target Device Testing**: `127.0.0.1:5555` (Android 13 / arm64-v8a).
+- **Target Device Testing**:
+  - `127.0.0.1:5555` (Infinix Note 30 VIP / Android 13 / arm64-v8a / 480dpi / SoC MediaTek Dimensity 1200).
+  - `10.92.4.57:41383` (Poco M3 / Android 13 / arm64-v8a / 440dpi).
 
 ---
 
@@ -186,6 +187,105 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
        # Menghasilkan port 4713 LISTEN dan koneksi ESTABLISHED dari plugin panel XFCE (libpulseaudio-plugin.so)
        ```
 
+
+---
+
+### G. Integrasi BSPWM Window Manager & Touch Session Support
+- **Konteks & Kebutuhan**:
+  - Tuan Eso menyukai Window Manager tiling `bspwm` di Kali NetHunter dan Droidspaces untuk navigasi layar yang cepat dan efisien.
+  - Namun, bspwm membutuhkan hotkey daemon `sxhkd`, status panel/bar (seperti polybar atau lemonbar), dan konfigurasi touch pointer agar ramah penggunaan layar sentuh Android.
+- **Solusi & Arsitektur**:
+  1. **Deteksi & Wrapper `bspwm-session`**:
+     - `ChrootDistro.java` mengutamakan `bspwm-session` di atas biner mentah `bspwm` jika wrapper tersebut tersedia di `<rootfs>/usr/bin/bspwm-session` atau rute eksekusi container.
+     - Script wrapper menginisialisasi `sxhkd &`, menyiapkan environment touch pointer, lalu mengeksekusi `exec bspwm`.
+  2. **Emergency Stop Multi-Proses (`ChrootDistro.killDesktopEnvironmentAsync`)**:
+     - Memasukkan `bspwm` dan `sxhkd` ke dalam daftar target proses killer, sehingga saat tombol `[×]` di status bar canvas ditekan, proses tiling WM beserta daemon keyboard shortcut-nya dihentikan serempak tanpa menyisakan background zombie processes.
+
+---
+
+### H. Integrasi Penuh Droidspaces Container ke Embedded Display (`DISPLAY=:0`)
+- **Konteks & Kebutuhan**:
+  - Droidspaces secara default sering menggunakan server X terpisah atau VNC, yang menyulitkan integrasi langsung dengan panel display embedded di Canvas Kanan launcher.
+- **Solusi & Arsitektur**:
+  1. **Direct Routing ke Display Host**:
+     - Mengaitkan eksekusi container Droidspaces langsung ke embedded X11 server Termux (`DISPLAY=:0`) melalui `droidspaces enter -- <command>`.
+     - Memastikan socket X11 `/data/data/com.termux/files/usr/tmp/.X11-unix` dan soket `.virgl` ter-forward secara transparan ke dalam container Droidspaces.
+  2. **Pencegahan Deadlock di `X11CliInstaller`**:
+     - Memperbaiki validasi perintah foreign route pada `X11CliInstaller` agar tidak memicu thread blocking / deadlock saat pengujian unit test maupun eksekusi startup desktop Droidspaces.
+  3. **Multi-DE Auto-Start di Droidspaces**:
+     - Mendukung peluncuran seluruh Desktop Environment yang ter-install di Droidspaces (XFCE4, GNOME, Openbox, MATE, LXQt, dll.) secara modular melalui runner `dbus-run-session`.
+
+---
+
+### I. PulseAudio TCP Server & ALSA/Pulse Bridge di Seluruh Container
+- **Konteks & Kebutuhan**:
+  - Berbagai aplikasi multimedia di dalam Kali NetHunter, Droidspaces, dan PRoot membutuhkan jalur audio yang stabil tanpa latency atau konfigurasi manual per sesi.
+- **Solusi & Arsitektur**:
+  1. **Daemon Auto-Start**:
+     - Menjamin daemon PulseAudio Termux host selalu aktif di TCP port `4713` (`127.0.0.1:4713`) dengan flag `--exit-idle-time=-1`.
+  2. **ALSA to PulseAudio Bridge**:
+     - Mengonfigurasi `/etc/asound.conf` di dalam chroot dan distro PRoot agar seluruh library audio ALSA otomatis me-redirect stream ke PulseAudio host (`pcm.!default { type pulse; server "127.0.0.1:4713"; }`).
+  3. **Penyempurnaan Payload Setup Termux Fusion**:
+     - Memperbarui `fusion_payload.tar.gz` dan `setup.sh` di folder assets agar bridge audio terpasang permanen pada instalasi baru.
+
+---
+
+### J. Integrasi Aplikasi Chroot (NetHunter & Droidspaces) di Hidden Apps, App Drawer, & CLI Helper
+- **Konteks & Kebutuhan**:
+  - Aplikasi Linux GUI yang ter-install di dalam chroot NetHunter (`/data/local/nhsystem/kali-arm64`) maupun Droidspaces awalnya tidak muncul di App Drawer Eso:Launcher dan menu *Hidden Apps*, karena launcher hanya memindai prefix internal Termux dan container PRoot.
+  - Tuan Eso menginginkan agar aplikasi chroot muncul di App Drawer, dapat disembunyikan/ditampilkan via menu **Settings -> Display & Linux Apps -> Hidden Apps**, serta dapat dikelola lewat CLI.
+- **Solusi & Arsitektur**:
+  1. **Ekspansi Direktori Desktop & Ikon (`ProotDistro.java`, `LinuxAppIcons.java`)**:
+     - Menambahkan jalur jembatan chroot ke katalog pemindaian:
+       - `.desktop` files: `$PREFIX/share/applications/chroot/<container>/` dan `$PREFIX/share/applications/chroot/`
+       - Icons: `$PREFIX/share/applications/chroot/<container>/icons/`, `$PREFIX/share/applications/chroot/icons/`, dan `$PREFIX/share/pixmaps/`.
+  2. **Validasi Biner Chroot (`LinuxAppCatalog.java`)**:
+     - Biner chroot berada di dalam filesystem rootfs yang terisolasi dan dipanggil melalui `su -mm -c "chroot ..."`. Oleh karena itu, pengecekan `executableExists()` untuk `Kind.CHROOT` selalu mengembalikan `true`.
+  3. **Jembatan Sinkronisasi Otomatis (`ChrootDistro.syncChrootBridge`)**:
+     - Menjalankan thread background otomatis saat katalog aplikasi dibaca:
+       - Memindai `/data/local/nhsystem/kali-arm64`, `/data/local/nhsystem/kalifs`, dan `/data/local/Droidspaces/Containers/*/rootfs`.
+       - Menyalin `.desktop` dan pixmaps ke direktori jembatan Termux dengan kepemilikan UID Termux yang valid.
+  4. **Dukungan Menu *Hidden Apps***:
+     - Aplikasi chroot kini sepenuhnya terindeks di `HiddenAppsFragment` sehingga Tuan Eso dapat memilih aplikasi chroot apa saja yang ingin ditampilkan di App Drawer/Dock.
+  5. **CLI Helper `chroot-apps`**:
+     - Dibuatkan tool shell `/data/data/com.termux/files/usr/bin/chroot-apps` di perangkat:
+       - `chroot-apps list` : Menampilkan daftar aplikasi chroot yang terdeteksi.
+       - `chroot-apps sync` : Menyinkronkan ulang file `.desktop` dan ikon dari rootfs chroot.
+       - `chroot-apps hide <app>` / `show <app>` : Mengatur visibilitas aplikasi langsung dari terminal zsh.
+
+---
+
+### K. Rekayasa Touchpad Mode Mouse Universal & Anti-Overlap Seukuran `touch.png`
+- **Konteks & Kebutuhan**:
+  - **Bypass Mouse Mode**: Tuan Eso menginginkan fitur Mouse Mode (Touchpad virtual) dapat digunakan kapan saja, baik saat berada di terminal biasa maupun di canvas X11, tanpa harus membuka display Linux terlebih dahulu.
+  - **Masalah Layout (Overlap & Kolom Terlalu Kecil)**:
+    - Saat mouse mode aktif, kolom touchpad yang muncul terlalu kecil / pendek dan menimpa/menutupi baris **Extra Keys** serta **Dock icon aplikasi**.
+    - Tuan Eso menyediakan gambar referensi layout yang benar: [`/project/touch.png`](file:///root/project/touch.png), di mana touchpad berukuran pas di bagian bawah layar (~240dp), sedangkan baris Extra Keys (2 baris), A-Z bar, dan Dock icon duduk rapi di atas touchpad tanpa saling menimpa.
+- **Akar Masalah**:
+  1. Method `isDisplayTouchpadFrame()` di upstream dikunci ke kondisi `isDisplayPageShowing() && isEmbeddedDisplayRunning() && mInAppKeyboard != null`.
+  2. Method `isInAppKeyboardShown()` hanya memeriksa `mInAppKeyboard.isVisible()`. Saat keyboard bawaan sedang tidak aktif (misal user menggunakan keyboard sistem Gboard atau keyboard ditutup), `isInAppKeyboardShown()` mengembalikan `false`.
+  3. Akibatnya, `buildChromeSpec().keyboardHeight` bernilai `0px`, dan `accessory_stack_container` hanya diberi tinggi pas-pasan sebesar baris dock (~90dp).
+  4. Touchpad berukuran 240dp yang dipasang ke dalam kontainer 90dp tersebut akhirnya terpotong ("kolom kecil") dan tumpah menutupi baris Extra Keys serta Dock di atasnya.
+- **Solusi & Arsitektur**:
+  1. **Bypass Universal (`TermuxActivity.java`)**:
+     - `isDisplayTouchpadFrame()` disederhanakan agar aktif kapan saja mode mouse dinyalakan (`mFrameContent.isMouseMode() && findViewById(inapp_keyboard_view_host) != null`).
+     - Menyembunyikan keyboard sistem Android secara otomatis saat mode mouse aktif.
+  2. **Pengakuan Touchpad dalam Stack Keyboard (`isInAppKeyboardShown`)**:
+     - Menambahkan method pembantu `isTouchpadShown()` (memeriksa `mDisplayTouchpad.getVisibility() == VISIBLE` atau intent mode PAD).
+     - Menjadikan `isTouchpadShown()` sebagai kondisi valid di `isInAppKeyboardShown()`, sehingga sistem mengenali touchpad sebagai pengisi slot keyboard penuh.
+  3. **Pemicu Geometri Otomatis (`applyDisplayFrameDecision` & `syncDisplayTouchpad`)**:
+     - Setiap kali mode mouse diaktifkan atau dinonaktifkan:
+       - Memanggil `mKeyboardGeometry.markHeightDirty()`.
+       - Memanggil `setTerminalToolbarHeight(false)`.
+       - Memicu request layout instan via `mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, ResizePolicy.NOW)`.
+       - Meminta render sinkronisasi chrome via `mChrome.requestSync(SCOPE_ACCESSORY_RENDER)`.
+  4. **Ekspansi Vertikal `accessory_stack_container`**:
+     - Dengan `keyboardHeight` yang terhitung benar (~240dp), `accessory_stack_container` otomatis mengembang setinggi `dockContentHeight + keyboardHeight` (~330dp).
+     - Karena `accessory_row_stack` (Extra Keys + Dock) memiliki aturan `android:layout_above="@id/accessory_keyboard_column"`, baris Extra Keys dan Dock secara mulus terangkat ke atas tepat di atas touchpad.
+     - Hasil tata letak 100% presisi dan identik dengan gambar acuan [`touch.png`](file:///root/project/touch.png).
+  5. **Fallback Ukur Stabil (`KeyboardGeometryChoreographer.java`)**:
+     - Menambahkan proteksi fallback `240dp * density` pada `measureHeightPx()` dan `desiredHeightPx()` saat `keyboardContainer` berstatus `VISIBLE` meskipun view keyboard standar belum terpasang.
+
 ---
 
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)
@@ -230,9 +330,10 @@ git push origin eso-launcher main --force-with-lease
 - Push ke branch `main` atau `eso-launcher` otomatis men-trigger workflow `.github/workflows/debug_build.yml` ("Build nightly").
 - Token akses GitHub: Menggunakan token GitHub pengguna yang tersimpan di remote origin / environment secret.
 
-### Script Otomatisasi Deploy
-Script monitoring dan deployment otomatis tersedia di direktori scratch:
-`/root/.gemini/antigravity-cli/brain/442dbc86-62d0-4dee-ac7a-db4a0a44c080/scratch/deploy.sh`
+### Script Otomatisasi Deploy Multi-Device
+Script monitoring dan deployment otomatis tersedia di `/project/monitor_build.py` yang secara otomatis memantau workflow CI GitHub Actions, mengunduh artifact APK `arm64-v8a`, dan memasangnya ke seluruh target perangkat aktif:
+- **Infinix**: `127.0.0.1:5555`
+- **Poco M3**: `10.92.4.57:41383`
 
 Langkah manual jika script perlu dijalankan ulang:
 1. Pantau status run via GitHub API / CLI:
@@ -243,11 +344,13 @@ Langkah manual jika script perlu dijalankan ulang:
 3. Pasang ke HP via ADB:
    ```bash
    adb -s 127.0.0.1:5555 install -r <nama-file-apk>.apk
+   adb -s 10.92.4.57:41383 install -r <nama-file-apk>.apk
    adb -s 127.0.0.1:5555 shell am force-stop com.termux
    adb -s 127.0.0.1:5555 shell am start -n com.termux/com.termux.app.TermuxActivity
    ```
-4. Verifikasi piksel bawah:
-   Pastikan baris `y = 2390..2399` konsisten tertutup latar gelap kaca dock dan tidak tembus warna wallpaper terang.
+4. Verifikasi piksel bawah & Touchpad:
+   - Pastikan baris `y = 2390..2399` konsisten tertutup latar gelap kaca dock dan tidak tembus warna wallpaper terang.
+   - Aktifkan Mouse Mode dan pastikan touchpad berukuran penuh (~240dp) dengan Extra Keys dan Dock berada di atasnya persis seperti `touch.png`.
 
 ---
 
@@ -255,3 +358,6 @@ Langkah manual jika script perlu dijalankan ulang:
 1. **Jangan aktifkan animasi tilt/wobble per frame pada touch event**: Tuan Eso menyukai terminal yang responsif dan bebas lag.
 2. **Jangan hapus penanganan overscan di `applyAccessoryLayerBounds`**: Jika `targetBottomMargin` dikembalikan ke `0`, celah wallpaper 8 piksel di dasar layar akan muncul kembali.
 3. **Posisikan elemen visual tetap di dalam `terminal_root_container` / `accessory_stack_container`**: Jangan mengubah tata letak tombol keyboard / extra keys ke luar view hierarchy yang sudah rapi.
+4. **Pertahankan `isTouchpadShown()` di dalam `isInAppKeyboardShown()`**: Ini adalah kunci agar `accessory_stack_container` mengembang dan tidak menimpa Extra Keys serta Dock saat mouse mode aktif.
+5. **Pertahankan fallback 240dp di `KeyboardGeometryChoreographer`**: Mencegah layout feedback loop pada touchpad saat mode mouse dibuka tanpa in-app keyboard terpasang.
+6. **Pertahankan jembatan Chroot `$PREFIX/share/applications/chroot`**: Direktori ini menghubungkan katalog `.desktop` NetHunter/Droidspaces dengan sistem Android launcher.
