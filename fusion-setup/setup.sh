@@ -13,8 +13,11 @@ GRAY='\033[38;2;98;114;164m'
 RESET='\033[0m'
 BOLD='\033[1m'
 
-PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
-HOME="${HOME:-/data/data/com.termux/files/home}"
+export PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+export PATH="$PREFIX/bin:$PREFIX/bin/applets:$PATH"
+if [ -z "$HOME" ] || [ "$HOME" = "/data" ] || [ "$HOME" = "/" ]; then
+    export HOME="/data/data/com.termux/files/home"
+fi
 FUSION_HOME="$HOME/.fusion"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -96,7 +99,7 @@ try {
     return 1
 }
 
-# Cari payload (baik terenkripsi .enc maupun mentah .tar.gz)
+# Cari payload terenkripsi (.enc) di prioritas utama
 PAYLOAD_ENC=""
 PAYLOAD_TAR=""
 
@@ -107,24 +110,28 @@ for loc in "$SCRIPT_DIR" "$HOME" "$HOME/.fusion"; do
     elif [ -f "$loc/fusion_payload.enc" ]; then
         PAYLOAD_ENC="$loc/fusion_payload.enc"
         break
-    elif [ -f "$loc/fusion_payload.tar.gz" ]; then
-        PAYLOAD_TAR="$loc/fusion_payload.tar.gz"
-        break
     fi
 done
 
-if [ -z "$PAYLOAD_ENC" ] && [ -z "$PAYLOAD_TAR" ]; then
+# Jika belum ada di disk, ekstrak .enc langsung dari aset APK terpasang
+if [ -z "$PAYLOAD_ENC" ]; then
     BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
     if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ]; then
         if command -v unzip >/dev/null 2>&1; then
             unzip -p "$BASE_APK" assets/fusion/fusion_payload.tar.gz.enc > "$HOME/fusion_payload.tar.gz.enc" 2>/dev/null || true
             [ -s "$HOME/fusion_payload.tar.gz.enc" ] && PAYLOAD_ENC="$HOME/fusion_payload.tar.gz.enc"
-            if [ -z "$PAYLOAD_ENC" ]; then
-                unzip -p "$BASE_APK" assets/fusion/fusion_payload.tar.gz > "$HOME/fusion_payload.tar.gz" 2>/dev/null || true
-                [ -s "$HOME/fusion_payload.tar.gz" ] && PAYLOAD_TAR="$HOME/fusion_payload.tar.gz"
-            fi
         fi
     fi
+fi
+
+# Fallback hanya jika .enc benar-benar tidak ada di mana pun
+if [ -z "$PAYLOAD_ENC" ]; then
+    for loc in "$SCRIPT_DIR" "$HOME" "$HOME/.fusion"; do
+        if [ -f "$loc/fusion_payload.tar.gz" ]; then
+            PAYLOAD_TAR="$loc/fusion_payload.tar.gz"
+            break
+        fi
+    done
 fi
 
 # Jika payload terenkripsi ditemukan, minta PIN akses
