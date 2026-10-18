@@ -358,8 +358,54 @@ else
     echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, npm, python, git, curl)${RESET}"
 fi
 
+# Cek & Pasang paket GUI/X11 & Audio di Native Termux (bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl)
+GUI_PKGS_OK=1
+for gpkg in bspwm sxhkd rofi polybar picom feh pulseaudio; do
+    if ! command -v "$gpkg" >/dev/null 2>&1; then
+        GUI_PKGS_OK=0
+        break
+    fi
+done
+if [ ! -f "$PREFIX/bin/virgl_test_server_android" ]; then
+    GUI_PKGS_OK=0
+fi
+
+if [ $GUI_PKGS_OK -eq 0 ]; then
+    spin "Memasang x11-repo & dependensi bspwm/audio di Termux..." bash -c '
+        pkg install -y x11-repo 2>/dev/null || true
+        pkg install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android 2>/dev/null || true
+    '
+    echo -e "  ${GREEN}✔ bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio & virgl terpasang di Termux${RESET}"
+else
+    echo -e "  ${GREEN}✔ Paket GUI & Audio Native Termux sudah lengkap (bspwm, pulseaudio, virgl)${RESET}"
+fi
+
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
     spin "Mengekstrak aset payload tarball offline..." tar -xzf "$PAYLOAD_TAR" -C "$FUSION_HOME" || true
+fi
+
+# Pasang Tema Eso (bspwm, polybar, rofi, picom, dunst, gtk-3.0 & wallpaper) di Termux
+THEME_SRC=""
+if [ -d "$FUSION_HOME/theme" ]; then
+    THEME_SRC="$FUSION_HOME/theme"
+elif [ -d "$SCRIPT_DIR/theme" ]; then
+    THEME_SRC="$SCRIPT_DIR/theme"
+fi
+
+if [ -n "$THEME_SRC" ]; then
+    mkdir -p "$HOME/.config" "$HOME/Pictures/wallpapers"
+    if [ -d "$THEME_SRC/.config" ]; then
+        cp -rf "$THEME_SRC/.config/"* "$HOME/.config/" 2>/dev/null || true
+    fi
+    if [ -d "$THEME_SRC/Pictures/wallpapers" ]; then
+        cp -rf "$THEME_SRC/Pictures/wallpapers/"* "$HOME/Pictures/wallpapers/" 2>/dev/null || true
+    fi
+    if [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
+        ln -sf "../../Pictures/wallpapers/evening-sky.png" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
+    fi
+    chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/polybar/"*.sh 2>/dev/null || true
+    chmod +x "$HOME/.config/bspwm/bspwmrc" "$HOME/.config/polybar/launch.sh" 2>/dev/null || true
+    echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) terpasang di Termux ($HOME/.config)${RESET}"
 fi
 
 # Pasang Zsh Plugins & Theme Powerlevel10k Offline
@@ -431,6 +477,20 @@ cat << 'EOF' > "$PREFIX/bin/browser"
 exec termux-ipc webview "$@"
 EOF
 chmod 755 "$PREFIX/bin/browser"
+
+# Wrapper Native bspwm
+cat << 'EOF_BSPWM' > "$PREFIX/bin/termux-bspwm"
+#!/data/data/com.termux/files/usr/bin/bash
+# Native BSPWM Desktop for Termux Launcher
+export DISPLAY="${DISPLAY:-:0}"
+for _w in $(seq 1 50); do [ -S /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ] && break; sleep 0.1; done
+pulseaudio --start --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1;172.28.0.0/16 auth-anonymous=1" --exit-idle-time=-1 >/dev/null 2>&1 || true
+export PULSE_SERVER=tcp:127.0.0.1:4713
+pkill -x sxhkd 2>/dev/null || true
+sxhkd &
+exec bspwm
+EOF_BSPWM
+chmod 755 "$PREFIX/bin/termux-bspwm"
 
 # Wrapper x (otomasi radar webview)
 cat << 'EOF_X' > "$PREFIX/bin/x"
@@ -560,11 +620,42 @@ EOF_PALSA
                 chmod 644 "$CONTAINER_ROOTFS/etc/asound.conf" 2>/dev/null || true
             fi
 
+            # Pasang bspwm, audio & tools di PRoot Distro
+            if command -v proot-distro >/dev/null 2>&1; then
+                spin "Memasang bspwm, audio & tools di PRoot $DISPLAY_NAME..." proot-distro login "$DISTRO_NAME" -- /bin/sh -c '
+                    export DEBIAN_FRONTEND=noninteractive
+                    apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                '
+            fi
+            if [ -n "$THEME_SRC" ]; then
+                mkdir -p "$CONTAINER_ROOTFS/root/.config" "$CONTAINER_ROOTFS/root/Pictures/wallpapers"
+                [ -d "$THEME_SRC/.config" ] && cp -rf "$THEME_SRC/.config/"* "$CONTAINER_ROOTFS/root/.config/" 2>/dev/null || true
+                [ -d "$THEME_SRC/Pictures/wallpapers" ] && cp -rf "$THEME_SRC/Pictures/wallpapers/"* "$CONTAINER_ROOTFS/root/Pictures/wallpapers/" 2>/dev/null || true
+                ln -sf "../../Pictures/wallpapers/evening-sky.png" "$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper" 2>/dev/null || true
+                chmod +x "$CONTAINER_ROOTFS/root/.config/bspwm/"*.sh "$CONTAINER_ROOTFS/root/.config/polybar/"*.sh 2>/dev/null || true
+                chmod +x "$CONTAINER_ROOTFS/root/.config/bspwm/bspwmrc" "$CONTAINER_ROOTFS/root/.config/polybar/launch.sh" 2>/dev/null || true
+                echo -e "  ${GREEN}✔ Tema Eso & wallpaper disinkronkan ke PRoot $DISPLAY_NAME (/root/.config/)${RESET}"
+            fi
+
             echo -e "  ${GREEN}✔ Shims & Audio Bridge terinjeksi ke $DISPLAY_NAME${RESET}"
         fi
     else
-        # Root Mode: Siapkan shims langsung di rootfs container jika path diketahui
+        # Root Mode: Siapkan bspwm, virgl, audio, shims & tema langsung di rootfs container jika path diketahui
         if [ -n "$CONTAINER_ROOTFS" ] && su -c "[ -d '$CONTAINER_ROOTFS' ]" 2>/dev/null; then
+            spin "Memasang bspwm, audio & virgl driver di $CUSTOM_LINUX_NAME..." su -c "
+                if [ -x '/data/local/Droidspaces/bin/droidspaces' ] && [ -n '$CUSTOM_LINUX_NAME' ] && [ '$CUSTOM_LINUX_NAME' != 'NetHunter' ]; then
+                    /data/local/Droidspaces/bin/droidspaces --name='$CUSTOM_LINUX_NAME' run /bin/sh -c '
+                        export DEBIAN_FRONTEND=noninteractive
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                    ' >/dev/null 2>&1 || true
+                else
+                    chroot '$CONTAINER_ROOTFS' /bin/sh -c '
+                        export DEBIAN_FRONTEND=noninteractive
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                    ' >/dev/null 2>&1 || true
+                fi
+            "
+
             spin "Menginjeksi shims langsung ke rootfs $CUSTOM_LINUX_NAME..." su -c "
                 mkdir -p '$CONTAINER_ROOTFS/usr/local/bin'
                 (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
@@ -582,6 +673,19 @@ EOF_PALSA
                     chmod 644 '$CONTAINER_ROOTFS/etc/asound.conf' 2>/dev/null || true
                 fi
             "
+
+            # Salin Tema Eso & Wallpapers ke Container Root (/root/.config/ dan /root/Pictures/wallpapers/)
+            if [ -n "$THEME_SRC" ]; then
+                spin "Menyalin tema Eso & wallpaper ke rootfs $CUSTOM_LINUX_NAME..." su -c "
+                    mkdir -p '$CONTAINER_ROOTFS/root/.config' '$CONTAINER_ROOTFS/root/Pictures/wallpapers'
+                    [ -d '$THEME_SRC/.config' ] && cp -rf '$THEME_SRC/.config/'* '$CONTAINER_ROOTFS/root/.config/' 2>/dev/null || true
+                    [ -d '$THEME_SRC/Pictures/wallpapers' ] && cp -rf '$THEME_SRC/Pictures/wallpapers/'* '$CONTAINER_ROOTFS/root/Pictures/wallpapers/' 2>/dev/null || true
+                    ln -sf '../../Pictures/wallpapers/evening-sky.png' '$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper' 2>/dev/null || true
+                    chmod +x '$CONTAINER_ROOTFS/root/.config/bspwm/'*.sh '$CONTAINER_ROOTFS/root/.config/polybar/'*.sh 2>/dev/null || true
+                    chmod +x '$CONTAINER_ROOTFS/root/.config/bspwm/bspwmrc' '$CONTAINER_ROOTFS/root/.config/polybar/launch.sh' 2>/dev/null || true
+                "
+                echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) disinkronkan ke $CUSTOM_LINUX_NAME (/root/.config/)${RESET}"
+            fi
             echo -e "  ${GREEN}✔ Shims & Audio Bridge terinjeksi langsung ke $CUSTOM_LINUX_NAME (/usr/local/bin/)${RESET}"
         fi
 
@@ -746,6 +850,7 @@ alias ipc="termux-ipc"
 alias copilot="agy-copilot"
 alias bashnh="bashnh"
 alias login="login"
+alias bspwm="termux-bspwm"
 '
 
 if [ $USE_ZSH -eq 1 ]; then
@@ -942,7 +1047,7 @@ if ! grep -q "Project Fusion Dynamic Environment & Aliases" "$BASHRC_FILE" 2>/de
     echo "$ALIAS_SNIPPET" >> "$BASHRC_FILE"
 fi
 
-echo -e "  ${GREEN}✔ Alias shell (browser, ipc, wallet, copilot, x, c, python, bashnh, login) terpasang${RESET}"
+echo -e "  ${GREEN}✔ Alias shell (browser, ipc, wallet, copilot, x, c, python, bashnh, login, bspwm) terpasang${RESET}"
 
 echo -e "\n${GREEN}${BOLD}✔ SETUP SELESAI DENGAN SUKSES!${RESET}"
 echo -e "${GRAY}──────────────────────────────${RESET}"
@@ -950,3 +1055,4 @@ echo -e "Ketik ${CYAN}browser https://google.com${RESET} untuk membuka WebView."
 echo -e "Ketik ${CYAN}x${RESET} untuk menjalankan X Radar WebView."
 echo -e "Ketik ${CYAN}login${RESET} untuk menu startup."
 echo -e "Ketik ${CYAN}bashnh${RESET} untuk langsung masuk ke container Linux aktif."
+echo -e "Ketik ${CYAN}bspwm${RESET} untuk menjalankan Touch BSPWM Desktop di Termux."

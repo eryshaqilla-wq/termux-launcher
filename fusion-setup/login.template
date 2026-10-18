@@ -73,8 +73,6 @@ ipc_send() {
 
 # JIKA TANPA LINUX: Langsung luncurkan Termux Shell secara cepat & bersih
 if [ "$HAS_LINUX" = "0" ]; then
-    ipc_send MOUSE_ON
-    ipc_send KEYBOARD_ENABLE
     printf "\033]0;home\007"
     printf "\033]2;home\007"
     stty sane 2>/dev/null
@@ -115,16 +113,13 @@ while true; do
 
     selected=${selected:-1}
 
-    trap 'ipc_send MOUSE_ON; ipc_send KEYBOARD_ENABLE; printf "\e[?1000l\e[?1006l\e[?25h\033]0;home\007"; stty sane 2>/dev/null; clear; exit' INT TERM
+    trap 'printf "\e[?1000l\e[?1006l\e[?25h\033]0;home\007"; stty sane 2>/dev/null; clear; exit' INT TERM
     printf "\033]0;home\007"
     printf "\033]2;home\007"
     stty sane 2>/dev/null
     stty -echo 2>/dev/null
     printf "\e[?1000l\e[?1006l\e[?25l"
     while read -rsn1 -t 0.05 _discard; do :; done
-
-    # IPC Deferred Lock
-    (sleep 0.25; ipc_send MOUSE_OFF; ipc_send KEYBOARD_HIDE) &
 
     # Toast Notifikasi RAM
     if [ -n "$CLEAN_TOAST" ]; then
@@ -197,8 +192,6 @@ while true; do
 
         stty sane 2>/dev/null
         stty -echo 2>/dev/null
-        ipc_send MOUSE_OFF
-        ipc_send KEYBOARD_HIDE
         printf "\e[?1000l\e[?1006l\e[?25l"
         while read -rsn1 -t 0.05 _discard; do :; done
 
@@ -211,8 +204,6 @@ while true; do
 done
 
 # Kembalikan terminal normal
-ipc_send MOUSE_ON
-ipc_send KEYBOARD_ENABLE
 printf "\e[?1000l\e[?1006l"
 stty sane 2>/dev/null
 stty echo 2>/dev/null

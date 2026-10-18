@@ -1,0 +1,5 @@
+XfdesktopIconView.view {
+    -XfdesktopIconView-cell-text-width-proportion: 2.5; 
+    -XfdesktopIconView-cell-padding: 2;
+    -XfdesktopIconView-cell-spacing: 2;
+}

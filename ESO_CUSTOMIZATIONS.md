@@ -458,6 +458,27 @@ git push origin eso-launcher main --force-with-lease
 
 ---
 
+### K. Bundel Setup Mandiri (Eso Setup Bundle & Touch BSPWM Theme Suite)
+- **Konteks & Kebutuhan**:
+  - Tuan Eso menginginkan agar saat menjalankan `./setup` di perangkat baru yang di-root maupun non-root, seluruh ekosistem langsung siap pakai (*out-of-the-box*):
+    1. Otomatis memasang `bspwm`, `sxhkd`, `rofi`, `polybar`, `picom`, `feh`, `pulseaudio`, dan `virgl` di Termux Native.
+    2. Jika perangkat memiliki akses Root, otomatis memasang dependensi tersebut dan driver akselerasi 3D ke dalam rootfs container (NetHunter Chroot / Droidspaces Ubuntu). Jika non-root, terpasang ke Termux Native (dan PRoot jika dipilih).
+    3. Memasukkan tema lengkap Touch BSPWM milik Tuan Eso (`~/.config/bspwm`, `polybar`, `rofi`, `picom`, `dunst`, `gtk-3.0`) dan koleksi wallpaper (`~/Pictures/wallpapers/`) ke dalam arsip payload.
+    4. Mengintegrasikan `termux.properties` aktif milik Tuan Eso dari `$HOME/.termux/` ke dalam bundle.
+    5. Membersihkan toggle `MOUSE_ON`/`MOUSE_OFF` dan `KEYBOARD_ENABLE`/`KEYBOARD_HIDE` dari `login.template` agar keyboard dan mouse tidak terkunci/berkedip saat menu startup login muncul.
+- **Solusi & Arsitektur**:
+  1. **Pembuatan Payload Bundle (`create_fusion_bundle.py`)**:
+     - Membaca dan mengemas seluruh direktori tema Touch BSPWM (`fusion-setup/theme/`) ke dalam `fusion_payload.tar.gz` (~14 MB).
+     - Menyinkronkan seluruh aset payload dan script ke direktori Android assets (`app/src/main/assets/fusion/`).
+  2. **Penyempurnaan `setup.sh` (Multi-Destinasi)**:
+     - Tahap 4: Memasang `x11-repo`, `bspwm`, `sxhkd`, `rofi`, `polybar`, `picom`, `feh`, `pulseaudio`, `virglrenderer-android`, mengekstrak tema ke `$HOME/.config/` & `$HOME/Pictures/wallpapers/`, serta membuat script wrapper `termux-bspwm`.
+     - Tahap 5: Jika Root, menginjeksi paket GUI/Audio ke rootfs container (`$CONTAINER_ROOTFS`), menyalin konfigurasi tema ke `/root/.config/` dan `/root/Pictures/wallpapers/`, serta mengatur symlink wallpaper relatif secara otomatis.
+     - Tahap 8: Menyediakan alias `bspwm="termux-bspwm"` pada shell `.zshrc` dan `.bashrc`.
+  3. **Pembersihan `login.template`**:
+     - Menghapus pemanggilan IPC `MOUSE_ON`, `MOUSE_OFF`, `KEYBOARD_ENABLE`, dan `KEYBOARD_HIDE` sehingga input pengguna tetap mulus dan normal saat memilih menu Linux/Termux.
+
+---
+
 ## 4. Prosedur Build CI & Deploy ke Perangkat
 
 ### GitHub Actions CI

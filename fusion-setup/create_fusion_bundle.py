@@ -170,6 +170,12 @@ if os.path.exists(zshrc_tmpl):
 
 print("✓ Added full zsh offline plugins, theme & configs to bundle")
 
+print("--- 2d. Menyiapkan Tema Eso (bspwm, polybar, rofi, picom, dunst, wallpapers) ke bundle ---")
+theme_src = "/project/termux-launcher/fusion-setup/theme"
+if os.path.exists(theme_src):
+    copy_tree_clean(theme_src, os.path.join(BUNDLE_DIR, "theme"))
+    print("✓ Added touch bspwm theme & wallpapers to bundle")
+
 print("--- 3. Mengemas menjadi fusion_payload.tar.gz ---")
 with tarfile.open(OUTPUT_TAR, "w:gz") as tar:
     for item in os.listdir(BUNDLE_DIR):
