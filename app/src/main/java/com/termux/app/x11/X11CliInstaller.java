@@ -334,10 +334,6 @@ public final class X11CliInstaller {
         String sleep = sleepCommand(prefixDir);
         return "#!" + NixProfile.hostShell(prefixDir).getPath() + "\n"
             + MARKER_PREAMBLE + " — do not edit; the launcher rewrites it\n"
-            + "if [ -x \"" + prefixDir.getPath() + "/bin/pulseaudio\" ]; then\n"
-            + "    \"" + prefixDir.getPath() + "/bin/pulseaudio\" --check 2>/dev/null || \"" + prefixDir.getPath() + "/bin/pulseaudio\" --start --load=\"module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1\" --exit-idle-time=-1 2>/dev/null || true\n"
-            + "    [ -x \"" + prefixDir.getPath() + "/bin/pactl\" ] && \"" + prefixDir.getPath() + "/bin/pactl\" unload-module module-suspend-on-idle 2>/dev/null || true\n"
-            + "fi\n"
             + command + " &\n"
             + "echo $! > " + pidFile + "\n"
             + "wait\n"
