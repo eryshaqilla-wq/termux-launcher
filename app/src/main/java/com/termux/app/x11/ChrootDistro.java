@@ -328,13 +328,67 @@ public final class ChrootDistro {
     }
 
     /**
+     * Checks whether SELinux is actively Enforcing on this device.
+     */
+    public static boolean isSelinuxEnforcing() {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"getenforce"});
+            try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()))) {
+                String line = r.readLine();
+                if (line != null) {
+                    return line.trim().equalsIgnoreCase("Enforcing");
+                }
+            }
+        } catch (Exception ignored) {}
+        try {
+            File enforce = new File("/sys/fs/selinux/enforce");
+            if (enforce.canRead()) {
+                byte[] b = new byte[1];
+                try (java.io.FileInputStream fis = new java.io.FileInputStream(enforce)) {
+                    if (fis.read(b) > 0 && b[0] == '1') return true;
+                }
+            }
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    /**
+     * Auto-detects SELinux status on rooted devices.
+     * If Enforcing: applies magiskpolicy dynamic allow rules for Termux app domains.
+     * If Permissive (e.g. kernel-level permissive on Poco M3): bypasses magiskpolicy ("full power").
+     */
+    public static void applySelinuxPolicyIfEnforcing() {
+        if (!isRootAvailable()) return;
+        new Thread(() -> {
+            try {
+                if (isSelinuxEnforcing()) {
+                    Logger.logInfo(LOG_TAG, "SELinux is Enforcing: applying magiskpolicy allow rules for Termux...");
+                    String magiskPolicyCmd = "if command -v magiskpolicy >/dev/null 2>&1; then "
+                        + "magiskpolicy --live \"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file dir { read open search getattr }\" "
+                        + "\"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file file { read open getattr }\" 2>/dev/null || true; "
+                        + "fi";
+                    Runtime.getRuntime().exec(new String[]{"su", "-c", magiskPolicyCmd}).waitFor();
+                } else {
+                    Logger.logInfo(LOG_TAG, "SELinux is Permissive (full power): direct rootfs access enabled without magiskpolicy.");
+                }
+            } catch (Exception ignored) {}
+        }, "selinux-policy-check").start();
+    }
+
+    /**
      * Synchronizes chroot .desktop files and icons into Termux's accessible prefix bridge directory.
      */
     public static void syncChrootBridge() {
         if (!isRootAvailable()) return;
         new Thread(() -> {
             try {
-                String cmd = "rm -rf /data/data/com.termux/files/usr/share/applications/chroot/kalifs 2>/dev/null; "
+                String cmd = "sel=$(getenforce 2>/dev/null || cat /sys/fs/selinux/enforce 2>/dev/null); "
+                    + "if [ \"$sel\" = \"Enforcing\" ] || [ \"$sel\" = \"1\" ]; then "
+                    + "if command -v magiskpolicy >/dev/null 2>&1; then "
+                    + "magiskpolicy --live \"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file dir { read open search getattr }\" "
+                    + "\"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file file { read open getattr }\" 2>/dev/null || true; "
+                    + "fi; fi; "
+                    + "rm -rf /data/data/com.termux/files/usr/share/applications/chroot/kalifs 2>/dev/null; "
                     + "icons_dir=\"/data/data/com.termux/files/usr/share/applications/chroot/icons\"; "
                     + "mkdir -p \"$icons_dir\"; "
                     + "for root in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs /data/local/Droidspaces/Containers/*/rootfs; do "
@@ -375,6 +429,7 @@ public final class ChrootDistro {
         long now = System.currentTimeMillis();
         if (now - sLastBridgeSync > 15_000) {
             sLastBridgeSync = now;
+            applySelinuxPolicyIfEnforcing();
             syncChrootBridge();
         }
         List<ProotDistro.Container> containers = new ArrayList<>();
@@ -884,6 +939,12 @@ public final class ChrootDistro {
                 isRunning = true;
             } catch (Exception ignored) {}
 
+            String[] envp = new String[]{
+                "HOME=" + TermuxConstants.TERMUX_HOME_DIR_PATH,
+                "TMPDIR=" + TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH,
+                "PATH=" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":/system/bin"
+            };
+
             if (!isRunning) {
                 try {
                     Logger.logInfo(LOG_TAG, "Starting PulseAudio TCP server on port 4713...");
@@ -893,16 +954,23 @@ public final class ChrootDistro {
                         "--load=module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1",
                         "--exit-idle-time=-1"
                     };
-                    String[] envp = new String[]{
-                        "HOME=" + TermuxConstants.TERMUX_HOME_DIR_PATH,
-                        "TMPDIR=" + TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH,
-                        "PATH=" + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":/system/bin"
-                    };
                     Process p = Runtime.getRuntime().exec(cmd, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
                     p.waitFor();
                 } catch (Exception e) {
                     Logger.logWarn(LOG_TAG, "Failed to start PulseAudio: " + e.getMessage());
                 }
+            }
+
+            // Always ensure module-suspend-on-idle is unloaded so Android OpenSL ES audio output never sleeps
+            File pactlBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "pactl");
+            if (pactlBin.exists()) {
+                try {
+                    Runtime.getRuntime().exec(new String[]{
+                        pactlBin.getAbsolutePath(),
+                        "unload-module",
+                        "module-suspend-on-idle"
+                    }, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH)).waitFor();
+                } catch (Exception ignored) {}
             }
         }
 
@@ -1009,19 +1077,14 @@ public final class ChrootDistro {
             } catch (Exception ignored) {}
         }
 
-        // Host-level cleanup (PulseAudio, VirGL, PRoot / native termux x11)
+        // Host-level cleanup (VirGL, PRoot / native termux x11 - PulseAudio stays running for continuous audio)
         try {
             Runtime.getRuntime().exec(new String[]{
-                TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pulseaudio", "--kill"
+                TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pkill", "-9", "-f", "virgl_test_server_android|" + DE_PROCESS_PATTERN + "|termux-x11"
             }).waitFor();
         } catch (Exception ignored) {}
         try {
-            Runtime.getRuntime().exec(new String[]{
-                TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pkill", "-9", "-f", "virgl_test_server_android|pulseaudio|" + DE_PROCESS_PATTERN + "|termux-x11"
-            }).waitFor();
-        } catch (Exception ignored) {}
-        try {
-            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", "virgl_test_server_android|pulseaudio|" + DE_PROCESS_PATTERN + "|termux-x11"}).waitFor();
+            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", "virgl_test_server_android|" + DE_PROCESS_PATTERN + "|termux-x11"}).waitFor();
         } catch (Exception ignored) {}
     }
 

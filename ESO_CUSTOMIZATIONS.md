@@ -309,6 +309,21 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 
 ---
 
+### M. Auto-Detect SELinux Enforcing vs Permissive & Pemulihan Audio PulseAudio
+- **Deteksi Otomatis SELinux (Enforcing vs Permissive)**:
+  - Pada HP ber-root seperti Infinix Note 30 VIP (SELinux `Enforcing`), proses Termux dicegat oleh kebijakan SELinux saat mengakses file direktori chroot. `ChrootDistro.applySelinuxPolicyIfEnforcing()` mendeteksi mode `Enforcing` dan menerapkan `magiskpolicy --live` untuk mengizinkan akses domain `untrusted_app*` dan `runas_app` ke `system_data_file`.
+  - Pada HP seperti Poco M3 yang sudah berstatus `Permissive` langsung dari level kernel, deteksi otomatis mengenali status `Permissive` dan langsung membuka akses tanpa perlu magiskpolicy ("Full Power").
+- **Pemulihan Audio PulseAudio NetHunter**:
+  1. **Anti-Sleep Output OpenSL ES**:
+     - PulseAudio secara bawaan memuat modul `module-suspend-on-idle` yang membuat sink audio OpenSL ES tertidur setelah 5 detik tidak bersuara. Saat aplikasi memutar suara kembali, sink gagal bangun sehingga audio bisu.
+     - `ChrootDistro.java` dan wrapper `termux-x11-wm` kini otomatis memanggil `pactl unload-module module-suspend-on-idle` sehingga audio selalu siaga.
+     - Di level host, `/data/data/com.termux/files/usr/etc/pulse/default.pa` juga dikonfigurasi untuk menonaktifkan suspend-on-idle.
+  2. **Persistensi Daemon PulseAudio**:
+     - Menghapus pembunuhan proses `pulseaudio` pada `killDesktopEnvironment()`. PulseAudio dibiarkan terus berjalan di background agar sesi desktop atau aplikasi berikutnya tidak kehilangan server suara.
+     - Pada `termux-x11-wm` (`X11CliInstaller.java`), ditambahkan pemeriksaan otomatis keberadaan daemon PulseAudio port 4713 sebelum window manager dieksekusi.
+
+---
+
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)
 
 Jika upstream (`PickleHik3/termux-launcher`) merilis update baru dan Tuan Eso meminta sync, **JANGAN PERNAH reset atau clone ulang dari 0**. Ikuti langkah standar berikut:
