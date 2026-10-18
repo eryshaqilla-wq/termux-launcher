@@ -588,16 +588,14 @@ public final class ChrootDistro {
             + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "    sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "fi\n\n"
-            + "# 2. Konfigurasi jembatan ALSA ke PulseAudio Unix Socket di dalam rootfs Droidspaces\n"
-            + "if [ -d \"$ROOTFS/etc\" ] && [ ! -f \"$ROOTFS/etc/asound.conf\" ]; then\n"
+            + "# 2. Konfigurasi jembatan ALSA ke PulseAudio di dalam rootfs Droidspaces\n"
+            + "if [ -d \"$ROOTFS/etc\" ]; then\n"
             + "    cat << 'EOF' > \"$ROOTFS/etc/asound.conf\"\n"
             + "pcm.!default {\n"
             + "    type pulse\n"
-            + "    server \"unix:/tmp/.pulse-socket\"\n"
             + "}\n"
             + "ctl.!default {\n"
             + "    type pulse\n"
-            + "    server \"unix:/tmp/.pulse-socket\"\n"
             + "}\n"
             + "EOF\n"
             + "    chmod 644 \"$ROOTFS/etc/asound.conf\" 2>/dev/null || true\n"
@@ -634,17 +632,20 @@ public final class ChrootDistro {
             + "# 7. Jalankan Desktop Environment di dalam container Droidspaces (Full Power Permissive Mode)\n"
             + "exec /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
             + "export DISPLAY=:0\n"
-            + "if [ -S /tmp/.pulse-socket ]; then\n"
-            + "    export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"\n"
-            + "else\n"
-            + "    export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
-            + "fi\n"
+            + "HOST_IP=$(ip route 2>/dev/null | awk \"/default/ {print \\$3}\" | head -n1)\n"
+            + "[ -z \"$HOST_IP\" ] && HOST_IP=\"172.28.0.1\"\n"
+            + "export PULSE_SERVER=\"tcp:$HOST_IP:4713\"\n"
+            + "rm -f /tmp/.pulse-socket 2>/dev/null || true\n"
             + "export GALLIUM_DRIVER=virpipe\n"
             + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
             + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
             + "export MESA_NO_ERROR=1\n"
             + "export LIBGL_DRI3_DISABLE=1\n"
-            + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n\n"
+            + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n"
+            + "export XDG_RUNTIME_DIR=/tmp/runtime-root\n"
+            + "export _JAVA_AWT_WM_NONREPARENTING=1\n"
+            + "export DISABLE_AUTO_TITLE=true\n"
+            + "mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root 2>/dev/null || true\n\n"
             + "for j in $(seq 1 20); do\n"
             + "    xdpyinfo >/dev/null 2>&1 && break\n"
             + "    sleep 0.1\n"
@@ -821,20 +822,66 @@ public final class ChrootDistro {
     }
 
     public static void writeDroidspacesKioskScript(@NonNull String containerName) {
+        writeDroidspacesKioskScript(containerName, null);
+    }
+
+    public static void writeDroidspacesKioskScript(@NonNull String containerName, @Nullable String preferredDe) {
         String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_KIOSK_SCRIPT_NAME;
         String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String virglDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.virgl";
         String configPath = "/data/local/Droidspaces/Containers/" + containerName + "/container.config";
+
+        String pref = (preferredDe != null) ? preferredDe.trim().toLowerCase(java.util.Locale.ROOT) : "";
+        if ("bspwm_kiosk".equals(pref)) pref = "bspwm";
+        if ("openbox_kiosk".equals(pref)) pref = "openbox";
+
+        String wmSelection;
+        if ("openbox".equals(pref)) {
+            wmSelection = "if command -v openbox >/dev/null 2>&1; then "
+                + "  exec openbox; "
+                + "elif command -v bspwm >/dev/null 2>&1; then "
+                + "  rm -f /tmp/bspwm* 2>/dev/null || true; "
+                + "  mkdir -p \"$HOME/.config/bspwm\" 2>/dev/null || true; "
+                + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc rule -a * state=tiled\\nbspc desktop 1 -l monocle\\n\" > \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true; "
+                + "  chmod +x \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true; "
+                + "  exec dbus-run-session -- bspwm -c \"$HOME/.config/bspwm/kiosk.bspwmrc\"; ";
+        } else {
+            wmSelection = "if command -v bspwm >/dev/null 2>&1; then "
+                + "  rm -f /tmp/bspwm* 2>/dev/null || true; "
+                + "  mkdir -p \"$HOME/.config/bspwm\" 2>/dev/null || true; "
+                + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc rule -a * state=tiled\\nbspc desktop 1 -l monocle\\n\" > \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true; "
+                + "  chmod +x \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true; "
+                + "  exec dbus-run-session -- bspwm -c \"$HOME/.config/bspwm/kiosk.bspwmrc\"; "
+                + "elif command -v openbox >/dev/null 2>&1; then "
+                + "  exec openbox; ";
+        }
+        wmSelection += "elif command -v xfwm4 >/dev/null 2>&1; then "
+            + "  exec xfwm4; "
+            + "elif command -v i3 >/dev/null 2>&1; then "
+            + "  exec i3; "
+            + "else "
+            + "  while true; do sleep 3600; done; "
+            + "fi";
+
         String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
             + "# Droidspaces Kiosk Window Manager (Standalone App) for Termux Launcher\n\n"
             + "CNAME=\"" + containerName + "\"\n"
+            + "ROOTFS=\"/data/local/Droidspaces/Containers/$CNAME/rootfs\"\n"
             + "CONFIG_PATH=\"" + configPath + "\"\n"
-            + "X11_DIR=\"" + x11Dir + "\"\n\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n"
+            + "VIRGL_DIR=\"" + virglDir + "\"\n\n"
             + "for _w in $(seq 1 50); do\n"
             + "    [ -S \"$X11_DIR/X0\" ] && break\n"
             + "    sleep 0.1\n"
             + "done\n"
             + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
-            + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "DS_RUNNING=0\n"
+            + "if /data/local/Droidspaces/bin/droidspaces pid --name=\"$CNAME\" >/dev/null 2>&1; then\n"
+            + "    DS_RUNNING=1\n"
+            + "elif /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "    DS_RUNNING=1\n"
+            + "fi\n\n"
+            + "if [ $DS_RUNNING -eq 0 ]; then\n"
             + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "    sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "    if [ -f \"$CONFIG_PATH\" ]; then\n"
@@ -844,36 +891,33 @@ public final class ChrootDistro {
             + "    fi\n"
             + "    sleep 1\n"
             + "fi\n\n"
-            + "mkdir -p \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
-            + "mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "mkdir -p \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "if [ -S \"$VIRGL_DIR/.virgl_test\" ]; then\n"
+            + "    rm -f \"$ROOTFS/tmp/.virgl_test\" 2>/dev/null || true\n"
+            + "    ln -sf \"$VIRGL_DIR/.virgl_test\" \"$ROOTFS/tmp/.virgl_test\" 2>/dev/null || true\n"
+            + "fi\n\n"
             + "exec /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
             + "export DISPLAY=:0\n"
             + "for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done\n"
-            + "if [ -S /tmp/.pulse-socket ]; then\n"
-            + "    export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"\n"
-            + "else\n"
-            + "    export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
-            + "fi\n"
+            + "HOST_IP=$(ip route 2>/dev/null | awk \"/default/ {print \\$3}\" | head -n1)\n"
+            + "[ -z \"$HOST_IP\" ] && HOST_IP=\"172.28.0.1\"\n"
+            + "export PULSE_SERVER=\"tcp:$HOST_IP:4713\"\n"
+            + "rm -f /tmp/.pulse-socket 2>/dev/null || true\n"
             + "export GALLIUM_DRIVER=virpipe\n"
             + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
             + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
             + "export MESA_NO_ERROR=1\n"
             + "export LIBGL_DRI3_DISABLE=1\n"
             + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n"
-            + "if command -v bspwm >/dev/null 2>&1; then \n"
-            + "  mkdir -p \"$HOME/.config/bspwm\" 2>/dev/null || true\n"
-            + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc desktop 1 -l monocle\\n\" > \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true\n"
-            + "  chmod +x \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true\n"
-            + "  exec dbus-run-session -- bspwm -c \"$HOME/.config/bspwm/kiosk.bspwmrc\"\n"
-            + "elif command -v openbox >/dev/null 2>&1; then \n"
-            + "  exec openbox\n"
-            + "elif command -v xfwm4 >/dev/null 2>&1; then \n"
-            + "  exec xfwm4\n"
-            + "elif command -v i3 >/dev/null 2>&1; then \n"
-            + "  exec i3\n"
-            + "else \n"
-            + "  while true; do sleep 3600; done\n"
-            + "fi\n"
+            + "export XDG_RUNTIME_DIR=/tmp/runtime-root\n"
+            + "export _JAVA_AWT_WM_NONREPARENTING=1\n"
+            + "export DISABLE_AUTO_TITLE=true\n"
+            + "export XDG_CURRENT_DESKTOP=" + ("openbox".equals(pref) ? "openbox" : "bspwm") + "\n"
+            + "mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root 2>/dev/null || true\n"
+            + "/etc/init.d/dbus start >/dev/null 2>&1 || true\n"
+            + wmSelection + "\n"
             + "'\n";
 
         File scriptFile = new File(scriptPath);
@@ -946,18 +990,27 @@ public final class ChrootDistro {
     public static void writeDroidspacesAppScript(@NonNull String containerName) {
         String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_APP_SCRIPT_NAME;
         String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String virglDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.virgl";
         String configPath = "/data/local/Droidspaces/Containers/" + containerName + "/container.config";
         String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
             + "# Droidspaces App Runner (Single-App Kiosk) for Termux Launcher\n\n"
             + "CNAME=\"" + containerName + "\"\n"
+            + "ROOTFS=\"/data/local/Droidspaces/Containers/$CNAME/rootfs\"\n"
             + "CONFIG_PATH=\"" + configPath + "\"\n"
-            + "X11_DIR=\"" + x11Dir + "\"\n\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n"
+            + "VIRGL_DIR=\"" + virglDir + "\"\n\n"
             + "for _w in $(seq 1 50); do\n"
             + "    [ -S \"$X11_DIR/X0\" ] && break\n"
             + "    sleep 0.1\n"
             + "done\n"
             + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
-            + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "DS_RUNNING=0\n"
+            + "if /data/local/Droidspaces/bin/droidspaces pid --name=\"$CNAME\" >/dev/null 2>&1; then\n"
+            + "    DS_RUNNING=1\n"
+            + "elif /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "    DS_RUNNING=1\n"
+            + "fi\n\n"
+            + "if [ $DS_RUNNING -eq 0 ]; then\n"
             + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "    sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "    if [ -f \"$CONFIG_PATH\" ]; then\n"
@@ -967,22 +1020,29 @@ public final class ChrootDistro {
             + "    fi\n"
             + "    sleep 1\n"
             + "fi\n\n"
-            + "mkdir -p \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
-            + "mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "mkdir -p \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "if [ -S \"$VIRGL_DIR/.virgl_test\" ]; then\n"
+            + "    rm -f \"$ROOTFS/tmp/.virgl_test\" 2>/dev/null || true\n"
+            + "    ln -sf \"$VIRGL_DIR/.virgl_test\" \"$ROOTFS/tmp/.virgl_test\" 2>/dev/null || true\n"
+            + "fi\n\n"
             + "exec /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
             + "export DISPLAY=:0\n"
             + "for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done\n"
-            + "if [ -S /tmp/.pulse-socket ]; then\n"
-            + "    export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"\n"
-            + "else\n"
-            + "    export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
-            + "fi\n"
+            + "HOST_IP=$(ip route 2>/dev/null | awk \"/default/ {print \\$3}\" | head -n1)\n"
+            + "[ -z \"$HOST_IP\" ] && HOST_IP=\"172.28.0.1\"\n"
+            + "export PULSE_SERVER=\"tcp:$HOST_IP:4713\"\n"
+            + "rm -f /tmp/.pulse-socket 2>/dev/null || true\n"
             + "export GALLIUM_DRIVER=virpipe\n"
             + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
             + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
             + "export MESA_NO_ERROR=1\n"
             + "export LIBGL_DRI3_DISABLE=1\n"
             + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n"
+            + "export XDG_RUNTIME_DIR=/tmp/runtime-root\n"
+            + "export _JAVA_AWT_WM_NONREPARENTING=1\n"
+            + "export DISABLE_AUTO_TITLE=true\n"
             + "for _wm in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break; sleep 0.1; done\n"
             + "\"$@\"\n"
             + "' dummy \"$@\"\n";
@@ -1119,7 +1179,8 @@ public final class ChrootDistro {
         if (GuiAppsSetup.Route.CHROOT.key.equals(route)) {
             ChrootEnvironment env = getActiveEnvironment(context);
             if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
-                writeDroidspacesKioskScript(env.containerName);
+                String selectedDe = prefs.getString(KEY_SELECTED_DE, "bspwm");
+                writeDroidspacesKioskScript(env.containerName, selectedDe);
                 return "su -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_KIOSK_SCRIPT_NAME;
             } else if (env != null) {
                 String selectedDe = prefs.getString(KEY_SELECTED_DE, "bspwm");
@@ -1474,7 +1535,7 @@ public final class ChrootDistro {
                 if (env.runnerType == RunnerType.DROIDSPACES) {
                     // Kill lingering DE processes inside Droidspaces container without stopping the container itself (warm standby)
                     String dsKillCmd = "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
-                        + "\" run /bin/sh -c 'pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true'; "
+                        + "\" run /bin/sh -c 'pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true; rm -f /tmp/bspwm* /tmp/.pulse-socket 2>/dev/null || true'; "
                         + "umount -l /data/local/Droidspaces/Containers/\"" + env.containerName + "\"/rootfs/tmp/.X11-unix 2>/dev/null || true; "
                         + "rm -f /data/local/Droidspaces/Containers/\"" + env.containerName + "\"/rootfs/tmp/.virgl_test 2>/dev/null || true";
                     try {
