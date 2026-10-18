@@ -45,17 +45,17 @@ public final class ChrootDistro {
     }
 
     public static final List<DesktopDef> SUPPORTED_DESKTOPS = Collections.unmodifiableList(Arrays.asList(
+        new DesktopDef("bspwm", "BSPWM (Full Desktop)", Arrays.asList("bspwm", "bspwm-session")),
         new DesktopDef("bspwm_kiosk", "BSPWM Kiosk (Single-App + Dock Bawah)", Arrays.asList("bspwm", "bspwm-session")),
+        new DesktopDef("openbox", "Openbox (Full Desktop)", Arrays.asList("openbox-session", "openbox")),
         new DesktopDef("openbox_kiosk", "Openbox (Single-App Fullscreen)", Arrays.asList("openbox", "openbox-session")),
         new DesktopDef("xfce4", "XFCE 4", Arrays.asList("startxfce4", "xfce4-session")),
-        new DesktopDef("bspwm", "BSPWM (Full Desktop)", Arrays.asList("bspwm", "bspwm-session")),
         new DesktopDef("gnome", "GNOME", Arrays.asList("gnome-session")),
         new DesktopDef("plasma", "KDE Plasma", Arrays.asList("startplasma-x11", "plasma-desktop")),
         new DesktopDef("mate", "MATE", Arrays.asList("mate-session")),
         new DesktopDef("lxde", "LXDE", Arrays.asList("startlxde", "lxsession")),
         new DesktopDef("lxqt", "LXQt", Arrays.asList("startlxqt")),
         new DesktopDef("cinnamon", "Cinnamon", Arrays.asList("cinnamon-session")),
-        new DesktopDef("openbox", "Openbox (Full Desktop)", Arrays.asList("openbox-session", "openbox")),
         new DesktopDef("i3", "i3 Window Manager", Arrays.asList("i3")),
         new DesktopDef("awesome", "Awesome WM", Arrays.asList("awesome")),
         new DesktopDef("fluxbox", "Fluxbox", Arrays.asList("startfluxbox", "fluxbox"))
@@ -80,17 +80,9 @@ public final class ChrootDistro {
         public String getChrootInnerCommand() {
             switch (id) {
                 case "bspwm_kiosk":
-                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; "
-                        + "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
-                        + "bspc config single_monocle true; "
-                        + "bspc config gapless_monocle true; "
-                        + "bspc config borderless_monocle true; "
-                        + "bspc config window_gap 0; "
-                        + "bspc config top_padding 0; "
-                        + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done; "
-                        + "for p in $(seq 1 40); do pkill -f 'polybar.*top' 2>/dev/null || true; sleep 0.2; done) & "
-                        + "[ -f /root/.config/bspwm/settings.conf ] && (grep -v '^BAR_TOP=' /root/.config/bspwm/settings.conf > /root/.config/bspwm/settings.conf.tmp 2>/dev/null && echo 'BAR_TOP=off' >> /root/.config/bspwm/settings.conf.tmp && mv /root/.config/bspwm/settings.conf.tmp /root/.config/bspwm/settings.conf 2>/dev/null || true); "
-                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session -- bspwm";
+                case "bspwm":
+                    return "[ -f /root/.config/bspwm/settings.conf ] && (grep -v '^BAR_TOP=' /root/.config/bspwm/settings.conf > /root/.config/bspwm/settings.conf.tmp 2>/dev/null && echo 'BAR_TOP=on' >> /root/.config/bspwm/settings.conf.tmp && mv /root/.config/bspwm/settings.conf.tmp /root/.config/bspwm/settings.conf 2>/dev/null || true); "
+                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || (/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-run-session -- bspwm)";
                 case "openbox_kiosk":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
                 case "gnome":
@@ -111,9 +103,6 @@ public final class ChrootDistro {
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec i3";
                 case "awesome":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec awesome";
-                case "bspwm":
-                    return "[ -f /root/.config/bspwm/settings.conf ] && (grep -v '^BAR_TOP=' /root/.config/bspwm/settings.conf > /root/.config/bspwm/settings.conf.tmp 2>/dev/null && echo 'BAR_TOP=on' >> /root/.config/bspwm/settings.conf.tmp && mv /root/.config/bspwm/settings.conf.tmp /root/.config/bspwm/settings.conf 2>/dev/null || true); "
-                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || (/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-run-session -- bspwm)";
                 case "fluxbox":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
                 case "xfce4":
@@ -126,15 +115,8 @@ public final class ChrootDistro {
         public String getDroidspacesInnerCommand() {
             switch (id) {
                 case "bspwm_kiosk":
-                    return "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
-                        + "bspc config single_monocle true; "
-                        + "bspc config gapless_monocle true; "
-                        + "bspc config borderless_monocle true; "
-                        + "bspc config window_gap 0; "
-                        + "bspc config top_padding 0; "
-                        + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done; "
-                        + "for p in $(seq 1 40); do pkill -f 'polybar.*top' 2>/dev/null || true; sleep 0.2; done) & "
-                        + "[ -f \"$HOME/.config/bspwm/settings.conf\" ] && (grep -v '^BAR_TOP=' \"$HOME/.config/bspwm/settings.conf\" > \"$HOME/.config/bspwm/settings.conf.tmp\" 2>/dev/null && echo 'BAR_TOP=off' >> \"$HOME/.config/bspwm/settings.conf.tmp\" && mv \"$HOME/.config/bspwm/settings.conf.tmp\" \"$HOME/.config/bspwm/settings.conf\" 2>/dev/null || true); "
+                case "bspwm":
+                    return "[ -f \"$HOME/.config/bspwm/settings.conf\" ] && (grep -v '^BAR_TOP=' \"$HOME/.config/bspwm/settings.conf\" > \"$HOME/.config/bspwm/settings.conf.tmp\" 2>/dev/null && echo 'BAR_TOP=on' >> \"$HOME/.config/bspwm/settings.conf.tmp\" && mv \"$HOME/.config/bspwm/settings.conf.tmp\" \"$HOME/.config/bspwm/settings.conf\" 2>/dev/null || true); "
                         + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session bspwm";
                 case "openbox_kiosk":
                     return "exec " + detectedBinary;
@@ -156,9 +138,6 @@ public final class ChrootDistro {
                     return "exec i3";
                 case "awesome":
                     return "exec awesome";
-                case "bspwm":
-                    return "[ -f \"$HOME/.config/bspwm/settings.conf\" ] && (grep -v '^BAR_TOP=' \"$HOME/.config/bspwm/settings.conf\" > \"$HOME/.config/bspwm/settings.conf.tmp\" 2>/dev/null && echo 'BAR_TOP=on' >> \"$HOME/.config/bspwm/settings.conf.tmp\" && mv \"$HOME/.config/bspwm/settings.conf.tmp\" \"$HOME/.config/bspwm/settings.conf\" 2>/dev/null || true); "
-                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session bspwm";
                 case "fluxbox":
                     return "exec " + detectedBinary;
                 case "xfce4":
@@ -522,23 +501,8 @@ public final class ChrootDistro {
 
         if (RunnerType.DROIDSPACES.name().equals(type)) {
             String cName = container.name;
-            String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
-            String runCmd = "export DISPLAY=:0; "
-                + "for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
-                + "if [ -S /tmp/.pulse-socket ]; then export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"; else export PULSE_SERVER=\"tcp:127.0.0.1:4713\"; fi; "
-                + "export GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 MESA_NO_ERROR=1 LIBGL_DRI3_DISABLE=1 VTEST_SOCKET_NAME=/tmp/.virgl_test; "
-                + command;
-            return "su -c \"for _w in $(seq 1 50); do [ -S /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
-                + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw '" + cName + "'; then "
-                + "sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' '" + configPath + "' 2>/dev/null || true; "
-                + "sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' '" + configPath + "' 2>/dev/null || true; "
-                + "if [ -f '" + configPath + "' ]; then /data/local/Droidspaces/bin/droidspaces --config='" + configPath + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start >/dev/null 2>&1 || true; "
-                + "else /data/local/Droidspaces/bin/droidspaces --name='" + cName + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start >/dev/null 2>&1 || true; fi; sleep 1; "
-                + "fi; "
-                + "mkdir -p /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
-                + "umount -l /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
-                + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
-                + "/data/local/Droidspaces/bin/droidspaces --name='" + cName + "' run /bin/sh -c " + ProotDistro.singleQuote(runCmd) + "\"";
+            writeDroidspacesAppScript(cName);
+            return "su -c " + ProotDistro.singleQuote(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_APP_SCRIPT_NAME + " " + command);
         } else if (RunnerType.CUSTOM.name().equals(type) && container.customRunner != null
                 && !container.customRunner.trim().isEmpty()) {
             return container.customRunner
@@ -547,32 +511,8 @@ public final class ChrootDistro {
         }
 
         // Default: NetHunter chroot with mount namespace (-mm) and auto-mounted X11 & VirGL unix sockets
-        return "su -mm -c \"for _w in $(seq 1 50); do [ -S /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
-            + "mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
-            + "umount -l " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
-            + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
-            + "mkdir -p " + rootPath + "/tmp/.virgl 2>/dev/null; "
-            + "umount -l " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
-            + "mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
-            + "ln -sf /tmp/.virgl/.virgl_test " + rootPath + "/tmp/.virgl_test 2>/dev/null || true; "
-            + "chroot " + rootPath + " /usr/bin/env -i "
-            + "HOME=/root "
-            + "USER=root "
-            + "LOGNAME=root "
-            + "TERM=xterm-256color "
-            + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
-            + "DISPLAY=${DISPLAY:-:0} "
-            + "PULSE_SERVER=tcp:127.0.0.1:4713 "
-            + "GALLIUM_DRIVER=virpipe "
-            + "MESA_GL_VERSION_OVERRIDE=4.3COMPAT "
-            + "MESA_GLES_VERSION_OVERRIDE=3.2 "
-            + "MESA_NO_ERROR=1 "
-            + "LIBGL_DRI3_DISABLE=1 "
-            + "VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test "
-            + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
-            + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
-            + "DISABLE_AUTO_TITLE=true "
-            + "/bin/sh -c " + ProotDistro.singleQuote("for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; " + command) + "\"";
+        writeChrootAppScript(rootPath);
+        return "su -mm -c " + ProotDistro.singleQuote(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_APP_SCRIPT_NAME + " " + command);
     }
 
     /**
@@ -773,6 +713,120 @@ public final class ChrootDistro {
         }
     }
 
+    public static final String CHROOT_APP_SCRIPT_NAME = "termux-chroot-app";
+    public static final String DROIDSPACES_APP_SCRIPT_NAME = "termux-droidspaces-app";
+
+    public static void writeChrootAppScript(@NonNull String rootPath) {
+        String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_APP_SCRIPT_NAME;
+        String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String virglDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.virgl";
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Chroot App Runner (Single-App Kiosk) for Termux Launcher\n\n"
+            + "ROOTPATH=\"" + rootPath + "\"\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n"
+            + "VIRGL_DIR=\"" + virglDir + "\"\n\n"
+            + "mkdir -p \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "mkdir -p \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "mount -o bind \"$VIRGL_DIR\" \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "ln -sf /tmp/.virgl/.virgl_test \"$ROOTPATH/tmp/.virgl_test\" 2>/dev/null || true\n\n"
+            + "# Tunggu socket X0 siap\n"
+            + "for _w in $(seq 1 50); do\n"
+            + "    [ -S \"$X11_DIR/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n"
+            + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
+            + "exec chroot \"$ROOTPATH\" /usr/bin/env -i \\\n"
+            + "    HOME=/root \\\n"
+            + "    USER=root \\\n"
+            + "    LOGNAME=root \\\n"
+            + "    TERM=xterm-256color \\\n"
+            + "    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\\n"
+            + "    DISPLAY=${DISPLAY:-:0} \\\n"
+            + "    PULSE_SERVER=tcp:127.0.0.1:4713 \\\n"
+            + "    GALLIUM_DRIVER=virpipe \\\n"
+            + "    MESA_GL_VERSION_OVERRIDE=4.3COMPAT \\\n"
+            + "    MESA_GLES_VERSION_OVERRIDE=3.2 \\\n"
+            + "    MESA_NO_ERROR=1 \\\n"
+            + "    LIBGL_DRI3_DISABLE=1 \\\n"
+            + "    VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test \\\n"
+            + "    XKB_CONFIG_ROOT=/usr/share/X11/xkb \\\n"
+            + "    LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 \\\n"
+            + "    DISABLE_AUTO_TITLE=true \\\n"
+            + "    /bin/bash -c \"for _w in \\$(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; (for k in \\$(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; bspc config single_monocle true 2>/dev/null || true; bspc config gapless_monocle true 2>/dev/null || true; bspc config borderless_monocle true 2>/dev/null || true; for d in \\$(bspc query -D 2>/dev/null); do bspc desktop \\\"\\$d\\\" -l monocle 2>/dev/null || true; done; polybar-msg -p \\$(pgrep -f 'polybar.*top') cmd hide 2>/dev/null || pkill -f 'polybar.*top' 2>/dev/null || true) & \\\"\\$@\\\"\" dummy \"$@\"\n";
+
+        File scriptFile = new File(scriptPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            java.nio.file.Files.write(scriptFile.toPath(), scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write chroot app script: " + e.getMessage());
+        }
+    }
+
+    public static void writeDroidspacesAppScript(@NonNull String containerName) {
+        String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_APP_SCRIPT_NAME;
+        String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String configPath = "/data/local/Droidspaces/Containers/" + containerName + "/container.config";
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Droidspaces App Runner (Single-App Kiosk) for Termux Launcher\n\n"
+            + "CNAME=\"" + containerName + "\"\n"
+            + "CONFIG_PATH=\"" + configPath + "\"\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n\n"
+            + "for _w in $(seq 1 50); do\n"
+            + "    [ -S \"$X11_DIR/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n"
+            + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
+            + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
+            + "    sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
+            + "    if [ -f \"$CONFIG_PATH\" ]; then\n"
+            + "        /data/local/Droidspaces/bin/droidspaces --config=\"$CONFIG_PATH\" -B \"$X11_DIR:/tmp/.X11-unix\" start >/dev/null 2>&1 || true\n"
+            + "    else\n"
+            + "        /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" -B \"$X11_DIR:/tmp/.X11-unix\" start >/dev/null 2>&1 || true\n"
+            + "    fi\n"
+            + "    sleep 1\n"
+            + "fi\n\n"
+            + "mkdir -p \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "exec /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
+            + "export DISPLAY=:0\n"
+            + "for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done\n"
+            + "if [ -S /tmp/.pulse-socket ]; then\n"
+            + "    export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"\n"
+            + "else\n"
+            + "    export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
+            + "fi\n"
+            + "export GALLIUM_DRIVER=virpipe\n"
+            + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
+            + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
+            + "export MESA_NO_ERROR=1\n"
+            + "export LIBGL_DRI3_DISABLE=1\n"
+            + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n"
+            + "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; bspc config single_monocle true 2>/dev/null || true; bspc config gapless_monocle true 2>/dev/null || true; bspc config borderless_monocle true 2>/dev/null || true; for d in $(bspc query -D 2>/dev/null); do bspc desktop \"$d\" -l monocle 2>/dev/null || true; done; polybar-msg -p $(pgrep -f 'polybar.*top') cmd hide 2>/dev/null || pkill -f 'polybar.*top' 2>/dev/null || true) & \n"
+            + "\"$@\"\n"
+            + "' dummy \"$@\"\n";
+
+        File scriptFile = new File(scriptPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            java.nio.file.Files.write(scriptFile.toPath(), scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write droidspaces app script: " + e.getMessage());
+        }
+    }
+
     @NonNull
     public static String getDesktopCommand(@Nullable ChrootEnvironment env, @Nullable DesktopEntry de) {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
@@ -819,14 +873,14 @@ public final class ChrootDistro {
             }
             if (selectedEntry == null) {
                 for (DesktopEntry entry : installed) {
-                    if ("bspwm_kiosk".equals(entry.id)) {
+                    if ("bspwm".equals(entry.id)) {
                         selectedEntry = entry;
                         break;
                     }
                 }
                 if (selectedEntry == null) {
                     for (DesktopEntry entry : installed) {
-                        if ("openbox_kiosk".equals(entry.id)) {
+                        if ("openbox".equals(entry.id)) {
                             selectedEntry = entry;
                             break;
                         }

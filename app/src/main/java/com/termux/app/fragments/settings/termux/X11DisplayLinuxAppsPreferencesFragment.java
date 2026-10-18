@@ -150,9 +150,10 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
                             }
                         }
                         if (!matched) {
-                            String targetVal = values.contains("bspwm_kiosk") ? "bspwm_kiosk"
-                                : (values.contains("openbox_kiosk") ? "openbox_kiosk"
-                                : (values.contains("xfce4") ? "xfce4" : values.get(0)));
+                            String targetVal = values.contains("bspwm") ? "bspwm"
+                                : (values.contains("bspwm_kiosk") ? "bspwm_kiosk"
+                                : (values.contains("openbox") ? "openbox"
+                                : (values.contains("xfce4") ? "xfce4" : values.get(0))));
                             dePref.setValue(targetVal);
                             prefs.edit().putString(ChrootDistro.KEY_SELECTED_DE, targetVal).apply();
                         }
