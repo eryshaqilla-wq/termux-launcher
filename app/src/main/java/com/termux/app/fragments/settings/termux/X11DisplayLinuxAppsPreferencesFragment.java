@@ -84,7 +84,7 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
             if (env != null) {
                 activeEngineTitle = (env.runnerType == ChrootDistro.RunnerType.DROIDSPACES)
                     ? "Droidspaces: " + env.containerName
-                    : env.displayName;
+                    : env.name;
             } else {
                 activeEngineTitle = "Chroot / NetHunter";
             }
