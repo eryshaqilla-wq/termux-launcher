@@ -20891,10 +20891,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * not at the card: the grab handle above it has to stay grabbable while mouse mode is on.
      */
     private int resolveExtraKeysBackgroundColor() {
-        if (mExtraKeysView != null && mExtraKeysView.getButtonBackgroundColor() != 0) {
+        if (mExtraKeysView != null) {
             return mExtraKeysView.getButtonBackgroundColor();
         }
-        return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanel, R.color.termux_surface_panel);
+        return android.graphics.Color.TRANSPARENT;
     }
 
     private void syncDisplayTouchpad() {

@@ -197,7 +197,7 @@ public final class DisplayTouchpadView extends View {
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         // The pad lies over the place in both shapes, so it is solid in both: the surface colour
         // at full alpha, and no rim at rest. The only stroke left is the drag ring below.
-        mSurfaceColor = ColorUtils.setAlphaComponent(surfaceColor, 255);
+        mSurfaceColor = surfaceColor;
         mFillPaint.setColor(mSurfaceColor);
         mStrokePaint.setStyle(Paint.Style.STROKE);
         mStrokePaint.setStrokeWidth(dp(1.5f));
@@ -258,7 +258,7 @@ public final class DisplayTouchpadView extends View {
     }
 
     public void setSurfaceColor(int surfaceColor) {
-        mSurfaceColor = ColorUtils.setAlphaComponent(surfaceColor, 255);
+        mSurfaceColor = surfaceColor;
         if (!mInGap) {
             mFillPaint.setColor(mSurfaceColor);
         }

@@ -505,18 +505,19 @@ git push origin eso-launcher main --force-with-lease
   - Tampilan touchpad pada Mouse Mode sebelumnya memiliki sudut membulat/lonjong (`panelRadius = 20dp`) serta inset samping (`inapp_keyboard_view_host` margin & padding), dan warnanya tidak serasi dengan barisan Extra Keys.
   - Tuan Eso meminta penambahan saklar pengaturan untuk Gboard Backspace Fix, serta touchpad yang solid datar rata tepi-ke-tepi (edge-to-edge, tanpa sudut melengkung) dengan warna latar yang selalu serasi dan dinamis mengikuti background `ExtraKeysView`.
 - **Solusi & Arsitektur**:
-  1. **Saklar Pengaturan X11 (`enforceCharBasedInput`)**:
+  1. **Saklar Pengaturan X11 (`enforceCharBasedInput`) & Bedah Mikro Backspace**:
      - Menambahkan string sumber daya di `app/src/main/res/values/strings.xml` (`settings_x11_enforce_char_based_input_title` dan `_summary`).
      - Menambahkan `<SwitchPreferenceCompat app:key="enforceCharBasedInput" ... />` pada `app/src/main/res/xml/x11_display_input_preferences.xml` di bawah kategori Keyboard.
-     - Terhubung langsung ke `X11DisplayPreferencesDataStore` dan preferensi inti X11 Server (`LorieHost.getPrefs().enforceCharBasedInput`), yang mengalihkan input Gboard dari `TYPE_CLASS_TEXT` menjadi `InputType.TYPE_NULL`, sehingga event raw keycode hardware (`KEYCODE_DEL`) dikirim langsung ke X11 tanpa tertelan/diabaikan oleh IME.
+     - Terhubung langsung ke `X11DisplayPreferencesDataStore` dan preferensi inti X11 Server (`LorieHost.getPrefs().enforceCharBasedInput`).
+     - **Bedah Mikro (`LorieView.java`)**: `inputType` tetap dipertahankan `TYPE_CLASS_TEXT` agar pengetikan huruf/angka di BSPWM dan semua window manager tetap lancar 100%. Saat saklar ON, sistem membypass filter spasi palsu di `deleteSurroundingText`, sehingga ketukan tombol Backspace pada Gboard langsung mengirim `sendKey(KeyEvent.KEYCODE_DEL)` ke X11 dan menghapus teks secara responsif.
   2. **Styling Touchpad Solid Flat Edge-to-Edge (`DisplayTouchpadView.java`)**:
      - Mengubah `panelRadius()` menjadi `0f` saat di luar split gap untuk menghasilkan sudut siku persegi penuh ("gausah lonjong2").
      - Menghapus inset batas panel di `layOutPanel()` (`mBounds.set(0f, 0f, w, h)`).
-     - Menambahkan method `setSurfaceColor(int surfaceColor)` untuk memungkinkan pembaruan warna dinamis saat runtime.
+     - Menambahkan method `setSurfaceColor(int surfaceColor)` tanpa memaksakan alpha 255 sehingga dapat transparan murni atau semi-transparan mengikuti background Extra Keys.
   3. **Penyesuaian Host Margin & Sinkronisasi Warna Dinamis (`TermuxActivity.java`)**:
      - Pada `dressInAppKeyboardHost()`: Mengatur `horizontalMargin`, `topMargin`, `innerPadding`, dan `bottomMargin` menjadi `0` saat `mouseMode` aktif, sehingga touchpad menutupi seluruh lebar layar dari ujung ke ujung.
      - Pada `applyInAppKeyboardSurfaceClip()`: Menonaktifkan `setClipToOutline` saat `mouseMode` aktif agar tidak terpotong sudut kapsul.
-     - Menambahkan helper `resolveExtraKeysBackgroundColor()` yang mengambil nilai `mExtraKeysView.getButtonBackgroundColor()`, dengan fallback aman ke `termuxColorSurfacePanel`.
+     - Helper `resolveExtraKeysBackgroundColor()` mengambil nilai `mExtraKeysView.getButtonBackgroundColor()`. Jika Extra Keys bernilai `0` (transparan), maka touchpad ikut transparan murni (`Color.TRANSPARENT`), memperlihatkan kaca dock dan wallpaper secara konsisten.
      - Menyinkronkan warna touchpad di `syncDisplayTouchpad()`, `setExtraKeysView()`, dan `applyExtraKeysFeedbackAccent()`.
 
 ---

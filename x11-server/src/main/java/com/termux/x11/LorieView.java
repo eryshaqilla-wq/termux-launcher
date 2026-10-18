@@ -166,7 +166,9 @@ public class LorieView extends SurfaceView implements InputStub {
         }
 
         @Override public boolean deleteSurroundingText(int beforeLength, int afterLength) {
-            if (requestedPos != -1 && requestedPos > currentPos && beforeLength > 0) {
+            boolean fixGboardBackspace = LorieHost.getPrefs() != null
+                && LorieHost.getPrefs().enforceCharBasedInput.get();
+            if (!fixGboardBackspace && requestedPos != -1 && requestedPos > currentPos && beforeLength > 0) {
                 // sometimes gboard sees following whitespace and wants to remove it.
                 // but we do not want to send backspace key events
                 // because the whitespace is fake, it is required for cursor control
@@ -697,10 +699,7 @@ public class LorieView extends SurfaceView implements InputStub {
 
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
-        if (LorieHost.getPrefs().enforceCharBasedInput.get())
-            outAttrs.inputType = InputType.TYPE_NULL;
-        else
-            outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_NORMAL;
+        outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_VARIATION_NORMAL;
         outAttrs.actionLabel = "↵";
         // Note that IME_ACTION_NONE cannot be used as that makes it impossible to input newlines using the on-screen
         // keyboard on Android TV (see https://github.com/termux/termux-app/issues/221).
