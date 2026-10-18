@@ -433,7 +433,7 @@ public final class X11LinuxAppRunner {
                 host.showNotice(failureNotice(app));
                 return;
             }
-            if (noSandbox) {
+            if (noSandbox || isNonElectronApp(app)) {
                 sandboxStore.forget(app.id);
                 host.showNotice(context.getString(com.termux.R.string.termux_x11_app_launch_failed));
                 return;
@@ -441,6 +441,14 @@ public final class X11LinuxAppRunner {
             Logger.logInfo(LOG_TAG, "Retrying " + app.id + " on the display with --no-sandbox");
             new Watch(app, display, env, null).start(script(app, display, env, true), true);
         }
+    }
+
+    static boolean isNonElectronApp(@NonNull LinuxAppCatalog.LinuxApp app) {
+        String exec = app.exec.toLowerCase();
+        return exec.contains("firefox") || exec.contains("thunderbird")
+            || exec.contains("gimp") || exec.contains("libreoffice")
+            || exec.contains("inkscape") || exec.contains("vlc")
+            || exec.contains("mpv") || exec.contains("terminal");
     }
 
     /** A process that has already exited with a non-zero code within the quick-fail window. */

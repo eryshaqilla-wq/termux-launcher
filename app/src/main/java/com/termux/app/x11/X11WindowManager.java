@@ -155,6 +155,7 @@ public final class X11WindowManager {
             + "while [ \"$i\" -lt " + tries + " ]; do\n"
             + "wm=$(cat " + pidFile + " 2>/dev/null)\n"
             + "[ -n \"$wm\" ] && kill -0 \"$wm\" 2>/dev/null && break\n"
+            + "[ -n \"$wm\" ] && [ -d \"/proc/$wm\" ] && break\n"
             + "sleep 0.1\n"
             + "i=$((i+1))\n"
             + "done\n";
@@ -190,14 +191,15 @@ public final class X11WindowManager {
      * {@code login}'s own {@code PATH} will find it by that same name.
      */
     private static boolean isInstalled(@NonNull String binary, @NonNull File prefixDir) {
+        if ("su".equals(binary) || "env".equals(binary) || "proot-distro".equals(binary)) return true;
         if (binary.contains("/")) return new File(binary).canExecute();
         File profile = NixProfile.profile(prefixDir);
         if (profile != null) {
             return NixProfile.under(prefixDir, profile, "bin/" + binary).canExecute();
         }
         if (new File(prefixDir, "bin/" + binary).canExecute()) return true;
-        if (new File("/system/bin/" + binary).canExecute()) return true;
-        if (new File("/system/xbin/" + binary).canExecute()) return true;
+        if (new File("/system/bin/" + binary).exists()) return true;
+        if (new File("/system/xbin/" + binary).exists()) return true;
         return false;
     }
 

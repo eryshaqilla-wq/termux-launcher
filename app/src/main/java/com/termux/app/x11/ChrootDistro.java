@@ -81,9 +81,15 @@ public final class ChrootDistro {
             switch (id) {
                 case "bspwm_kiosk":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; "
-                        + "(for k in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
-                        + "bspc config single_monocle true; bspc desktop -l monocle; "
-                        + "sleep 0.8; polybar-msg -p \"$(pgrep -f 'polybar.*top')\" cmd hide >/dev/null 2>&1 || true) & "
+                        + "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
+                        + "bspc config single_monocle true; "
+                        + "bspc config gapless_monocle true; "
+                        + "bspc config borderless_monocle true; "
+                        + "bspc config window_gap 0; "
+                        + "bspc config top_padding 0; "
+                        + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done; "
+                        + "for p in $(seq 1 40); do pkill -f 'polybar.*top' 2>/dev/null || true; sleep 0.2; done) & "
+                        + "[ -f /root/.config/bspwm/settings.conf ] && (grep -v '^BAR_TOP=' /root/.config/bspwm/settings.conf > /root/.config/bspwm/settings.conf.tmp 2>/dev/null && echo 'BAR_TOP=off' >> /root/.config/bspwm/settings.conf.tmp && mv /root/.config/bspwm/settings.conf.tmp /root/.config/bspwm/settings.conf 2>/dev/null || true); "
                         + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session -- bspwm";
                 case "openbox_kiosk":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
@@ -106,7 +112,8 @@ public final class ChrootDistro {
                 case "awesome":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec awesome";
                 case "bspwm":
-                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || (/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-run-session -- bspwm)";
+                    return "[ -f /root/.config/bspwm/settings.conf ] && (grep -v '^BAR_TOP=' /root/.config/bspwm/settings.conf > /root/.config/bspwm/settings.conf.tmp 2>/dev/null && echo 'BAR_TOP=on' >> /root/.config/bspwm/settings.conf.tmp && mv /root/.config/bspwm/settings.conf.tmp /root/.config/bspwm/settings.conf 2>/dev/null || true); "
+                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || (/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-run-session -- bspwm)";
                 case "fluxbox":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
                 case "xfce4":
@@ -119,9 +126,15 @@ public final class ChrootDistro {
         public String getDroidspacesInnerCommand() {
             switch (id) {
                 case "bspwm_kiosk":
-                    return "(for k in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
-                        + "bspc config single_monocle true; bspc desktop -l monocle; "
-                        + "sleep 0.8; polybar-msg -p \"$(pgrep -f 'polybar.*top')\" cmd hide >/dev/null 2>&1 || true) & "
+                    return "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
+                        + "bspc config single_monocle true; "
+                        + "bspc config gapless_monocle true; "
+                        + "bspc config borderless_monocle true; "
+                        + "bspc config window_gap 0; "
+                        + "bspc config top_padding 0; "
+                        + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done; "
+                        + "for p in $(seq 1 40); do pkill -f 'polybar.*top' 2>/dev/null || true; sleep 0.2; done) & "
+                        + "[ -f \"$HOME/.config/bspwm/settings.conf\" ] && (grep -v '^BAR_TOP=' \"$HOME/.config/bspwm/settings.conf\" > \"$HOME/.config/bspwm/settings.conf.tmp\" 2>/dev/null && echo 'BAR_TOP=off' >> \"$HOME/.config/bspwm/settings.conf.tmp\" && mv \"$HOME/.config/bspwm/settings.conf.tmp\" \"$HOME/.config/bspwm/settings.conf\" 2>/dev/null || true); "
                         + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session bspwm";
                 case "openbox_kiosk":
                     return "exec " + detectedBinary;
@@ -144,7 +157,8 @@ public final class ChrootDistro {
                 case "awesome":
                     return "exec awesome";
                 case "bspwm":
-                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session bspwm";
+                    return "[ -f \"$HOME/.config/bspwm/settings.conf\" ] && (grep -v '^BAR_TOP=' \"$HOME/.config/bspwm/settings.conf\" > \"$HOME/.config/bspwm/settings.conf.tmp\" 2>/dev/null && echo 'BAR_TOP=on' >> \"$HOME/.config/bspwm/settings.conf.tmp\" && mv \"$HOME/.config/bspwm/settings.conf.tmp\" \"$HOME/.config/bspwm/settings.conf\" 2>/dev/null || true); "
+                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session bspwm";
                 case "fluxbox":
                     return "exec " + detectedBinary;
                 case "xfce4":
@@ -159,8 +173,13 @@ public final class ChrootDistro {
             boolean hasDbus = dbusBin.canExecute();
             switch (id) {
                 case "bspwm_kiosk":
-                    return "(for k in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
-                        + "bspc config single_monocle true; bspc desktop -l monocle) & bspwm";
+                    return "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
+                        + "bspc config single_monocle true; "
+                        + "bspc config gapless_monocle true; "
+                        + "bspc config borderless_monocle true; "
+                        + "bspc config window_gap 0; "
+                        + "bspc config top_padding 0; "
+                        + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done) & bspwm";
                 case "openbox_kiosk":
                     File rck = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/xdg/openbox/rc.xml");
                     return rck.exists() ? "openbox --config-file " + rck.getAbsolutePath() : "openbox";
@@ -505,10 +524,12 @@ public final class ChrootDistro {
             String cName = container.name;
             String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
             String runCmd = "export DISPLAY=:0; "
+                + "for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
                 + "if [ -S /tmp/.pulse-socket ]; then export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"; else export PULSE_SERVER=\"tcp:127.0.0.1:4713\"; fi; "
                 + "export GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 MESA_NO_ERROR=1 LIBGL_DRI3_DISABLE=1 VTEST_SOCKET_NAME=/tmp/.virgl_test; "
                 + command;
-            return "su -c \"if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw '" + cName + "'; then "
+            return "su -c \"for _w in $(seq 1 50); do [ -S /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
+                + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw '" + cName + "'; then "
                 + "sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' '" + configPath + "' 2>/dev/null || true; "
                 + "sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' '" + configPath + "' 2>/dev/null || true; "
                 + "if [ -f '" + configPath + "' ]; then /data/local/Droidspaces/bin/droidspaces --config='" + configPath + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start >/dev/null 2>&1 || true; "
@@ -526,7 +547,8 @@ public final class ChrootDistro {
         }
 
         // Default: NetHunter chroot with mount namespace (-mm) and auto-mounted X11 & VirGL unix sockets
-        return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
+        return "su -mm -c \"for _w in $(seq 1 50); do [ -S /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
+            + "mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
             + "umount -l " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
             + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
             + "mkdir -p " + rootPath + "/tmp/.virgl 2>/dev/null; "
@@ -550,7 +572,7 @@ public final class ChrootDistro {
             + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
             + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
             + "DISABLE_AUTO_TITLE=true "
-            + "/bin/sh -c " + ProotDistro.singleQuote(command) + "\"";
+            + "/bin/sh -c " + ProotDistro.singleQuote("for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; " + command) + "\"";
     }
 
     /**
