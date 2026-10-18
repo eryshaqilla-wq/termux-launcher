@@ -20187,7 +20187,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @Override public boolean isDisplayEnabled() { return isX11DisplayEnabled(); }
                 @Override public void turnOnDisplay() { turnOnEmbeddedDisplay(); }
                 @Override public boolean isDisplayRunning() { return isEmbeddedDisplayRunning(); }
-                @Override public void startDisplay() { startEmbeddedDisplay(); }
+                @Override public void startDisplay() { startEmbeddedDisplay(false); }
+                @Override public void startDisplayStandalone() { startEmbeddedDisplay(true); }
                 @Override public boolean runScript(@NonNull String script,
                         @NonNull com.termux.app.x11.X11LinuxAppRunner.ScriptExitListener onExit) {
                     if (mTermuxService == null) return false;
@@ -20496,28 +20497,41 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** Run the configured start command as a background task, as if it had been typed. */
     private void startEmbeddedDisplay() {
+        startEmbeddedDisplay(false);
+    }
+
+    private void startEmbeddedDisplay(boolean standalone) {
         if (mTermuxService == null || mPreferences == null || !isX11DisplayEnabled()) return;
         // The prefix commands are written at start-up, which on a first launch is before the
         // bootstrap exists. Put them in now if they are missing, then start.
         if (!com.termux.app.x11.X11CliInstaller.isInstalled(this)) {
             com.termux.app.x11.X11CliInstaller.installAsync(this, result -> {
                 if (isFinishing() || isDestroyed()) return;
-                if (com.termux.app.x11.X11CliInstaller.isInstalled(this)) startEmbeddedDisplayNow();
+                if (com.termux.app.x11.X11CliInstaller.isInstalled(this)) startEmbeddedDisplayNow(standalone);
                 else Logger.logWarn(LOG_TAG, "Display commands not installed: " + result);
             });
             return;
         }
-        startEmbeddedDisplayNow();
+        startEmbeddedDisplayNow(standalone);
     }
 
     private void startEmbeddedDisplayNow() {
+        startEmbeddedDisplayNow(false);
+    }
+
+    private void startEmbeddedDisplayNow(boolean standalone) {
         if (mTermuxService == null || mPreferences == null || !isX11DisplayEnabled()) return;
         com.termux.app.x11.ChrootDistro.startAudioAndGraphicsServices(this);
-        String wm = com.termux.app.x11.ChrootDistro.resolveActiveDesktopCommand(this);
+        String wm;
+        if (standalone) {
+            wm = com.termux.app.x11.ChrootDistro.resolveStandaloneKioskCommand(this);
+        } else {
+            wm = com.termux.app.x11.ChrootDistro.resolveActiveDesktopCommand(this);
+        }
         if (wm == null || wm.isEmpty()) {
             wm = mPreferences.getX11WindowManager();
         }
-        com.termux.app.x11.X11CliInstaller.forPrefix(this).writeWindowManagerScript();
+        com.termux.app.x11.X11CliInstaller.forPrefix(this, wm).writeWindowManagerScript();
         String[] argv = com.termux.app.x11.X11StartCommand.argv(mPreferences.getX11DisplayCommand(),
             mPreferences.getX11DisplayDpi(), mPreferences.isX11LegacyDrawingEnabled(),
             mPreferences.isX11ForceBgraEnabled(),

@@ -91,6 +91,7 @@ public final class X11LinuxAppRunner {
         void turnOnDisplay();
         boolean isDisplayRunning();
         void startDisplay();
+        default void startDisplayStandalone() { startDisplay(); }
         /**
          * Run a shell script as a background task in the prefix. Returns whether the task actually
          * started; when it did, {@code onExit} is called exactly once, later, on the main thread,
@@ -178,7 +179,11 @@ public final class X11LinuxAppRunner {
         pending = app;
         handler.removeCallbacks(giveUp);
         handler.postDelayed(giveUp, START_TIMEOUT_MS);
-        host.startDisplay();
+        if (app.session) {
+            host.startDisplay();
+        } else {
+            host.startDisplayStandalone();
+        }
     }
 
     /** The controller's running state changed. */

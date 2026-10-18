@@ -715,6 +715,145 @@ public final class ChrootDistro {
 
     public static final String CHROOT_APP_SCRIPT_NAME = "termux-chroot-app";
     public static final String DROIDSPACES_APP_SCRIPT_NAME = "termux-droidspaces-app";
+    public static final String CHROOT_KIOSK_SCRIPT_NAME = "termux-chroot-kiosk";
+    public static final String DROIDSPACES_KIOSK_SCRIPT_NAME = "termux-droidspaces-kiosk";
+
+    public static void writeChrootKioskScript(@NonNull String rootPath) {
+        String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_KIOSK_SCRIPT_NAME;
+        String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String virglDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.virgl";
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Chroot Kiosk Window Manager (Standalone App) for Termux Launcher\n\n"
+            + "ROOTPATH=\"" + rootPath + "\"\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n"
+            + "VIRGL_DIR=\"" + virglDir + "\"\n\n"
+            + "mkdir -p \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "mkdir -p \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "mount -o bind \"$VIRGL_DIR\" \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "ln -sf /tmp/.virgl/.virgl_test \"$ROOTPATH/tmp/.virgl_test\" 2>/dev/null || true\n\n"
+            + "for _w in $(seq 1 50); do\n"
+            + "    [ -S \"$X11_DIR/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n"
+            + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
+            + "exec chroot \"$ROOTPATH\" /usr/bin/env -i \\\n"
+            + "    HOME=/root \\\n"
+            + "    USER=root \\\n"
+            + "    LOGNAME=root \\\n"
+            + "    TERM=xterm-256color \\\n"
+            + "    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\\n"
+            + "    DISPLAY=${DISPLAY:-:0} \\\n"
+            + "    PULSE_SERVER=tcp:127.0.0.1:4713 \\\n"
+            + "    GALLIUM_DRIVER=virpipe \\\n"
+            + "    MESA_GL_VERSION_OVERRIDE=4.3COMPAT \\\n"
+            + "    MESA_GLES_VERSION_OVERRIDE=3.2 \\\n"
+            + "    MESA_NO_ERROR=1 \\\n"
+            + "    LIBGL_DRI3_DISABLE=1 \\\n"
+            + "    VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test \\\n"
+            + "    XKB_CONFIG_ROOT=/usr/share/X11/xkb \\\n"
+            + "    LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 \\\n"
+            + "    DISABLE_AUTO_TITLE=true \\\n"
+            + "    /bin/bash -c 'for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
+            + "/etc/init.d/dbus start >/dev/null 2>&1 || true; "
+            + "if command -v bspwm >/dev/null 2>&1; then "
+            + "  mkdir -p /root/.config/bspwm 2>/dev/null || true; "
+            + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc desktop 1 -l monocle\\n\" > /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+            + "  chmod +x /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+            + "  exec dbus-run-session -- bspwm -c /root/.config/bspwm/kiosk.bspwmrc; "
+            + "elif command -v openbox >/dev/null 2>&1; then "
+            + "  exec openbox; "
+            + "elif command -v xfwm4 >/dev/null 2>&1; then "
+            + "  exec xfwm4; "
+            + "elif command -v i3 >/dev/null 2>&1; then "
+            + "  exec i3; "
+            + "else "
+            + "  while true; do sleep 3600; done; "
+            + "fi'\n";
+
+        File scriptFile = new File(scriptPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            java.nio.file.Files.write(scriptFile.toPath(), scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write chroot kiosk script: " + e.getMessage());
+        }
+    }
+
+    public static void writeDroidspacesKioskScript(@NonNull String containerName) {
+        String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_KIOSK_SCRIPT_NAME;
+        String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String configPath = "/data/local/Droidspaces/Containers/" + containerName + "/container.config";
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Droidspaces Kiosk Window Manager (Standalone App) for Termux Launcher\n\n"
+            + "CNAME=\"" + containerName + "\"\n"
+            + "CONFIG_PATH=\"" + configPath + "\"\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n\n"
+            + "for _w in $(seq 1 50); do\n"
+            + "    [ -S \"$X11_DIR/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n"
+            + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
+            + "if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; then\n"
+            + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
+            + "    sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
+            + "    if [ -f \"$CONFIG_PATH\" ]; then\n"
+            + "        /data/local/Droidspaces/bin/droidspaces --config=\"$CONFIG_PATH\" -B \"$X11_DIR:/tmp/.X11-unix\" start >/dev/null 2>&1 || true\n"
+            + "    else\n"
+            + "        /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" -B \"$X11_DIR:/tmp/.X11-unix\" start >/dev/null 2>&1 || true\n"
+            + "    fi\n"
+            + "    sleep 1\n"
+            + "fi\n\n"
+            + "mkdir -p \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "exec /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
+            + "export DISPLAY=:0\n"
+            + "for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done\n"
+            + "if [ -S /tmp/.pulse-socket ]; then\n"
+            + "    export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"\n"
+            + "else\n"
+            + "    export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
+            + "fi\n"
+            + "export GALLIUM_DRIVER=virpipe\n"
+            + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
+            + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
+            + "export MESA_NO_ERROR=1\n"
+            + "export LIBGL_DRI3_DISABLE=1\n"
+            + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n"
+            + "if command -v bspwm >/dev/null 2>&1; then \n"
+            + "  mkdir -p \"$HOME/.config/bspwm\" 2>/dev/null || true\n"
+            + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc desktop 1 -l monocle\\n\" > \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true\n"
+            + "  chmod +x \"$HOME/.config/bspwm/kiosk.bspwmrc\" 2>/dev/null || true\n"
+            + "  exec dbus-run-session -- bspwm -c \"$HOME/.config/bspwm/kiosk.bspwmrc\"\n"
+            + "elif command -v openbox >/dev/null 2>&1; then \n"
+            + "  exec openbox\n"
+            + "elif command -v xfwm4 >/dev/null 2>&1; then \n"
+            + "  exec xfwm4\n"
+            + "elif command -v i3 >/dev/null 2>&1; then \n"
+            + "  exec i3\n"
+            + "else \n"
+            + "  while true; do sleep 3600; done\n"
+            + "fi\n"
+            + "'\n";
+
+        File scriptFile = new File(scriptPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            java.nio.file.Files.write(scriptFile.toPath(), scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write droidspaces kiosk script: " + e.getMessage());
+        }
+    }
 
     public static void writeChrootAppScript(@NonNull String rootPath) {
         String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_APP_SCRIPT_NAME;
@@ -755,7 +894,7 @@ public final class ChrootDistro {
             + "    XKB_CONFIG_ROOT=/usr/share/X11/xkb \\\n"
             + "    LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 \\\n"
             + "    DISABLE_AUTO_TITLE=true \\\n"
-            + "    /bin/bash -c \"for _w in \\$(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; (for k in \\$(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; bspc config single_monocle true 2>/dev/null || true; bspc config gapless_monocle true 2>/dev/null || true; bspc config borderless_monocle true 2>/dev/null || true; for d in \\$(bspc query -D 2>/dev/null); do bspc desktop \\\"\\$d\\\" -l monocle 2>/dev/null || true; done; polybar-msg -p \\$(pgrep -f 'polybar.*top') cmd hide 2>/dev/null || pkill -f 'polybar.*top' 2>/dev/null || true) & \\\"\\$@\\\"\" dummy \"$@\"\n";
+            + "    /bin/bash -c \"for _w in \\$(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; for _wm in \\$(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break; sleep 0.1; done; \\\"\\$@\\\"\" dummy \"$@\"\n";
 
         File scriptFile = new File(scriptPath);
         try {
@@ -810,7 +949,7 @@ public final class ChrootDistro {
             + "export MESA_NO_ERROR=1\n"
             + "export LIBGL_DRI3_DISABLE=1\n"
             + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n"
-            + "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; bspc config single_monocle true 2>/dev/null || true; bspc config gapless_monocle true 2>/dev/null || true; bspc config borderless_monocle true 2>/dev/null || true; for d in $(bspc query -D 2>/dev/null); do bspc desktop \"$d\" -l monocle 2>/dev/null || true; done; polybar-msg -p $(pgrep -f 'polybar.*top') cmd hide 2>/dev/null || pkill -f 'polybar.*top' 2>/dev/null || true) & \n"
+            + "for _wm in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break; sleep 0.1; done\n"
             + "\"$@\"\n"
             + "' dummy \"$@\"\n";
 
@@ -929,6 +1068,74 @@ public final class ChrootDistro {
             }
             return "env PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 MESA_NO_ERROR=1 LIBGL_DRI3_DISABLE=1 VTEST_SOCKET_NAME=/data/data/com.termux/files/usr/tmp/.virgl/.virgl_test " + baseCmd;
         }
+    }
+
+    /**
+     * Resolves the startup command for Standalone App Kiosk Mode.
+     * Starts a minimal Window Manager (BSPWM monocle with padding 0, or Openbox)
+     * without desktop bloat (no polybar, no desktop wallpapers, no heavy session daemons).
+     */
+    @NonNull
+    public static String resolveStandaloneKioskCommand(@NonNull Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            Context.MODE_PRIVATE);
+        String route = prefs.getString("gui_apps_route", "x11");
+
+        if (GuiAppsSetup.Route.CHROOT.key.equals(route)) {
+            ChrootEnvironment env = getActiveEnvironment(context);
+            if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
+                writeDroidspacesKioskScript(env.containerName);
+                return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_KIOSK_SCRIPT_NAME;
+            } else if (env != null) {
+                writeChrootKioskScript(env.rootfs.getAbsolutePath());
+                return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_KIOSK_SCRIPT_NAME;
+            }
+        } else if (GuiAppsSetup.Route.DISTRO.key.equals(route)) {
+            String distro = prefs.getString("gui_apps_distro", "debian");
+            String inner = "/etc/init.d/dbus start >/dev/null 2>&1 || true; "
+                + "for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
+                + "if command -v bspwm >/dev/null 2>&1; then "
+                + "  mkdir -p /root/.config/bspwm 2>/dev/null || true; "
+                + "  printf '#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc desktop 1 -l monocle\\n' > /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+                + "  chmod +x /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+                + "  exec dbus-run-session -- bspwm -c /root/.config/bspwm/kiosk.bspwmrc; "
+                + "elif command -v openbox >/dev/null 2>&1; then "
+                + "  exec openbox; "
+                + "elif command -v xfwm4 >/dev/null 2>&1; then "
+                + "  exec xfwm4; "
+                + "elif command -v i3 >/dev/null 2>&1; then "
+                + "  exec i3; "
+                + "else "
+                + "  while true; do sleep 3600; done; "
+                + "fi";
+            return "proot-distro login " + distro + " --shared-x11 --shared-tmp"
+                + " -e DISPLAY=${DISPLAY:-:0}"
+                + " -e PULSE_SERVER=tcp:127.0.0.1:4713"
+                + " -e GALLIUM_DRIVER=virpipe"
+                + " -e MESA_GL_VERSION_OVERRIDE=4.3COMPAT"
+                + " -e MESA_GLES_VERSION_OVERRIDE=3.2"
+                + " -e MESA_NO_ERROR=1"
+                + " -e LIBGL_DRI3_DISABLE=1"
+                + " -e VTEST_SOCKET_NAME=/tmp/.virgl_test"
+                + " -- /bin/bash -c " + ProotDistro.singleQuote(inner);
+        }
+
+        // Host / Native X11 fallback
+        File bspwmBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "bspwm");
+        if (bspwmBin.canExecute()) {
+            return "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
+                + "bspc config single_monocle true; "
+                + "bspc config gapless_monocle true; "
+                + "bspc config borderless_monocle true; "
+                + "bspc config window_gap 0; "
+                + "bspc config top_padding 0; "
+                + "bspc config bottom_padding 0; "
+                + "bspc config left_padding 0; "
+                + "bspc config right_padding 0; "
+                + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done) & bspwm";
+        }
+        return "openbox";
     }
 
     /**

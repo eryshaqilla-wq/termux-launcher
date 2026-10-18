@@ -119,9 +119,18 @@ public final class X11CliInstaller {
     /** The installer for this launcher's own prefix. */
     @NonNull
     public static X11CliInstaller forPrefix(@NonNull Context context) {
+        return forPrefix(context, null);
+    }
+
+    /** The installer for this launcher's own prefix with explicit WM startup command. */
+    @NonNull
+    public static X11CliInstaller forPrefix(@NonNull Context context, @Nullable String explicitWm) {
         Context app = context.getApplicationContext();
         TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(app);
-        String wm = ChrootDistro.resolveActiveDesktopCommand(app);
+        String wm = explicitWm;
+        if (wm == null || wm.isEmpty()) {
+            wm = ChrootDistro.resolveActiveDesktopCommand(app);
+        }
         if (wm == null || wm.isEmpty()) {
             wm = preferences == null ? "" : preferences.getX11WindowManager();
         }
