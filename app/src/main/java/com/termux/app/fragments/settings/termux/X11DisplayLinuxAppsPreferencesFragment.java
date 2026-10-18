@@ -100,8 +100,13 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
         }
 
         if (wmPref != null) {
+            wmPref.setSummaryProvider(null);
             if (GuiAppsSetup.Route.CHROOT.key.equals(route) || GuiAppsSetup.Route.DISTRO.key.equals(route)) {
                 wmPref.setSummary("Active engine: " + activeEngineTitle + " (Managed dynamically)");
+                wmPref.setEnabled(false);
+            } else {
+                wmPref.setEnabled(true);
+                wmPref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
             }
         }
 
