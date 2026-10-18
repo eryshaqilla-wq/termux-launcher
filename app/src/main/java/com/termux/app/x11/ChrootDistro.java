@@ -481,16 +481,19 @@ public final class ChrootDistro {
         if (RunnerType.DROIDSPACES.name().equals(type)) {
             String cName = container.name;
             String configPath = "/data/local/Droidspaces/Containers/" + cName + "/container.config";
-            String runCmd = "export DISPLAY=:0 PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe VTEST_SOCKET_NAME=/tmp/.virgl_test; " + command;
+            String runCmd = "export DISPLAY=:0; "
+                + "if [ -S /tmp/.pulse-socket ]; then export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"; else export PULSE_SERVER=\"tcp:127.0.0.1:4713\"; fi; "
+                + "export GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 MESA_NO_ERROR=1 LIBGL_DRI3_DISABLE=1 VTEST_SOCKET_NAME=/tmp/.virgl_test; "
+                + command;
             return "su -c \"if ! /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw '" + cName + "'; then "
                 + "sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' '" + configPath + "' 2>/dev/null || true; "
-                + "if [ -f '" + configPath + "' ]; then /data/local/Droidspaces/bin/droidspaces --config='" + configPath + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; "
-                + "else /data/local/Droidspaces/bin/droidspaces --name='" + cName + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start; fi; sleep 2; "
-                + "else "
+                + "sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' '" + configPath + "' 2>/dev/null || true; "
+                + "if [ -f '" + configPath + "' ]; then /data/local/Droidspaces/bin/droidspaces --config='" + configPath + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start >/dev/null 2>&1 || true; "
+                + "else /data/local/Droidspaces/bin/droidspaces --name='" + cName + "' -B /data/data/com.termux/files/usr/tmp/.X11-unix:/tmp/.X11-unix start >/dev/null 2>&1 || true; fi; sleep 1; "
+                + "fi; "
                 + "mkdir -p /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
                 + "umount -l /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
                 + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix /data/local/Droidspaces/Containers/'" + cName + "'/rootfs/tmp/.X11-unix 2>/dev/null || true; "
-                + "fi; "
                 + "/data/local/Droidspaces/bin/droidspaces --name='" + cName + "' run /bin/sh -c " + ProotDistro.singleQuote(runCmd) + "\"";
         } else if (RunnerType.CUSTOM.name().equals(type) && container.customRunner != null
                 && !container.customRunner.trim().isEmpty()) {
@@ -573,22 +576,40 @@ public final class ChrootDistro {
     public static void writeDroidspacesDesktopScript(@NonNull String cName, @NonNull String innerCmd) {
         String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_DESKTOP_SCRIPT_NAME;
         String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String virglDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.virgl";
         String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
-            + "# Droidspaces Desktop Runner for Termux Launcher\n\n"
+            + "# Droidspaces Desktop Runner for Termux Launcher (Full Power Permissive Mode)\n\n"
             + "CNAME=\"" + cName + "\"\n"
-            + "X11_DIR=\"" + x11Dir + "\"\n\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n"
+            + "VIRGL_DIR=\"" + virglDir + "\"\n\n"
             + "# 1. Auto-detect nama container jika belum diatur atau kosong\n"
             + "if [ -z \"$CNAME\" ] || [ ! -d \"/data/local/Droidspaces/Containers/$CNAME\" ]; then\n"
             + "    AUTO_C=$(ls -1 /data/local/Droidspaces/Containers/ 2>/dev/null | grep -v '^\\.' | head -n1)\n"
             + "    [ -n \"$AUTO_C\" ] && CNAME=\"$AUTO_C\"\n"
             + "fi\n\n"
+            + "ROOTFS=\"/data/local/Droidspaces/Containers/$CNAME/rootfs\"\n"
             + "CONFIG_PATH=\"/data/local/Droidspaces/Containers/$CNAME/container.config\"\n\n"
             + "mkdir -p \"$X11_DIR\" 2>/dev/null || true\n"
             + "chmod 777 \"$X11_DIR\" 2>/dev/null || true\n\n"
             + "if [ -f \"$CONFIG_PATH\" ]; then\n"
             + "    sed -i 's/enable_termux_x11=1/enable_termux_x11=0/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
+            + "    sed -i 's/enable_pulseaudio=0/enable_pulseaudio=1/' \"$CONFIG_PATH\" 2>/dev/null || true\n"
             + "fi\n\n"
-            + "# 2. Cek apakah container Droidspaces sudah berjalan. Jika belum, start dulu agar tidak layar hitam!\n"
+            + "# 2. Konfigurasi jembatan ALSA ke PulseAudio Unix Socket di dalam rootfs Droidspaces\n"
+            + "if [ -d \"$ROOTFS/etc\" ] && [ ! -f \"$ROOTFS/etc/asound.conf\" ]; then\n"
+            + "    cat << 'EOF' > \"$ROOTFS/etc/asound.conf\"\n"
+            + "pcm.!default {\n"
+            + "    type pulse\n"
+            + "    server \"unix:/tmp/.pulse-socket\"\n"
+            + "}\n"
+            + "ctl.!default {\n"
+            + "    type pulse\n"
+            + "    server \"unix:/tmp/.pulse-socket\"\n"
+            + "}\n"
+            + "EOF\n"
+            + "    chmod 644 \"$ROOTFS/etc/asound.conf\" 2>/dev/null || true\n"
+            + "fi\n\n"
+            + "# 3. Cek apakah container Droidspaces sudah berjalan. Jika belum, start dulu agar tidak layar hitam!\n"
             + "DS_RUNNING=0\n"
             + "if /data/local/Droidspaces/bin/droidspaces pid --name=\"$CNAME\" >/dev/null 2>&1; then\n"
             + "    DS_RUNNING=1\n"
@@ -597,37 +618,46 @@ public final class ChrootDistro {
             + "fi\n\n"
             + "if [ $DS_RUNNING -eq 0 ]; then\n"
             + "    /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" start >/dev/null 2>&1 || true\n"
-            + "    sleep 2\n"
+            + "    sleep 1.5\n"
             + "fi\n\n"
-            + "# 3. Pastikan socket X11 ter-mount ke rootfs Droidspaces\n"
-            + "mkdir -p \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
-            + "umount -l \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n"
-            + "mount -o bind \"$X11_DIR\" \"/data/local/Droidspaces/Containers/$CNAME/rootfs/tmp/.X11-unix\" 2>/dev/null || true\n\n"
-            + "# 4. Pastikan Termux IPC bridge daemon aktif\n"
+            + "# 4. Pastikan socket X11 dan VirGL ter-mount segar ke rootfs Droidspaces\n"
+            + "mkdir -p \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"$ROOTFS/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "if [ -S \"$VIRGL_DIR/.virgl_test\" ]; then\n"
+            + "    rm -f \"$ROOTFS/tmp/.virgl_test\" 2>/dev/null || true\n"
+            + "    ln -sf \"$VIRGL_DIR/.virgl_test\" \"$ROOTFS/tmp/.virgl_test\" 2>/dev/null || true\n"
+            + "fi\n\n"
+            + "# 5. Pastikan Termux IPC bridge daemon aktif\n"
             + "if [ -x \"/data/data/com.termux/files/usr/bin/termux-ipc-bridge\" ]; then\n"
             + "    pgrep -f termux-ipc-bridge >/dev/null 2>&1 || /data/data/com.termux/files/usr/bin/termux-ipc-bridge </dev/null >/dev/null 2>&1 &\n"
             + "fi\n\n"
-            + "# 5. Tunggu sampai socket X0 muncul\n"
+            + "# 6. Tunggu sampai socket X0 muncul\n"
             + "for i in $(seq 1 50); do\n"
             + "    [ -S \"$X11_DIR/X0\" ] && break\n"
             + "    sleep 0.1\n"
             + "done\n"
             + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
-            + "# 6. Jalankan Desktop Environment di dalam container Droidspaces\n"
-            + "/data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
+            + "# 7. Jalankan Desktop Environment di dalam container Droidspaces (Full Power Permissive Mode)\n"
+            + "exec /data/local/Droidspaces/bin/droidspaces --name=\"$CNAME\" run /bin/sh -c '\n"
             + "export DISPLAY=:0\n"
-            + "export PULSE_SERVER=tcp:127.0.0.1:4713\n"
+            + "if [ -S /tmp/.pulse-socket ]; then\n"
+            + "    export PULSE_SERVER=\"unix:/tmp/.pulse-socket\"\n"
+            + "else\n"
+            + "    export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
+            + "fi\n"
             + "export GALLIUM_DRIVER=virpipe\n"
+            + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
+            + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
+            + "export MESA_NO_ERROR=1\n"
+            + "export LIBGL_DRI3_DISABLE=1\n"
             + "export VTEST_SOCKET_NAME=/tmp/.virgl_test\n\n"
             + "for j in $(seq 1 20); do\n"
             + "    xdpyinfo >/dev/null 2>&1 && break\n"
             + "    sleep 0.1\n"
             + "done\n\n"
             + innerCmd + "\n"
-            + "'\n\n"
-            + "while /data/local/Droidspaces/bin/droidspaces show 2>/dev/null | grep -qw \"$CNAME\"; do\n"
-            + "    sleep 3\n"
-            + "done\n";
+            + "'\n";
 
         File scriptFile = new File(scriptPath);
         try {
@@ -951,7 +981,8 @@ public final class ChrootDistro {
                     String[] cmd = new String[]{
                         pulseBin.getAbsolutePath(),
                         "--start",
-                        "--load=module-native-protocol-tcp auth-ip-acl=127.0.0.1 auth-anonymous=1",
+                        "--load=module-native-protocol-tcp auth-ip-acl=127.0.0.1;172.28.0.0/16 auth-anonymous=1",
+                        "--load=module-native-protocol-unix socket=" + TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.pulse-socket auth-anonymous=1",
                         "--exit-idle-time=-1"
                     };
                     Process p = Runtime.getRuntime().exec(cmd, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH));
@@ -969,6 +1000,13 @@ public final class ChrootDistro {
                         pactlBin.getAbsolutePath(),
                         "unload-module",
                         "module-suspend-on-idle"
+                    }, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH)).waitFor();
+                    Runtime.getRuntime().exec(new String[]{
+                        pactlBin.getAbsolutePath(),
+                        "load-module",
+                        "module-native-protocol-unix",
+                        "socket=" + TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.pulse-socket",
+                        "auth-anonymous=1"
                     }, envp, new File(TermuxConstants.TERMUX_HOME_DIR_PATH)).waitFor();
                 } catch (Exception ignored) {}
             }

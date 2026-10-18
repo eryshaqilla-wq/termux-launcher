@@ -203,17 +203,23 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 
 ---
 
-### H. Integrasi Penuh Droidspaces Container ke Embedded Display (`DISPLAY=:0`)
+### H. Integrasi Penuh & Optimalisasi Mesin Droidspaces X11 (`DISPLAY=:0`)
 - **Konteks & Kebutuhan**:
-  - Droidspaces secara default sering menggunakan server X terpisah atau VNC, yang menyulitkan integrasi langsung dengan panel display embedded di Canvas Kanan launcher.
-- **Solusi & Arsitektur**:
-  1. **Direct Routing ke Display Host**:
-     - Mengaitkan eksekusi container Droidspaces langsung ke embedded X11 server Termux (`DISPLAY=:0`) melalui `droidspaces enter -- <command>`.
-     - Memastikan socket X11 `/data/data/com.termux/files/usr/tmp/.X11-unix` dan soket `.virgl` ter-forward secara transparan ke dalam container Droidspaces.
-  2. **Pencegahan Deadlock di `X11CliInstaller`**:
-     - Memperbaiki validasi perintah foreign route pada `X11CliInstaller` agar tidak memicu thread blocking / deadlock saat pengujian unit test maupun eksekusi startup desktop Droidspaces.
-  3. **Multi-DE Auto-Start di Droidspaces**:
-     - Mendukung peluncuran seluruh Desktop Environment yang ter-install di Droidspaces (XFCE4, GNOME, Openbox, MATE, LXQt, dll.) secara modular melalui runner `dbus-run-session`.
+  - Droidspaces membutuhkan lingkungan SELinux `Permissive` pada kernel Android (seperti di Poco M3) untuk menjalankan namespace container.
+  - Sebelumnya, Droidspaces mengalami ketiadaan audio (isu network namespace NAT tidak bisa menjangkau TCP 127.0.0.1 Termux host), loop runner menggantung (`while sleep 3`), dan soket VirGL 3D belum terhubung sempurna.
+- **Solusi & Arsitektur (Full Power Permissive Mode)**:
+  1. **Direct Routing ke Display Host & Penghapusan Loop Zombie**:
+     - Runner `termux-droidspaces-desktop` kini menggunakan `exec /data/local/Droidspaces/bin/droidspaces run ...` menggantikan loop sleep 3 lama, sehingga saat session desktop atau window manager ditutup, proses langsung exit secara bersih tanpa menyisakan proses zombie.
+     - Soket X11 `/data/data/com.termux/files/usr/tmp/.X11-unix` di-bind mount segar setiap peluncuran.
+  2. **Pemulihan Audio Droidspaces via PulseAudio Unix Socket & ALSA Bridge**:
+     - Karena Droidspaces beroperasi dalam network namespace NAT (`172.28.28.28`), koneksi TCP ke `127.0.0.1:4713` terisolasi dari host.
+     - Mesin Droidspaces kini menargetkan **UNIX Domain Socket**: `/tmp/.pulse-socket` yang otomatis di-mount oleh Droidspaces dan Termux host (`PULSE_SERVER="unix:/tmp/.pulse-socket"`).
+     - Otomatis membuat `/etc/asound.conf` di dalam rootfs Droidspaces agar library ALSA langsung mengarah ke `unix:/tmp/.pulse-socket`.
+     - PulseAudio host di Termux kini otomatis memuat `module-native-protocol-unix socket=$TMPDIR/.pulse-socket` dan mengizinkan subnet NAT `172.28.0.0/16`.
+  3. **Akselerasi Grafis VirGL 3D Hardware Penuh**:
+     - Soket `.virgl_test` di-link langsung ke `/tmp/.virgl_test` di dalam container rootfs dengan environment MESA OpenGL 4.3 Compat & GLES 3.2.
+  4. **Isolasi Penuh dari PRoot & Chroot**:
+     - Seluruh perbaikan Droidspaces terlokalisasi di `RunnerType.DROIDSPACES` dan tidak memodifikasi alur eksekusi Chroot (NetHunter) maupun PRoot.
 
 ---
 
