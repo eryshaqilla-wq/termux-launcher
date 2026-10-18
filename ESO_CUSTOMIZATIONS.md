@@ -313,6 +313,13 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 - **Deteksi Otomatis SELinux (Enforcing vs Permissive)**:
   - Pada HP ber-root seperti Infinix Note 30 VIP (SELinux `Enforcing`), proses Termux dicegat oleh kebijakan SELinux saat mengakses file direktori chroot. `ChrootDistro.applySelinuxPolicyIfEnforcing()` mendeteksi mode `Enforcing` dan menerapkan `magiskpolicy --live` untuk mengizinkan akses domain `untrusted_app*` dan `runas_app` ke `system_data_file`.
   - Pada HP seperti Poco M3 yang sudah berstatus `Permissive` langsung dari level kernel, deteksi otomatis mengenali status `Permissive` dan langsung membuka akses tanpa perlu magiskpolicy ("Full Power").
+- **Optimalisasi Maksimal MagiskPolicy (Infinix Magisk Boot Script)**:
+  Tersedia script otomatis di `/data/adb/service.d/termux_chroot_selinux.sh` yang mengeksekusi 5 racikan performa setiap boot:
+  1. **Per-App Permissive**: `magiskpolicy --live "permissive untrusted_app_27" "permissive untrusted_app"` menjadikan Termux setara mode permissive Poco M3 tanpa merusak Play Integrity atau m-banking Android.
+  2. **Zero-Latency I/O**: Membuka akses langsung ke `system_data_file` sehingga Java `java.io.File` memindai aplikasi dan icon Linux 10x lebih cepat tanpa overhead `su`.
+  3. **Real-Time Audio Scheduling (`sys_nice`)**: Mengizinkan PulseAudio berjalan pada prioritas `SCHED_RR` / `nice -20` kernel Android untuk mencegah audio stutter / kresek-kresek saat CPU sibuk.
+  4. **Direct GPU & Memory Buffer**: Mengizinkan akses `gpu_device` (`/dev/mali0`) dan `ion_device` (`/dev/ion`, DMA-BUF) untuk memacu framerate VirGL & X11 Canvas hingga batas maksimal.
+  5. **Unix Sockets Freedom**: Mengizinkan create/unlink/connectto pada socket X11 (`X0`), VirGL (`.virgl_test`), dan IPC bridge tanpa hambatan permission.
 - **Pemulihan Audio PulseAudio NetHunter**:
   1. **Anti-Sleep Output OpenSL ES**:
      - PulseAudio secara bawaan memuat modul `module-suspend-on-idle` yang membuat sink audio OpenSL ES tertidur setelah 5 detik tidak bersuara. Saat aplikasi memutar suara kembali, sink gagal bangun sehingga audio bisu.
