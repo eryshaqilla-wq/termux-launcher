@@ -92,6 +92,7 @@ public final class X11LinuxAppRunner {
         boolean isDisplayRunning();
         void startDisplay();
         default void startDisplayStandalone() { startDisplay(); }
+        default void startDisplayStandalone(@NonNull String appName) { startDisplayStandalone(); }
         /**
          * Run a shell script as a background task in the prefix. Returns whether the task actually
          * started; when it did, {@code onExit} is called exactly once, later, on the main thread,
@@ -182,7 +183,7 @@ public final class X11LinuxAppRunner {
         if (app.session) {
             host.startDisplay();
         } else {
-            host.startDisplayStandalone();
+            host.startDisplayStandalone(app.name);
         }
     }
 

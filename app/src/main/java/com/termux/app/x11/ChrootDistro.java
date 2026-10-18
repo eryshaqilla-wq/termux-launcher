@@ -755,12 +755,16 @@ public final class ChrootDistro {
             + "    VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test \\\n"
             + "    XKB_CONFIG_ROOT=/usr/share/X11/xkb \\\n"
             + "    LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 \\\n"
+            + "    XDG_RUNTIME_DIR=/tmp/runtime-root \\\n"
+            + "    XDG_CURRENT_DESKTOP=bspwm \\\n"
+            + "    _JAVA_AWT_WM_NONREPARENTING=1 \\\n"
             + "    DISABLE_AUTO_TITLE=true \\\n"
             + "    /bin/bash -c 'for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
+            + "mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root; "
             + "/etc/init.d/dbus start >/dev/null 2>&1 || true; "
             + "if command -v bspwm >/dev/null 2>&1; then "
             + "  mkdir -p /root/.config/bspwm 2>/dev/null || true; "
-            + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc desktop 1 -l monocle\\n\" > /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+            + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc rule -a * state=tiled\\nbspc desktop 1 -l monocle\\n\" > /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
             + "  chmod +x /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
             + "  exec dbus-run-session -- bspwm -c /root/.config/bspwm/kiosk.bspwmrc; "
             + "elif command -v openbox >/dev/null 2>&1; then "
@@ -1086,10 +1090,10 @@ public final class ChrootDistro {
             ChrootEnvironment env = getActiveEnvironment(context);
             if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
                 writeDroidspacesKioskScript(env.containerName);
-                return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_KIOSK_SCRIPT_NAME;
+                return "su -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_KIOSK_SCRIPT_NAME;
             } else if (env != null) {
                 writeChrootKioskScript(env.rootfs.getAbsolutePath());
-                return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_KIOSK_SCRIPT_NAME;
+                return "su -mm -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_KIOSK_SCRIPT_NAME;
             }
         } else if (GuiAppsSetup.Route.DISTRO.key.equals(route)) {
             String distro = prefs.getString("gui_apps_distro", "debian");

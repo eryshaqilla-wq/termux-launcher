@@ -153,6 +153,9 @@ public final class X11WindowIconResolver {
             if (key.equals(key(app.startupWmClass))) return app;
         }
         for (LinuxAppCatalog.LinuxApp app : apps) {
+            if (key.equals(key(app.name))) return app;
+        }
+        for (LinuxAppCatalog.LinuxApp app : apps) {
             if (key.equals(execBasename(app.exec))) return app;
         }
         for (LinuxAppCatalog.LinuxApp app : apps) {
