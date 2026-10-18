@@ -5642,6 +5642,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             && mFrameContent.content() == com.termux.app.x11.DisplayFrameContentPolicy.Content.PAD;
     }
 
+    private boolean isWholeFrameTouchpadShown() {
+        return isTouchpadShown() && splitKeyboardTouchpadGap(mAttachedInAppKeyboardView) == null;
+    }
+
     private boolean isInAppKeyboardShown() {
         if (isTouchpadShown()) {
             return true;
@@ -5916,7 +5920,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * opaque fill. Nothing produces a backdrop for any of them, so nothing may wait on one.
      */
     private boolean paintsNoInAppKeyboardBackdrop() {
-        return inAppKeyboardMaterial() != KeyboardMaterialPolicy.Material.GLASS;
+        return isWholeFrameTouchpadShown()
+            || inAppKeyboardMaterial() != KeyboardMaterialPolicy.Material.GLASS;
     }
 
     /**
@@ -6482,7 +6487,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (surfaceHost == null) {
             return;
         }
-        if (!state.keyboardShown) {
+        if (!state.keyboardShown || isWholeFrameTouchpadShown()) {
             surfaceHost.setBackground(null);
             clearInAppKeyboardBackdrop();
             return;
@@ -6722,6 +6727,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     @Nullable
     private Drawable buildInAppKeyboardVeilOnly(@NonNull ChromeSpec state, @NonNull View surfaceHost) {
+        if (isWholeFrameTouchpadShown()) return null;
         com.termux.app.chrome.GlassBackdropCache.Band band = noteInAppKeyboardBand(surfaceHost);
         if (band == null) return null;
         Drawable veil = mChrome.glass().veilOnlyLayer(band, inAppKeyboardGlassAlpha(state), 0f,
@@ -20933,6 +20939,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             if (host != null) {
                 host.setVisibility(View.VISIBLE);
+                if (splitKeyboardTouchpadGap(mAttachedInAppKeyboardView) == null) {
+                    host.setBackground(null);
+                    clearInAppKeyboardBackdrop();
+                }
                 if (host.getLayoutParams() != null) {
                     host.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
                 }
@@ -20975,6 +20985,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         if (pad != null && pad.getParent() == host) {
+            if (splitKeyboardTouchpadGap(mAttachedInAppKeyboardView) == null) {
+                host.setBackground(null);
+                clearInAppKeyboardBackdrop();
+            }
             pad.setSurfaceColor(resolveExtraKeysBackgroundColor());
             // The keyboard's type may have moved under a pad that is already up.
             applyDisplayTouchpadFrame(pad, mAttachedInAppKeyboardView);
@@ -21023,6 +21037,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mDisplayTouchpadWaitRound = 0;
         if (pad.getParent() instanceof ViewGroup) ((ViewGroup) pad.getParent()).removeView(pad);
         Rect gap = splitKeyboardTouchpadGap(keyboardView);
+        if (gap == null) {
+            host.setBackground(null);
+            clearInAppKeyboardBackdrop();
+        }
         host.addView(pad, seatDisplayTouchpad(pad, keyboardView, gap));
         if (keyboardView != null) {
             final com.termux.app.x11.DisplayTouchpadView following = pad;
