@@ -458,7 +458,7 @@ git push origin eso-launcher main --force-with-lease
 
 ---
 
-### K. Bundel Setup Mandiri (Eso Setup Bundle & Touch BSPWM Theme Suite)
+### Q. Bundel Setup Mandiri (Eso Setup Bundle & Touch BSPWM Theme Suite)
 - **Konteks & Kebutuhan**:
   - Tuan Eso menginginkan agar saat menjalankan `./setup` di perangkat baru yang di-root maupun non-root, seluruh ekosistem langsung siap pakai (*out-of-the-box*):
     1. Otomatis memasang `bspwm`, `sxhkd`, `rofi`, `polybar`, `picom`, `feh`, `pulseaudio`, dan `virgl` di Termux Native.
@@ -476,6 +476,28 @@ git push origin eso-launcher main --force-with-lease
      - Tahap 8: Menyediakan alias `bspwm="termux-bspwm"` pada shell `.zshrc` dan `.bashrc`.
   3. **Pembersihan `login.template`**:
      - Menghapus pemanggilan IPC `MOUSE_ON`, `MOUSE_OFF`, `KEYBOARD_ENABLE`, dan `KEYBOARD_HIDE` sehingga input pengguna tetap mulus dan normal saat memilih menu Linux/Termux.
+
+---
+
+### R. Antigravity IDE (GUI Desktop) Native ARM64 di NetHunter & Standalone Kiosk
+- **Konteks & Kebutuhan**:
+  - Tuan Eso ingin menjalankan Antigravity IDE versi GUI resmi (bukan versi CLI `agy`) langsung di dalam Kali NetHunter (Infinix Note 30 VIP) secara native tanpa lewat ADB.
+  - Aplikasi harus terintegrasi dengan App Drawer Termux Launcher dan dapat diluncurkan dalam mode Standalone Kiosk (monocle fullscreen tiling).
+- **Solusi & Arsitektur**:
+  1. **Unduhan & Ekstraksi Biner Resmi**:
+     - Mengunduh paket resmi Electron Linux ARM64: `https://storage.googleapis.com/antigravity-public/antigravity-hub/2.24.0-5780333019398144/linux-arm/Antigravity.tar.gz` (~181 MB).
+     - Diekstrak ke `/opt/Antigravity/` di dalam rootfs Kali NetHunter (`/data/local/nhsystem/kali-arm64`).
+  2. **Dependensi GUI & DBus**:
+     - Memasang dependensi Electron via `apt-get`: `libgtk-3-0t64 libnotify4 libnss3 libxss1 libasound2t64 libsecret-1-0 libgbm1 libxkbcommon0 libx11-xcb1 libxcb-dri3-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 libcups2t64 xvfb`.
+     - Memastikan layanan DBus `/etc/init.d/dbus start` aktif.
+  3. **Wrapper Script (`/usr/local/bin/antigravity`)**:
+     - Menjalankan Electron dengan flag kontainer & root:
+       `exec /opt/Antigravity/antigravity --no-sandbox --disable-dev-shm-usage --disable-gpu-sandbox "$@"`
+  4. **Ekstraksi Ikon & Desktop Entry**:
+     - Ikon resmi 512x512 diekstrak dari header ASAR (`/opt/Antigravity/icon.png`) dan dipasang ke `/usr/share/pixmaps/antigravity.png` serta jembatan launcher `$PREFIX/share/applications/chroot/icons/antigravity.png`.
+     - File `.desktop` dipasang di `/usr/share/applications/antigravity.desktop` dan disinkronkan ke `$PREFIX/share/applications/chroot/kali-arm64/antigravity.desktop`.
+  5. **Verifikasi Headless & GUI**:
+     - Berhasil diverifikasi menggunakan `xvfb-run`, Language Server dan Electron window aktif (`https://127.0.0.1:35939/`), siap dipakai pada Termux:X11 display `:0`.
 
 ---
 
