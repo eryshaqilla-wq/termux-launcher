@@ -218,7 +218,11 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
      - PulseAudio host di Termux kini otomatis memuat `module-native-protocol-unix socket=$TMPDIR/.pulse-socket` dan mengizinkan subnet NAT `172.28.0.0/16`.
   3. **Akselerasi Grafis VirGL 3D Hardware Penuh**:
      - Soket `.virgl_test` di-link langsung ke `/tmp/.virgl_test` di dalam container rootfs dengan environment MESA OpenGL 4.3 Compat & GLES 3.2.
-  4. **Isolasi Penuh dari PRoot & Chroot**:
+  4. **Pembersihan Emergency Stop GUI Tanpa Mematikan Kontainer (`[×]`)**:
+     - Pada `killDesktopEnvironment()`, perintah `droidspaces stop` telah dihapus.
+     - Saat tombol `[×]` ditekan, launcher hanya membunuh proses GUI desktop (`xfce4`, `bspwm`, dll.) dan melepaskan soket X11, sementara sistem kontainer Droidspaces tetap dibiarkan hidup siaga (*warm standby*) di latar belakang.
+     - Hal ini mencegah background service di Droidspaces mati dan membuat sesi berikutnya dapat diluncurkan secara instan (<0.2 detik) tanpa jeda cold boot.
+  5. **Isolasi Penuh dari PRoot & Chroot**:
      - Seluruh perbaikan Droidspaces terlokalisasi di `RunnerType.DROIDSPACES` dan tidak memodifikasi alur eksekusi Chroot (NetHunter) maupun PRoot.
 
 ---

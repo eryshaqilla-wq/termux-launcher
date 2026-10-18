@@ -1081,10 +1081,11 @@ public final class ChrootDistro {
             List<ChrootEnvironment> envs = scan();
             for (ChrootEnvironment env : envs) {
                 if (env.runnerType == RunnerType.DROIDSPACES) {
-                    // Stop Droidspaces container and kill lingering DE processes
+                    // Kill lingering DE processes inside Droidspaces container without stopping the container itself (warm standby)
                     String dsKillCmd = "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName
                         + "\" run /bin/sh -c 'pkill -9 -f \"" + DE_PROCESS_PATTERN + "\" 2>/dev/null || true'; "
-                        + "/data/local/Droidspaces/bin/droidspaces --name=\"" + env.containerName + "\" stop 2>/dev/null || true";
+                        + "umount -l /data/local/Droidspaces/Containers/\"" + env.containerName + "\"/rootfs/tmp/.X11-unix 2>/dev/null || true; "
+                        + "rm -f /data/local/Droidspaces/Containers/\"" + env.containerName + "\"/rootfs/tmp/.virgl_test 2>/dev/null || true";
                     try {
                         Runtime.getRuntime().exec(new String[]{"su", "-c", dsKillCmd}).waitFor();
                     } catch (Exception ignored) {}
@@ -1108,6 +1109,7 @@ public final class ChrootDistro {
                     + "killall -9 virgl_test_server_android 2>/dev/null || pkill -9 -f virgl_test_server_android 2>/dev/null; "
                     + "rm -f /data/data/com.termux/files/usr/tmp/termux-x11-wm.pid 2>/dev/null; "
                     + "umount -l /data/local/nhsystem/kali-arm64/tmp/.X11-unix 2>/dev/null || true; "
+                    + "umount -l /data/local/Droidspaces/Containers/*/rootfs/tmp/.X11-unix 2>/dev/null || true; "
                     + "umount -l /data/local/nhsystem/kali-arm64/tmp/.virgl 2>/dev/null || true; "
                     + "rm -rf /data/data/com.termux/files/usr/tmp/.virgl 2>/dev/null; "
                     + "rm -f /data/data/com.termux/files/usr/tmp/.virgl_test 2>/dev/null; "
