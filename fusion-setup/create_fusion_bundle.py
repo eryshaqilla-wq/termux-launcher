@@ -184,16 +184,61 @@ with tarfile.open(OUTPUT_TAR, "w:gz") as tar:
 
 print(f"✓ Payload berhasil dibuat: {OUTPUT_TAR} ({os.path.getsize(OUTPUT_TAR)} bytes)")
 
+# Encrypt payload with AES-256-CBC PBKDF2 using secure dynamic PIN
+PIN = os.environ.get("FUSION_PIN")
+if not PIN and os.path.exists("/root/.fusion_pin"):
+    try:
+        with open("/root/.fusion_pin", "r") as pf:
+            PIN = pf.read().strip()
+    except Exception:
+        pass
+
+if not PIN:
+    import getpass
+    PIN = getpass.getpass("Masukkan PIN untuk mengenkripsi payload: ")
+
+if not PIN:
+    print("Error: PIN enkripsi tidak boleh kosong!")
+    sys.exit(1)
+
+OUTPUT_ENC = OUTPUT_TAR + ".enc"
+print(f"--- 3b. Mengenkripsi payload dengan AES-256-CBC ---")
+import subprocess
+res = subprocess.run([
+    "openssl", "enc", "-aes-256-cbc", "-pbkdf2", "-iter", "100000",
+    "-pass", f"pass:{PIN}",
+    "-in", OUTPUT_TAR,
+    "-out", OUTPUT_ENC
+], capture_output=True)
+if res.returncode != 0:
+    print(f"Error encrypting payload: {res.stderr.decode()}")
+    sys.exit(1)
+print(f"✓ Payload terenkripsi berhasil dibuat: {OUTPUT_ENC} ({os.path.getsize(OUTPUT_ENC)} bytes)")
+
 # Salin ke lokasi assets aplikasi Android
 ASSETS_DIR = "/project/termux-launcher/app/src/main/assets/fusion"
 FUSION_SETUP_DIR = "/project/termux-launcher/fusion-setup"
 os.makedirs(ASSETS_DIR, exist_ok=True)
 
-# 1. Payload tarball
-shutil.copy2(OUTPUT_TAR, os.path.join(ASSETS_DIR, "fusion_payload.tar.gz"))
-shutil.copy2(OUTPUT_TAR, os.path.join(FUSION_SETUP_DIR, "fusion_payload.tar.gz"))
+# 1. Salin payload terenkripsi (.enc)
+shutil.copy2(OUTPUT_ENC, os.path.join(ASSETS_DIR, "fusion_payload.tar.gz.enc"))
+shutil.copy2(OUTPUT_ENC, os.path.join(FUSION_SETUP_DIR, "fusion_payload.tar.gz.enc"))
 
-# 2. Standalone files di assets agar bisa langsung disalin Java saat pertama buka
+# Hapus payload mentah unencrypted agar tidak ter-commit ke GitHub
+for target in [
+    os.path.join(ASSETS_DIR, "fusion_payload.tar.gz"),
+    os.path.join(FUSION_SETUP_DIR, "fusion_payload.tar.gz"),
+    os.path.join(ASSETS_DIR, "wallet.js"),
+    os.path.join(ASSETS_DIR, "x_webview.js"),
+    os.path.join(ASSETS_DIR, "wallets_db.json"),
+    os.path.join(ASSETS_DIR, "chains_db.json"),
+    os.path.join(ASSETS_DIR, "package.json"),
+    os.path.join(ASSETS_DIR, "recipes_db.json"),
+]:
+    if os.path.exists(target):
+        os.remove(target)
+
+# 2. Standalone files di assets yang aman (installer & CLI runner umum)
 shutil.copy2(os.path.join(BUNDLE_DIR, "setup.sh"), os.path.join(ASSETS_DIR, "setup.sh"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc"), os.path.join(ASSETS_DIR, "termux-ipc"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge")):
@@ -204,19 +249,8 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/bashnh")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/bashnh"), os.path.join(ASSETS_DIR, "bashnh"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet"), os.path.join(ASSETS_DIR, "wallet"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallet.js")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/wallet.js"), os.path.join(ASSETS_DIR, "wallet.js"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/x_webview.js")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/x_webview.js"), os.path.join(ASSETS_DIR, "x_webview.js"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), os.path.join(ASSETS_DIR, "wallets_db.json"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/chains_db.json")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/chains_db.json"), os.path.join(ASSETS_DIR, "chains_db.json"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/package.json")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/package.json"), os.path.join(ASSETS_DIR, "package.json"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), os.path.join(ASSETS_DIR, "recipes_db.json"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "termux.properties")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "termux.properties"), os.path.join(ASSETS_DIR, "termux.properties"))
 
-print(f"✓ Berhasil menyinkronkan seluruh aset ke {ASSETS_DIR}")
+print(f"✓ Berhasil menyinkronkan seluruh aset terlindungi ke {ASSETS_DIR}")
+

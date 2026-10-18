@@ -543,6 +543,28 @@ git push origin eso-launcher main --force-with-lease
 
 ---
 
+### U. Proteksi Enkripsi AES-256 Bundle Setup (Secure PIN Gate)
+- **Konteks & Kebutuhan**:
+  - Mengingat repository fork `eryshaqilla-wq/termux-launcher` berada di domain publik, aset payload bundle (`fusion_payload.tar.gz`) yang berisi Web3 wallet daemon, otomasi script, tema Touch BSPWM, wallpaper, dan konfigurasi privat tidak boleh bisa diakses atau diekstrak oleh orang lain yang mengunduh repository dari GitHub.
+  - Tuan Eso menetapkan kebijakan proteksi: file payload bundle dienkripsi secara kuat dengan PIN rahasia pengguna. Siapapun yang mengunduh file bundle dari GitHub tidak akan bisa menggunakan atau membukanya tanpa memasukkan PIN ini.
+- **Solusi & Arsitektur**:
+  1. **Enkripsi Kriptografi Tingkat Lanjut (AES-256-CBC PBKDF2)**:
+     - `fusion-setup/create_fusion_bundle.py` secara otomatis mengenkripsi `fusion_payload.tar.gz` menggunakan algoritma `AES-256-CBC` dengan standard `PBKDF2` (100.000 iterasi sha256) menggunakan PIN rahasia pengguna yang dibaca dari environment atau file lokal mesin Tuan (`/root/.fusion_pin`).
+     - File hasil enkripsi disimpan sebagai `fusion_payload.tar.gz.enc` di `fusion-setup/` dan `app/src/main/assets/fusion/`.
+     - File mentah `fusion_payload.tar.gz` serta file aset sensitif individual (`wallet.js`, `x_webview.js`, `wallets_db.json`, `chains_db.json`, `package.json`, `recipes_db.json`) dihapus dari git tracking.
+     - Folder tema mentah `fusion-setup/theme/` dimasukkan ke `.gitignore` sehingga tetap tersimpan di mesin lokal namun tidak terunggah ke repositori publik GitHub.
+  2. **Security Gate Interaktif & Multi-Engine Decryptor (`setup.sh`)**:
+     - Di awal proses instalasi `setup.sh`, sistem mendeteksi keberadaan file `.enc`.
+     - Ditampilkan antarmuka otentikasi PIN tersembunyi (`read -s`) dengan batas maksimal 3 kali percobaan.
+     - Decryptor mendukung multi-engine: native `openssl` dan built-in `node:crypto` (serta auto-fallback jika belum terpasang).
+     - Jika PIN salah 3 kali, akses ditolak seketika (`exit 1`) dan seluruh file sementara langsung dibersihkan.
+     - Jika PIN benar, payload didekripsi ke file sementara, diekstrak ke `$HOME/.fusion`, dan file sementara langsung dihapus bersih dari penyimpanan.
+     - Mendukung otomasi via environment variable `FUSION_PIN=<pin> ./setup`.
+  3. **Penyesuaian Bootstrap Android (`FusionBootstrapRunnable.java`)**:
+     - Menyinkronkan asset loader APK Android untuk menyalin `fusion/fusion_payload.tar.gz.enc` ke `$HOME` pengguna secara aman.
+
+---
+
 ## 4. Prosedur Build CI & Deploy ke Perangkat
 
 ### GitHub Actions CI

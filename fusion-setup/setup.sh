@@ -38,21 +38,146 @@ clear 2>/dev/null || true
 echo -e "${MAGENTA}${BOLD}⚡ ESO:LAUNCHER SETUP${RESET}"
 echo -e "${GRAY}──────────────────────────────${RESET}"
 
-# Cari payload tarball
+# ==============================================================================
+# DETEKSI DAN PROTEKSI AKSES FUSION BUNDLE (AES-256)
+# ==============================================================================
+decrypt_payload() {
+    local pin="$1"
+    local infile="$2"
+    local outfile="$3"
+
+    # 1. Coba OpenSSL
+    if command -v openssl >/dev/null 2>&1; then
+        if openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass pass:"$pin" -in "$infile" -out "$outfile" 2>/dev/null; then
+            if [ -s "$outfile" ]; then
+                return 0
+            fi
+        fi
+    fi
+
+    # 2. Coba Node.js
+    if command -v node >/dev/null 2>&1; then
+        if node -e "
+const fs = require('fs');
+const crypto = require('crypto');
+try {
+    const data = fs.readFileSync(process.argv[2]);
+    if (data.subarray(0, 8).toString() !== 'Salted__') process.exit(1);
+    const salt = data.subarray(8, 16);
+    const ciphertext = data.subarray(16);
+    const keyIv = crypto.pbkdf2Sync(process.argv[1], salt, 100000, 48, 'sha256');
+    const decipher = crypto.createDecipheriv('aes-256-cbc', keyIv.subarray(0, 32), keyIv.subarray(32, 48));
+    const out = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+    fs.writeFileSync(process.argv[3], out);
+    process.exit(0);
+} catch (e) {
+    process.exit(1);
+}
+" "$pin" "$infile" "$outfile" 2>/dev/null; then
+            if [ -s "$outfile" ]; then
+                return 0
+            fi
+        fi
+    fi
+
+    # 3. Fallback: coba install openssl-tool jika belum ada tool kriptografi
+    if ! command -v openssl >/dev/null 2>&1 && ! command -v node >/dev/null 2>&1; then
+        echo -e "  ${YELLOW}ℹ Mengunduh modul kriptografi untuk verifikasi...${RESET}"
+        pkg install -y openssl-tool >/dev/null 2>&1 || apt-get install -y openssl-tool >/dev/null 2>&1 || true
+        if command -v openssl >/dev/null 2>&1; then
+            if openssl enc -d -aes-256-cbc -pbkdf2 -iter 100000 -pass pass:"$pin" -in "$infile" -out "$outfile" 2>/dev/null; then
+                if [ -s "$outfile" ]; then
+                    return 0
+                fi
+            fi
+        fi
+    fi
+
+    return 1
+}
+
+# Cari payload (baik terenkripsi .enc maupun mentah .tar.gz)
+PAYLOAD_ENC=""
 PAYLOAD_TAR=""
-if [ -f "$SCRIPT_DIR/fusion_payload.tar.gz" ]; then
-    PAYLOAD_TAR="$SCRIPT_DIR/fusion_payload.tar.gz"
-elif [ -f "$HOME/fusion_payload.tar.gz" ]; then
-    PAYLOAD_TAR="$HOME/fusion_payload.tar.gz"
-elif [ -f "$HOME/.fusion/fusion_payload.tar.gz" ]; then
-    PAYLOAD_TAR="$HOME/.fusion/fusion_payload.tar.gz"
-else
+
+for loc in "$SCRIPT_DIR" "$HOME" "$HOME/.fusion"; do
+    if [ -f "$loc/fusion_payload.tar.gz.enc" ]; then
+        PAYLOAD_ENC="$loc/fusion_payload.tar.gz.enc"
+        break
+    elif [ -f "$loc/fusion_payload.enc" ]; then
+        PAYLOAD_ENC="$loc/fusion_payload.enc"
+        break
+    elif [ -f "$loc/fusion_payload.tar.gz" ]; then
+        PAYLOAD_TAR="$loc/fusion_payload.tar.gz"
+        break
+    fi
+done
+
+if [ -z "$PAYLOAD_ENC" ] && [ -z "$PAYLOAD_TAR" ]; then
     BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
     if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ]; then
         if command -v unzip >/dev/null 2>&1; then
-            unzip -p "$BASE_APK" assets/fusion/fusion_payload.tar.gz > "$HOME/fusion_payload.tar.gz" 2>/dev/null || true
-            [ -s "$HOME/fusion_payload.tar.gz" ] && PAYLOAD_TAR="$HOME/fusion_payload.tar.gz"
+            unzip -p "$BASE_APK" assets/fusion/fusion_payload.tar.gz.enc > "$HOME/fusion_payload.tar.gz.enc" 2>/dev/null || true
+            [ -s "$HOME/fusion_payload.tar.gz.enc" ] && PAYLOAD_ENC="$HOME/fusion_payload.tar.gz.enc"
+            if [ -z "$PAYLOAD_ENC" ]; then
+                unzip -p "$BASE_APK" assets/fusion/fusion_payload.tar.gz > "$HOME/fusion_payload.tar.gz" 2>/dev/null || true
+                [ -s "$HOME/fusion_payload.tar.gz" ] && PAYLOAD_TAR="$HOME/fusion_payload.tar.gz"
+            fi
         fi
+    fi
+fi
+
+# Jika payload terenkripsi ditemukan, minta PIN akses
+TEMP_PAYLOAD_UNLOCKED=""
+if [ -n "$PAYLOAD_ENC" ] && [ -f "$PAYLOAD_ENC" ]; then
+    echo -e "\n${MAGENTA}${BOLD}🔒 PROTEKSI ESO:LAUNCHER FUSION BUNDLE${RESET}"
+    echo -e "${GRAY}Aset payload diproteksi enkripsi AES-256. Dibutuhkan PIN akses untuk membuka.${RESET}"
+
+    DECRYPT_SUCCESS=0
+    MAX_ATTEMPTS=3
+    ATTEMPT=1
+
+    # Cek jika PIN dipassing via environment variable FUSION_PIN
+    if [ -n "$FUSION_PIN" ]; then
+        TEMP_CANDIDATE="$FUSION_HOME/payload_unlocked_$$.tar.gz"
+        mkdir -p "$FUSION_HOME"
+        if decrypt_payload "$FUSION_PIN" "$PAYLOAD_ENC" "$TEMP_CANDIDATE"; then
+            PAYLOAD_TAR="$TEMP_CANDIDATE"
+            TEMP_PAYLOAD_UNLOCKED="$TEMP_CANDIDATE"
+            DECRYPT_SUCCESS=1
+            echo -e "  ${GREEN}✔ PIN Otomatis Terverifikasi via FUSION_PIN!${RESET}"
+        fi
+    fi
+
+    while [ $DECRYPT_SUCCESS -eq 0 ] && [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+        echo -ne "  ${CYAN}🔑 Masukkan PIN Akses (percobaan $ATTEMPT/$MAX_ATTEMPTS): ${RESET}"
+        read -s ENTERED_PIN
+        echo ""
+
+        if [ -z "$ENTERED_PIN" ]; then
+            echo -e "  ${RED}✖ PIN tidak boleh kosong!${RESET}"
+            ATTEMPT=$((ATTEMPT + 1))
+            continue
+        fi
+
+        TEMP_CANDIDATE="$FUSION_HOME/payload_unlocked_$$.tar.gz"
+        mkdir -p "$FUSION_HOME"
+        if decrypt_payload "$ENTERED_PIN" "$PAYLOAD_ENC" "$TEMP_CANDIDATE"; then
+            PAYLOAD_TAR="$TEMP_CANDIDATE"
+            TEMP_PAYLOAD_UNLOCKED="$TEMP_CANDIDATE"
+            DECRYPT_SUCCESS=1
+            echo -e "  ${GREEN}✔ PIN Terverifikasi! Akses bundle dibuka.${RESET}"
+            break
+        else
+            echo -e "  ${RED}✖ PIN Akses Salah!${RESET}"
+            rm -f "$TEMP_CANDIDATE" 2>/dev/null || true
+            ATTEMPT=$((ATTEMPT + 1))
+        fi
+    done
+
+    if [ $DECRYPT_SUCCESS -eq 0 ]; then
+        echo -e "\n${RED}${BOLD}⛔ AKSES DITOLAK: PIN salah. Anda tidak memiliki izin untuk memasang bundle ini.${RESET}\n"
+        exit 1
     fi
 fi
 
@@ -382,6 +507,9 @@ fi
 
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
     spin "Mengekstrak aset payload tarball offline..." tar -xzf "$PAYLOAD_TAR" -C "$FUSION_HOME" || true
+    if [ -n "$TEMP_PAYLOAD_UNLOCKED" ] && [ -f "$TEMP_PAYLOAD_UNLOCKED" ]; then
+        rm -f "$TEMP_PAYLOAD_UNLOCKED" 2>/dev/null || true
+    fi
 fi
 
 # Pasang Tema Eso (bspwm, polybar, rofi, picom, dunst, gtk-3.0 & wallpaper) di Termux
