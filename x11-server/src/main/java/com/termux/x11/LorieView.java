@@ -272,6 +272,18 @@ public class LorieView extends SurfaceView implements InputStub {
 
         @Override
         public boolean sendKeyEvent(KeyEvent event) {
+            boolean fixGboardBackspace = LorieHost.getPrefs() != null
+                && LorieHost.getPrefs().enforceCharBasedInput.get();
+            if (fixGboardBackspace) {
+                if (event != null && event.getKeyCode() == KeyEvent.KEYCODE_DEL) {
+                    boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
+                    LorieView.this.sendKeyEvent(0, KeyEvent.KEYCODE_DEL, down);
+                    return true;
+                }
+                if (activity != null && event != null && activity.handleKey(event)) {
+                    return true;
+                }
+            }
             return LorieView.this.dispatchKeyEvent(event);
         }
 
@@ -589,6 +601,19 @@ public class LorieView extends SurfaceView implements InputStub {
             int action = event.getAction();
             if (action == KeyEvent.ACTION_UP)
                 keyReleaseHandler.removeMessages(event.getKeyCode());
+        }
+
+        boolean fixGboardBackspace = LorieHost.getPrefs() != null
+            && LorieHost.getPrefs().enforceCharBasedInput.get();
+        if (fixGboardBackspace) {
+            if (event != null && event.getKeyCode() == KeyEvent.KEYCODE_DEL) {
+                boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
+                sendKeyEvent(0, KeyEvent.KEYCODE_DEL, down);
+                return true;
+            }
+            if (activity != null && event != null && activity.handleKey(event)) {
+                return true;
+            }
         }
 
         return super.dispatchKeyEvent(event);

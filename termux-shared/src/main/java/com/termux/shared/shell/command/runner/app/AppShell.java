@@ -195,8 +195,20 @@ public final class AppShell {
         } catch (IOException e) {
             // might be closed already
         }
-        STDOUT.join();
-        STDERR.join();
+        try {
+            mProcess.getInputStream().close();
+        } catch (IOException ignored) {}
+        try {
+            mProcess.getErrorStream().close();
+        } catch (IOException ignored) {}
+        try {
+            STDOUT.join(500);
+            if (STDOUT.isAlive()) STDOUT.interrupt();
+        } catch (InterruptedException ignored) {}
+        try {
+            STDERR.join(500);
+            if (STDERR.isAlive()) STDERR.interrupt();
+        } catch (InterruptedException ignored) {}
         mProcess.destroy();
         // Process result
         if (exitCode == 0)

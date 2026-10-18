@@ -19748,9 +19748,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     private void killEmbeddedDisplayServer() {
         if (mTermuxService != null) {
+            mTermuxService.killTermuxTasksForShellName("termux-x11");
             mTermuxService.createTermuxTask(
                 TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pkill",
-                new String[]{"-f", "termux-x11 " + getPackageName()}, null,
+                new String[]{"-f", "termux-x11"}, null,
                 TermuxConstants.TERMUX_HOME_DIR_PATH);
         }
         com.termux.app.x11.ChrootDistro.killDesktopEnvironmentAsync(this, null);

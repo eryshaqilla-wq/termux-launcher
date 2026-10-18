@@ -520,6 +520,27 @@ git push origin eso-launcher main --force-with-lease
      - Helper `resolveExtraKeysBackgroundColor()` mengambil nilai `mExtraKeysView.getButtonBackgroundColor()`. Jika Extra Keys bernilai `0` (transparan), maka touchpad ikut transparan murni (`Color.TRANSPARENT`), memperlihatkan kaca dock dan wallpaper secara konsisten.
      - Menyinkronkan warna touchpad di `syncDisplayTouchpad()`, `setExtraKeysView()`, dan `applyExtraKeysFeedbackAccent()`.
 
+### T. Fix Background Task Leak on Display Stop & Complete Gboard Backspace Routing
+- **Konteks & Kebutuhan**:
+  - **Bug Task Menumpuk di Notifikasi (`task.jpg`)**: Setiap kali X11 Display dimulai lalu dimatikan, jumlah background task di notifikasi Termux bertambah (`1 session, 2 tasks (wake lock held)` ... hingga 10 tasks). Hal ini menyebabkan pemborosan daya baterai, thread leak, dan penahanan wakelock permanen.
+  - **Gboard Backspace di BSPWM**: Penekanan Backspace pada Gboard masih belum menghapus teks di BSPWM karena Gboard mengirim event tombol mentah (`sendKeyEvent(KEYCODE_DEL)`) yang diabaikan oleh `dispatchKeyEvent` di `LorieView`.
+- **Solusi & Arsitektur**:
+  1. **Solusi Anti-Deadlock Pipa Output (`AppShell.java`)**:
+     - Proses daemon di dalam chroot (`dbus-daemon`, `gvfsd`, `at-spi`) mewarisi pipa stdout/stderr dari proses `termux-x11`. Saat display dimatikan, daemon tersebut menahan ujung pipa terbuka sehingga thread pembaca (`StreamGobbler`) terkena *infinite block* di `pipe_read`.
+     - Ditambahkan penutupan paksa stream: `mProcess.getInputStream().close()` dan `getErrorStream().close()` setelah `mProcess.waitFor()`.
+     - `STDOUT.join()` dan `STDERR.join()` kini dibatasi dengan batas aman timeout (`500ms`) dan interrupt. `AppShell` dijamin selalu menyelesaikan eksekusi dan memanggil `onAppShellExited()`, menghapus task dari `mTermuxTasks`.
+  2. **Pembersihan Bersih Daemon Chroot (`ChrootDistro.java`)**:
+     - `DE_PROCESS_PATTERN` diperluas dengan menambahkan `dbus-daemon`, `gvfsd`, dan `at-spi`, sehingga daemon sesi chroot/container dibasmi tuntas saat display ditutup.
+  3. **Pembersihan Task Display Server (`TermuxService.java` & `TermuxActivity.java`)**:
+     - Ditambahkan method `killTermuxTasksForShellName(String name)` di `TermuxService`.
+     - Pada `killEmbeddedDisplayServer()` di `TermuxActivity`, sistem otomatis membasmi task `termux-x11` yang sedang aktif di TermuxService dan menggunakan pola `pkill -f termux-x11`.
+  4. **Penyaluran Lengkap Backspace Gboard (`LorieView.java`)**:
+     - Saat saklar `enforceCharBasedInput` aktif (ON):
+       - `mConnection.sendKeyEvent(event)` mendeteksi `KEYCODE_DEL` dan langsung menginjeksikannya ke X11 engine via `LorieView.this.sendKeyEvent(0, KEYCODE_DEL, down)`. Event kunci lain dialihkan ke `activity.handleKey(event)`.
+       - `dispatchKeyEvent(event)` menginjeksi `KEYCODE_DEL` ke X11 dan mengalihkan event ke `activity.handleKey(event)` alih-alih dibuang oleh `super.dispatchKeyEvent`.
+     - Saat saklar nonaktif (OFF):
+       - Perilaku kembali 100% ke standar upstream Termux-X11.
+
 ---
 
 ## 4. Prosedur Build CI & Deploy ke Perangkat

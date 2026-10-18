@@ -1520,7 +1520,7 @@ public final class ChrootDistro {
     }
 
     public static final String DE_PROCESS_PATTERN =
-        "xfce4|gnome|plasma|kwin|mate|lxde|lxqt|openbox|fluxbox|cinnamon|dbus-launch|dbus-run-session|polybar|sxhkd|picom|(\\<i3\\>)|(\\<bspwm\\>)|(\\<awesome\\>)";
+        "xfce4|gnome|plasma|kwin|mate|lxde|lxqt|openbox|fluxbox|cinnamon|dbus-launch|dbus-run-session|dbus-daemon|gvfsd|at-spi|polybar|sxhkd|picom|(\\<i3\\>)|(\\<bspwm\\>)|(\\<awesome\\>)";
 
     /**
      * Dynamically stops and kills desktop environments and window managers across

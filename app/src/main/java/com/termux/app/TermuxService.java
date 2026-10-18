@@ -1075,6 +1075,18 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         return null;
     }
 
+    public synchronized void killTermuxTasksForShellName(String name) {
+        if (DataUtils.isNullOrEmpty(name))
+            return;
+        for (int i = mShellManager.mTermuxTasks.size() - 1; i >= 0; i--) {
+            AppShell appShell = mShellManager.mTermuxTasks.get(i);
+            String shellName = appShell.getExecutionCommand().shellName;
+            if (shellName != null && shellName.contains(name)) {
+                appShell.terminateIfExecuting(this, 0, true);
+            }
+        }
+    }
+
     public synchronized TermuxSession getTermuxSessionForShellName(String name) {
         if (DataUtils.isNullOrEmpty(name))
             return null;
