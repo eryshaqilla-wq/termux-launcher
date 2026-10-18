@@ -366,6 +366,62 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 
 ---
 
+### O. Rekayasa Standalone Kiosk Mode 1-Tab Bersih & One-Click Cleanup
+- **Konteks & Kebutuhan**:
+  - Saat aplikasi Linux dibuka langsung dari App Drawer (mode standalone), muncul 2 tab di status bar atas:
+    1) Tab Root Display (misal `[ Firefox ESR ]`).
+    2) Tab Jendela X11 Client (misal `[ Firefox-esr ]`).
+  - Hal ini membingungkan dan memaksa pengguna menutup 2 tab secara manual agar layar X11 bersih kembali ke Termux.
+  - Selain itu, status Desktop Environment sering memunculkan teks ambigu *"Belum disetel"*, serta mode kiosk belum tersinkronisasi otomatis dengan DE pilihan pengguna.
+- **Solusi & Arsitektur**:
+  1. **Eliminasi Tab Ganda (`TermuxActivity.java: syncWindowBarItems`)**:
+     - Pada mode standalone, jika jendela aplikasi sudah ter-mapping (`!mDisplayWindows.isEmpty()`), tab root display otomatis disembunyikan. Yang tampil di bar hanyalah 1 tab bersih milik jendela aplikasi tersebut.
+     - Jika pengguna membuka lebih dari 1 jendela, setiap jendela mendapat 1 tab masing-masing tanpa ada tab root tambahan.
+  2. **One-Click Close & Auto-Cleanup (`closeWindowFromStatusBar` & `onDisplayWindowsChanged`)**:
+     - Ketika tab aplikasi ditutup (klik tombol silang `x`) dan itu adalah jendela terakhir, sistem otomatis memanggil `stopAndKillAllDisplayServices()`. Jendela DAN display server langsung mati seketika.
+     - Begitu pula saat aplikasi keluar sendiri (exit/quit), `onDisplayWindowsChanged` mendeteksi daftar jendela kosong dan langsung mematikan display server otomatis tanpa meninggalkan layar hitam.
+  3. **Pembersihan Menu & Penghapusan "Belum disetel"**:
+     - `GuiAppsSetupPreferencesFragment.java` dan `ChrootDistro.java` memastikan dropdown DE selalu sinkron dengan biner DE yang terpasang, mengeliminasi status "Belum disetel".
+     - Menghubungkan pilihan DE pengguna (`KEY_SELECTED_DE`) langsung ke generator skrip kiosk (`writeChrootKioskScript` & `writeDroidspacesKioskScript`).
+  4. **Aturan Monocle Fullscreen BSPWM**:
+     - Menambahkan aturan tiling penuh: `bspc rule -a * state=tiled`, `bspc config single_monocle true`, `bspc config gapless_monocle true`, `bspc config borderless_monocle true`, serta `_JAVA_AWT_WM_NONREPARENTING=1` dan `XDG_RUNTIME_DIR=/tmp/runtime-root`.
+     - Jendela aplikasi otomatis memenuhi 100% canvas layar tanpa border atau celah.
+  5. **Hasil Pengujian di Infinix Note 30 VIP**:
+     - Dikonfirmasi oleh Tuan Eso: **"perfecto bro"** (Komit `497ce9d`).
+
+---
+
+### P. Optimalisasi Audio & Standalone Kiosk Khusus Droidspaces Container (Poco M3)
+- **Konteks & Kebutuhan**:
+  - Pada Poco M3 yang menggunakan container Droidspaces ("Ubuntu"), mode standalone dan suara sempat tidak muncul.
+- **Akar Masalah**:
+  1. **Audio (PulseAudio)**:
+     - Droidspaces berjalan di dalam isolated network namespace (`eth0 172.28.28.28/16`), dengan default gateway menuju host Android pada IP `172.28.0.1`.
+     - Di dalam `/tmp` Ubuntu terdapat file socket mati sisa sesi lama (`/tmp/.pulse-socket` link count 0). Skrip lama memeriksa `[ -S /tmp/.pulse-socket ]` dan mengarahkan audio ke socket mati tersebut (`Connection refused`).
+     - Fallback ke `tcp:127.0.0.1:4713` juga gagal karena `127.0.0.1` di dalam Droidspaces adalah loopback container sendiri, bukan host Termux.
+  2. **Standalone Kiosk Droidspaces**:
+     - `writeDroidspacesKioskScript` belum memiliki aturan monocle tiling lengkap (`bspc rule -a * state=tiled`, `_JAVA_AWT_WM_NONREPARENTING=1`, `XDG_RUNTIME_DIR=/tmp/runtime-root`).
+     - `resolveStandaloneKioskCommand` belum meneruskan preferensi `selectedDe` ke `writeDroidspacesKioskScript`.
+     - Terdapat sisa file socket `/tmp/bspwm*` di dalam container yang menyebabkan bspwm menolak binding socket baru (*"The server closed the connection: socket, pipe or stream error"*).
+- **Solusi & Rekayasa (`ChrootDistro.java`)**:
+  1. **Audio Dynamic Host Routing**:
+     - Di dalam skrip Droidspaces (`writeDroidspacesDesktopScript`, `writeDroidspacesKioskScript`, `writeDroidspacesAppScript`), IP host Android dideteksi dinamis via routing kernel:
+       `HOST_IP=$(ip route 2>/dev/null | awk "/default/ {print \$3}" | head -n1)` (fallback `172.28.0.1`).
+     - Set `export PULSE_SERVER="tcp:$HOST_IP:4713"`.
+     - Bersihkan file stale socket: `rm -f /tmp/.pulse-socket 2>/dev/null || true`.
+     - Sederhanakan `/etc/asound.conf` generic ALSA type pulse tanpa hardcode unix socket.
+  2. **Penyempurnaan Kiosk Monocle & Stale Socket Cleaner**:
+     - Meneruskan `selectedDe` ke `writeDroidspacesKioskScript(env.containerName, selectedDe)`.
+     - Bersihkan stale bspwm socket: `rm -f /tmp/bspwm* 2>/dev/null || true`.
+     - Terapkan aturan monocle lengkap: `bspc rule -a * state=tiled` dan environment runtime Java/XDG.
+     - Tambahkan pembersihan socket bspwm dan pulse pada `killDesktopEnvironment()`.
+  3. **Jaminan Isolasi Modular**:
+     - Seluruh perbaikan Droidspaces terisolasi 100% di dalam blok `RunnerType.DROIDSPACES`.
+     - Kali NetHunter Chroot (Infinix), PRoot Distro, dan Native Termux X11 tetap berjalan normal tanpa terpengaruh sedikit pun.
+- **Status Komit**: `30ce53797`
+
+---
+
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)
 
 Jika upstream (`PickleHik3/termux-launcher`) merilis update baru dan Tuan Eso meminta sync, **JANGAN PERNAH reset atau clone ulang dari 0**. Ikuti langkah standar berikut:
