@@ -327,7 +327,7 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
      - Di level host, `/data/data/com.termux/files/usr/etc/pulse/default.pa` juga dikonfigurasi untuk menonaktifkan suspend-on-idle.
   2. **Persistensi Daemon PulseAudio**:
      - Menghapus pembunuhan proses `pulseaudio` pada `killDesktopEnvironment()`. PulseAudio dibiarkan terus berjalan di background agar sesi desktop atau aplikasi berikutnya tidak kehilangan server suara.
-     - Pada `termux-x11-wm` (`X11CliInstaller.java`), ditambahkan pemeriksaan otomatis keberadaan daemon PulseAudio port 4713 sebelum window manager dieksekusi.
+     - Daemon PulseAudio dipastikan selalu aktif melalui `ChrootDistro.startAudioAndGraphicsServicesSync()` dan ditargetkan langsung via env `PULSE_SERVER=tcp:127.0.0.1:4713` di seluruh sesi chroot, Droidspaces, dan PRoot.
 
 ---
 
