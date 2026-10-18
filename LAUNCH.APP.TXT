@@ -1,0 +1,79 @@
+# RENCANA & ARSITEKTUR FITUR: SINGLE-APP KIOSK MODE & DYNAMIC WM (PROJECT FUSION)
+Dokumen Perencanaan Resmi untuk Tuan Eso
+Target: Eso Launcher (Termux Launcher Fork) - Linux X11 Engine (Droidspaces, Chroot NetHunter, PRoot, Native Termux)
+
+================================================================================
+1. TUJUAN UTAMA
+================================================================================
+- Menjalankan aplikasi Linux (seperti Firefox, Wireshark, Alacritty, VSCode, GIMP)
+  secara "Single-App Kiosk Mode" langsung fullscreen / monocle begitu dibuka dari drawer.
+- Tidak membebani sistem dengan desktop panel atas yang berat atau elemen desktop
+  klasik yang tidak diperlukan.
+- Tetap mempertahankan:
+  a. Ukuran kanvas display 100% konsisten seukuran browser/webview (tanpa distorsi).
+  b. Suara (PulseAudio) tetap aktif.
+  c. Akselerasi grafis hardware (VirGL 3D) tetap aktif.
+  d. Dock kontrol bawah (Polybar bottom dock pada BSPWM) tetap aktif untuk navigasi.
+  e. Dukungan perangkat non-root (PRoot/Native Openbox) fullscreen tanpa titlebar.
+  f. Pilihan Window Manager & Desktop Environment dinamis (tidak hardcoded) di Display Settings.
+
+================================================================================
+2. SISTEM WINDOW MANAGER & KIOSK ENGINE
+================================================================================
+A. BSPWM KIOSK (Untuk Root / Droidspaces / NetHunter Chroot):
+   - Menggunakan konfigurasi monocle:
+     `bspc config single_monocle true`
+     `bspc desktop -l monocle`
+   - Menyembunyikan topbar panel bawaan desktop (`polybar-msg cmd hide`).
+   - Tetap memunculkan bottom dock (`polybar -q dock &`).
+   - Setiap aplikasi yang dibuka langsung menempati layar penuh di atas dock.
+
+B. OPENBOX KIOSK (Untuk Non-Root PRoot & Fallback Native):
+   - Menggunakan `openbox-rc.xml` khusus kiosk mode:
+     * `<decor>no</decor>` (menghilangkan titlebar & border tebal).
+     * `<maximized>yes</maximized>` (otomatis fullscreen memenuhi kanvas).
+
+================================================================================
+3. PERILAKU MULTI-APP & PERPINDAHAN APLIKASI (TAB SWITCHING)
+================================================================================
+Pertanyaan:
+"Jika X11 sedang dipakai lalu kita buka aplikasi baru, dan apakah jika kita buka 2
+aplikasi bisa ganti-ganti lewat tombol tab di kanvas kanan saat mode Kiosk?"
+
+Jawaban & Cara Kerja:
+1. Ketika aplikasi pertama (App 1) sedang berjalan dan pengguna membuka aplikasi
+   kedua (App 2) dari App Drawer:
+   - X11 Server `:0` tetap berjalan (tidak direstart).
+   - App 2 diluncurkan langsung ke dalam sesi display yang ada.
+   - Di BSPWM Kiosk (mode monocle): App 2 langsung mengambil posisi fullscreen
+     paling depan. App 1 tetap hidup di background (tidak force-close).
+2. Mekanisme Tab / Window Switching:
+   - Eso Launcher memiliki pemantau jendela bawaan berbasis protokol EWMH
+     (`_NET_CLIENT_LIST` & `_NET_ACTIVE_WINDOW`) di kelas `X11WindowList`.
+   - Tombol tab / chip jendela di kanvas launcher membaca daftar semua jendela aktif.
+   - Saat tombol tab atau chip aplikasi ditekan, Launcher mengirimkan event
+     `_NET_ACTIVE_WINDOW` ke Window Manager (BSPWM / Openbox).
+   - BSPWM / Openbox secara instan menaikkan (raise & focus) aplikasi yang dipilih
+     ke tampilan utama secara fullscreen.
+   - Selain lewat tombol tab kanvas launcher, pengguna juga bisa berpindah aplikasi
+     lewat:
+     a. Menu / switcher jendela pada Polybar dock bawah.
+     b. Gestur usap 3-jari (3-finger swipe) untuk Alt+Tab instan.
+     c. Pintasan keyboard fisik/virtual (Ctrl+Alt+] / [).
+
+================================================================================
+4. PENGATURAN DINAMIS DI DISPLAY SETTINGS (ANTI-HARDCODED)
+================================================================================
+- Fragment `X11DisplayLinuxAppsPreferencesFragment`:
+  * Mendeteksi sistem aktif secara dinamis (`gui_apps_route`):
+    - Droidspaces (Ubuntu, Debian, Arch, dll.)
+    - Chroot NetHunter
+    - PRoot Distro
+    - Native Termux
+  * Judul kategori otomatis berubah sesuai mesin aktif:
+    "Desktop & Window Manager (Droidspaces: Ubuntu)"
+  * Menu dropdown `gui_apps_selected_de` membaca daftar desktop/kiosk yang benar-benar
+    terpasang di mesin tersebut via `ChrootDistro.detectInstalledDesktops(context)`.
+  * Input manual `x11_window_manager` otomatis dinonaktifkan (`disabled`) saat
+    berada di container chroot/droidspaces agar tidak membingungkan pengguna, dan
+    hanya aktif saat mode Native Termux digunakan.
