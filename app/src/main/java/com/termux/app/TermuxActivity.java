@@ -6415,18 +6415,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         boolean capsule = isInAppKeyboardCapsule();
         boolean floating = isKeyboardFloating();
+        boolean mouseMode = mFrameContent != null && mFrameContent.isMouseMode();
         // The side gap keeps a docked capsule off the screen's edges; inside a floating card it was
-        // only more rim round the keys.
-        int horizontalMargin = floating ? 0 : resolveInAppKeyboardHorizontalInsetPx();
+        // only more rim round the keys. In mouse mode it is edge-to-edge with no margins.
+        int horizontalMargin = (floating || mouseMode) ? 0 : resolveInAppKeyboardHorizontalInsetPx();
         // A floating keyboard already sits under its card's grab handle, so the capsule's top gap
         // would only push the keys further from it: the host runs straight up to the handle row
         // and keeps a thin inner rim of the one surface the card and the host share.
-        int topMargin = capsule && !floating ? com.termux.app.dock.UnderKeyboardBand
+        int topMargin = (capsule && !floating && !mouseMode) ? com.termux.app.dock.UnderKeyboardBand
             .keyboardGapPx(getResources().getDisplayMetrics().density) : 0;
         // A floating card keeps a thin 3dp rim at the sides and none above and below: its handle row
         // and the keyboard's own margins are rim enough.
-        int innerPadding = floating ? Math.round(dpToPx(3)) : capsule ? Math.round(dpToPx(6)) : 0;
-        int innerTopPadding = floating ? 0 : innerPadding;
+        int innerPadding = (floating || mouseMode) ? 0 : capsule ? Math.round(dpToPx(6)) : 0;
+        int innerTopPadding = (floating || mouseMode) ? 0 : innerPadding;
         // The user's own chin allowance, from Settings, and it lands in a different place per shape:
         // padding inside the docked slab, a taller gap under the floating capsule. In the stack the
         // capsule's gap is not this host's to carry: the stack's own bottom margin is the one edge
@@ -6435,8 +6436,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // still keeps the card's gap under its keys.
         int chinPaddingPx = resolveInAppKeyboardBottomPaddingPx();
         int bottomMargin = ChromePolicy.keyboardChinBottomMarginPx(
-            capsule, 0, chinPaddingPx);
-        int innerBottomPadding = floating ? 0 : ChromePolicy.keyboardChinBottomPaddingPx(
+            capsule && !mouseMode, 0, chinPaddingPx);
+        int innerBottomPadding = (floating || mouseMode) ? 0 : ChromePolicy.keyboardChinBottomPaddingPx(
             capsule, innerPadding, chinPaddingPx);
         boolean changed = false;
         ViewGroup.LayoutParams layoutParams = surfaceHost.getLayoutParams();
@@ -6629,6 +6630,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     private void applyInAppKeyboardSurfaceClip(@NonNull View surfaceHost, boolean capsule,
                                                float cornerRadiusPx) {
+        boolean mouseMode = mFrameContent != null && mFrameContent.isMouseMode();
+        if (mouseMode) {
+            surfaceHost.setClipToOutline(false);
+            return;
+        }
         boolean changed = mKeyboardOutline.setClip(capsule
             ? com.termux.app.chrome.LiveChromeShape.cardClip(cornerRadiusPx)
             : chromeClipOf(KEYBOARD_PIECES));
@@ -16893,6 +16899,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (page == 0) mExtraKeysView = extraKeysView;
         applyExtraKeysFeedbackAccent(extraKeysView);
         applyExtraKeysPlaceEligibility(extraKeysView);
+        if (mDisplayTouchpad != null) {
+            mDisplayTouchpad.setSurfaceColor(resolveExtraKeysBackgroundColor());
+        }
     }
 
     public void setExtraKeysView(ExtraKeysView extraKeysView) {
@@ -16919,6 +16928,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     clearExtraKeyLens();
                 }
             });
+            if (mDisplayTouchpad != null) {
+                mDisplayTouchpad.setSurfaceColor(resolveExtraKeysBackgroundColor());
+            }
         }
     }
 
@@ -20815,6 +20827,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (decision.mouseMode()) {
             hideDisplaySystemKeyboard();
         }
+        dressInAppKeyboardHost();
         syncDisplayTouchpad();
         // The frame the pad raised for itself goes down with the pad, so the mouse key closes
         // exactly what it opened and the user is not left with a keyboard to dismiss.
@@ -20877,7 +20890,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * floating card and is dragged around with it for free. It deliberately stops at the keyboard,
      * not at the card: the grab handle above it has to stay grabbable while mouse mode is on.
      */
+    private int resolveExtraKeysBackgroundColor() {
+        if (mExtraKeysView != null && mExtraKeysView.getButtonBackgroundColor() != 0) {
+            return mExtraKeysView.getButtonBackgroundColor();
+        }
+        return getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanel, R.color.termux_surface_panel);
+    }
+
     private void syncDisplayTouchpad() {
+        dressInAppKeyboardHost();
         FrameLayout host = findViewById(R.id.inapp_keyboard_view_host);
         boolean ours = isDisplayTouchpadFrame() && host != null;
         // The frame stops being mouse mode's when the wall leaves the place or the display goes:
@@ -20921,6 +20942,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         }
         if (!wanted) {
+            dressInAppKeyboardHost();
             releaseDisplayTouchpadWait();
             mDisplayTouchpadWaitRound = 0;
             if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
@@ -20952,6 +20974,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         if (pad != null && pad.getParent() == host) {
+            pad.setSurfaceColor(resolveExtraKeysBackgroundColor());
             // The keyboard's type may have moved under a pad that is already up.
             applyDisplayTouchpadFrame(pad, mAttachedInAppKeyboardView);
             return;
@@ -20963,11 +20986,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         ? null : mPaneWallController.displayPage();
                     return frame == null || !isEmbeddedDisplayRunning() ? null : frame.display();
                 },
-                isInAppKeyboardCapsule(),
-                // The pad lies over the place, so it is an overlay: one opaque panel in the same
-                // surface role the drawer and the popups use, never the dock's glass.
-                getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh,
-                    R.color.termux_surface_panel_high),
+                false,
+                resolveExtraKeysBackgroundColor(),
                 getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface,
                     R.color.termux_on_surface),
                 com.termux.app.statusbar.StatusBarLensView.accentFor(this,
@@ -20979,6 +20999,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (mX11Display != null) mX11Display.onDisplayTap();
             });
             mDisplayTouchpad = pad;
+        } else {
+            pad.setSurfaceColor(resolveExtraKeysBackgroundColor());
         }
         // The keyboard's frame is the pad's: the host wraps its content, so a match-parent pad
         // would take every pixel above the keyboard instead of the keyboard's own room. Over a

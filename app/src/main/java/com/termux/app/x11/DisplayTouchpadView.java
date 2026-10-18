@@ -116,7 +116,7 @@ public final class DisplayTouchpadView extends View {
     private final int mTouchSlop;
     private final boolean mCard;
     /** The overlay panel's fill, which the pad wears over the whole keyboard. */
-    private final int mSurfaceColor;
+    private int mSurfaceColor;
     /**
      * The pad stands in a split keyboard's parting rather than over the whole keyboard: it is
      * then one more key among the keys, so it drops the card's inset and takes the caps' radius
@@ -244,18 +244,25 @@ public final class DisplayTouchpadView extends View {
         invalidate();
     }
 
-    /** The panel's own radius: the caps' in the parting, its card corner over the keyboard. */
+    /** The panel's own radius: the caps' in the parting, or 0 for flush edge-to-edge solid rectangle. */
     private float panelRadius() {
-        return mInGap ? mGapRadiusPx : dp(RADIUS_DP);
+        return mInGap ? mGapRadiusPx : 0f;
     }
 
     private void layOutPanel(int w, int h) {
-        float inset = mCard && !mInGap ? dp(1f) : 0f;
-        mBounds.set(inset, inset, w - inset, h - inset);
+        mBounds.set(0f, 0f, w, h);
         float size = dp(BACK_SIZE_DP);
         float margin = dp(BACK_INSET_DP);
         mBack.set(margin, h - margin - size, margin + size, h - margin);
         layOutStrip();
+    }
+
+    public void setSurfaceColor(int surfaceColor) {
+        mSurfaceColor = ColorUtils.setAlphaComponent(surfaceColor, 255);
+        if (!mInGap) {
+            mFillPaint.setColor(mSurfaceColor);
+        }
+        invalidate();
     }
 
     /**
