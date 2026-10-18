@@ -5881,6 +5881,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // like the docked one does. Bands under the keyboard wear a card of their own below it,
         // and one material spanning the dock and the keyboard would run on down behind that card.
         if (underKeyboardBandsShown()) return false;
+        if (isWholeFrameTouchpadShown()) {
+            return state.toolbarShown && !isRoundedDockStyle();
+        }
         return ChromePolicy.shouldUseUnifiedDefaultKeyboardGlassSurface(state.toolbarShown,
             state.keyboardShown, isRoundedDockStyle(), isInAppKeyboardGlassSurface())
             && !hasInAppKeyboardBackgroundOverride()
