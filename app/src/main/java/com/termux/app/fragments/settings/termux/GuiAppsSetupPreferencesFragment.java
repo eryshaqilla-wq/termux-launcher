@@ -257,6 +257,42 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
         Context ctx = getContext();
         if (ctx == null) return;
 
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences(
+            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+            Context.MODE_PRIVATE);
+        String savedDe = prefs.getString(KEY_SELECTED_DE, "bspwm");
+        if ("bspwm_kiosk".equals(savedDe)) savedDe = "bspwm";
+        if ("openbox_kiosk".equals(savedDe)) savedDe = "openbox";
+        dePref.setValue(savedDe);
+
+        // Pre-populate entries synchronously
+        List<String> preEntries = new java.util.ArrayList<>();
+        List<String> preValues = new java.util.ArrayList<>();
+        for (ChrootDistro.DesktopDef def : ChrootDistro.SUPPORTED_DESKTOPS) {
+            preEntries.add(def.displayName);
+            preValues.add(def.id);
+        }
+        dePref.setEntries(preEntries.toArray(new CharSequence[0]));
+        dePref.setEntryValues(preValues.toArray(new CharSequence[0]));
+
+        dePref.setSummaryProvider(preference -> {
+            CharSequence entry = dePref.getEntry();
+            if (entry != null && !android.text.TextUtils.isEmpty(entry)) return entry;
+            String val = dePref.getValue();
+            if (val != null && !val.isEmpty() && !"none".equals(val)) {
+                return ChrootDistro.getDesktopDisplayName(val);
+            }
+            return getString(R.string.settings_gui_apps_selected_de_none);
+        });
+
+        dePref.setOnPreferenceChangeListener((pref, newVal) -> {
+            String selectedId = String.valueOf(newVal);
+            if ("bspwm_kiosk".equals(selectedId)) selectedId = "bspwm";
+            if ("openbox_kiosk".equals(selectedId)) selectedId = "openbox";
+            prefs.edit().putString(KEY_SELECTED_DE, selectedId).apply();
+            return true;
+        });
+
         probeExecutor.execute(() -> {
             List<ChrootDistro.DesktopEntry> des = ChrootDistro.detectInstalledDesktops(ctx);
             probeHandler.post(() -> {
@@ -281,6 +317,8 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                     dePref.setEnabled(true);
 
                     String currentVal = dePref.getValue();
+                    if ("bspwm_kiosk".equals(currentVal)) currentVal = "bspwm";
+                    if ("openbox_kiosk".equals(currentVal)) currentVal = "openbox";
                     boolean matched = false;
                     for (String val : values) {
                         if (val.equals(currentVal)) {
@@ -289,15 +327,13 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                         }
                     }
                     if (!matched) {
-                        String targetVal = values.contains("bspwm_kiosk") ? "bspwm_kiosk"
-                            : (values.contains("openbox_kiosk") ? "openbox_kiosk"
+                        String targetVal = values.contains("bspwm") ? "bspwm"
+                            : (values.contains("openbox") ? "openbox"
                             : (values.contains("xfce4") ? "xfce4" : values.get(0)));
                         dePref.setValue(targetVal);
-                        currentVal = targetVal;
-                        android.content.SharedPreferences prefs = ctx.getSharedPreferences(
-                            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
-                            Context.MODE_PRIVATE);
-                        prefs.edit().putString(KEY_SELECTED_DE, currentVal).apply();
+                        prefs.edit().putString(KEY_SELECTED_DE, targetVal).apply();
+                    } else {
+                        dePref.setValue(currentVal);
                     }
                 }
             });

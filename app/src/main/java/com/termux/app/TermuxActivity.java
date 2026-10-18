@@ -20491,10 +20491,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void onDisplayWindowsChanged(
             @NonNull java.util.List<com.termux.app.x11.X11WindowList.Window> windows, int active) {
+        boolean wasNonEmpty = !mDisplayWindows.isEmpty();
         mDisplayWindows = windows;
         mDisplayActiveWindow = active;
         // A stop in progress is waiting for exactly this: the last app closing itself.
         if (mDisplayStop != null) mDisplayStop.onWindowsChanged(windows.size());
+        if (mActiveStandaloneAppName != null && isEmbeddedDisplayRunning() && wasNonEmpty && windows.isEmpty()) {
+            stopAndKillAllDisplayServices();
+            return;
+        }
         if (!isDisplayPageShowing() || !isSplitPanesEnabled()) return;
         com.termux.app.terminal.TerminalWindowBar bar = findViewById(R.id.terminal_window_bar);
         if (bar != null) syncWindowBarItems(bar);
@@ -21287,9 +21292,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void selectWindowFromStatusBar(int index) {
         if (!isSplitPanesEnabled()) return;
         if (isDisplayPageShowing()) {
+            boolean isStandalone = (mActiveStandaloneAppName != null && !mActiveStandaloneAppName.trim().isEmpty());
             if (isEmbeddedDisplayRunning()) {
-                if (index == 0) return;
-                index--;
+                if (!isStandalone || mDisplayWindows.isEmpty()) {
+                    if (index == 0) return;
+                    index--;
+                }
             }
             // On the Display place the chips are the display's apps: a tap brings one to the front.
             if (mX11Windows != null && index >= 0 && index < mDisplayWindows.size()) {
@@ -21330,13 +21338,27 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     private void closeWindowFromStatusBar(int index) {
         if (isDisplayPageShowing()) {
-            if (isEmbeddedDisplayRunning() && index == 0) {
-                stopAndKillAllDisplayServices();
+            boolean isStandalone = (mActiveStandaloneAppName != null && !mActiveStandaloneAppName.trim().isEmpty());
+            if (isEmbeddedDisplayRunning()) {
+                if (isStandalone) {
+                    if (mDisplayWindows.size() <= 1) {
+                        stopAndKillAllDisplayServices();
+                        return;
+                    }
+                    if (index >= 0 && index < mDisplayWindows.size()) {
+                        closeDisplayWindow(index);
+                    }
+                    return;
+                }
+                if (index == 0) {
+                    stopAndKillAllDisplayServices();
+                    return;
+                }
+                int windowIndex = index - 1;
+                // The app shows its own "save before closing?" when it has something to ask.
+                closeDisplayWindow(windowIndex);
                 return;
             }
-            int windowIndex = isEmbeddedDisplayRunning() ? index - 1 : index;
-            // The app shows its own "save before closing?" when it has something to ask.
-            closeDisplayWindow(windowIndex);
             return;
         }
         if (!isSplitPanesEnabled()) return;
@@ -22013,34 +22035,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean terminalWindows = false;
         if (isDisplayPageShowing()) {
             boolean running = isEmbeddedDisplayRunning();
+            boolean isStandalone = (mActiveStandaloneAppName != null && !mActiveStandaloneAppName.trim().isEmpty());
             if (running) {
-                com.termux.app.x11.X11WindowIconResolver icons = displayWindowIcons();
-                String rootLabel = (mActiveStandaloneAppName != null && !mActiveStandaloneAppName.trim().isEmpty())
-                    ? mActiveStandaloneAppName.trim() : "X11 Display";
-                android.graphics.Bitmap rootIcon = null;
-                if (mActiveStandaloneAppName != null && !mActiveStandaloneAppName.trim().isEmpty()) {
-                    if (icons != null) {
-                        rootIcon = icons.iconFor(mActiveStandaloneAppName);
-                    }
-                } else {
-                    String route = getSharedPreferences(
-                        TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
-                        MODE_PRIVATE).getString("gui_apps_route", "x11");
-                    if ("chroot".equals(route)) {
-                        com.termux.app.x11.ChrootDistro.ChrootEnvironment chrootEnv =
-                            com.termux.app.x11.ChrootDistro.getActiveEnvironment(this);
-                        if (chrootEnv != null) {
-                            rootLabel = chrootEnv.runnerType == com.termux.app.x11.ChrootDistro.RunnerType.DROIDSPACES
-                                ? "Droidspaces" : (com.termux.app.x11.ChrootDistro.ID_NETHUNTER.equals(chrootEnv.id) ? "NetHunter" : chrootEnv.name);
-                        } else {
-                            rootLabel = "NetHunter";
+                if (!isStandalone || mDisplayWindows.isEmpty()) {
+                    com.termux.app.x11.X11WindowIconResolver icons = displayWindowIcons();
+                    String rootLabel = isStandalone ? mActiveStandaloneAppName.trim() : "X11 Display";
+                    android.graphics.Bitmap rootIcon = null;
+                    if (isStandalone) {
+                        if (icons != null) {
+                            rootIcon = icons.iconFor(mActiveStandaloneAppName);
                         }
-                    } else if ("proot".equals(route)) {
-                        rootLabel = "PRoot Distro";
+                    } else {
+                        String route = getSharedPreferences(
+                            TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+                            MODE_PRIVATE).getString("gui_apps_route", "x11");
+                        if ("chroot".equals(route)) {
+                            com.termux.app.x11.ChrootDistro.ChrootEnvironment chrootEnv =
+                                com.termux.app.x11.ChrootDistro.getActiveEnvironment(this);
+                            if (chrootEnv != null) {
+                                rootLabel = chrootEnv.runnerType == com.termux.app.x11.ChrootDistro.RunnerType.DROIDSPACES
+                                    ? "Droidspaces" : (com.termux.app.x11.ChrootDistro.ID_NETHUNTER.equals(chrootEnv.id) ? "NetHunter" : chrootEnv.name);
+                            } else {
+                                rootLabel = "NetHunter";
+                            }
+                        } else if ("proot".equals(route)) {
+                            rootLabel = "PRoot Distro";
+                        }
                     }
+                    items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem(rootLabel, rootLabel)
+                        .withIcon(rootIcon));
                 }
-                items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem(rootLabel, rootLabel)
-                    .withIcon(rootIcon));
             }
             // The display's apps, front one selected; the terminal's marks (busy, attention,
             // done) have no meaning for them.
@@ -22054,7 +22078,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     .withIcon(icons == null ? null : icons.iconFor(window.wmClass)));
             }
             if (running) {
-                selected = mDisplayActiveWindow >= 0 ? mDisplayActiveWindow + 1 : 0;
+                if (!isStandalone || mDisplayWindows.isEmpty()) {
+                    selected = mDisplayActiveWindow >= 0 ? mDisplayActiveWindow + 1 : 0;
+                } else {
+                    selected = mDisplayActiveWindow >= 0 ? mDisplayActiveWindow : 0;
+                }
             } else {
                 selected = mDisplayActiveWindow;
             }

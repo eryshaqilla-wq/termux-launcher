@@ -45,10 +45,8 @@ public final class ChrootDistro {
     }
 
     public static final List<DesktopDef> SUPPORTED_DESKTOPS = Collections.unmodifiableList(Arrays.asList(
-        new DesktopDef("bspwm", "BSPWM (Full Desktop)", Arrays.asList("bspwm", "bspwm-session")),
-        new DesktopDef("bspwm_kiosk", "BSPWM Kiosk (Single-App + Dock Bawah)", Arrays.asList("bspwm", "bspwm-session")),
-        new DesktopDef("openbox", "Openbox (Full Desktop)", Arrays.asList("openbox-session", "openbox")),
-        new DesktopDef("openbox_kiosk", "Openbox (Single-App Fullscreen)", Arrays.asList("openbox", "openbox-session")),
+        new DesktopDef("bspwm", "BSPWM", Arrays.asList("bspwm", "bspwm-session")),
+        new DesktopDef("openbox", "Openbox", Arrays.asList("openbox-session", "openbox")),
         new DesktopDef("xfce4", "XFCE 4", Arrays.asList("startxfce4", "xfce4-session")),
         new DesktopDef("gnome", "GNOME", Arrays.asList("gnome-session")),
         new DesktopDef("plasma", "KDE Plasma", Arrays.asList("startplasma-x11", "plasma-desktop")),
@@ -60,6 +58,16 @@ public final class ChrootDistro {
         new DesktopDef("awesome", "Awesome WM", Arrays.asList("awesome")),
         new DesktopDef("fluxbox", "Fluxbox", Arrays.asList("startfluxbox", "fluxbox"))
     ));
+
+    @NonNull
+    public static String getDesktopDisplayName(@Nullable String deId) {
+        if (deId == null || deId.trim().isEmpty() || "none".equals(deId)) return "None";
+        String normalized = ("bspwm_kiosk".equals(deId)) ? "bspwm" : (("openbox_kiosk".equals(deId)) ? "openbox" : deId);
+        for (DesktopDef def : SUPPORTED_DESKTOPS) {
+            if (def.id.equals(normalized)) return def.displayName;
+        }
+        return deId.toUpperCase(java.util.Locale.ROOT);
+    }
 
     public static final class DesktopEntry {
         @NonNull public final String id;
@@ -719,9 +727,44 @@ public final class ChrootDistro {
     public static final String DROIDSPACES_KIOSK_SCRIPT_NAME = "termux-droidspaces-kiosk";
 
     public static void writeChrootKioskScript(@NonNull String rootPath) {
+        writeChrootKioskScript(rootPath, null);
+    }
+
+    public static void writeChrootKioskScript(@NonNull String rootPath, @Nullable String preferredDe) {
         String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_KIOSK_SCRIPT_NAME;
         String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
         String virglDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.virgl";
+
+        String pref = (preferredDe != null) ? preferredDe.trim().toLowerCase(java.util.Locale.ROOT) : "";
+        if ("bspwm_kiosk".equals(pref)) pref = "bspwm";
+        if ("openbox_kiosk".equals(pref)) pref = "openbox";
+
+        String wmSelection;
+        if ("openbox".equals(pref)) {
+            wmSelection = "if command -v openbox >/dev/null 2>&1; then "
+                + "  exec openbox; "
+                + "elif command -v bspwm >/dev/null 2>&1; then "
+                + "  mkdir -p /root/.config/bspwm 2>/dev/null || true; "
+                + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc rule -a * state=tiled\\nbspc desktop 1 -l monocle\\n\" > /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+                + "  chmod +x /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+                + "  exec dbus-run-session -- bspwm -c /root/.config/bspwm/kiosk.bspwmrc; ";
+        } else {
+            wmSelection = "if command -v bspwm >/dev/null 2>&1; then "
+                + "  mkdir -p /root/.config/bspwm 2>/dev/null || true; "
+                + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc rule -a * state=tiled\\nbspc desktop 1 -l monocle\\n\" > /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+                + "  chmod +x /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
+                + "  exec dbus-run-session -- bspwm -c /root/.config/bspwm/kiosk.bspwmrc; "
+                + "elif command -v openbox >/dev/null 2>&1; then "
+                + "  exec openbox; ";
+        }
+        wmSelection += "elif command -v xfwm4 >/dev/null 2>&1; then "
+            + "  exec xfwm4; "
+            + "elif command -v i3 >/dev/null 2>&1; then "
+            + "  exec i3; "
+            + "else "
+            + "  while true; do sleep 3600; done; "
+            + "fi";
+
         String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
             + "# Chroot Kiosk Window Manager (Standalone App) for Termux Launcher\n\n"
             + "ROOTPATH=\"" + rootPath + "\"\n"
@@ -756,26 +799,13 @@ public final class ChrootDistro {
             + "    XKB_CONFIG_ROOT=/usr/share/X11/xkb \\\n"
             + "    LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 \\\n"
             + "    XDG_RUNTIME_DIR=/tmp/runtime-root \\\n"
-            + "    XDG_CURRENT_DESKTOP=bspwm \\\n"
+            + "    XDG_CURRENT_DESKTOP=" + ("openbox".equals(pref) ? "openbox" : "bspwm") + " \\\n"
             + "    _JAVA_AWT_WM_NONREPARENTING=1 \\\n"
             + "    DISABLE_AUTO_TITLE=true \\\n"
             + "    /bin/bash -c 'for _w in $(seq 1 50); do [ -S /tmp/.X11-unix/X0 ] && break; sleep 0.1; done; "
             + "mkdir -p /tmp/runtime-root && chmod 700 /tmp/runtime-root; "
             + "/etc/init.d/dbus start >/dev/null 2>&1 || true; "
-            + "if command -v bspwm >/dev/null 2>&1; then "
-            + "  mkdir -p /root/.config/bspwm 2>/dev/null || true; "
-            + "  printf \"#!/bin/sh\\nbspc monitor -d 1\\nbspc config border_width 0\\nbspc config window_gap 0\\nbspc config top_padding 0\\nbspc config bottom_padding 0\\nbspc config left_padding 0\\nbspc config right_padding 0\\nbspc config single_monocle true\\nbspc config gapless_monocle true\\nbspc config borderless_monocle true\\nbspc rule -a * state=tiled\\nbspc desktop 1 -l monocle\\n\" > /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
-            + "  chmod +x /root/.config/bspwm/kiosk.bspwmrc 2>/dev/null || true; "
-            + "  exec dbus-run-session -- bspwm -c /root/.config/bspwm/kiosk.bspwmrc; "
-            + "elif command -v openbox >/dev/null 2>&1; then "
-            + "  exec openbox; "
-            + "elif command -v xfwm4 >/dev/null 2>&1; then "
-            + "  exec xfwm4; "
-            + "elif command -v i3 >/dev/null 2>&1; then "
-            + "  exec i3; "
-            + "else "
-            + "  while true; do sleep 3600; done; "
-            + "fi'\n";
+            + wmSelection + "'\n";
 
         File scriptFile = new File(scriptPath);
         try {
@@ -1092,7 +1122,8 @@ public final class ChrootDistro {
                 writeDroidspacesKioskScript(env.containerName);
                 return "su -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + DROIDSPACES_KIOSK_SCRIPT_NAME;
             } else if (env != null) {
-                writeChrootKioskScript(env.rootfs.getAbsolutePath());
+                String selectedDe = prefs.getString(KEY_SELECTED_DE, "bspwm");
+                writeChrootKioskScript(env.rootfs.getAbsolutePath(), selectedDe);
                 return "su -mm -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_KIOSK_SCRIPT_NAME;
             }
         } else if (GuiAppsSetup.Route.DISTRO.key.equals(route)) {

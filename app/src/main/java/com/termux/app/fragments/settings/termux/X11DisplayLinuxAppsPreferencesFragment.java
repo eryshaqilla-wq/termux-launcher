@@ -102,17 +102,45 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
         if (wmPref != null) {
             wmPref.setSummaryProvider(null);
             if (GuiAppsSetup.Route.CHROOT.key.equals(route) || GuiAppsSetup.Route.DISTRO.key.equals(route)) {
-                wmPref.setSummary("Active engine: " + activeEngineTitle + " (Managed dynamically)");
-                wmPref.setEnabled(false);
+                wmPref.setVisible(false);
             } else {
+                wmPref.setVisible(true);
                 wmPref.setEnabled(true);
                 wmPref.setSummaryProvider(EditTextPreference.SimpleSummaryProvider.getInstance());
             }
         }
 
         if (dePref != null) {
+            String savedDe = prefs.getString(ChrootDistro.KEY_SELECTED_DE, "bspwm");
+            if ("bspwm_kiosk".equals(savedDe)) savedDe = "bspwm";
+            if ("openbox_kiosk".equals(savedDe)) savedDe = "openbox";
+            dePref.setValue(savedDe);
+
+            // Pre-populate entries synchronously so it NEVER flashes "Belum disetel"
+            List<String> preEntries = new ArrayList<>();
+            List<String> preValues = new ArrayList<>();
+            for (ChrootDistro.DesktopDef def : ChrootDistro.SUPPORTED_DESKTOPS) {
+                preEntries.add(def.displayName);
+                preValues.add(def.id);
+            }
+            dePref.setEntries(preEntries.toArray(new CharSequence[0]));
+            dePref.setEntryValues(preValues.toArray(new CharSequence[0]));
+
+            // Custom summary provider that resolves to human-readable desktop name
+            dePref.setSummaryProvider(preference -> {
+                CharSequence entry = dePref.getEntry();
+                if (entry != null && !android.text.TextUtils.isEmpty(entry)) return entry;
+                String val = dePref.getValue();
+                if (val != null && !val.isEmpty() && !"none".equals(val)) {
+                    return ChrootDistro.getDesktopDisplayName(val);
+                }
+                return getString(R.string.settings_gui_apps_selected_de_none);
+            });
+
             dePref.setOnPreferenceChangeListener((pref, newVal) -> {
                 String selectedId = String.valueOf(newVal);
+                if ("bspwm_kiosk".equals(selectedId)) selectedId = "bspwm";
+                if ("openbox_kiosk".equals(selectedId)) selectedId = "openbox";
                 prefs.edit().putString(ChrootDistro.KEY_SELECTED_DE, selectedId).apply();
                 X11CliInstaller.forPrefix(context).writeWindowManagerScript();
                 return true;
@@ -142,6 +170,8 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
                         dePref.setEnabled(true);
 
                         String currentVal = dePref.getValue();
+                        if ("bspwm_kiosk".equals(currentVal)) currentVal = "bspwm";
+                        if ("openbox_kiosk".equals(currentVal)) currentVal = "openbox";
                         boolean matched = false;
                         for (String val : values) {
                             if (val.equals(currentVal)) {
@@ -151,11 +181,12 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
                         }
                         if (!matched) {
                             String targetVal = values.contains("bspwm") ? "bspwm"
-                                : (values.contains("bspwm_kiosk") ? "bspwm_kiosk"
                                 : (values.contains("openbox") ? "openbox"
-                                : (values.contains("xfce4") ? "xfce4" : values.get(0))));
+                                : (values.contains("xfce4") ? "xfce4" : values.get(0)));
                             dePref.setValue(targetVal);
                             prefs.edit().putString(ChrootDistro.KEY_SELECTED_DE, targetVal).apply();
+                        } else {
+                            dePref.setValue(currentVal);
                         }
                     }
                 });
