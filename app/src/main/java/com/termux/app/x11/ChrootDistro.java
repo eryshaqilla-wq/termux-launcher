@@ -717,6 +717,62 @@ public final class ChrootDistro {
         }
     }
 
+    public static final String CHROOT_DESKTOP_SCRIPT_NAME = "termux-chroot-desktop";
+
+    public static void writeChrootDesktopScript(@NonNull String rootPath, @NonNull String innerCmd) {
+        String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_DESKTOP_SCRIPT_NAME;
+        String x11Dir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix";
+        String virglDir = TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.virgl";
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Chroot Desktop Runner for Termux Launcher\n\n"
+            + "ROOTPATH=\"" + rootPath + "\"\n"
+            + "X11_DIR=\"" + x11Dir + "\"\n"
+            + "VIRGL_DIR=\"" + virglDir + "\"\n\n"
+            + "mkdir -p \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n"
+            + "mount -o bind \"$X11_DIR\" \"$ROOTPATH/tmp/.X11-unix\" 2>/dev/null || true\n\n"
+            + "mkdir -p \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "umount -l \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "mount -o bind \"$VIRGL_DIR\" \"$ROOTPATH/tmp/.virgl\" 2>/dev/null || true\n"
+            + "ln -sf /tmp/.virgl/.virgl_test \"$ROOTPATH/tmp/.virgl_test\" 2>/dev/null || true\n\n"
+            + "# Tunggu socket X0 siap\n"
+            + "for _w in $(seq 1 50); do\n"
+            + "    [ -S \"$X11_DIR/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n"
+            + "chmod 777 \"$X11_DIR/X0\" 2>/dev/null || true\n\n"
+            + "exec chroot \"$ROOTPATH\" /usr/bin/env -i \\\n"
+            + "    HOME=/root \\\n"
+            + "    USER=root \\\n"
+            + "    LOGNAME=root \\\n"
+            + "    TERM=xterm-256color \\\n"
+            + "    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \\\n"
+            + "    DISPLAY=${DISPLAY:-:0} \\\n"
+            + "    PULSE_SERVER=tcp:127.0.0.1:4713 \\\n"
+            + "    GALLIUM_DRIVER=virpipe \\\n"
+            + "    MESA_GL_VERSION_OVERRIDE=4.3COMPAT \\\n"
+            + "    MESA_GLES_VERSION_OVERRIDE=3.2 \\\n"
+            + "    MESA_NO_ERROR=1 \\\n"
+            + "    LIBGL_DRI3_DISABLE=1 \\\n"
+            + "    VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test \\\n"
+            + "    XKB_CONFIG_ROOT=/usr/share/X11/xkb \\\n"
+            + "    LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 \\\n"
+            + "    DISABLE_AUTO_TITLE=true \\\n"
+            + "    /bin/bash -c " + ProotDistro.singleQuote(innerCmd) + "\n";
+
+        File scriptFile = new File(scriptPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            java.nio.file.Files.write(scriptFile.toPath(), scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write chroot desktop script: " + e.getMessage());
+        }
+    }
+
     @NonNull
     public static String getDesktopCommand(@Nullable ChrootEnvironment env, @Nullable DesktopEntry de) {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
@@ -735,30 +791,8 @@ public final class ChrootDistro {
         String inner = (de != null) ? de.getChrootInnerCommand()
             : "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec dbus-launch --exit-with-session startxfce4";
 
-        return "su -mm -c \"mkdir -p " + rootPath + "/tmp/.X11-unix 2>/dev/null; "
-            + "umount -l " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
-            + "mount -o bind /data/data/com.termux/files/usr/tmp/.X11-unix " + rootPath + "/tmp/.X11-unix 2>/dev/null || true; "
-            + "mkdir -p " + rootPath + "/tmp/.virgl 2>/dev/null; "
-            + "umount -l " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
-            + "mount -o bind /data/data/com.termux/files/usr/tmp/.virgl " + rootPath + "/tmp/.virgl 2>/dev/null || true; "
-            + "ln -sf /tmp/.virgl/.virgl_test " + rootPath + "/tmp/.virgl_test 2>/dev/null || true; "
-            + "chroot " + rootPath + " /usr/bin/env -i "
-            + "HOME=/root "
-            + "USER=root "
-            + "LOGNAME=root "
-            + "TERM=xterm-256color "
-            + "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
-            + "DISPLAY=${DISPLAY:-:0} "
-            + "PULSE_SERVER=tcp:127.0.0.1:4713 "
-            + "GALLIUM_DRIVER=virpipe "
-            + "MESA_GL_VERSION_OVERRIDE=4.3COMPAT "
-            + "MESA_GLES_VERSION_OVERRIDE=3.2 "
-            + "MESA_NO_ERROR=1 "
-            + "LIBGL_DRI3_DISABLE=1 "
-            + "VTEST_SOCKET_NAME=/tmp/.virgl/.virgl_test "
-            + "XKB_CONFIG_ROOT=/usr/share/X11/xkb "
-            + "LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libgcc_s.so.1 "
-            + "/bin/bash -c " + ProotDistro.singleQuote(inner) + "\"";
+        writeChrootDesktopScript(rootPath, inner);
+        return "su -mm -c " + TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + CHROOT_DESKTOP_SCRIPT_NAME;
     }
 
     /**
