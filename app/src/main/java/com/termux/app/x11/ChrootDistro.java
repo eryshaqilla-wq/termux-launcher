@@ -45,17 +45,19 @@ public final class ChrootDistro {
     }
 
     public static final List<DesktopDef> SUPPORTED_DESKTOPS = Collections.unmodifiableList(Arrays.asList(
+        new DesktopDef("bspwm_kiosk", "BSPWM Kiosk (Single-App + Dock Bawah)", Arrays.asList("bspwm", "bspwm-session")),
+        new DesktopDef("openbox_kiosk", "Openbox (Single-App Fullscreen)", Arrays.asList("openbox", "openbox-session")),
         new DesktopDef("xfce4", "XFCE 4", Arrays.asList("startxfce4", "xfce4-session")),
+        new DesktopDef("bspwm", "BSPWM (Full Desktop)", Arrays.asList("bspwm", "bspwm-session")),
         new DesktopDef("gnome", "GNOME", Arrays.asList("gnome-session")),
         new DesktopDef("plasma", "KDE Plasma", Arrays.asList("startplasma-x11", "plasma-desktop")),
         new DesktopDef("mate", "MATE", Arrays.asList("mate-session")),
         new DesktopDef("lxde", "LXDE", Arrays.asList("startlxde", "lxsession")),
         new DesktopDef("lxqt", "LXQt", Arrays.asList("startlxqt")),
         new DesktopDef("cinnamon", "Cinnamon", Arrays.asList("cinnamon-session")),
-        new DesktopDef("openbox", "Openbox", Arrays.asList("openbox-session", "openbox")),
+        new DesktopDef("openbox", "Openbox (Full Desktop)", Arrays.asList("openbox-session", "openbox")),
         new DesktopDef("i3", "i3 Window Manager", Arrays.asList("i3")),
         new DesktopDef("awesome", "Awesome WM", Arrays.asList("awesome")),
-        new DesktopDef("bspwm", "bspwm", Arrays.asList("bspwm", "bspwm-session")),
         new DesktopDef("fluxbox", "Fluxbox", Arrays.asList("startfluxbox", "fluxbox"))
     ));
 
@@ -77,6 +79,14 @@ public final class ChrootDistro {
         @NonNull
         public String getChrootInnerCommand() {
             switch (id) {
+                case "bspwm_kiosk":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; "
+                        + "(for k in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
+                        + "bspc config single_monocle true; bspc desktop -l monocle; "
+                        + "sleep 0.8; polybar-msg -p \"$(pgrep -f 'polybar.*top')\" cmd hide >/dev/null 2>&1 || true) & "
+                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session -- bspwm";
+                case "openbox_kiosk":
+                    return "/etc/init.d/dbus start >/dev/null 2>&1 || true; exec " + detectedBinary;
                 case "gnome":
                     return "/etc/init.d/dbus start >/dev/null 2>&1 || true; export XDG_SESSION_TYPE=x11; exec dbus-launch --exit-with-session gnome-session";
                 case "plasma":
@@ -108,6 +118,13 @@ public final class ChrootDistro {
         @NonNull
         public String getDroidspacesInnerCommand() {
             switch (id) {
+                case "bspwm_kiosk":
+                    return "(for k in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
+                        + "bspc config single_monocle true; bspc desktop -l monocle; "
+                        + "sleep 0.8; polybar-msg -p \"$(pgrep -f 'polybar.*top')\" cmd hide >/dev/null 2>&1 || true) & "
+                        + "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || exec dbus-run-session bspwm";
+                case "openbox_kiosk":
+                    return "exec " + detectedBinary;
                 case "gnome":
                     return "export XDG_SESSION_TYPE=x11 && exec dbus-run-session gnome-session";
                 case "plasma":
@@ -141,6 +158,12 @@ public final class ChrootDistro {
             File dbusBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "dbus-launch");
             boolean hasDbus = dbusBin.canExecute();
             switch (id) {
+                case "bspwm_kiosk":
+                    return "(for k in $(seq 1 40); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
+                        + "bspc config single_monocle true; bspc desktop -l monocle) & bspwm";
+                case "openbox_kiosk":
+                    File rck = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/xdg/openbox/rc.xml");
+                    return rck.exists() ? "openbox --config-file " + rck.getAbsolutePath() : "openbox";
                 case "gnome":
                     return hasDbus ? "env XDG_SESSION_TYPE=x11 dbus-launch --exit-with-session gnome-session"
                                    : "env XDG_SESSION_TYPE=x11 gnome-session";
@@ -740,9 +763,25 @@ public final class ChrootDistro {
             }
             if (selectedEntry == null) {
                 for (DesktopEntry entry : installed) {
-                    if ("xfce4".equals(entry.id)) {
+                    if ("bspwm_kiosk".equals(entry.id)) {
                         selectedEntry = entry;
                         break;
+                    }
+                }
+                if (selectedEntry == null) {
+                    for (DesktopEntry entry : installed) {
+                        if ("openbox_kiosk".equals(entry.id)) {
+                            selectedEntry = entry;
+                            break;
+                        }
+                    }
+                }
+                if (selectedEntry == null) {
+                    for (DesktopEntry entry : installed) {
+                        if ("xfce4".equals(entry.id)) {
+                            selectedEntry = entry;
+                            break;
+                        }
                     }
                 }
                 if (selectedEntry == null) {

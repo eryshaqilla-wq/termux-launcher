@@ -20,7 +20,14 @@
             app:fragment="com.termux.app.fragments.settings.termux.HiddenAppsPreferencesFragment" />
     </PreferenceCategory>
 
-    <PreferenceCategory app:title="@string/settings_x11_group_desktop">
+    <PreferenceCategory
+        app:key="x11_group_desktop_cat"
+        app:title="@string/settings_x11_group_desktop">
+        <ListPreference
+            app:key="gui_apps_selected_de"
+            app:title="@string/settings_gui_apps_selected_de_title"
+            app:summary="@string/settings_gui_apps_selected_de_summary"
+            app:useSimpleSummaryProvider="true" />
         <EditTextPreference
             app:key="x11_window_manager"
             app:title="@string/settings_x11_window_manager_title"

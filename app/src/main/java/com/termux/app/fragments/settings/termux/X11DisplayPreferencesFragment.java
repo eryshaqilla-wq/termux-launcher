@@ -169,6 +169,12 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                 launcher.setX11WindowManager(value);
             } else if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_RUNTIME_BADGE.equals(key)) {
                 launcher.setX11RuntimeBadge(value);
+            } else if (com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE.equals(key)) {
+                android.content.SharedPreferences defaultPrefs = context.getSharedPreferences(
+                    com.termux.shared.termux.TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+                    Context.MODE_PRIVATE);
+                defaultPrefs.edit().putString(com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE, value).apply();
+                com.termux.app.x11.X11CliInstaller.forPrefix(context).writeWindowManagerScript();
             }
         }
 
@@ -188,6 +194,12 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
             }
             if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_RUNTIME_BADGE.equals(key)) {
                 return launcher.getX11RuntimeBadge();
+            }
+            if (com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE.equals(key)) {
+                android.content.SharedPreferences defaultPrefs = context.getSharedPreferences(
+                    com.termux.shared.termux.TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+                    Context.MODE_PRIVATE);
+                return defaultPrefs.getString(com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE, defValue);
             }
             return defValue;
         }

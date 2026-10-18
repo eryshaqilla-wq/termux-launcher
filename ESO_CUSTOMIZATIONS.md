@@ -341,6 +341,31 @@ Dokumen ini berisi catatan perubahan, arsitektur modifikasi, dan petunjuk teknis
 
 ---
 
+### N. Single-App Kiosk Mode & Arsitektur Dynamic Window Manager (Anti-Hardcoded)
+- **Visi & Tujuan**:
+  Membuka aplikasi individual Linux (Firefox, Wireshark, GIMP, Alacritty, dll.) secara instan tanpa perlu memuat seluruh Desktop Environment (XFCE/GNOME) yang berat. Jendela aplikasi langsung mengisi seluruh layar (Monocle/Maximized) di atas dock bawah, dengan akselerasi 3D VirGL dan audio PulseAudio aktif 100%.
+- **Penanganan Perangkat: Root (BSPWM) vs Non-Root (Openbox)**:
+  1. **Rooted Devices (Droidspaces / NetHunter - Poco M3 & Infinix)**:
+     - Menggunakan **BSPWM Kiosk Mode**:
+       * Background monitor subshell mengonfigurasi `bspc config single_monocle true` dan `bspc desktop -l monocle`.
+       * Sembunyikan bar atas (`polybar-msg cmd hide`) dan pertahankan dock bawah (`polybar -q dock` dengan modul apps, terminal, files, windows, layout, fullscreen, close).
+       * Padding dock bawah secara otomatis diatur oleh strut EWMH polybar (`wm-restack = bspwm`).
+       * Ukuran kanvas X11 presisi 100% mengikuti rasio viewport Webview / right pane frame.
+     - Audio: `PULSE_SERVER="unix:/tmp/.pulse-socket"` (Droidspaces) / `tcp:127.0.0.1:4713` (Chroot NetHunter).
+     - GPU: VirGL virpipe 3D hardware acceleration (`/tmp/.virgl_test`).
+  2. **Non-Root Devices (PRoot Distro / Native Termux X11)**:
+     - Menggunakan **Openbox (Single-App Fullscreen)**:
+       * Menggunakan aturan `openbox-rc.xml` bawaan launcher: `<application class="*"><decor>no</decor><maximized>yes</maximized><focus>yes</focus></application>`.
+       * Jendela otomatis maximized memenuhi kanvas X11 tanpa titlebar memakan layar.
+       * Audio diarahkan ke PulseAudio TCP host (`127.0.0.1:4713`).
+- **Dynamic Window Manager & Engine Settings (Anti-Hardcoded)**:
+  - Menu Settings `X11DisplayLinuxAppsPreferencesFragment` dan `GuiAppsSetupPreferencesFragment` kini terhubung secara dinamis dengan engine aktif:
+    * Judul kategori otomatis menampilkan identitas engine aktif: `Desktop & Window Manager (Droidspaces: Ubuntu)`, `Desktop & Window Manager (Kali NetHunter)`, `Desktop & Window Manager (PRoot debian)`, atau `Desktop & Window Manager (Native Termux)`.
+    * Preferensi `gui_apps_selected_de` mendeteksi WM/DE yang benar-benar terpasang di rootfs/host aktif (`ChrootDistro.detectInstalledDesktops`), menyajikan opsi seperti `BSPWM Kiosk (Single-App + Dock Bawah)`, `Openbox (Single-App Fullscreen)`, `BSPWM (Full Desktop)`, atau `XFCE 4`.
+    * Perubahan preferensi langsung disimpan ke SharedPreferences dan men-trigger pembaruan `writeWindowManagerScript()` secara instan.
+
+---
+
 ## 3. Petunjuk Sinkronisasi Update dari Upstream (Anti-Tertimpa)
 
 Jika upstream (`PickleHik3/termux-launcher`) merilis update baru dan Tuan Eso meminta sync, **JANGAN PERNAH reset atau clone ulang dari 0**. Ikuti langkah standar berikut:

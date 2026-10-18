@@ -289,7 +289,9 @@ public final class GuiAppsSetupPreferencesFragment extends MaterialPreferenceFra
                         }
                     }
                     if (!matched) {
-                        String targetVal = values.contains("xfce4") ? "xfce4" : values.get(0);
+                        String targetVal = values.contains("bspwm_kiosk") ? "bspwm_kiosk"
+                            : (values.contains("openbox_kiosk") ? "openbox_kiosk"
+                            : (values.contains("xfce4") ? "xfce4" : values.get(0)));
                         dePref.setValue(targetVal);
                         currentVal = targetVal;
                         android.content.SharedPreferences prefs = ctx.getSharedPreferences(
