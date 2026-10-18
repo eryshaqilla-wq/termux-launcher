@@ -96,4 +96,8 @@
     <string name="settings_terminal_cursor_trail_title">Jejak kursor</string>
     <string name="settings_terminal_cursor_trail_summary">Animasi jejak kursor saat mengetik atau bergerak di terminal.</string>
     <string name="settings_terminal_cursor_trail_style_title">Gaya jejak kursor</string>
+    <string name="settings_x11_sync_linux_apps_title">Sinkronkan aplikasi Linux</string>
+    <string name="settings_x11_sync_linux_apps_summary">Pindai ulang dan perbarui ikon aplikasi desktop dari chroot/container.</string>
+    <string name="settings_x11_sync_linux_apps_syncing">Menyinkronkan aplikasi Linux…</string>
+    <string name="settings_x11_sync_linux_apps_done">Aplikasi Linux berhasil disinkronkan.</string>
 </resources>

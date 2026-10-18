@@ -9,7 +9,9 @@ import android.os.Looper;
 import androidx.annotation.Keep;
 import androidx.preference.EditTextPreference;
 import androidx.preference.ListPreference;
+import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
+import android.widget.Toast;
 
 import com.termux.R;
 import com.termux.app.x11.ChrootDistro;
@@ -77,6 +79,27 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
         PreferenceCategory desktopCat = findPreference("x11_group_desktop_cat");
         ListPreference dePref = findPreference(ChrootDistro.KEY_SELECTED_DE);
         EditTextPreference wmPref = findPreference("x11_window_manager");
+        Preference syncPref = findPreference("x11_sync_linux_apps");
+
+        if (syncPref != null) {
+            syncPref.setOnPreferenceClickListener(preference -> {
+                Context ctx = getContext();
+                if (ctx == null) return true;
+                syncPref.setEnabled(false);
+                syncPref.setSummary(R.string.settings_x11_sync_linux_apps_syncing);
+                ChrootDistro.syncChrootBridge(() -> {
+                    handler.post(() -> {
+                        if (!isAdded()) return;
+                        syncPref.setEnabled(true);
+                        syncPref.setSummary(R.string.settings_x11_sync_linux_apps_summary);
+                        com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(ctx.getApplicationContext()).invalidate();
+                        com.termux.app.TermuxActivity.requestAppDrawerReloadOnNextResume(ctx.getApplicationContext());
+                        Toast.makeText(ctx, R.string.settings_x11_sync_linux_apps_done, Toast.LENGTH_SHORT).show();
+                    });
+                });
+                return true;
+            });
+        }
 
         String activeEngineTitle;
         if (GuiAppsSetup.Route.CHROOT.key.equals(route)) {

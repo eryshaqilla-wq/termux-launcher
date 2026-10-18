@@ -18,6 +18,10 @@
             app:title="@string/settings_x11_hidden_apps_title"
             app:summary="@string/settings_x11_hidden_apps_summary"
             app:fragment="com.termux.app.fragments.settings.termux.HiddenAppsPreferencesFragment" />
+        <Preference
+            app:key="x11_sync_linux_apps"
+            app:title="@string/settings_x11_sync_linux_apps_title"
+            app:summary="@string/settings_x11_sync_linux_apps_summary" />
     </PreferenceCategory>
 
     <PreferenceCategory

@@ -404,48 +404,83 @@ public final class ChrootDistro {
         }, "selinux-policy-check").start();
     }
 
+    private static String getSyncBridgeCommand() {
+        return "sel=$(getenforce 2>/dev/null || cat /sys/fs/selinux/enforce 2>/dev/null); "
+            + "if [ \"$sel\" = \"Enforcing\" ] || [ \"$sel\" = \"1\" ]; then "
+            + "if command -v magiskpolicy >/dev/null 2>&1; then "
+            + "magiskpolicy --live \"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file dir { read open search getattr }\" "
+            + "\"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file file { read open getattr }\" 2>/dev/null || true; "
+            + "fi; fi; "
+            + "rm -rf /data/data/com.termux/files/usr/share/applications/chroot/kalifs 2>/dev/null; "
+            + "icons_dir=\"/data/data/com.termux/files/usr/share/applications/chroot/icons\"; "
+            + "mkdir -p \"$icons_dir\"; "
+            + "for root in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs /data/local/Droidspaces/Containers/*/rootfs; do "
+            + "[ -L \"$root\" ] && continue; "
+            + "if [ -d \"$root/usr/share/applications\" ]; then "
+            + "cname=$(basename \"$(dirname \"$root\")\"); [ \"$cname\" = \"nhsystem\" ] && cname=$(basename \"$root\"); "
+            + "out=\"/data/data/com.termux/files/usr/share/applications/chroot/$cname\"; "
+            + "mkdir -p \"$out\"; "
+            + "cp -u \"$root\"/usr/share/applications/*.desktop \"$out/\" 2>/dev/null || true; "
+            + "for tdir in \"$root\"/usr/share/icons/hicolor/scalable/apps "
+            + "\"$root\"/usr/share/icons/hicolor/256x256/apps "
+            + "\"$root\"/usr/share/icons/hicolor/128x128/apps "
+            + "\"$root\"/usr/share/icons/hicolor/64x64/apps "
+            + "\"$root\"/usr/share/icons/hicolor/48x48/apps "
+            + "\"$root\"/usr/share/icons/Papirus/128x128/apps "
+            + "\"$root\"/usr/share/pixmaps; do "
+            + "[ -d \"$tdir\" ] && cp -unL \"$tdir\"/* \"$icons_dir/\" 2>/dev/null || true; "
+            + "done; "
+            + "fi; done; "
+            + "uid=$(stat -c '%u' /data/data/com.termux/files/home 2>/dev/null || id -u); "
+            + "chown -R \"$uid:$uid\" \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
+            + "chmod -R 755 \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; ";
+    }
+
+    /**
+     * Synchronously synchronizes chroot .desktop files and icons into Termux's accessible prefix bridge directory.
+     * Can be safely called from background loader threads.
+     */
+    public static void syncChrootBridgeBlocking() {
+        if (!isRootAvailable()) return;
+        try {
+            String cmd = getSyncBridgeCommand();
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+            int exit = p.waitFor();
+            if (exit == 0 && sOnSyncCompleted != null) {
+                sOnSyncCompleted.run();
+            }
+        } catch (Exception ignored) {}
+    }
+
     /**
      * Synchronizes chroot .desktop files and icons into Termux's accessible prefix bridge directory.
      */
     public static void syncChrootBridge() {
-        if (!isRootAvailable()) return;
+        syncChrootBridge(null);
+    }
+
+    /**
+     * Synchronizes chroot .desktop files and icons asynchronously and invokes callback upon completion.
+     */
+    public static void syncChrootBridge(@Nullable Runnable onFinished) {
+        if (!isRootAvailable()) {
+            if (onFinished != null) onFinished.run();
+            return;
+        }
         new Thread(() -> {
             try {
-                String cmd = "sel=$(getenforce 2>/dev/null || cat /sys/fs/selinux/enforce 2>/dev/null); "
-                    + "if [ \"$sel\" = \"Enforcing\" ] || [ \"$sel\" = \"1\" ]; then "
-                    + "if command -v magiskpolicy >/dev/null 2>&1; then "
-                    + "magiskpolicy --live \"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file dir { read open search getattr }\" "
-                    + "\"allow { untrusted_app untrusted_app_27 untrusted_app_29 untrusted_app_30 untrusted_app_32 untrusted_app_all runas_app } system_data_file file { read open getattr }\" 2>/dev/null || true; "
-                    + "fi; fi; "
-                    + "rm -rf /data/data/com.termux/files/usr/share/applications/chroot/kalifs 2>/dev/null; "
-                    + "icons_dir=\"/data/data/com.termux/files/usr/share/applications/chroot/icons\"; "
-                    + "mkdir -p \"$icons_dir\"; "
-                    + "for root in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs /data/local/Droidspaces/Containers/*/rootfs; do "
-                    + "[ -L \"$root\" ] && continue; "
-                    + "if [ -d \"$root/usr/share/applications\" ]; then "
-                    + "cname=$(basename \"$(dirname \"$root\")\"); [ \"$cname\" = \"nhsystem\" ] && cname=$(basename \"$root\"); "
-                    + "out=\"/data/data/com.termux/files/usr/share/applications/chroot/$cname\"; "
-                    + "mkdir -p \"$out\"; "
-                    + "cp -u \"$root\"/usr/share/applications/*.desktop \"$out/\" 2>/dev/null || true; "
-                    + "for tdir in \"$root\"/usr/share/icons/hicolor/scalable/apps "
-                    + "\"$root\"/usr/share/icons/hicolor/256x256/apps "
-                    + "\"$root\"/usr/share/icons/hicolor/128x128/apps "
-                    + "\"$root\"/usr/share/icons/hicolor/64x64/apps "
-                    + "\"$root\"/usr/share/icons/hicolor/48x48/apps "
-                    + "\"$root\"/usr/share/icons/Papirus/128x128/apps "
-                    + "\"$root\"/usr/share/pixmaps; do "
-                    + "[ -d \"$tdir\" ] && cp -unL \"$tdir\"/* \"$icons_dir/\" 2>/dev/null || true; "
-                    + "done; "
-                    + "fi; done; "
-                    + "uid=$(stat -c '%u' /data/data/com.termux/files/home 2>/dev/null || id -u); "
-                    + "chown -R \"$uid:$uid\" \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; "
-                    + "chmod -R 755 \"/data/data/com.termux/files/usr/share/applications/chroot\" 2>/dev/null || true; ";
+                String cmd = getSyncBridgeCommand();
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
                 int exit = p.waitFor();
                 if (exit == 0 && sOnSyncCompleted != null) {
                     sOnSyncCompleted.run();
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            } finally {
+                if (onFinished != null) {
+                    onFinished.run();
+                }
+            }
         }, "chroot-bridge-sync").start();
     }
 
@@ -455,12 +490,6 @@ public final class ChrootDistro {
     @NonNull
     public static List<ProotDistro.Container> installed() {
         if (!isRootAvailable()) return Collections.emptyList();
-        long now = System.currentTimeMillis();
-        if (now - sLastBridgeSync > 15_000) {
-            sLastBridgeSync = now;
-            applySelinuxPolicyIfEnforcing();
-            syncChrootBridge();
-        }
         List<ProotDistro.Container> containers = new ArrayList<>();
         List<ChrootEnvironment> envs = scan();
         for (ChrootEnvironment env : envs) {

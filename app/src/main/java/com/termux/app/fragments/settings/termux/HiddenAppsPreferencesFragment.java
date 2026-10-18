@@ -18,6 +18,7 @@ import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.launcher.data.LauncherAppDataProvider;
 import com.termux.app.launcher.data.LauncherHiddenAppsStore;
 import com.termux.app.launcher.model.LauncherAppEntry;
+import com.termux.app.x11.ChrootDistro;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -92,6 +93,8 @@ public final class HiddenAppsPreferencesFragment extends MaterialPreferenceFragm
     /** The catalogue walk is blocking; keep it off the fragment-creation thread. */
     private void loadAsync(@NonNull Context appContext) {
         loadExecutor.execute(() -> {
+            ChrootDistro.syncChrootBridgeBlocking();
+            LauncherAppDataProvider.getInstance(appContext).invalidate();
             LauncherAppDataProvider.getInstance(appContext).hiddenApps().reload();
             List<LauncherAppEntry> apps = new ArrayList<>();
             for (LauncherAppEntry entry : LauncherAppDataProvider.getInstance(appContext)
