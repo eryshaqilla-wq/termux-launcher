@@ -6490,9 +6490,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (surfaceHost == null) {
             return;
         }
-        if (!state.keyboardShown || isWholeFrameTouchpadShown()) {
+        if (!state.keyboardShown) {
             surfaceHost.setBackground(null);
             clearInAppKeyboardBackdrop();
+            return;
+        }
+
+        if (shouldUseUnifiedDefaultKeyboardGlassSurface(state)) {
+            // Once accessory_surface_host has actually laid out at the expanded height — and, when
+            // there is a frame to blur, its backdrop shows it — the transparent keyboard exposes
+            // that one unified material. Until then, keep a keyboard-local glass background in
+            // place: changing the RelativeLayout rules above only requests layout, so clearing
+            // this background here would expose sharp wallpaper for a frame (or the whole IME
+            // transition). It must come off the moment the shared surface is there, though: the
+            // expanded surface already paints this glass under the keyboard, and a local coat left
+            // on top is the same translucent material twice — a keyboard visibly darker than the
+            // band above it. Both sample the one shared frame at the host's own position, so the
+            // wallpaper under the keys is the same picture on either side of the handoff.
+            if (isUnifiedAccessoryBackdropReady(state)) {
+                // No glass of its own, but the keyboard band's veil: over the unified glass,
+                // under the keys, on the host's bounds only, so the dock rows are never veiled.
+                surfaceHost.setBackground(buildInAppKeyboardVeilOnly(state, surfaceHost));
+                clearInAppKeyboardBackdrop();
+            } else {
+                surfaceHost.setBackground(buildInAppKeyboardSurfaceBackground(
+                    state, surfaceHost, false, 0f));
+            }
             return;
         }
 
@@ -6543,28 +6566,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (frameStandsDown()) {
             surfaceHost.setBackground(null);
             clearInAppKeyboardBackdrop();
-            return;
-        }
-        if (shouldUseUnifiedDefaultKeyboardGlassSurface(state)) {
-            // Once accessory_surface_host has actually laid out at the expanded height — and, when
-            // there is a frame to blur, its backdrop shows it — the transparent keyboard exposes
-            // that one unified material. Until then, keep a keyboard-local glass background in
-            // place: changing the RelativeLayout rules above only requests layout, so clearing
-            // this background here would expose sharp wallpaper for a frame (or the whole IME
-            // transition). It must come off the moment the shared surface is there, though: the
-            // expanded surface already paints this glass under the keyboard, and a local coat left
-            // on top is the same translucent material twice — a keyboard visibly darker than the
-            // band above it. Both sample the one shared frame at the host's own position, so the
-            // wallpaper under the keys is the same picture on either side of the handoff.
-            if (isUnifiedAccessoryBackdropReady(state)) {
-                // No glass of its own, but the keyboard band's veil: over the unified glass,
-                // under the keys, on the host's bounds only, so the dock rows are never veiled.
-                surfaceHost.setBackground(buildInAppKeyboardVeilOnly(state, surfaceHost));
-                clearInAppKeyboardBackdrop();
-            } else {
-                surfaceHost.setBackground(buildInAppKeyboardSurfaceBackground(
-                    state, surfaceHost, false, 0f));
-            }
             return;
         }
         surfaceHost.setBackground(buildInAppKeyboardSurfaceBackground(
@@ -7582,9 +7583,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Bitmap frame = mChrome.blurCache().obtain(state.blurRadiusDp, wallpaperFrame);
         Rect frameRect = mChrome.blurCache().frameRectRef();
         if (frame == null) {
-            if (installed != null && installed.frameRect().equals(frameRect)) {
-                // A blur in flight: the frame already up still describes this screen, and it is
-                // sampled where the view is now, so a moved dock shows the right wallpaper.
+            if (installed != null) {
+                // A blur in flight or transition: keep the existing frame active so sharp wallpaper never flashes through.
                 backdrop.invalidate();
                 backdrop.setVisibility(View.VISIBLE);
             } else {
@@ -20942,10 +20942,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             if (host != null) {
                 host.setVisibility(View.VISIBLE);
-                if (splitKeyboardTouchpadGap(mAttachedInAppKeyboardView) == null) {
-                    host.setBackground(null);
-                    clearInAppKeyboardBackdrop();
-                }
                 if (host.getLayoutParams() != null) {
                     host.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
                 }
@@ -20988,10 +20984,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         if (pad != null && pad.getParent() == host) {
-            if (splitKeyboardTouchpadGap(mAttachedInAppKeyboardView) == null) {
-                host.setBackground(null);
-                clearInAppKeyboardBackdrop();
-            }
             pad.setSurfaceColor(resolveExtraKeysBackgroundColor());
             // The keyboard's type may have moved under a pad that is already up.
             applyDisplayTouchpadFrame(pad, mAttachedInAppKeyboardView);
@@ -21040,10 +21032,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mDisplayTouchpadWaitRound = 0;
         if (pad.getParent() instanceof ViewGroup) ((ViewGroup) pad.getParent()).removeView(pad);
         Rect gap = splitKeyboardTouchpadGap(keyboardView);
-        if (gap == null) {
-            host.setBackground(null);
-            clearInAppKeyboardBackdrop();
-        }
         host.addView(pad, seatDisplayTouchpad(pad, keyboardView, gap));
         if (keyboardView != null) {
             final com.termux.app.x11.DisplayTouchpadView following = pad;
