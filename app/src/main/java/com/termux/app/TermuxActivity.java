@@ -4740,24 +4740,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int targetBottomMargin = 0;
         boolean capsuleSurface = viewId == R.id.accessory_surface_host && isRoundedDockStyle();
         ViewParent parent = view.getParent();
-        if (parent instanceof View) {
-            View parentView = (View) parent;
-            if (parentView.getHeight() > 0) {
-                targetHeight = parentView.getHeight();
-            }
-        }
         if (bounds != null) {
             targetTop = Math.max(0, bounds.top);
             targetHeight = Math.max(0, bounds.height());
         }
         if (viewId == R.id.accessory_surface_host) {
-            // The margins, and MATCH_PARENT for what is left — never the parent's width frozen
-            // into pixels. The dock gets its width back in the same frame a bar leaves a side
-            // edge, and this pass runs before that re-layout: a pixel width read here left the
-            // glass short by the rail's whole band, all of it on the right.
+            // The margins, and MATCH_PARENT for what is left — never the parent's width or height frozen
+            // into pixels when bounds == null. The dock gets its width and height back in the same frame a bar
+            // leaves a side edge or the keyboard/touchpad stack expands.
             int horizontalMargin = getDockLayout().horizontalInsetPx;
             targetLeftMargin = horizontalMargin;
             targetRightMargin = horizontalMargin;
+            if (bounds == null) {
+                targetHeight = ViewGroup.LayoutParams.MATCH_PARENT;
+            }
             if (!capsuleSurface && bounds == null) {
                 int containerPaddingBottom = 0;
                 if (parent instanceof View) {
@@ -5923,8 +5919,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * opaque fill. Nothing produces a backdrop for any of them, so nothing may wait on one.
      */
     private boolean paintsNoInAppKeyboardBackdrop() {
-        return isWholeFrameTouchpadShown()
-            || inAppKeyboardMaterial() != KeyboardMaterialPolicy.Material.GLASS;
+        return inAppKeyboardMaterial() != KeyboardMaterialPolicy.Material.GLASS;
     }
 
     /**
@@ -6096,12 +6091,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * the frost directly above it.
      */
     private int navStripBlurRadiusDp(@NonNull ChromeSpec state) {
+        if (isWholeFrameTouchpadShown()) return state.blurRadiusDp;
         return state.keyboardShown && isInAppKeyboardGlassSurface()
             ? getEffectiveInAppKeyboardBlurRadius() : state.blurRadiusDp;
     }
 
     /** The same surface's frost gate: the keyboard blurs by its own radius, the dock by its own. */
     private boolean navStripBlurEnabled(@NonNull ChromeSpec state) {
+        if (isWholeFrameTouchpadShown()) return state.blurEnabled;
         if (!state.keyboardShown) return state.blurEnabled;
         return isInAppKeyboardGlassSurface()
             && ChromePolicy.dockBlurEnabled(getEffectiveInAppKeyboardBlurRadius());
@@ -6121,7 +6118,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @NonNull
     private Drawable buildDecorNavBarTint(@NonNull ChromeSpec state) {
         float foot = defaultDockGlassFootFraction();
-        if (!state.keyboardShown)
+        if (!state.keyboardShown || isWholeFrameTouchpadShown())
             return mChrome.glass().dockSurface(state.barAlpha, foot, 1f, false);
         // A keyboard overlaying its place is an opaque panel that answers to neither the slider
         // nor the scheme colour, so the strip takes the same fill: at the glass alpha it would
@@ -6507,7 +6504,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // on top is the same translucent material twice — a keyboard visibly darker than the
             // band above it. Both sample the one shared frame at the host's own position, so the
             // wallpaper under the keys is the same picture on either side of the handoff.
-            if (isUnifiedAccessoryBackdropReady(state) || isWholeFrameTouchpadShown()) {
+            if (isUnifiedAccessoryBackdropReady(state)) {
                 // No glass of its own, but the keyboard band's veil: over the unified glass,
                 // under the keys, on the host's bounds only, so the dock rows are never veiled.
                 surfaceHost.setBackground(buildInAppKeyboardVeilOnly(state, surfaceHost));
@@ -6683,7 +6680,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean normalized = isInAppKeyboardOpacityLinked()
             || !KeyboardMaterialPolicy.opacityApplies(inAppKeyboardForm(), inAppKeyboardOverlays());
         Integer schemeBackground = normalized ? null : resolveInAppKeyboardSchemeBackgroundColor();
-        int blurRadiusDp = getEffectiveInAppKeyboardBlurRadius();
+        boolean wholePad = isWholeFrameTouchpadShown();
+        int blurRadiusDp = wholePad ? getEffectiveExtraKeysBlurRadius() : getEffectiveInAppKeyboardBlurRadius();
         // Render only the keyboard's slice of the shared light model — the under-pill nav strip
         // renders the remainder so the single foot lands under the pill (see the slice overload).
         // Docked, the keyboard is a slice of the frame: only the edge the model says faces the
@@ -6692,20 +6690,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean floating = isKeyboardFloating();
         int modelRim = capsule ? com.termux.app.chrome.ChromeEdgeRule.ALL
             : chromeRimEdges(KEYBOARD_PIECES);
-        com.termux.app.chrome.GlassStack.Spec spec = com.termux.app.chrome.GlassStack.keyboard(
-                mPreferences, state.barAlpha, capsule ? cornerRadiusPx : 0f, mFancierGlassLook)
-            .withBlur(blurRadiusDp)
-            // A card is a card: its fill and rim are never faded out by the stack alpha a
-            // detached Keyboard Opacity may hold. That alpha belongs to a slice of the frame.
-            .withStackAlpha(capsule && !floating ? 100
-                : com.termux.app.chrome.GlassStack.keyboardStackAlphaPercent(mPreferences))
-            .withRim(capsule ? !floating : modelRim != com.termux.app.chrome.ChromeEdgeRule.NONE)
-            .withSlice(defaultDockGlassFootFraction(), false)
-            .withSeams(capsule ? com.termux.app.chrome.ChromeEdgeRule.NONE
-                : com.termux.app.chrome.ChromeEdgeRule.ALL & ~modelRim)
-            .withTintColor(schemeBackground == null ? null : withAlphaComponent(schemeBackground,
-                Math.round(255f * getInAppKeyboardBackgroundOpacityPercent() / 100f)))
-            .withBand(noteInAppKeyboardBand(surfaceHost));
+        com.termux.app.chrome.GlassStack.Spec spec;
+        if (wholePad) {
+            int dockGrain = mPreferences != null
+                ? mPreferences.getDockGlassGrain()
+                : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN;
+            int dockTintStrength = mPreferences != null
+                ? mPreferences.getDockTintStrength()
+                : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_SURFACE_BASE_TINT;
+            spec = com.termux.app.chrome.GlassStack.Spec.of(
+                    blurRadiusDp, state.barAlpha, dockGrain, capsule ? cornerRadiusPx : 0f, mFancierGlassLook)
+                .withRim(false)
+                .withSlice(defaultDockGlassFootFraction(), false)
+                .withSeams(com.termux.app.chrome.ChromeEdgeRule.ALL)
+                .withTintStrength(dockTintStrength)
+                .withBand(null);
+        } else {
+            spec = com.termux.app.chrome.GlassStack.keyboard(
+                    mPreferences, state.barAlpha, capsule ? cornerRadiusPx : 0f, mFancierGlassLook)
+                .withBlur(blurRadiusDp)
+                // A card is a card: its fill and rim are never faded out by the stack alpha a
+                // detached Keyboard Opacity may hold. That alpha belongs to a slice of the frame.
+                .withStackAlpha(capsule && !floating ? 100
+                    : com.termux.app.chrome.GlassStack.keyboardStackAlphaPercent(mPreferences))
+                .withRim(capsule ? !floating : modelRim != com.termux.app.chrome.ChromeEdgeRule.NONE)
+                .withSlice(defaultDockGlassFootFraction(), false)
+                .withSeams(capsule ? com.termux.app.chrome.ChromeEdgeRule.NONE
+                    : com.termux.app.chrome.ChromeEdgeRule.ALL & ~modelRim)
+                .withTintColor(schemeBackground == null ? null : withAlphaComponent(schemeBackground,
+                    Math.round(255f * getInAppKeyboardBackgroundOpacityPercent() / 100f)))
+                .withBand(noteInAppKeyboardBand(surfaceHost));
+        }
         com.termux.app.chrome.SharedFrameDrawable backdrop = null;
         if (ChromePolicy.dockBlurEnabled(blurRadiusDp)) {
             Bitmap frame = obtainInAppKeyboardBackdropFrame(state, surfaceHost);
@@ -6788,7 +6803,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         // The keyboard's own radius, not the dock's state.blurRadiusDp it used to share outright —
         // falls back to it while the keyboard's is still the -1 "follow" sentinel.
-        int keyboardBlurRadiusDp = getEffectiveInAppKeyboardBlurRadius();
+        int keyboardBlurRadiusDp = isWholeFrameTouchpadShown()
+            ? getEffectiveExtraKeysBlurRadius()
+            : getEffectiveInAppKeyboardBlurRadius();
         if (mPreferences != null && (mPreferences.isV0239EffectsPresetEnabled() || !mPreferences.isWallpaperBlurEnabled())) {
             return null;
         }
@@ -20936,9 +20953,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The pad and the clipboard panel stand in the same frame; the pad's arrival puts the
         // panel away first, so the two never stack.
         View container = findViewById(R.id.inapp_keyboard_container);
+        boolean willRaiseKeyboard = ours && mInAppKeyboard != null && mInAppKeyboard.isEnabled() && !mInAppKeyboard.isVisible();
         if (wanted) {
             if (container != null) {
-                container.setVisibility(View.VISIBLE);
+                if (!willRaiseKeyboard) {
+                    container.setVisibility(View.VISIBLE);
+                }
                 if (container.getLayoutParams() != null) {
                     container.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
                 }
@@ -20949,7 +20969,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     host.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
                 }
             }
-            if (ours && mInAppKeyboard != null && mInAppKeyboard.isEnabled() && !mInAppKeyboard.isVisible()) {
+            if (willRaiseKeyboard) {
                 raiseDisplayFrameKeyboard();
                 mFrameContent.onFrameRaisedForPad();
             }
