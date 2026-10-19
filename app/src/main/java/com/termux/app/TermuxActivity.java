@@ -6511,7 +6511,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 // No glass of its own, but the keyboard band's veil: over the unified glass,
                 // under the keys, on the host's bounds only, so the dock rows are never veiled.
                 surfaceHost.setBackground(buildInAppKeyboardVeilOnly(state, surfaceHost));
-                clearInAppKeyboardBackdrop();
             } else {
                 surfaceHost.setBackground(buildInAppKeyboardSurfaceBackground(
                     state, surfaceHost, false, 0f));
@@ -6785,7 +6784,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Rect targetRect = wallpaperFrame == null ? null
             : buildInAppKeyboardBackdropTargetRect(state, surfaceHost);
         if (targetRect == null) {
-            return mChrome.ledger().isDirty(SurfaceDirtyLedger.Backdrop.IN_APP_KEYBOARD) ? null : mInAppKeyboardBackdropBitmap;
+            return mInAppKeyboardBackdropBitmap;
         }
         // The keyboard's own radius, not the dock's state.blurRadiusDp it used to share outright —
         // falls back to it while the keyboard's is still the -1 "follow" sentinel.
@@ -6800,7 +6799,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         Bitmap frame = mChrome.blurCache().obtain(keyboardBlurRadiusDp, wallpaperFrame);
         Rect frameRect = mChrome.blurCache().frameRectRef();
         if (frame == null) {
-            return mInAppKeyboardBackdropFrameRect.equals(frameRect) ? mInAppKeyboardBackdropBitmap : null;
+            return mInAppKeyboardBackdropBitmap;
         }
         mInAppKeyboardBackdropBitmap = frame;
         mInAppKeyboardBackdropFrameRect.set(frameRect);
@@ -7546,9 +7545,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (backdrop == null || surfaceHost == null || accessoryContainer == null || wallpaperFrame == null ||
             accessoryContainer.getWidth() <= 0 || accessoryContainer.getHeight() <= 0) {
-            if (backdrop != null && shouldUseAccessoryRenderEffectBlur(state)
-                && com.termux.app.chrome.SharedFrameDrawable.of(backdrop.getDrawable()) != null) {
-                backdrop.setVisibility(View.VISIBLE);
+            if (backdrop != null && shouldUseAccessoryRenderEffectBlur(state)) {
+                if (com.termux.app.chrome.SharedFrameDrawable.of(backdrop.getDrawable()) != null) {
+                    backdrop.setVisibility(View.VISIBLE);
+                }
             } else {
                 clearAccessoryRenderEffectBackdrop();
             }
@@ -8090,7 +8090,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * whatever the dock is laid out to next, it shows the wallpaper behind it.
      */
     private boolean isDockBackdropSafeForCurrentDestination(@NonNull ChromeSpec state) {
-        return true;
+        if (!state.blurEnabled || state.blurRadiusDp <= 0) {
+            return true;
+        }
+        return isAccessoryBlurHealthy(state);
     }
 
     private void applyRealtimeBlurRadius(View blurView, int blurRadiusDp) {
@@ -20978,9 +20981,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
             };
             leaving.animate().cancel();
-            if (reduced) detach.run();
-            else leaving.animate().alpha(0f).translationY(dpToPx(12)).setDuration(duration)
-                .setInterpolator(settle).withEndAction(detach).start();
+            if (reduced || mFrameContent.content() == com.termux.app.x11.DisplayFrameContentPolicy.Content.NONE) {
+                detach.run();
+            } else {
+                leaving.animate().alpha(0f).translationY(dpToPx(12)).setDuration(duration)
+                    .setInterpolator(settle).withEndAction(detach).start();
+            }
             return;
         }
         if (pad != null && pad.getParent() == host) {

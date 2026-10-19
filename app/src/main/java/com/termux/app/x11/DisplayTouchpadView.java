@@ -198,7 +198,7 @@ public final class DisplayTouchpadView extends View {
         // The pad lies over the place in both shapes, so it is solid in both: the surface colour
         // at full alpha, and no rim at rest. The only stroke left is the drag ring below.
         mSurfaceColor = surfaceColor;
-        mFillPaint.setColor(mSurfaceColor);
+        mFillPaint.setColor(android.graphics.Color.TRANSPARENT);
         mStrokePaint.setStyle(Paint.Style.STROKE);
         mStrokePaint.setStrokeWidth(dp(1.5f));
         mStrokePaint.setColor(ColorUtils.setAlphaComponent(onSurfaceColor, 120));
@@ -234,7 +234,7 @@ public final class DisplayTouchpadView extends View {
      * panel.
      */
     public void setInSplitGap(boolean inGap, float capRadiusPx, int capColor) {
-        int fill = inGap ? capColor : mSurfaceColor;
+        int fill = inGap ? capColor : android.graphics.Color.TRANSPARENT;
         if (mInGap == inGap && Float.compare(mGapRadiusPx, capRadiusPx) == 0
             && mFillPaint.getColor() == fill) return;
         mInGap = inGap;
@@ -260,7 +260,7 @@ public final class DisplayTouchpadView extends View {
     public void setSurfaceColor(int surfaceColor) {
         mSurfaceColor = surfaceColor;
         if (!mInGap) {
-            mFillPaint.setColor(mSurfaceColor);
+            mFillPaint.setColor(android.graphics.Color.TRANSPARENT);
         }
         invalidate();
     }
@@ -314,7 +314,9 @@ public final class DisplayTouchpadView extends View {
     protected void onDraw(@NonNull Canvas canvas) {
         super.onDraw(canvas);
         float radius = panelRadius();
-        canvas.drawRoundRect(mBounds, radius, radius, mFillPaint);
+        if (mInGap) {
+            canvas.drawRoundRect(mBounds, radius, radius, mFillPaint);
+        }
         // A faint grid of dots says "this is a surface you move across", nothing more. It stops
         // at the strip's own left edge, when the strip is up, so the pointing area reads smaller.
         boolean stripShown = !mStrip.isEmpty();
