@@ -480,6 +480,7 @@ public final class KeyboardGeometryChoreographer {
             return;
         }
         mPendingOpenReveal = false;
+        mSurface.applyKeyboardSurfaceState(state);
         keyboardContainer.setVisibility(View.VISIBLE);
         removeOpenPreDrawGate();
     }
@@ -494,6 +495,7 @@ public final class KeyboardGeometryChoreographer {
         View keyboardContainer = mSurface.findView(R.id.inapp_keyboard_container);
         if (keyboardContainer != null && keyboardContainer.getVisibility() == View.INVISIBLE)
             keyboardContainer.setVisibility(View.VISIBLE);
+        mSurface.applyKeyboardSurfaceState(mSurface.buildChromeSpec());
         removeOpenPreDrawGate();
     }
 

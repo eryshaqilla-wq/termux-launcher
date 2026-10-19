@@ -6507,7 +6507,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // on top is the same translucent material twice — a keyboard visibly darker than the
             // band above it. Both sample the one shared frame at the host's own position, so the
             // wallpaper under the keys is the same picture on either side of the handoff.
-            if (isUnifiedAccessoryBackdropReady(state)) {
+            if (isUnifiedAccessoryBackdropReady(state) || isWholeFrameTouchpadShown()) {
                 // No glass of its own, but the keyboard band's veil: over the unified glass,
                 // under the keys, on the host's bounds only, so the dock rows are never veiled.
                 surfaceHost.setBackground(buildInAppKeyboardVeilOnly(state, surfaceHost));
@@ -12190,7 +12190,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 ViewGroup.LayoutParams.WRAP_CONTENT));
             mAttachedInAppKeyboardView = keyboardView;
             mKeyboardGeometry.discardMeasuredHeight();
-            keyboardView.setAlpha(1f);
+            keyboardView.setAlpha(isWholeFrameTouchpadShown() ? 0f : 1f);
             // A fresh keyboard view drops the touchpad that was over the old one; put it back.
             if (mDisplayTouchpad != null) {
                 mDisplayTouchpad = null;
@@ -21052,9 +21052,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View keys = mAttachedInAppKeyboardView;
         // A pad standing in the parting leaves both halves typing, so the keys stay lit. Only a
         // measured keyboard that has no parting to stand in is put out under a whole-frame pad.
-        if (keys != null && gap == null && keys.getHeight() > 0) {
+        if (keys != null && gap == null) {
             keys.animate().cancel();
-            if (reduced) keys.setAlpha(0f);
+            if (reduced || keys.getHeight() <= 0) keys.setAlpha(0f);
             else keys.animate().alpha(0f).setDuration(duration).setInterpolator(settle).start();
         }
         pad.animate().cancel();
@@ -21110,9 +21110,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!com.termux.app.x11.DisplayTouchpadPlacement.describes(pad.getLayoutParams(), params)) {
             pad.setLayoutParams(params);
         }
-        if (gap != null && keyboardView != null && keyboardView.getAlpha() != 1f) {
-            keyboardView.animate().cancel();
-            keyboardView.setAlpha(1f);
+        if (gap != null) {
+            if (keyboardView != null && keyboardView.getAlpha() != 1f) {
+                keyboardView.animate().cancel();
+                keyboardView.setAlpha(1f);
+            }
+        } else {
+            if (keyboardView != null && keyboardView.getAlpha() != 0f) {
+                keyboardView.animate().cancel();
+                keyboardView.setAlpha(0f);
+            }
         }
     }
 
