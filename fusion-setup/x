@@ -1,0 +1,24 @@
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
+fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/x_webview.cjs" ]; then
+        exec node "$TARGET_DIR/x_webview.cjs" "$@"
+    elif [ -f "$TARGET_DIR/x_webview.js" ]; then
+        exec node "$TARGET_DIR/x_webview.js" "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/x_webview.js" ]; then
+        exec node "$TARGET_DIR/x_webview.js" "$@"
+    elif [ -f "$TARGET_DIR/x_webview.cjs" ]; then
+        exec node "$TARGET_DIR/x_webview.cjs" "$@"
+    fi
+fi
+echo "x_webview (.cjs/.js) tidak ditemukan di $TARGET_DIR"
+exit 1

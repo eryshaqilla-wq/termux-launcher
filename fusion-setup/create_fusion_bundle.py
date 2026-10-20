@@ -44,20 +44,28 @@ with open(os.path.join(BUNDLE_DIR, "bin/browser"), "w") as f:
 with open(os.path.join(BUNDLE_DIR, "bin/x"), "w") as f:
     f.write("""#!/data/data/com.termux/files/usr/bin/bash
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
-TARGET_X="${FUSION_WALLET_DIR:-$HOME/wallet}/x_webview.js"
-if [ ! -f "$TARGET_X" ]; then
-    if [ -f "$HOME/wallet/x_webview.js" ]; then
-        TARGET_X="$HOME/wallet/x_webview.js"
-    elif [ -f "/root/wallet/x_webview.js" ]; then
-        TARGET_X="/root/wallet/x_webview.js"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
+fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/x_webview.cjs" ]; then
+        exec node "$TARGET_DIR/x_webview.cjs" "$@"
+    elif [ -f "$TARGET_DIR/x_webview.js" ]; then
+        exec node "$TARGET_DIR/x_webview.js" "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/x_webview.js" ]; then
+        exec node "$TARGET_DIR/x_webview.js" "$@"
+    elif [ -f "$TARGET_DIR/x_webview.cjs" ]; then
+        exec node "$TARGET_DIR/x_webview.cjs" "$@"
     fi
 fi
-if [ -f "$TARGET_X" ]; then
-    exec node "$TARGET_X" "$@"
-else
-    echo "x_webview.js tidak ditemukan di $TARGET_X"
-    exit 1
-fi
+echo "x_webview (.cjs/.js) tidak ditemukan di $TARGET_DIR"
+exit 1
 """)
 
 # Wrapper wallet (Ghost Web3 Wallet Daemon)
@@ -65,19 +73,60 @@ with open(os.path.join(BUNDLE_DIR, "bin/wallet"), "w") as f:
     f.write("""#!/data/data/com.termux/files/usr/bin/bash
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
-if [ ! -f "$TARGET_DIR/wallet.js" ]; then
-    if [ -f "$HOME/wallet/wallet.js" ]; then
-        TARGET_DIR="$HOME/wallet"
-    elif [ -f "/root/wallet/wallet.js" ]; then
-        TARGET_DIR="/root/wallet"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
+fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/wallet.cjs" ]; then
+        cd "$TARGET_DIR" && exec node wallet.cjs "$@"
+    elif [ -f "$TARGET_DIR/wallet.js" ]; then
+        cd "$TARGET_DIR" && exec node wallet.js "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/wallet.js" ]; then
+        cd "$TARGET_DIR"
+        if [ ! -d "node_modules/dotenv" ] && command -v npm >/dev/null 2>&1; then
+            echo "Menyiapkan dependensi wallet (dotenv, ethers)..."
+            npm install --silent --no-audit --no-fund dotenv ethers @walletconnect/core @walletconnect/web3wallet 2>/dev/null || true
+        fi
+        exec node wallet.js "$@"
+    elif [ -f "$TARGET_DIR/wallet.cjs" ]; then
+        cd "$TARGET_DIR" && exec node wallet.cjs "$@"
     fi
 fi
-if [ -f "$TARGET_DIR/wallet.js" ]; then
-    cd "$TARGET_DIR" && exec node wallet.js "$@"
-else
-    echo "GhostWallet (wallet.js) tidak ditemukan di $TARGET_DIR"
-    exit 1
+echo "GhostWallet (.cjs/.js) tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+
+# Wrapper pemantau (Telegram Sniper Engine)
+with open(os.path.join(BUNDLE_DIR, "bin/pemantau"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
 fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+        cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+        cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+        cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+    elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+        cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    fi
+fi
+echo "Pemantau (.cjs/.py) tidak ditemukan di $TARGET_DIR"
+exit 1
 """)
 
 if os.path.exists("/usr/local/bin/agy-copilot"):
@@ -86,27 +135,33 @@ if os.path.exists("/usr/local/bin/agy-copilot"):
 for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
     os.chmod(os.path.join(BUNDLE_DIR, "bin", b), 0o755)
 
-print("--- 2. Menyiapkan Wallet & Configs ke bundle/wallet ---")
-if os.path.exists("/root/wallet/wallet.js"):
-    shutil.copy2("/root/wallet/wallet.js", os.path.join(BUNDLE_DIR, "wallet/wallet.js"))
-if os.path.exists("/root/wallet/package.json"):
-    shutil.copy2("/root/wallet/package.json", os.path.join(BUNDLE_DIR, "wallet/package.json"))
-if os.path.exists("/root/wallet/chains_db.json"):
-    shutil.copy2("/root/wallet/chains_db.json", os.path.join(BUNDLE_DIR, "wallet/chains_db.json"))
+print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
+# 1. Salin Standalone CJS Suite (dari /project/node2cjs/)
+node2cjs_dir = "/project/node2cjs"
+if os.path.exists(node2cjs_dir):
+    for f_cjs in [
+        "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "tele_session_string.txt",
+        "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
+        "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
+        "ai_config.json", "ai_selectors.json"
+    ]:
+        src_path = os.path.join(node2cjs_dir, f_cjs)
+        if os.path.exists(src_path):
+            shutil.copy2(src_path, os.path.join(BUNDLE_DIR, "wallet", f_cjs))
+    print("✓ Added CJS suite (wallet.cjs, x_webview.cjs, pemantau.cjs) to bundle")
 
-for rpc in glob.glob("/root/wallet/config_rpc*.json"):
+# 2. Salin Regular JS/Python Suite (dari /root/wallet/ atau /project/node2cjs/)
+for f_js in ["wallet.js", "x_webview.js", "pemantautelegram.py", "package.json", "chains_db.json"]:
+    for src_candidate in [os.path.join("/root/wallet", f_js), os.path.join("/project/node2cjs", f_js)]:
+        if os.path.exists(src_candidate):
+            shutil.copy2(src_candidate, os.path.join(BUNDLE_DIR, "wallet", f_js))
+            break
+
+for rpc in glob.glob("/root/wallet/config_rpc*.json") + glob.glob("/project/node2cjs/config_rpc*.json"):
     shutil.copy2(rpc, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(rpc)))
 
-# Cari x_webview.js
-x_source = None
-for candidate in ["/project/termux-launcher/fusion-setup/x_webview.js", "/root/wallet/x_webview.js", "/project/clean_build/fusion_bundle/wallet/x_webview.js"]:
-    if os.path.exists(candidate):
-        x_source = candidate
-        break
-if x_source:
-    shutil.copy2(x_source, os.path.join(BUNDLE_DIR, "wallet/x_webview.js"))
-    os.chmod(os.path.join(BUNDLE_DIR, "wallet/x_webview.js"), 0o755)
-    print(f"✓ Added x_webview.js from {x_source} to wallet bundle")
+for g_conf in glob.glob("/project/node2cjs/gate*.json") + glob.glob("/root/wallet/gate*.json") + glob.glob("/project/node2cjs/www.gate*.json"):
+    shutil.copy2(g_conf, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(g_conf)))
 
 # Dummy template wallets_db.json dan recipes_db.json jika belum ada
 dummy_wallet = {"master_index": None, "wallets": []}
@@ -229,7 +284,11 @@ for target in [
     os.path.join(ASSETS_DIR, "fusion_payload.tar.gz"),
     os.path.join(FUSION_SETUP_DIR, "fusion_payload.tar.gz"),
     os.path.join(ASSETS_DIR, "wallet.js"),
+    os.path.join(ASSETS_DIR, "wallet.cjs"),
     os.path.join(ASSETS_DIR, "x_webview.js"),
+    os.path.join(ASSETS_DIR, "x_webview.cjs"),
+    os.path.join(ASSETS_DIR, "pemantau.cjs"),
+    os.path.join(ASSETS_DIR, "pemantautelegram.py"),
     os.path.join(ASSETS_DIR, "wallets_db.json"),
     os.path.join(ASSETS_DIR, "chains_db.json"),
     os.path.join(ASSETS_DIR, "package.json"),
@@ -245,10 +304,15 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge"), os.path.join(ASSETS_DIR, "termux-ipc-bridge"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/browser"), os.path.join(ASSETS_DIR, "browser"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/x"), os.path.join(ASSETS_DIR, "x"))
+shutil.copy2(os.path.join(BUNDLE_DIR, "bin/x"), os.path.join(FUSION_SETUP_DIR, "x"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/bashnh")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/bashnh"), os.path.join(ASSETS_DIR, "bashnh"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet"), os.path.join(ASSETS_DIR, "wallet"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet"), os.path.join(FUSION_SETUP_DIR, "wallet"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/pemantau")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(ASSETS_DIR, "pemantau"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(FUSION_SETUP_DIR, "pemantau"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "termux.properties")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "termux.properties"), os.path.join(ASSETS_DIR, "termux.properties"))
 

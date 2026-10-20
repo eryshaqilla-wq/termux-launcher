@@ -1,0 +1,24 @@
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
+fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+        cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+        cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+        cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+    elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+        cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    fi
+fi
+echo "Pemantau (.cjs/.py) tidak ditemukan di $TARGET_DIR"
+exit 1

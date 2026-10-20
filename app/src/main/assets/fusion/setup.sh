@@ -478,16 +478,19 @@ fi
 if [ $USE_ZSH -eq 1 ] && ! command -v zsh >/dev/null 2>&1; then
     SYSTEM_PKGS_OK=0
 fi
+if ! command -v termux-notification >/dev/null 2>&1; then
+    SYSTEM_PKGS_OK=0
+fi
 
 if [ $SYSTEM_PKGS_OK -eq 0 ]; then
-    spin "Memperbarui katalog paket..." apt-get update -y -qq
+    spin "Memperbarui katalog paket..." apt-get update -y -qq 2>/dev/null || pkg update -y -qq 2>/dev/null || true
     if [ $USE_ZSH -eq 1 ]; then
-        spin "Menginstall nodejs, npm, python, git, curl, unzip, zsh..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs npm python git curl unzip zsh zsh-completions || apt-get install -y nodejs npm python git curl unzip zsh 2>/dev/null || pkg install -y nodejs npm python git curl unzip zsh 2>/dev/null || true
+        spin "Menginstall nodejs, npm, python, git, curl, unzip, zsh, termux-api..." pkg install -y nodejs-lts npm python git curl unzip zsh termux-api openssl-tool 2>/dev/null || pkg install -y nodejs npm python git curl unzip zsh termux-api openssl-tool 2>/dev/null || apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs npm python3 git curl unzip zsh 2>/dev/null || true
     else
-        spin "Menginstall nodejs, npm, python, git, curl, unzip..." apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs npm python git curl unzip || apt-get install -y nodejs npm python git curl unzip 2>/dev/null || pkg install -y nodejs npm python git curl unzip 2>/dev/null || true
+        spin "Menginstall nodejs, npm, python, git, curl, unzip, termux-api..." pkg install -y nodejs-lts npm python git curl unzip termux-api openssl-tool 2>/dev/null || pkg install -y nodejs npm python git curl unzip termux-api openssl-tool 2>/dev/null || apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confold" nodejs npm python3 git curl unzip 2>/dev/null || true
     fi
 else
-    echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, npm, python, git, curl)${RESET}"
+    echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, npm, python, git, curl, zsh, termux-api)${RESET}"
 fi
 
 # Cek & Pasang paket GUI/X11 & Audio di Native Termux (bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl)
@@ -630,43 +633,94 @@ chmod 755 "$PREFIX/bin/termux-bspwm"
 # Wrapper x (otomasi radar webview)
 cat << 'EOF_X' > "$PREFIX/bin/x"
 #!/data/data/com.termux/files/usr/bin/bash
-TARGET_X="${HOME}/wallet/x_webview.js"
-if [ ! -f "$TARGET_X" ] && [ -f "/root/wallet/x_webview.js" ]; then
-    TARGET_X="/root/wallet/x_webview.js"
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
 fi
-if [ -f "$TARGET_X" ]; then
-    exec node "$TARGET_X" "$@"
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/x_webview.cjs" ]; then
+        exec node "$TARGET_DIR/x_webview.cjs" "$@"
+    elif [ -f "$TARGET_DIR/x_webview.js" ]; then
+        exec node "$TARGET_DIR/x_webview.js" "$@"
+    fi
 else
-    echo "x_webview.js tidak ditemukan di $TARGET_X"
-    exit 1
+    if [ -f "$TARGET_DIR/x_webview.js" ]; then
+        exec node "$TARGET_DIR/x_webview.js" "$@"
+    elif [ -f "$TARGET_DIR/x_webview.cjs" ]; then
+        exec node "$TARGET_DIR/x_webview.cjs" "$@"
+    fi
 fi
+echo "x_webview (.cjs/.js) tidak ditemukan di $TARGET_DIR"
+exit 1
 EOF_X
 chmod 755 "$PREFIX/bin/x"
 
 # Wrapper wallet CLI
 cat << 'EOF_W' > "$PREFIX/bin/wallet"
 #!/data/data/com.termux/files/usr/bin/bash
-WALLET_DIR="${HOME}/wallet"
-if [ -f "$WALLET_DIR/wallet.js" ]; then
-    cd "$WALLET_DIR"
-    if [ ! -d "node_modules/dotenv" ] && command -v npm >/dev/null 2>&1; then
-        echo "Menyiapkan dependensi wallet (dotenv, ethers)..."
-        npm install --silent --no-audit --no-fund dotenv ethers @walletconnect/core @walletconnect/web3wallet 2>/dev/null || true
-    fi
-    exec node wallet.js "$@"
-elif [ -f "/root/wallet/wallet.js" ]; then
-    cd "/root/wallet"
-    if [ ! -d "node_modules/dotenv" ] && command -v npm >/dev/null 2>&1; then
-        echo "Menyiapkan dependensi wallet (dotenv, ethers)..."
-        npm install --silent --no-audit --no-fund dotenv ethers @walletconnect/core @walletconnect/web3wallet 2>/dev/null || true
-    fi
-    exec node wallet.js "$@"
-else
-    echo "GhostWallet tidak ditemukan di $WALLET_DIR atau /root/wallet"
-    exit 1
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
 fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/wallet.cjs" ]; then
+        cd "$TARGET_DIR" && exec node wallet.cjs "$@"
+    elif [ -f "$TARGET_DIR/wallet.js" ]; then
+        cd "$TARGET_DIR" && exec node wallet.js "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/wallet.js" ]; then
+        cd "$TARGET_DIR"
+        if [ ! -d "node_modules/dotenv" ] && command -v npm >/dev/null 2>&1; then
+            echo "Menyiapkan dependensi wallet (dotenv, ethers)..."
+            npm install --silent --no-audit --no-fund dotenv ethers @walletconnect/core @walletconnect/web3wallet 2>/dev/null || true
+        fi
+        exec node wallet.js "$@"
+    elif [ -f "$TARGET_DIR/wallet.cjs" ]; then
+        cd "$TARGET_DIR" && exec node wallet.cjs "$@"
+    fi
+fi
+echo "GhostWallet (.cjs/.js) tidak ditemukan di $TARGET_DIR"
+exit 1
 EOF_W
 chmod 755 "$PREFIX/bin/wallet"
+
+# Wrapper pemantau CLI (Telegram Sniper)
+cat << 'EOF_P' > "$PREFIX/bin/pemantau"
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
+fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+        cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+        cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+        cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+    elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+        cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    fi
+fi
+echo "Pemantau (.cjs/.py) tidak ditemukan di $TARGET_DIR"
+exit 1
+EOF_P
+chmod 755 "$PREFIX/bin/pemantau"
 
 # Pasang copilot symlink jika ada
 if [ -f "$PREFIX/bin/agy-copilot" ]; then
@@ -712,12 +766,18 @@ EOF_B
 
             cat << 'EOF_CW' > "$CONTAINER_ROOTFS/usr/local/bin/wallet"
 #!/bin/bash
-if [ -f "/root/wallet/wallet.js" ]; then
-    cd /root/wallet && exec node wallet.js "$@"
-elif [ -f "$HOME/wallet/wallet.js" ]; then
-    cd "$HOME/wallet" && exec node wallet.js "$@"
+[ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+EMODE="${FUSION_ENGINE_MODE:-cjs}"
+if [ "$EMODE" = "cjs" ] && [ -f "$WDIR/wallet.cjs" ]; then
+    cd "$WDIR" && exec node wallet.cjs "$@"
+elif [ -f "$WDIR/wallet.js" ]; then
+    cd "$WDIR" && exec node wallet.js "$@"
+elif [ -f "$WDIR/wallet.cjs" ]; then
+    cd "$WDIR" && exec node wallet.cjs "$@"
 else
-    echo "GhostWallet tidak ditemukan"
+    echo "GhostWallet tidak ditemukan di $WDIR"
     exit 1
 fi
 EOF_CW
@@ -725,16 +785,41 @@ EOF_CW
 
             cat << 'EOF_CX' > "$CONTAINER_ROOTFS/usr/local/bin/x"
 #!/bin/bash
-if [ -f "/root/wallet/x_webview.js" ]; then
-    exec node /root/wallet/x_webview.js "$@"
-elif [ -f "$HOME/wallet/x_webview.js" ]; then
-    exec node "$HOME/wallet/x_webview.js" "$@"
+[ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+EMODE="${FUSION_ENGINE_MODE:-cjs}"
+if [ "$EMODE" = "cjs" ] && [ -f "$WDIR/x_webview.cjs" ]; then
+    exec node "$WDIR/x_webview.cjs" "$@"
+elif [ -f "$WDIR/x_webview.js" ]; then
+    exec node "$WDIR/x_webview.js" "$@"
+elif [ -f "$WDIR/x_webview.cjs" ]; then
+    exec node "$WDIR/x_webview.cjs" "$@"
 else
-    echo "x_webview.js tidak ditemukan"
+    echo "x_webview tidak ditemukan di $WDIR"
     exit 1
 fi
 EOF_CX
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/x"
+
+            cat << 'EOF_CP' > "$CONTAINER_ROOTFS/usr/local/bin/pemantau"
+#!/bin/bash
+[ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+EMODE="${FUSION_ENGINE_MODE:-cjs}"
+if [ "$EMODE" = "cjs" ] && [ -f "$WDIR/pemantau.cjs" ]; then
+    cd "$WDIR" && exec node pemantau.cjs "$@"
+elif [ -f "$WDIR/pemantautelegram.py" ]; then
+    cd "$WDIR" && exec python3 pemantautelegram.py "$@"
+elif [ -f "$WDIR/pemantau.cjs" ]; then
+    cd "$WDIR" && exec node pemantau.cjs "$@"
+else
+    echo "Pemantau tidak ditemukan di $WDIR"
+    exit 1
+fi
+EOF_CP
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/pemantau"
 
             # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
             if [ -d "$CONTAINER_ROOTFS/etc/pulse" ]; then
@@ -795,8 +880,45 @@ EOF_PALSA
                 mkdir -p '$CONTAINER_ROOTFS/usr/local/bin'
                 (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
                 echo -e '#!/bin/bash\nexec termux-ipc webview \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/browser'
-                echo -e '#!/bin/bash\nif [ -f /root/wallet/wallet.js ]; then\n  cd /root/wallet && exec node wallet.js \"\$@\"\nfi' > '$CONTAINER_ROOTFS/usr/local/bin/wallet'
-                echo -e '#!/bin/bash\nif [ -f /root/wallet/x_webview.js ]; then\n  exec node /root/wallet/x_webview.js \"\$@\"\nfi' > '$CONTAINER_ROOTFS/usr/local/bin/x'
+                cat << 'EOF_RW' > '$CONTAINER_ROOTFS/usr/local/bin/wallet'
+#!/bin/bash
+[ -f /root/.fusion_env ] && . /root/.fusion_env
+WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+EMODE=\"\${FUSION_ENGINE_MODE:-cjs}\"
+if [ \"\$EMODE\" = \"cjs\" ] && [ -f \"\$WDIR/wallet.cjs\" ]; then
+  cd \"\$WDIR\" && exec node wallet.cjs \"\$@\"
+elif [ -f \"\$WDIR/wallet.js\" ]; then
+  cd \"\$WDIR\" && exec node wallet.js \"\$@\"
+elif [ -f \"\$WDIR/wallet.cjs\" ]; then
+  cd \"\$WDIR\" && exec node wallet.cjs \"\$@\"
+fi
+EOF_RW
+                cat << 'EOF_RX' > '$CONTAINER_ROOTFS/usr/local/bin/x'
+#!/bin/bash
+[ -f /root/.fusion_env ] && . /root/.fusion_env
+WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+EMODE=\"\${FUSION_ENGINE_MODE:-cjs}\"
+if [ \"\$EMODE\" = \"cjs\" ] && [ -f \"\$WDIR/x_webview.cjs\" ]; then
+  exec node \"\$WDIR/x_webview.cjs\" \"\$@\"
+elif [ -f \"\$WDIR/x_webview.js\" ]; then
+  exec node \"\$WDIR/x_webview.js\" \"\$@\"
+elif [ -f \"\$WDIR/x_webview.cjs\" ]; then
+  exec node \"\$WDIR/x_webview.cjs\" \"\$@\"
+fi
+EOF_RX
+                cat << 'EOF_RP' > '$CONTAINER_ROOTFS/usr/local/bin/pemantau'
+#!/bin/bash
+[ -f /root/.fusion_env ] && . /root/.fusion_env
+WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+EMODE=\"\${FUSION_ENGINE_MODE:-cjs}\"
+if [ \"\$EMODE\" = \"cjs\" ] && [ -f \"\$WDIR/pemantau.cjs\" ]; then
+  cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"
+elif [ -f \"\$WDIR/pemantautelegram.py\" ]; then
+  cd \"\$WDIR\" && exec python3 pemantautelegram.py \"\$@\"
+elif [ -f \"\$WDIR/pemantau.cjs\" ]; then
+  cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"
+fi
+EOF_RP
                 chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/'*
                 # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
                 if [ -d '$CONTAINER_ROOTFS/etc/pulse' ]; then
@@ -894,11 +1016,27 @@ else
     echo -e "  ${GREEN}➔ Lokasi Wallet: Termux Lokal ($HOST_WALLET_DIR)${RESET}"
 fi
 
+# Pilihan Format Engine Otomasi (CJS vs JS)
+echo -e "  Pilih Format Engine Otomasi (Web3, X Radar & Telegram Sniper):"
+echo -e "    1) Standalone CommonJS (.cjs) - Cepat, Mandiri, Zero node_modules [Default]"
+echo -e "    2) Regular JavaScript (.js) - Klasik dengan node_modules"
+read -p "    Pilih [1/2, def: 1]: " ENGINE_CHOICE
+[ -z "$ENGINE_CHOICE" ] && ENGINE_CHOICE="1"
+
+if [ "$ENGINE_CHOICE" = "1" ]; then
+    FUSION_ENGINE_MODE="cjs"
+    echo -e "  ${GREEN}➔ Engine: Standalone CommonJS (.cjs) aktif [Bypass npm install]${RESET}"
+else
+    FUSION_ENGINE_MODE="js"
+    echo -e "  ${GREEN}➔ Engine: Regular JavaScript (.js) aktif${RESET}"
+fi
+
 cat << EOF > "$HOME/.fusion_env"
 # Project Fusion Dynamic Environment
 export FUSION_MODE="$([ $IS_ROOT -eq 1 ] && echo 'root' || echo 'nonroot')"
 export FUSION_WALLET_DIR="$HOST_WALLET_DIR"
 export FUSION_DB_DIR="$HOST_WALLET_DIR"
+export FUSION_ENGINE_MODE="$FUSION_ENGINE_MODE"
 EOF
 chmod 644 "$HOME/.fusion_env"
 echo -e "  ${GREEN}✔ Konfigurasi dinamis disimpan di $HOME/.fusion_env${RESET}"
@@ -912,19 +1050,17 @@ if [ -d "$SCRIPT_DIR/wallet" ]; then
 fi
 
 # Fallback ekstraksi aset wallet dari APK jika belum lengkap
-if [ ! -f "$HOME/wallet/wallet.js" ]; then
-    BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
-    if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ] && command -v unzip >/dev/null 2>&1; then
-        unzip -j -o "$BASE_APK" "assets/fusion/wallet.js" -d "$HOME/wallet/" 2>/dev/null || true
-        unzip -j -o "$BASE_APK" "assets/fusion/wallets_db.json" -d "$HOME/wallet/" 2>/dev/null || true
-        unzip -j -o "$BASE_APK" "assets/fusion/chains_db.json" -d "$HOME/wallet/" 2>/dev/null || true
-        unzip -j -o "$BASE_APK" "assets/fusion/package.json" -d "$HOME/wallet/" 2>/dev/null || true
-        unzip -j -o "$BASE_APK" "assets/fusion/recipes_db.json" -d "$HOME/wallet/" 2>/dev/null || true
-        unzip -j -o "$BASE_APK" "assets/fusion/x_webview.js" -d "$HOME/wallet/" 2>/dev/null || true
-    fi
+BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
+if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ] && command -v unzip >/dev/null 2>&1; then
+    for w_asset in wallet.cjs x_webview.cjs pemantau.cjs wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
+        unzip -j -o "$BASE_APK" "assets/fusion/$w_asset" -d "$HOME/wallet/" 2>/dev/null || true
+    done
 fi
 
-if [ ! -f "$HOME/wallet/wallet.js" ] && [ -f "/root/wallet/wallet.js" ]; then
+if [ -d "/project/node2cjs" ]; then
+    cp -rf /project/node2cjs/* "$HOME/wallet/" 2>/dev/null || true
+fi
+if [ -d "/root/wallet" ]; then
     cp -rf /root/wallet/* "$HOME/wallet/" 2>/dev/null || true
 fi
 
@@ -932,14 +1068,7 @@ fi
 [ ! -f "$HOME/wallet/chains_db.json" ] && echo '{}' > "$HOME/wallet/chains_db.json"
 [ ! -f "$HOME/wallet/recipes_db.json" ] && echo '{}' > "$HOME/wallet/recipes_db.json"
 
-if [ -f "$FUSION_HOME/wallet/x_webview.js" ]; then
-    cp -f "$FUSION_HOME/wallet/x_webview.js" "$HOME/wallet/x_webview.js"
-elif [ -f "$SCRIPT_DIR/x_webview.js" ]; then
-    cp -f "$SCRIPT_DIR/x_webview.js" "$HOME/wallet/x_webview.js"
-elif [ -f "/root/wallet/x_webview.js" ]; then
-    cp -f "/root/wallet/x_webview.js" "$HOME/wallet/x_webview.js"
-fi
-chmod 755 "$HOME/wallet/x_webview.js" 2>/dev/null || true
+chmod 755 "$HOME/wallet/"*.cjs "$HOME/wallet/"*.js "$HOME/wallet/"*.py 2>/dev/null || true
 
 if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CONTAINER_ROOTFS" ]; then
     su -c "mkdir -p '$TARGET_WALLET_DIR'" 2>/dev/null || true
@@ -947,12 +1076,16 @@ if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CO
     [ -f "$HOME/.fusion_env" ] && su -c "cp -f '$HOME/.fusion_env' '$CONTAINER_ROOTFS/root/.fusion_env'" 2>/dev/null || true
 fi
 
-if [ -d "$HOME/wallet/node_modules/ethers" ] && [ -d "$HOME/wallet/node_modules/dotenv" ]; then
-    echo -e "  ${GREEN}✔ Dependensi Web3 di Termux lokal sudah terpasang${RESET}"
+if [ "$FUSION_ENGINE_MODE" = "cjs" ]; then
+    echo -e "  ${GREEN}✔ Mode Standalone CJS aktif — bypass npm install (Zero node_modules)${RESET}"
 else
-    if command -v npm >/dev/null 2>&1; then
-        cd "$HOME/wallet" 2>/dev/null || cd "$HOME"
-        spin "Memasang dependensi Web3 (ethers, dotenv, walletconnect)..." npm install --silent --no-audit --no-fund ethers dotenv @walletconnect/core @walletconnect/web3wallet || true
+    if [ -d "$HOME/wallet/node_modules/ethers" ] && [ -d "$HOME/wallet/node_modules/dotenv" ]; then
+        echo -e "  ${GREEN}✔ Dependensi Web3 di Termux lokal sudah terpasang${RESET}"
+    else
+        if command -v npm >/dev/null 2>&1; then
+            cd "$HOME/wallet" 2>/dev/null || cd "$HOME"
+            spin "Memasang dependensi Web3 (ethers, dotenv, walletconnect)..." npm install --silent --no-audit --no-fund ethers dotenv @walletconnect/core @walletconnect/web3wallet || true
+        fi
     fi
 fi
 
@@ -977,6 +1110,8 @@ alias ll="ls -l"
 alias la="ls -A"
 alias l="ls -CF"
 alias wallet="wallet"
+alias pemantau="pemantau"
+alias pmt="pemantau"
 alias patchright="node ./wallet/patchright.js"
 alias x="x"
 alias xradar="node ~/wallet/x_webview.js"

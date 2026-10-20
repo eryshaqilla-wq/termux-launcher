@@ -1,16 +1,29 @@
 #!/data/data/com.termux/files/usr/bin/bash
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
-if [ ! -f "$TARGET_DIR/wallet.js" ]; then
-    if [ -f "$HOME/wallet/wallet.js" ]; then
-        TARGET_DIR="$HOME/wallet"
-    elif [ -f "/root/wallet/wallet.js" ]; then
-        TARGET_DIR="/root/wallet"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
+    TARGET_DIR="/root/wallet"
+fi
+
+if [ "$ENGINE_MODE" = "cjs" ]; then
+    if [ -f "$TARGET_DIR/wallet.cjs" ]; then
+        cd "$TARGET_DIR" && exec node wallet.cjs "$@"
+    elif [ -f "$TARGET_DIR/wallet.js" ]; then
+        cd "$TARGET_DIR" && exec node wallet.js "$@"
+    fi
+else
+    if [ -f "$TARGET_DIR/wallet.js" ]; then
+        cd "$TARGET_DIR"
+        if [ ! -d "node_modules/dotenv" ] && command -v npm >/dev/null 2>&1; then
+            echo "Menyiapkan dependensi wallet (dotenv, ethers)..."
+            npm install --silent --no-audit --no-fund dotenv ethers @walletconnect/core @walletconnect/web3wallet 2>/dev/null || true
+        fi
+        exec node wallet.js "$@"
+    elif [ -f "$TARGET_DIR/wallet.cjs" ]; then
+        cd "$TARGET_DIR" && exec node wallet.cjs "$@"
     fi
 fi
-if [ -f "$TARGET_DIR/wallet.js" ]; then
-    cd "$TARGET_DIR" && exec node wallet.js "$@"
-else
-    echo "GhostWallet (wallet.js) tidak ditemukan di $TARGET_DIR"
-    exit 1
-fi
+echo "GhostWallet (.cjs/.js) tidak ditemukan di $TARGET_DIR"
+exit 1
