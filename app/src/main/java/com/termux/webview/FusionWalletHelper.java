@@ -119,13 +119,19 @@ public class FusionWalletHelper {
             return "/data/data/com.termux/files/home/wallet";
         }
 
-        // 3. Cek Kali NetHunter Chroot (jika ada)
+        // 3. Cek symlink /wallet
+        File directWallet = new File("/wallet");
+        if (directWallet.exists()) {
+            return "/wallet";
+        }
+
+        // 4. Cek Kali NetHunter Chroot (jika ada)
         File nhWallet = new File("/data/local/nhsystem/kali-arm64/root/wallet");
         if (nhWallet.exists()) {
             return "/data/local/nhsystem/kali-arm64/root/wallet";
         }
 
-        // 4. Cek /root/wallet hanya jika ada dan bisa dibaca (root mode)
+        // 5. Cek /root/wallet hanya jika ada dan bisa dibaca (root mode)
         File rootWallet = new File("/root/wallet");
         if (rootWallet.exists() && rootWallet.canRead()) {
             return "/root/wallet";
@@ -133,6 +139,67 @@ public class FusionWalletHelper {
 
         // Default mutlak non-root
         return "/data/data/com.termux/files/home/wallet";
+    }
+
+    public static String getDetectedEngine() {
+        // 1. Cek dari .fusion_env terlebih dahulu
+        try {
+            File envFile = new File("/data/data/com.termux/files/home/.fusion_env");
+            if (!envFile.exists() || !envFile.canRead()) {
+                envFile = new File("/root/.fusion_env");
+            }
+            if (envFile.exists() && envFile.canRead()) {
+                FileInputStream fis = new FileInputStream(envFile);
+                byte[] b = new byte[(int) envFile.length()];
+                int readBytes = fis.read(b);
+                fis.close();
+                if (readBytes > 0) {
+                    String content = new String(b, 0, readBytes, "UTF-8");
+                    for (String line : content.split("\n")) {
+                        if (line.startsWith("export FUSION_ENGINE_MODE=")) {
+                            String mode = line.substring(26).replace("\"", "").replace("'", "").trim();
+                            if ("cjs".equalsIgnoreCase(mode)) return "CJS";
+                            if ("js".equalsIgnoreCase(mode)) return "JS";
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 2. Cek file fisik di direktori wallet yang terdeteksi
+        String[] dirs = new String[]{
+            getWalletDir(),
+            "/data/data/com.termux/files/home/wallet",
+            "/wallet",
+            "/root/wallet",
+            "/data/local/nhsystem/kali-arm64/root/wallet"
+        };
+        for (String d : dirs) {
+            if (d == null) continue;
+            try {
+                File dirFile = new File(d);
+                if (new File(dirFile, "wallet.cjs").exists()) {
+                    return "CJS";
+                }
+                if (new File(dirFile, "wallet.js").exists()) {
+                    return "JS";
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return "CJS"; // Default suite baru
+    }
+
+    public static String getStartWalletDaemonCommand() {
+        return "if command -v wallet >/dev/null 2>&1; then " +
+               "wallet --auto --ghostwallet 3333; " +
+               "else " +
+               "for d in \"$FUSION_WALLET_DIR\" \"$HOME/wallet\" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do " +
+               "if [ -n \"$d\" ] && [ -d \"$d\" ]; then " +
+               "cd \"$d\" && { if [ -f wallet.cjs ]; then node wallet.cjs --auto --ghostwallet 3333; elif [ -f wallet.js ]; then node wallet.js --auto --ghostwallet 3333; fi; } && break; " +
+               "fi; done; " +
+               "fi";
     }
 
     public static void init(Context context) {
@@ -155,29 +222,21 @@ public class FusionWalletHelper {
             }
         }
         if (fileInputStream == null) {
-            try {
-                File file2 = new File("/data/data/com.termux/files/home/wallet/wallets_db.json");
-                if (file2.exists() && file2.canRead()) {
-                    fileInputStream = new FileInputStream(file2);
-                }
-            } catch (Exception unused2) {
-            }
-            if (fileInputStream == null) {
+            String[] searchPaths = new String[]{
+                new File(getWalletDir(), "wallets_db.json").getAbsolutePath(),
+                "/data/data/com.termux/files/home/wallet/wallets_db.json",
+                "/wallet/wallets_db.json",
+                "/root/wallet/wallets_db.json",
+                "/data/local/nhsystem/kali-arm64/root/wallet/wallets_db.json"
+            };
+            for (String p : searchPaths) {
                 try {
-                    File file3 = new File("/data/local/nhsystem/kali-arm64/root/wallet/wallets_db.json");
-                    if (file3.exists()) {
-                        fileInputStream = new FileInputStream(file3);
+                    File f = new File(p);
+                    if (f.exists() && f.canRead()) {
+                        fileInputStream = new FileInputStream(f);
+                        break;
                     }
-                } catch (Exception unused3) {
-                }
-                if (fileInputStream == null) {
-                    try {
-                        File file4 = new File("/root/wallet/wallets_db.json");
-                        if (file4.exists()) {
-                            fileInputStream = new FileInputStream(file4);
-                        }
-                    } catch (Exception unused4) {
-                    }
+                } catch (Exception ignored) {
                 }
             }
         }

@@ -931,7 +931,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout7.addView(textView9, new LinearLayout.LayoutParams(0, -2, 1.0f));
             TextView textView10 = new TextView(this.mActivity);
             this.mStartDaemonBtn = textView10;
-            textView10.setText("[Start wallet.js]");
+            textView10.setText("[Start Wallet (" + FusionWalletHelper.getDetectedEngine() + ")]");
             textView10.setBackgroundColor(-12285730);
             textView10.setTextColor(-1);
             textView10.setTextSize(2, 10.0f);
@@ -984,7 +984,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout8.addView(textView14, new LinearLayout.LayoutParams(0, -2, 1.0f));
             this.mMenuCard.addView(linearLayout8);
             TextView textView15 = new TextView(this.mActivity);
-            textView15.setText("Lokasi wallet.js / Load DB");
+            textView15.setText("Lokasi GhostWallet / Load DB");
             FusionUiHelper.setSolidBtn(textView15);
             textView15.setTextSize(2, 11.0f);
             textView15.setGravity(17);
@@ -1742,11 +1742,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return;
         }
         if (zCheckRpcDaemon) {
-            Toast.makeText((Context) r1, "[OK] wallet.js Aktif di Port 3333!", 0).show();
+            Toast.makeText((Context) r1, "[OK] GhostWallet Aktif di Port 3333!", 0).show();
             return;
         }
-        TermuxIpcServer.injectCommand(r1, "cd " + FusionWalletHelper.getWalletDir() + " && node wallet.js --auto --ghostwallet 3333", true);
-        Toast.makeText((Context) r1, "Memulai wallet.js di terminal (port 3333)...", 0).show();
+        TermuxIpcServer.injectCommand(r1, FusionWalletHelper.getStartWalletDaemonCommand(), true);
+        Toast.makeText((Context) r1, "Memulai GhostWallet di terminal (port 3333)...", 0).show();
         updateMenuTexts();
         toggleMinimize();
     }
@@ -2215,7 +2215,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 textView7.setText("[OK] RPC Aktif");
                 textView7.setBackgroundColor(-13730510);
             } else {
-                textView7.setText("[Start wallet.js]");
+                textView7.setText("[Start Wallet (" + FusionWalletHelper.getDetectedEngine() + ")]");
                 textView7.setBackgroundColor(-12285730);
             }
         }

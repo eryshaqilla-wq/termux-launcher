@@ -21,6 +21,7 @@ public class FusionBootstrapRunnable implements Runnable {
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/browser", "/data/data/com.termux/files/usr/bin/browser", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/x", "/data/data/com.termux/files/usr/bin/x", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/wallet", "/data/data/com.termux/files/usr/bin/wallet", true, true);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/pemantau", "/data/data/com.termux/files/usr/bin/pemantau", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/setup.sh", "/data/data/com.termux/files/usr/bin/setup", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/setup.sh", "/data/data/com.termux/files/home/setup", true, true);
 

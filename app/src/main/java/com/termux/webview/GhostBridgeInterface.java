@@ -69,7 +69,7 @@ public class GhostBridgeInterface implements Runnable {
                 byteArrayOutputStream.write(bArr, 0, i);
             }
         } catch (Exception e) {
-            return "{\"error\":\"Ghost RPC daemon offline. Jalankan wallet.js terlebih dahulu\"}";
+            return "{\"error\":\"Ghost RPC daemon offline. Jalankan GhostWallet terlebih dahulu\"}";
         }
     }
 
@@ -335,7 +335,7 @@ public class GhostBridgeInterface implements Runnable {
         if (str.contains("eth_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
-                return "{\"error\":{\"code\":4001,\"message\":\"Daemon wallet.js belum aktif! Start daemon terlebih dahulu.\"}}";
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
             return "{\"result\":[\"" + sCurrentWalletAddress + "\"]}";
         }
@@ -362,7 +362,7 @@ public class GhostBridgeInterface implements Runnable {
                 return "{\"result\":[{\"caveats\":[],\"parentCapability\":\"eth_accounts\"}]}";
             }
             notifyDaemonOffline();
-            return "{\"error\":{\"code\":4001,\"message\":\"Daemon wallet.js belum aktif! Start daemon terlebih dahulu.\"}}";
+            return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
         }
         try {
             JSONArray jSONArrayOptJSONArray = new JSONObject(str).optJSONArray("params");

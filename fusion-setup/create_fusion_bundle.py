@@ -47,8 +47,13 @@ with open(os.path.join(BUNDLE_DIR, "bin/x"), "w") as f:
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
 ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
 
-if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
-    TARGET_DIR="/root/wallet"
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
 fi
 
 if [ "$ENGINE_MODE" = "cjs" ]; then
@@ -75,8 +80,13 @@ with open(os.path.join(BUNDLE_DIR, "bin/wallet"), "w") as f:
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
 ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
 
-if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
-    TARGET_DIR="/root/wallet"
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
 fi
 
 if [ "$ENGINE_MODE" = "cjs" ]; then
@@ -108,8 +118,13 @@ with open(os.path.join(BUNDLE_DIR, "bin/pemantau"), "w") as f:
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
 ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
 
-if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
-    TARGET_DIR="/root/wallet"
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
 fi
 
 if [ "$ENGINE_MODE" = "cjs" ]; then

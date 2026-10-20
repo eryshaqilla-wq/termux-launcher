@@ -637,8 +637,13 @@ cat << 'EOF_X' > "$PREFIX/bin/x"
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
 ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
 
-if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
-    TARGET_DIR="/root/wallet"
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
 fi
 
 if [ "$ENGINE_MODE" = "cjs" ]; then
@@ -666,8 +671,13 @@ cat << 'EOF_W' > "$PREFIX/bin/wallet"
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
 ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
 
-if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
-    TARGET_DIR="/root/wallet"
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
 fi
 
 if [ "$ENGINE_MODE" = "cjs" ]; then
@@ -700,8 +710,13 @@ cat << 'EOF_P' > "$PREFIX/bin/pemantau"
 TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
 ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
 
-if [ ! -d "$TARGET_DIR" ] && [ -d "/root/wallet" ]; then
-    TARGET_DIR="/root/wallet"
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
 fi
 
 if [ "$ENGINE_MODE" = "cjs" ]; then
@@ -769,6 +784,11 @@ EOF_B
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+if [ ! -d "$WDIR" ]; then
+    for cand in /wallet /root/wallet "$HOME/wallet" /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then WDIR="$cand"; break; fi
+    done
+fi
 EMODE="${FUSION_ENGINE_MODE:-cjs}"
 if [ "$EMODE" = "cjs" ] && [ -f "$WDIR/wallet.cjs" ]; then
     cd "$WDIR" && exec node wallet.cjs "$@"
@@ -788,6 +808,11 @@ EOF_CW
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+if [ ! -d "$WDIR" ]; then
+    for cand in /wallet /root/wallet "$HOME/wallet" /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then WDIR="$cand"; break; fi
+    done
+fi
 EMODE="${FUSION_ENGINE_MODE:-cjs}"
 if [ "$EMODE" = "cjs" ] && [ -f "$WDIR/x_webview.cjs" ]; then
     exec node "$WDIR/x_webview.cjs" "$@"
@@ -807,6 +832,11 @@ EOF_CX
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+if [ ! -d "$WDIR" ]; then
+    for cand in /wallet /root/wallet "$HOME/wallet" /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then WDIR="$cand"; break; fi
+    done
+fi
 EMODE="${FUSION_ENGINE_MODE:-cjs}"
 if [ "$EMODE" = "cjs" ] && [ -f "$WDIR/pemantau.cjs" ]; then
     cd "$WDIR" && exec node pemantau.cjs "$@"
@@ -884,6 +914,11 @@ EOF_PALSA
 #!/bin/bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+if [ ! -d \"\$WDIR\" ]; then
+  for cand in /wallet /root/wallet \"\$HOME/wallet\" /data/data/com.termux/files/home/wallet; do
+    if [ -d \"\$cand\" ]; then WDIR=\"\$cand\"; break; fi
+  done
+fi
 EMODE=\"\${FUSION_ENGINE_MODE:-cjs}\"
 if [ \"\$EMODE\" = \"cjs\" ] && [ -f \"\$WDIR/wallet.cjs\" ]; then
   cd \"\$WDIR\" && exec node wallet.cjs \"\$@\"
@@ -897,6 +932,11 @@ EOF_RW
 #!/bin/bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+if [ ! -d \"\$WDIR\" ]; then
+  for cand in /wallet /root/wallet \"\$HOME/wallet\" /data/data/com.termux/files/home/wallet; do
+    if [ -d \"\$cand\" ]; then WDIR=\"\$cand\"; break; fi
+  done
+fi
 EMODE=\"\${FUSION_ENGINE_MODE:-cjs}\"
 if [ \"\$EMODE\" = \"cjs\" ] && [ -f \"\$WDIR/x_webview.cjs\" ]; then
   exec node \"\$WDIR/x_webview.cjs\" \"\$@\"
@@ -910,6 +950,11 @@ EOF_RX
 #!/bin/bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+if [ ! -d \"\$WDIR\" ]; then
+  for cand in /wallet /root/wallet \"\$HOME/wallet\" /data/data/com.termux/files/home/wallet; do
+    if [ -d \"\$cand\" ]; then WDIR=\"\$cand\"; break; fi
+  done
+fi
 EMODE=\"\${FUSION_ENGINE_MODE:-cjs}\"
 if [ \"\$EMODE\" = \"cjs\" ] && [ -f \"\$WDIR/pemantau.cjs\" ]; then
   cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"

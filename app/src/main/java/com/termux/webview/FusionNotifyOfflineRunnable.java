@@ -15,7 +15,7 @@ public class FusionNotifyOfflineRunnable implements Runnable {
     public void run() {
         Context context = this.mContext;
         if (context != null) {
-            Toast.makeText(context, "[RPC Daemon] Daemon wallet.js belum aktif! Start daemon terlebih dahulu.", 1).show();
+            Toast.makeText(context, "[RPC Daemon] Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.", 1).show();
         }
     }
 }
