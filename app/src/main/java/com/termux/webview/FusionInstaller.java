@@ -22,24 +22,28 @@ public class FusionInstaller {
                     }
                 }
                 AssetManager assets = context.getAssets();
-                copyAssetFile(assets, "fusion/login", "/data/data/com.termux/files/usr/bin/login", true);
-                copyAssetFile(assets, "fusion/bashnh", "/data/data/com.termux/files/usr/bin/bashnh", true);
-                copyAssetFile(assets, "fusion/termux-ipc-send", "/data/data/com.termux/files/usr/bin/termux-ipc-send", true);
-                copyAssetFile(assets, "fusion/deploy_fusion.sh", "/data/data/com.termux/files/usr/share/fusion/deploy_fusion.sh", true);
-                copyAssetFile(assets, "fusion/fusion_core.tar.gz", "/data/data/com.termux/files/usr/share/fusion/fusion_core.tar.gz", false);
+                copyAssetFile(assets, "fusion/login", "/data/data/com.termux/files/usr/bin/login", true, false);
+                copyAssetFile(assets, "fusion/bashnh", "/data/data/com.termux/files/usr/bin/bashnh", true, true);
+                copyAssetFile(assets, "fusion/termux-ipc-send", "/data/data/com.termux/files/usr/bin/termux-ipc-send", true, true);
+                copyAssetFile(assets, "fusion/deploy_fusion.sh", "/data/data/com.termux/files/usr/share/fusion/deploy_fusion.sh", true, true);
+                copyAssetFile(assets, "fusion/fusion_core.tar.gz", "/data/data/com.termux/files/usr/share/fusion/fusion_core.tar.gz", false, false);
             }
         } catch (Throwable unused) {
         }
     }
 
     public static void copyAssetFile(AssetManager assetManager, String str, String str2, boolean z) {
+        copyAssetFile(assetManager, str, str2, z, false);
+    }
+
+    public static void copyAssetFile(AssetManager assetManager, String str, String str2, boolean z, boolean overwrite) {
         try {
             File file = new File(str2);
             File parentFile = file.getParentFile();
             if (parentFile != null && !parentFile.exists()) {
                 parentFile.mkdirs();
             }
-            if (file.exists() && file.length() > 0) {
+            if (file.exists() && file.length() > 0 && !overwrite) {
                 if (z) {
                     file.setExecutable(true, false);
                     return;

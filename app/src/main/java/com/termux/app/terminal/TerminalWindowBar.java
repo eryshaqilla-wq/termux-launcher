@@ -790,7 +790,8 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             // descendant of this row as child-owned, so a finger on the × can never start an
             // expand or a collapse instead of closing the window.
             close.setClickable(true);
-            close.setFocusable(true);
+            close.setFocusable(false);
+            close.setFocusableInTouchMode(false);
             close.setOnClickListener(v -> {
                 int target = mReveal.revealedIndex();
                 mReveal.hide();
@@ -1241,7 +1242,8 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             + dp(ChipWatermarkGeometry.TITLE_NUDGE_DP) + dp(3.5f) * 2);
         applyChipWatermark(tab, item, selected ? 1f : 0f);
         tab.setSelected(selected);
-        tab.setFocusable(true);
+        tab.setFocusable(false);
+        tab.setFocusableInTouchMode(false);
         return tab;
     }
 
@@ -1252,6 +1254,8 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             : MaterialColors.getColor(context, com.termux.shared.R.attr.termuxColorPrimary,
                 ContextCompat.getColor(context, R.color.termux_primary));
         AppCompatImageButton add = new AppCompatImageButton(context);
+        add.setFocusable(false);
+        add.setFocusableInTouchMode(false);
         add.setImageResource(R.drawable.ic_status_bar_add_window);
         ImageViewCompat.setImageTintList(add, ColorStateList.valueOf(plusTint(accent)));
         add.setScaleType(ImageView.ScaleType.CENTER);

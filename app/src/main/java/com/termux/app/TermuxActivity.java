@@ -22795,19 +22795,50 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 glyphProcessFor(info), info.openFile);
         }
         // Idle or not yet resolved: directory basename via the title/cwd/chroot derivation.
-        return com.termux.app.terminal.TerminalWindowBar.itemFor(session, index, resolveSessionEnvironmentLabel());
+        return com.termux.app.terminal.TerminalWindowBar.itemFor(session, index, resolveSessionEnvironment(session));
     }
 
     @Nullable
-    private String resolveSessionEnvironmentLabel() {
-        try {
-            if (com.termux.app.x11.ChrootDistro.isRootAvailable()) {
-                com.termux.app.x11.ChrootDistro.ChrootEnvironment chrootEnv =
-                    com.termux.app.x11.ChrootDistro.getActiveEnvironment(this);
-                if (chrootEnv != null) {
-                    return chrootEnv.runnerType == com.termux.app.x11.ChrootDistro.RunnerType.DROIDSPACES
-                        ? "Droidspaces" : (com.termux.app.x11.ChrootDistro.ID_NETHUNTER.equals(chrootEnv.id) ? "NetHunter" : chrootEnv.name);
+    private String resolveSessionEnvironment(@Nullable TerminalSession session) {
+        if (session == null) return null;
+        int pid = session.getPid();
+        if (pid <= 0) return null;
+
+        String cmd = readProcCmdline(pid);
+        if (cmd == null || cmd.isEmpty()) {
+            if (mWindowForegroundResolver != null) {
+                com.termux.app.statusbar.WindowForegroundResolver.ForegroundInfo info =
+                    mWindowForegroundResolver.get(pid);
+                if (info != null && info.command != null && !info.command.isEmpty()) {
+                    cmd = TextUtils.join(" ", info.command);
                 }
+            }
+        }
+
+        if (cmd != null && !cmd.isEmpty()) {
+            String lower = cmd.toLowerCase(Locale.ROOT);
+            if (lower.contains("nhsystem") || lower.contains("kalifs") || lower.contains("kali-arm64")
+                    || lower.contains("nethunter") || lower.contains("chroot /data/local/nhsystem")) {
+                return "NetHunter";
+            }
+            if (lower.contains("droidspaces")) {
+                return "Droidspaces";
+            }
+            if (lower.contains("proot-distro") || lower.contains("proot")) {
+                return "PRoot";
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    private static String readProcCmdline(int pid) {
+        if (pid <= 0) return null;
+        try (java.io.FileInputStream fis = new java.io.FileInputStream("/proc/" + pid + "/cmdline")) {
+            byte[] buf = new byte[1024];
+            int len = fis.read(buf);
+            if (len > 0) {
+                return new String(buf, 0, len, java.nio.charset.StandardCharsets.UTF_8).replace('\0', ' ');
             }
         } catch (Throwable ignored) {
         }
@@ -24271,6 +24302,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 for (TermuxTerminalExtraKeys pageClient : mTermuxTerminalExtraKeysPages) {
                     if (pageClient != null) pageClient.setTerminalView(v);
                 }
+                v.post(() -> {
+                    if (!v.hasFocus()) {
+                        v.requestFocus();
+                    }
+                    try {
+                        android.view.inputmethod.InputMethodManager imm =
+                            (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                        if (imm != null) {
+                            imm.restartInput(v);
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                });
             }
             mCurrentTabPrimary = mPaneController.getActiveSession();
             // Every window switch lands here — the bar, the space bar's swipes, the browser — so

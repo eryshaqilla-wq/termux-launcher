@@ -94,7 +94,8 @@ while true; do
 
     action_clean=0
 
-    printf "\033]0;home\007"
+    printf "\033]0;Dashboard\007"
+    printf "\033]2;Dashboard\007"
     printf "\e[0m\e[r\e[?1049l\e[2J\e[3J\e[H" 
     command -v fastfetch >/dev/null 2>&1 && fastfetch
 
@@ -114,8 +115,8 @@ while true; do
     selected=${selected:-1}
 
     trap 'printf "\e[?1000l\e[?1006l\e[?25h\033]0;home\007"; stty sane 2>/dev/null; clear; exit' INT TERM
-    printf "\033]0;home\007"
-    printf "\033]2;home\007"
+    printf "\033]0;Dashboard\007"
+    printf "\033]2;Dashboard\007"
     stty sane 2>/dev/null
     stty -echo 2>/dev/null
     printf "\e[?1000l\e[?1006l\e[?25l"
@@ -207,7 +208,7 @@ done
 printf "\e[?1000l\e[?1006l"
 stty sane 2>/dev/null
 stty echo 2>/dev/null
-printf "\e[?25h\e[2J\e[3J\e[H\033]0;home\007\033]2;home\007"
+printf "\e[?25h\e[2J\e[3J\e[H"
 
 # ==========================================
 # EKSEKUSI PILIHAN (1: LINUX, 2: TERMUX)
@@ -246,7 +247,7 @@ if [ $selected -eq 1 ]; then
                 fi
                 su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$LINUX_NAME\" enter"
             elif su -c "[ -d '/data/local/nhsystem/kali-arm64' ]" 2>/dev/null; then
-                su -mm -c "chroot /data/local/nhsystem/kali-arm64 /usr/bin/env -i HOME=/root TERM=xterm-256color PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin USER=root LOGNAME=root DISABLE_AUTO_TITLE=true /bin/zsh -l"
+                su -mm -c "chroot /data/local/nhsystem/kali-arm64 /usr/bin/env -i HOME=/root TERM=xterm-256color PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin USER=root LOGNAME=root AUTO_TITLE=true /bin/zsh -l"
             else
                 su
             fi
