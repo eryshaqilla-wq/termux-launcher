@@ -677,4 +677,13 @@ public class Fusion9RouterHelper {
         String cmd = "/usr/local/bin/9router-autoconfig apply" + sb.toString();
         runAsyncCommand(context, null, cmd, onDone);
     }
+
+    public static void applyModel(Context context, String modelName, final Runnable onDone) {
+        if (modelName == null || modelName.isEmpty()) {
+            if (onDone != null) onDone.run();
+            return;
+        }
+        String cmd = "/usr/local/bin/9router-autoconfig model " + modelName;
+        runAsyncCommand(context, null, cmd, onDone);
+    }
 }

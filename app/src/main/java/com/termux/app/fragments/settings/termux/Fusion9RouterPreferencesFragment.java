@@ -240,35 +240,48 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
             });
         }
 
-        // 4c. Info Model 9Router
+        // 4c. Info & Penggantian Model 9Router
         Preference modelsPref = findPreference(PREF_MODELS_INFO);
         if (modelsPref != null) {
             modelsPref.setOnPreferenceClickListener(preference -> {
+                Toast.makeText(context, "Memuat daftar model...", Toast.LENGTH_SHORT).show();
                 new Thread(() -> {
                     final Fusion9RouterHelper.AutoConfigData data = Fusion9RouterHelper.getAutoConfigData(context);
                     final int accCount = Fusion9RouterHelper.getAccountCount(context);
                     final String accLabel = accCount > 0 ? (accCount + " akun") : "multi-akun";
                     mMainHandler.post(() -> {
-                        StringBuilder sb = new StringBuilder();
-                        String defModel = (data != null && data.defaultModel != null) ? data.defaultModel : "ag/gemini-3.8-flash-medium";
-                        sb.append("Model Utama 9Router:\n").append(defModel).append("\n\n");
-                        sb.append("Daftar Varian Model Terdaftar:\n");
-                        if (data != null && !data.models.isEmpty()) {
-                            for (String m : data.models) {
-                                sb.append("• ").append(m).append("\n");
-                            }
-                        } else {
-                            sb.append("• ag/gemini-3.8-flash-medium\n");
-                            sb.append("• ag/claude-sonnet-5-5\n");
-                            sb.append("• ag/claude-opus-5-5\n");
-                            sb.append("• ag/gpt-oss-120b-medium\n");
+                        if (data == null || data.models.isEmpty()) {
+                            Toast.makeText(context, "Gagal memuat model dari 9Router", Toast.LENGTH_SHORT).show();
+                            return;
                         }
-                        sb.append("\nCatatan: Pemilihan model dikontrol langsung di 9Router, klien AI otomatis mewarisi routing dan rotasi ").append(accLabel).append(" Antigravity.");
+                        final List<String> models = data.models;
+                        final CharSequence[] items = new CharSequence[models.size()];
+                        int selectedIdx = 0;
+                        String curModel = (data.defaultModel != null) ? data.defaultModel : "";
 
+                        for (int i = 0; i < models.size(); i++) {
+                            String m = models.get(i);
+                            items[i] = m;
+                            if (m.equalsIgnoreCase(curModel)) {
+                                selectedIdx = i;
+                            }
+                        }
+
+                        final int[] chosenIdx = new int[]{selectedIdx};
                         new MaterialAlertDialogBuilder(context)
-                            .setTitle("Model 9Router (Google Antigravity)")
-                            .setMessage(sb.toString())
-                            .setPositiveButton("Tutup", null)
+                            .setTitle("Pilih Model 9Router (" + accLabel + ")")
+                            .setSingleChoiceItems(items, selectedIdx, (dialog, which) -> {
+                                chosenIdx[0] = which;
+                            })
+                            .setPositiveButton("Ganti Model", (dialog, which) -> {
+                                String selectedModel = models.get(chosenIdx[0]);
+                                Toast.makeText(context, "Mengganti model ke " + selectedModel + "...", Toast.LENGTH_SHORT).show();
+                                Fusion9RouterHelper.applyModel(context, selectedModel, () -> {
+                                    Toast.makeText(context, "Model aktif diubah ke: " + selectedModel, Toast.LENGTH_LONG).show();
+                                    refreshState();
+                                });
+                            })
+                            .setNegativeButton("Batal", null)
                             .show();
                     });
                 }).start();
