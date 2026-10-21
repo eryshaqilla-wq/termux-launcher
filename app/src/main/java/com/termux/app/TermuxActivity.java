@@ -5805,7 +5805,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mChrome.ledger().reset(SurfaceDirtyLedger.Backdrop.ACCESSORY);
     }
 
+    private int mLastAccessoryUnderlayHeightPx = 0;
+    private boolean mCloseUnderlayGracePeriodActive = false;
+    private final Runnable mCloseUnderlayResetRunnable = () -> {
+        mCloseUnderlayGracePeriodActive = false;
+        updateAccessoryUnderlayState(buildChromeSpec());
+    };
+
+    private void startCloseUnderlayGracePeriod() {
+        mCloseUnderlayGracePeriodActive = true;
+        updateAccessoryUnderlayState(buildChromeSpec());
+        View root = findViewById(R.id.activity_termux_root_view);
+        if (root != null) {
+            root.removeCallbacks(mCloseUnderlayResetRunnable);
+            root.postDelayed(mCloseUnderlayResetRunnable, 180);
+        }
+    }
+
     private void clearAccessoryUnderlayBackdrop() {
+        mCloseUnderlayGracePeriodActive = false;
         View underlayHost = findViewById(R.id.accessory_underlay_host);
         if (underlayHost != null) {
             underlayHost.setVisibility(View.GONE);
@@ -5820,15 +5838,46 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void updateAccessoryUnderlayState(@NonNull ChromeSpec state) {
         View underlayHost = findViewById(R.id.accessory_underlay_host);
         if (underlayHost == null) return;
-        boolean transitionActive = mKeyboardGeometry.isOpenRevealPending()
-            || mKeyboardGeometry.isCloseGeometryPending()
-            || (state.keyboardShown && !isUnifiedAccessoryBackdropReady(state));
-        if (!state.toolbarShown || !transitionActive) {
+        boolean keyboardOrTouchpadActive = state.keyboardShown
+            || isTouchpadShown()
+            || mKeyboardGeometry.isOpenRevealPending();
+        boolean closeTransitionActive = mCloseUnderlayGracePeriodActive
+            || mKeyboardGeometry.isCloseGeometryPending();
+        boolean needed = shouldUseWallpaperPassthroughMode()
+            && (keyboardOrTouchpadActive || closeTransitionActive);
+        if (!needed) {
             underlayHost.setVisibility(View.GONE);
+            ImageView underlayBlur = findViewById(R.id.accessory_underlay_blur_backdrop);
+            if (underlayBlur != null) {
+                underlayBlur.setImageDrawable(null);
+                underlayBlur.setVisibility(View.GONE);
+            }
             return;
         }
-        applyDockSurfaceShape(underlayHost, isRoundedDockStyle(), ViewGroup.LayoutParams.MATCH_PARENT, true, true);
+
+        int underlayHostHeight;
+        if (keyboardOrTouchpadActive) {
+            int measuredHeight = mAppliedContentReservationPx > 0
+                ? mAppliedContentReservationPx
+                : (mKeyboardGeometry.desiredHeightPx() + mAppliedDockContentHeightPx);
+            if (measuredHeight <= 0) {
+                measuredHeight = Math.round(dpToPx(310));
+            }
+            mLastAccessoryUnderlayHeightPx = measuredHeight;
+            underlayHostHeight = measuredHeight;
+        } else {
+            underlayHostHeight = mLastAccessoryUnderlayHeightPx > 0
+                ? mLastAccessoryUnderlayHeightPx
+                : Math.round(dpToPx(310));
+        }
+
+        ViewGroup.LayoutParams lp = underlayHost.getLayoutParams();
+        if (lp != null && lp.height != underlayHostHeight) {
+            lp.height = underlayHostHeight;
+            underlayHost.setLayoutParams(lp);
+        }
         underlayHost.setVisibility(View.VISIBLE);
+
         View underlayScrim = findViewById(R.id.accessory_underlay_scrim);
         if (underlayScrim != null) {
             underlayScrim.setBackground(frameStandsDown() ? null
@@ -5837,12 +5886,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         ImageView underlayBlur = findViewById(R.id.accessory_underlay_blur_backdrop);
         if (underlayBlur != null) {
-            if (shouldUseAccessoryRenderEffectBlur(state)) {
+            int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
+            if (ChromePolicy.dockBlurEnabled(blurRadiusDp)) {
                 View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
                 if (wallpaperFrame != null) {
-                    Bitmap frame = mChrome.blurCache().obtain(state.blurRadiusDp, wallpaperFrame);
+                    Bitmap frame = mChrome.blurCache().obtain(blurRadiusDp, wallpaperFrame);
                     Rect frameRect = mChrome.blurCache().frameRectRef();
-                    if (frame != null) {
+                    if (frame != null && !frame.isRecycled()) {
                         underlayBlur.setImageDrawable(new com.termux.app.chrome.SharedFrameDrawable(
                             frame, frameRect, mWallpaperParallax,
                             com.termux.app.chrome.GlassAnchor.layout(underlayBlur, mAccessoryStackLift)));
@@ -5850,6 +5900,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     } else {
                         underlayBlur.setVisibility(View.GONE);
                     }
+                } else {
+                    underlayBlur.setVisibility(View.GONE);
                 }
             } else {
                 underlayBlur.setVisibility(View.GONE);
@@ -7632,7 +7684,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyAccessorySurfaceBounds(state);
         if (shouldUseDockDecorNavBarSurface(state) && !isRoundedDockStyle()) {
             clearAccessoryRenderEffectBackdrop();
-            clearAccessoryUnderlayBackdrop();
             return;
         }
         if (backdrop == null || surfaceHost == null || accessoryContainer == null || wallpaperFrame == null ||
@@ -7643,13 +7694,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             } else {
                 clearAccessoryRenderEffectBackdrop();
-            clearAccessoryUnderlayBackdrop();
             }
             return;
         }
         if (!shouldUseAccessoryRenderEffectBlur(state)) {
             clearAccessoryRenderEffectBackdrop();
-            clearAccessoryUnderlayBackdrop();
             return;
         }
         int horizontalOverscanPx = computeAccessoryBackdropHorizontalOverscanPx(state.blurRadiusDp);
@@ -7877,7 +7926,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 azLabelOverlay.setVisibility(View.GONE);
             }
             clearAccessoryRenderEffectBackdrop();
-            clearAccessoryUnderlayBackdrop();
             // Nothing lands on the dock, but the letters may still be standing on another edge.
             syncAzBarHosts();
             syncOffDockPlank(currentPlaceLayout());
@@ -8174,6 +8222,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
             @Override public void onKeyboardClosed() {
                 mKeybindHintPresenter.hideAfterLinger();
+                startCloseUnderlayGracePeriod();
             }
 
             @Override public void requestApplyInsets() {
@@ -14209,6 +14258,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean accessoryHeightChanged = updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
         // What the container's layout listener holds the laid-out keyboard to.
         mKeyboardGeometry.noteReservedHeightPx(state.keyboardHeight);
+        if (state.keyboardShown || isTouchpadShown()) {
+            mLastAccessoryUnderlayHeightPx = Math.max(mLastAccessoryUnderlayHeightPx, combinedHeight);
+        }
+        updateAccessoryUnderlayState(state);
         boolean accessoryMarginChanged = updateAccessoryStackContainerBottomMargin(
             accessoryStackContainer,
             accessoryBottomMarginPx
@@ -21190,8 +21243,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (pad == null) {
                 if (mPendingReleaseFrameOnPadDetach) {
                     mPendingReleaseFrameOnPadDetach = false;
+                    startCloseUnderlayGracePeriod();
                     lowerDisplayFrameKeyboard();
                 } else if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
+                    startCloseUnderlayGracePeriod();
                     container.setVisibility(View.GONE);
                 }
                 return;
@@ -21208,6 +21263,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (leaving.getParent() instanceof ViewGroup) {
                     ((ViewGroup) leaving.getParent()).removeView(leaving);
                 }
+                startCloseUnderlayGracePeriod();
                 if (mPendingReleaseFrameOnPadDetach) {
                     mPendingReleaseFrameOnPadDetach = false;
                     lowerDisplayFrameKeyboard();
