@@ -22794,8 +22794,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return com.termux.app.terminal.TerminalWindowBar.itemForForegroundProcess(
                 glyphProcessFor(info), info.openFile);
         }
-        // Idle or not yet resolved: directory basename via the existing title/cwd derivation.
-        return com.termux.app.terminal.TerminalWindowBar.itemFor(session, index);
+        // Idle or not yet resolved: directory basename via the title/cwd/chroot derivation.
+        return com.termux.app.terminal.TerminalWindowBar.itemFor(session, index, resolveSessionEnvironmentLabel());
+    }
+
+    @Nullable
+    private String resolveSessionEnvironmentLabel() {
+        try {
+            if (com.termux.app.x11.ChrootDistro.isRootAvailable()) {
+                com.termux.app.x11.ChrootDistro.ChrootEnvironment chrootEnv =
+                    com.termux.app.x11.ChrootDistro.getActiveEnvironment(this);
+                if (chrootEnv != null) {
+                    return chrootEnv.runnerType == com.termux.app.x11.ChrootDistro.RunnerType.DROIDSPACES
+                        ? "Droidspaces" : (com.termux.app.x11.ChrootDistro.ID_NETHUNTER.equals(chrootEnv.id) ? "NetHunter" : chrootEnv.name);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     /**
@@ -24252,6 +24268,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mTerminalView = v;
                 if (mTermuxTerminalExtraKeys != null)
                     mTermuxTerminalExtraKeys.setTerminalView(v);
+                for (TermuxTerminalExtraKeys pageClient : mTermuxTerminalExtraKeysPages) {
+                    if (pageClient != null) pageClient.setTerminalView(v);
+                }
             }
             mCurrentTabPrimary = mPaneController.getActiveSession();
             // Every window switch lands here — the bar, the space bar's swipes, the browser — so

@@ -1996,16 +1996,21 @@ public final class TerminalWindowBar extends HorizontalScrollView {
 
     /** Process is represented only by a Nerd Font glyph; visible text is the compact directory. */
     @NonNull
-    public static WindowItem itemFor(@Nullable TerminalSession session, int index) {
+    public static WindowItem itemFor(@Nullable TerminalSession session, int index, @Nullable String environmentLabel) {
         if (session == null) {
             String fallback = "window " + (index + 1);
             return new WindowItem(glyph(0xE795) + " " + (index + 1), fallback);
         }
         String process = processName(session.getTitle());
-        String directory = directoryName(session.getCwd(), session.getTitle());
+        String directory = directoryName(session.getCwd(), session.getTitle(), environmentLabel);
         String spokenProcess = process == null ? "terminal" : process;
         return new WindowItem(processGlyph(process) + " " + directory,
             spokenProcess + " in " + directory);
+    }
+
+    @NonNull
+    public static WindowItem itemFor(@Nullable TerminalSession session, int index) {
+        return itemFor(session, index, null);
     }
 
     /**
@@ -2138,25 +2143,62 @@ public final class TerminalWindowBar extends HorizontalScrollView {
     }
 
     @NonNull
-    private static String directoryName(@Nullable String cwd, @Nullable String title) {
+    public static String directoryName(@Nullable String cwd, @Nullable String title, @Nullable String environmentLabel) {
+        String fromTitle = extractDirectoryFromTitle(title);
+        if (fromTitle != null && !fromTitle.isEmpty() && !"home".equalsIgnoreCase(fromTitle)) {
+            return middleEllipsize(leafName(fromTitle), LABEL_MAX_CHARS);
+        }
         String path = clean(cwd);
-        if (path == null) {
-            String cleanedTitle = clean(title);
-            if (cleanedTitle != null) {
-                int open = cleanedTitle.lastIndexOf('<');
-                int close = cleanedTitle.lastIndexOf('>');
-                if (open >= 0 && close > open) path = cleanedTitle.substring(open + 1, close);
-                else if (cleanedTitle.endsWith(" ~")) path = "home";
+        if (path != null && !path.equals(TermuxConstants.TERMUX_HOME_DIR_PATH) && !path.equals("~")) {
+            return middleEllipsize(leafName(path), LABEL_MAX_CHARS);
+        }
+        if (environmentLabel != null && !environmentLabel.trim().isEmpty()) {
+            return middleEllipsize(environmentLabel.trim(), LABEL_MAX_CHARS);
+        }
+        return "home";
+    }
+
+    @NonNull
+    public static String directoryName(@Nullable String cwd, @Nullable String title) {
+        return directoryName(cwd, title, null);
+    }
+
+    @Nullable
+    public static String extractDirectoryFromTitle(@Nullable String title) {
+        String cleaned = clean(title);
+        if (cleaned == null || cleaned.isEmpty() || "home".equalsIgnoreCase(cleaned)) {
+            return null;
+        }
+        int open = cleaned.lastIndexOf('<');
+        int close = cleaned.lastIndexOf('>');
+        if (open >= 0 && close > open) {
+            return cleaned.substring(open + 1, close).trim();
+        }
+        int colon = cleaned.indexOf(':');
+        if (colon >= 0 && colon + 1 < cleaned.length()) {
+            String afterColon = cleaned.substring(colon + 1).trim();
+            if (afterColon.endsWith("#") || afterColon.endsWith("$") || afterColon.endsWith("%")) {
+                afterColon = afterColon.substring(0, afterColon.length() - 1).trim();
+            }
+            if (!afterColon.isEmpty()) {
+                return afterColon;
             }
         }
-        if (path == null || path.equals(TermuxConstants.TERMUX_HOME_DIR_PATH) || path.equals("~")) {
-            return "home";
+        if (cleaned.startsWith("/") || cleaned.startsWith("~")) {
+            return cleaned;
         }
-        while (path.length() > 1 && path.endsWith("/")) path = path.substring(0, path.length() - 1);
-        int slash = path.lastIndexOf('/');
-        String leaf = slash >= 0 ? path.substring(slash + 1) : path;
-        if (leaf.isEmpty()) leaf = "/";
-        return middleEllipsize(leaf, LABEL_MAX_CHARS);
+        return cleaned;
+    }
+
+    @NonNull
+    private static String leafName(@NonNull String path) {
+        String p = path.trim();
+        while (p.length() > 1 && p.endsWith("/")) p = p.substring(0, p.length() - 1);
+        int slash = p.lastIndexOf('/');
+        String leaf = slash >= 0 ? p.substring(slash + 1) : p;
+        if (leaf.isEmpty() || leaf.equals("/")) return "/";
+        if (leaf.equals("~")) return "home";
+        return leaf;
     }
 
     @NonNull

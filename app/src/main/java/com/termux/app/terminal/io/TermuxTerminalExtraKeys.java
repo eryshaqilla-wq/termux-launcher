@@ -111,6 +111,10 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
     @SuppressLint("RtlHardcoded")
     @Override
     public void onTerminalExtraKeyButtonClick(View view, String key, boolean ctrlDown, boolean altDown, boolean shiftDown, boolean fnDown) {
+        TerminalView activeView = mActivity.getTerminalView();
+        if (activeView != null) {
+            setTerminalView(activeView);
+        }
         // A key that moves the wall needs no readout: the place arriving is the announcement, and
         // the readout would borrow the alphabet row's slot for the length of the slide.
         if (key != null && !announcesItself(key))

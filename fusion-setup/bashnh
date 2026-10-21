@@ -14,10 +14,6 @@ PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 FUSION_DIR="$HOME/.fusion"
 
-# 2. Pertahankan tab terminal tetap bernama 'home'
-printf "\033]0;home\007"
-printf "\033]2;home\007"
-
 # Cek hak akses root
 HAS_SU=0
 if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
@@ -37,6 +33,7 @@ launch_nethunter() {
         nh_path="/data/local/nhsystem/kalifs"
     fi
 
+    printf "\033]0;NetHunter\007"
     exec su -mm -c "chroot $nh_path /usr/bin/env -i \
         HOME=/root \
         TERM=xterm-256color \
@@ -44,7 +41,7 @@ launch_nethunter() {
         USER=root \
         LOGNAME=root \
         MAIL=/var/mail/root \
-        DISABLE_AUTO_TITLE=true \
+        AUTO_TITLE=true \
         YOU_KNOW_WHAT=THIS_IS_KALI_LINUX_NETHUNTER_FROM_JAVA_BINKY \
         /bin/zsh -l"
 }
@@ -78,6 +75,7 @@ launch_droidspaces() {
         su -c "$ds_bin --name='$ds_name' start" >/dev/null 2>&1 || true
     fi
 
+    printf "\033]0;Droidspaces\007"
     if [ -n "$*" ]; then
         exec su -c "$ds_bin --name=\"$ds_name\" run -- $*"
     else
