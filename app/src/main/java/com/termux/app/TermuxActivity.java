@@ -19945,11 +19945,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the wall commits to the next place and the content becomes that place's.
         float travel = width <= 0 ? 0f : Math.min(1f, Math.abs(offsetPx) / (width * 0.5f));
         float alpha = 1f - travel;
+        boolean vertical = isStatusBarVertical();
         View strip = hotView(R.id.terminal_status_place_content);
         if (strip != null) {
             // The place's content leaves the way the wall does: sideways past a row's ends,
             // up and down past a column's.
-            boolean vertical = isStatusBarVertical();
             strip.setTranslationX(vertical ? 0f : offsetPx);
             strip.setTranslationY(vertical ? offsetPx : 0f);
             strip.setAlpha(alpha);
