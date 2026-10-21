@@ -154,11 +154,12 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         Preference openWebUi = findPreference(PREF_OPEN_WEBUI);
         if (openWebUi != null) {
             openWebUi.setOnPreferenceClickListener(preference -> {
-                Toast.makeText(context, "Membuka Dashboard 9Router...", Toast.LENGTH_SHORT).show();
-                Fusion9RouterHelper.openDashboard(context);
-                if (getActivity() != null) {
-                    getActivity().finish();
-                }
+                Toast.makeText(context, "Mempersiapkan Dashboard 9Router...", Toast.LENGTH_SHORT).show();
+                Fusion9RouterHelper.openDashboard(context, () -> {
+                    if (getActivity() != null && !getActivity().isFinishing()) {
+                        getActivity().finish();
+                    }
+                });
                 return true;
             });
         }
@@ -210,7 +211,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                         }
 
                         new MaterialAlertDialogBuilder(context)
-                            .setTitle("Klien AI (Model: " + data.defaultModel + ")")
+                            .setTitle("Klien AI • Model: " + data.defaultModel)
                             .setMultiChoiceItems(items, checkedItems, (dialog, which, isChecked) -> {
                                 selectedResults[which] = isChecked;
                             })
@@ -245,14 +246,24 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
             modelsPref.setOnPreferenceClickListener(preference -> {
                 new Thread(() -> {
                     final Fusion9RouterHelper.AutoConfigData data = Fusion9RouterHelper.getAutoConfigData(context);
+                    final int accCount = Fusion9RouterHelper.getAccountCount(context);
+                    final String accLabel = accCount > 0 ? (accCount + " akun") : "multi-akun";
                     mMainHandler.post(() -> {
                         StringBuilder sb = new StringBuilder();
-                        sb.append("Model Utama 9Router:\n").append(data.defaultModel).append("\n\n");
+                        String defModel = (data != null && data.defaultModel != null) ? data.defaultModel : "ag/gemini-3.8-flash-medium";
+                        sb.append("Model Utama 9Router:\n").append(defModel).append("\n\n");
                         sb.append("Daftar Varian Model Terdaftar:\n");
-                        for (String m : data.models) {
-                            sb.append("• ").append(m).append("\n");
+                        if (data != null && !data.models.isEmpty()) {
+                            for (String m : data.models) {
+                                sb.append("• ").append(m).append("\n");
+                            }
+                        } else {
+                            sb.append("• ag/gemini-3.8-flash-medium\n");
+                            sb.append("• ag/claude-sonnet-5-5\n");
+                            sb.append("• ag/claude-opus-5-5\n");
+                            sb.append("• ag/gpt-oss-120b-medium\n");
                         }
-                        sb.append("\nCatatan: Pemilihan model dikontrol langsung di 9Router, klien AI otomatis mewarisi routing dan rotasi 5 akun Antigravity.");
+                        sb.append("\nCatatan: Pemilihan model dikontrol langsung di 9Router, klien AI otomatis mewarisi routing dan rotasi ").append(accLabel).append(" Antigravity.");
 
                         new MaterialAlertDialogBuilder(context)
                             .setTitle("Model 9Router (Google Antigravity)")

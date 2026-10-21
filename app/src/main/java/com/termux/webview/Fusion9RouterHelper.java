@@ -268,10 +268,10 @@ public class Fusion9RouterHelper {
                 if (target.type == RunnerType.DROIDSPACES) {
                     String dsName = target.id.replace("ds_", "");
                     p = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /bin/sh -c 'ls -1 /root/.agy-accounts/*.json 2>/dev/null | wc -l'"});
+                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh -c 'ls -1 /root/.agy-accounts/*.json 2>/dev/null | wc -l'"});
                 } else {
                     p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
-                        "chroot " + target.rootfsPath + " /bin/sh -c 'ls -1 /root/.agy-accounts/*.json 2>/dev/null | wc -l'"});
+                        "chroot " + target.rootfsPath + " /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh -c 'ls -1 /root/.agy-accounts/*.json 2>/dev/null | wc -l'"});
                 }
                 BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 String line = reader.readLine();
@@ -367,17 +367,24 @@ public class Fusion9RouterHelper {
             }
         }
 
+        // Coba dari AutoConfigData dulu karena 9router-autoconfig --json sudah membaca langsung
+        AutoConfigData auto = getAutoConfigData(context);
+        if (auto != null && auto.apiKey != null && !auto.apiKey.isEmpty()) {
+            return auto.apiKey;
+        }
+
         // Fallback jika file direct dibatasi permission
         if (target != null && target.isRoot && target.rootfsPath != null) {
             try {
                 Process p;
+                String cmd = "/usr/local/bin/9router-autoconfig apikey 2>/dev/null";
                 if (target.type == RunnerType.DROIDSPACES) {
                     String dsName = target.id.replace("ds_", "");
                     p = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /bin/sh -c 'sqlite3 /root/.9router/db/data.sqlite \"SELECT key FROM apiKeys LIMIT 1;\" 2>/dev/null'"});
+                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " + cmd});
                 } else {
                     p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
-                        "chroot " + target.rootfsPath + " /bin/sh -c 'sqlite3 /root/.9router/db/data.sqlite \"SELECT key FROM apiKeys LIMIT 1;\" 2>/dev/null'"});
+                        "chroot " + target.rootfsPath + " /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " + cmd});
                 }
                 BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 String line = reader.readLine();
@@ -390,7 +397,7 @@ public class Fusion9RouterHelper {
             try {
                 Process p = Runtime.getRuntime().exec(new String[]{
                     "/data/data/com.termux/files/usr/bin/bash", "-c",
-                    "sqlite3 $HOME/.9router/db/data.sqlite \"SELECT key FROM apiKeys LIMIT 1;\" 2>/dev/null"});
+                    "export HOME=/data/data/com.termux/files/home PATH=/data/data/com.termux/files/usr/bin:$PATH && /usr/local/bin/9router-autoconfig apikey 2>/dev/null"});
                 BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
                 String line = reader.readLine();
                 if (line != null && !line.trim().isEmpty()) {
@@ -420,7 +427,7 @@ public class Fusion9RouterHelper {
                     if (finalTarget.type == RunnerType.DROIDSPACES) {
                         String dsName = finalTarget.id.replace("ds_", "");
                         p = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                            "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- " + cmd});
+                            "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " + cmd});
                     } else {
                         p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
                             "chroot " + finalTarget.rootfsPath + " /usr/bin/env -i HOME=/root USER=root " +
@@ -428,7 +435,8 @@ public class Fusion9RouterHelper {
                     }
                 } else {
                     p = Runtime.getRuntime().exec(new String[]{
-                        "/data/data/com.termux/files/usr/bin/bash", "-c", cmd});
+                        "/data/data/com.termux/files/usr/bin/bash", "-c",
+                        "export HOME=/data/data/com.termux/files/home PATH=/data/data/com.termux/files/usr/bin:$PATH && " + cmd});
                 }
                 p.waitFor();
             } catch (Exception ignored) {
@@ -489,27 +497,72 @@ public class Fusion9RouterHelper {
 
     /**
      * Membuka halaman visual WebUI 9router di Webview Termux.
-     * Otomatis mengaktifkan background service jika belum berjalan.
+     * Otomatis mengaktifkan background service jika belum berjalan dan menunggu port 20128 siap
+     * sebelum membuka tab Webview serta memanggil callback onReady (misal menutup halaman pengaturan).
      */
+    public static void openDashboard(Context context, final Runnable onReady) {
+        new Thread(() -> {
+            boolean wasRunning = isServiceRunning();
+            if (!wasRunning) {
+                startService(context, null);
+            }
+
+            // Tunggu/polling hingga port 20128 siap merespons (maksimal 8 detik)
+            long startTime = System.currentTimeMillis();
+            long timeout = 8000;
+            boolean ready = false;
+
+            while (System.currentTimeMillis() - startTime < timeout) {
+                if (isServiceRunning()) {
+                    ready = true;
+                    break;
+                }
+                try {
+                    Thread.sleep(300);
+                } catch (InterruptedException ignored) {
+                }
+            }
+
+            // Beri jeda penyangga ekstra (400ms) agar HTTP server internal 9Router siap menerima HTTP request
+            if (ready) {
+                try {
+                    Thread.sleep(400);
+                } catch (InterruptedException ignored) {
+                }
+            }
+
+            final boolean isReady = ready;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (isReady) {
+                    boolean opened = false;
+                    try {
+                        FusionWebViewManager manager = FusionWebViewManager.getInstance();
+                        if (manager != null) {
+                            manager.addNewTab(DASHBOARD_URL);
+                            opened = true;
+                        }
+                    } catch (Exception ignored) {
+                    }
+                    if (!opened && context != null) {
+                        try {
+                            runAsyncCommand(context, null, "termux-ipc webview " + DASHBOARD_URL, null);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    if (onReady != null) {
+                        onReady.run();
+                    }
+                } else {
+                    if (context != null) {
+                        Toast.makeText(context, "Layanan 9Router belum siap di port 20128. Silakan periksa service 9Router.", Toast.LENGTH_LONG).show();
+                    }
+                }
+            });
+        }).start();
+    }
+
     public static void openDashboard(Context context) {
-        if (!isServiceRunning()) {
-            startService(context, null);
-        }
-        boolean opened = false;
-        try {
-            FusionWebViewManager manager = FusionWebViewManager.getInstance();
-            if (manager != null) {
-                manager.addNewTab(DASHBOARD_URL);
-                opened = true;
-            }
-        } catch (Exception ignored) {
-        }
-        if (!opened && context != null) {
-            try {
-                runAsyncCommand(context, null, "termux-ipc webview " + DASHBOARD_URL, null);
-            } catch (Exception ignored) {
-            }
-        }
+        openDashboard(context, null);
     }
 
     public static class ClientConfigInfo {
@@ -521,6 +574,7 @@ public class Fusion9RouterHelper {
     }
 
     public static class AutoConfigData {
+        public String apiKey = null;
         public String endpoint = LOCAL_BASE_URL;
         public String defaultModel = "ag/gemini-3.8-flash-medium";
         public List<String> models = new ArrayList<>();
@@ -550,14 +604,15 @@ public class Fusion9RouterHelper {
                 if (target.type == RunnerType.DROIDSPACES) {
                     String dsName = target.id.replace("ds_", "");
                     p = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /bin/sh -c '" + cmd + "'"});
+                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " + cmd});
                 } else {
                     p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
-                        "chroot " + target.rootfsPath + " /bin/sh -c '" + cmd + "'"});
+                        "chroot " + target.rootfsPath + " /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " + cmd});
                 }
             } else {
                 p = Runtime.getRuntime().exec(new String[]{
-                    "/data/data/com.termux/files/usr/bin/bash", "-c", cmd});
+                    "/data/data/com.termux/files/usr/bin/bash", "-c",
+                    "export HOME=/data/data/com.termux/files/home PATH=/data/data/com.termux/files/usr/bin:$PATH && " + cmd});
             }
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
@@ -574,6 +629,9 @@ public class Fusion9RouterHelper {
         if (jsonStr != null && jsonStr.startsWith("{")) {
             try {
                 JSONObject obj = new JSONObject(jsonStr);
+                if (obj.has("apiKey")) {
+                    result.apiKey = obj.getString("apiKey");
+                }
                 if (obj.has("defaultModel")) {
                     result.defaultModel = obj.getString("defaultModel");
                 }
