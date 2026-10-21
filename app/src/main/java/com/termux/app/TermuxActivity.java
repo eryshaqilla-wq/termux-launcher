@@ -1750,6 +1750,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         content.setOnApplyWindowInsetsListener((v, insets) -> {
             WindowInsetsCompat insetsCompat = WindowInsetsCompat.toWindowInsetsCompat(insets, v);
             mNavBarHeight = insetsCompat.getInsets(Type.systemBars()).bottom;
+            if (mIsAccessoryStackCollapsed && mDockRestorePillHost != null) {
+                styleDockRestorePill(mDockRestorePillHost);
+            }
             applyAppDrawerEdgeBleed(insetsCompat);
             mImeLiftPx = computeDockImeLiftPx(insetsCompat);
             applyDockImeOffset(0);
@@ -7821,7 +7824,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             mChrome.requestSync(ChromeRenderer.SCOPE_TOP_PANE_FROST);
             if (mDockRestorePillHost != null) {
-                if (mIsAccessoryStackCollapsed) {
+                if (mIsAccessoryStackCollapsed && !state.keyboardShown && !isImeVisible()) {
                     mDockRestorePillHost.setVisibility(View.VISIBLE);
                     mDockRestorePillHost.bringToFront();
                     styleDockRestorePill(mDockRestorePillHost);
@@ -7833,7 +7836,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         if (mDockRestorePillHost != null) {
-            mDockRestorePillHost.setVisibility(View.GONE);
+            if (mIsAccessoryStackCollapsed && !state.keyboardShown && !isImeVisible()) {
+                mDockRestorePillHost.setVisibility(View.VISIBLE);
+                mDockRestorePillHost.bringToFront();
+                styleDockRestorePill(mDockRestorePillHost);
+            } else {
+                mDockRestorePillHost.setVisibility(View.GONE);
+            }
         }
 
         if (accessoryContainer != null)
@@ -12644,11 +12653,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    private int getDockRestoreChinHeightPx() {
+        int minChinPx = Math.round(dpToPx(24f));
+        return Math.max(mNavBarHeight, minChinPx);
+    }
+
     private void setupDockRestorePill() {
         mDockRestorePillHost = findViewById(R.id.dock_restore_pill_host);
         if (mDockRestorePillHost != null) {
             styleDockRestorePill(mDockRestorePillHost);
-            if (mIsAccessoryStackCollapsed) {
+            if (mIsAccessoryStackCollapsed && !isInAppKeyboardShown() && !isImeVisible()) {
                 mDockRestorePillHost.setVisibility(View.VISIBLE);
                 mDockRestorePillHost.bringToFront();
             } else {
@@ -12658,36 +12672,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void styleDockRestorePill(@Nullable View pillHost) {
-        if (pillHost == null || mPreferences == null) return;
-        com.github.mmin18.widget.RealtimeBlurView blurView =
-            pillHost.findViewById(R.id.dock_restore_pill_blur);
-        if (blurView != null) {
-            int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
-            applyRealtimeBlurRadius(blurView, blurRadiusDp);
-            blurView.setVisibility(ChromePolicy.dockBlurEnabled(blurRadiusDp) ? View.VISIBLE : View.GONE);
+        if (pillHost == null) return;
+        int chinHeight = getDockRestoreChinHeightPx();
+        ViewGroup.LayoutParams lp = pillHost.getLayoutParams();
+        if (lp != null && lp.height != chinHeight) {
+            lp.height = chinHeight;
+            pillHost.setLayoutParams(lp);
         }
-        TextView button = pillHost.findViewById(R.id.dock_restore_pill_button);
-        if (button != null) {
-            button.setOnClickListener(v -> setAccessoryStackCollapsed(false, true));
+
+        View touchArea = pillHost.findViewById(R.id.dock_restore_pill_touch_area);
+        if (touchArea != null) {
+            touchArea.setOnClickListener(v -> setAccessoryStackCollapsed(false, true));
+        }
+
+        View pillBar = pillHost.findViewById(R.id.dock_restore_pill_bar);
+        if (pillBar != null && mPreferences != null) {
+            float cornerRadiusPx = dpToPx(99f);
             if (mChrome != null && mChrome.glass() != null) {
                 float barAlpha = mPreferences.getAppBarOpacity() / 100f;
                 int grain = mPreferences.getDockGlassGrain();
-                float cornerRadiusPx = dpToPx(99f);
                 try {
-                    button.setBackground(mChrome.glass().surface(
-                        com.termux.app.chrome.LowOpacityGlass.floored(barAlpha, 0.85f),
-                        0f, 1f, false, grain, cornerRadiusPx, true));
+                    pillBar.setBackground(mChrome.glass().surface(
+                        com.termux.app.chrome.LowOpacityGlass.floored(barAlpha, 0.75f),
+                        0f, 1f, false, grain, cornerRadiusPx, false));
                 } catch (Throwable ignored) {
-                    // Fallback to XML ripple drawable
+                    // Fallback to XML shape drawable
                 }
-            }
-        }
-        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) pillHost.getLayoutParams();
-        if (lp != null) {
-            int bottomMargin = Math.max(Math.round(dpToPx(14f)), mNavBarHeight + Math.round(dpToPx(8f)));
-            if (lp.bottomMargin != bottomMargin) {
-                lp.bottomMargin = bottomMargin;
-                pillHost.setLayoutParams(lp);
             }
         }
     }
@@ -14201,10 +14211,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the margin either way, so it is the room the layout really gives.
         boolean stackShown = !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(state.toolbarShown, state.keyboardShown,
             statusBandPx > 0);
-        int contentEdgeGapPx = stackShown ? 0 : accessoryBottomMarginPx;
+        int contentEdgeGapPx;
+        if (stackShown) {
+            contentEdgeGapPx = 0;
+        } else if (state.keyboardShown || isImeVisible()) {
+            contentEdgeGapPx = accessoryBottomMarginPx;
+        } else {
+            // Full canvas mode: reserve chin height for the Android navigation pill so terminal canvas
+            // remains a clean, unclipped rectangle above the phone's physical corner curve.
+            contentEdgeGapPx = getDockRestoreChinHeightPx();
+        }
         boolean overlapChanged = applyContentBottomMargin(contentEdgeGapPx, keyboardOverlapPx);
         int contentReservationPx = KeyboardOverlayPolicy.contentReservationPx(
-            combinedHeight, accessoryBottomMarginPx, keyboardOverlapPx);
+            combinedHeight, contentEdgeGapPx, keyboardOverlapPx);
         boolean contentReservationChanged = contentReservationPx != mAppliedContentReservationPx;
         mAppliedContentReservationPx = contentReservationPx;
         boolean keyboardShownChanged = mKeyboardGeometry.applyKeyboardShown(state.keyboardShown);

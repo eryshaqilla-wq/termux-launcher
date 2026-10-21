@@ -1134,18 +1134,16 @@
             android:focusable="false"
             android:visibility="gone" />
 
-        <!-- Floating Dock Restore Pill (Ultra-Minimalist [ ⌃ ]) -->
+        <!-- Full-Canvas Android Navigation Pill Chin -->
         <FrameLayout
             android:id="@+id/dock_restore_pill_host"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
+            android:layout_width="match_parent"
+            android:layout_height="24dp"
             android:layout_alignParentBottom="true"
-            android:layout_alignParentStart="true"
-            android:layout_marginStart="14dp"
-            android:layout_marginBottom="14dp"
+            android:layout_centerHorizontal="true"
             android:elevation="24dp"
-            android:clipChildren="true"
-            android:clipToPadding="true"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:visibility="gone">
 
             <ImageView
@@ -1161,23 +1159,26 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 app:realtimeBlurRadius="10dp"
-                app:realtimeOverlayColor="@android:color/transparent" />
+                app:realtimeOverlayColor="@android:color/transparent"
+                android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/dock_restore_pill_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="40dp"
-                android:minHeight="32dp"
-                android:paddingHorizontal="12dp"
-                android:paddingVertical="4dp"
-                android:gravity="center"
-                android:text="⌃"
-                android:textSize="17sp"
-                android:textStyle="bold"
-                android:textColor="?attr/termuxColorOnSurface"
-                android:background="@drawable/dock_restore_pill_background"
-                android:contentDescription="@string/dock_restore_pill_content_description" />
+            <FrameLayout
+                android:id="@+id/dock_restore_pill_touch_area"
+                android:layout_width="160dp"
+                android:layout_height="match_parent"
+                android:layout_gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/dock_restore_pill_content_description">
+
+                <View
+                    android:id="@+id/dock_restore_pill_bar"
+                    android:layout_width="72dp"
+                    android:layout_height="4.5dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/dock_restore_pill_background" />
+            </FrameLayout>
         </FrameLayout>
         </RelativeLayout>
         <!-- App drawer overlay plane. A full-bleed sibling of the padded content root, so it paints
