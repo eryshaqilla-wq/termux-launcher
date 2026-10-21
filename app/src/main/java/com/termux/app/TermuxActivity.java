@@ -24289,6 +24289,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             TermuxActivity.this.toggleTerminalToolbar();
         }
 
+        @Override public void toggleAccessoryStackCollapsed() {
+            TermuxActivity.this.toggleAccessoryStackCollapsed();
+        }
+
+        @Override public boolean isAccessoryStackCollapsed() {
+            return TermuxActivity.this.isAccessoryStackCollapsed();
+        }
+
         @Override public void requestFlushDockGeometryUpdate() {
             requestTerminalFlushDockGeometryUpdate();
         }

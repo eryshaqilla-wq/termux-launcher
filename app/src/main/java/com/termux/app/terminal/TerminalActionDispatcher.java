@@ -636,8 +636,8 @@ public final class TerminalActionDispatcher {
                     return ok().put("page", page);
                 }
                 case TOOL_DOCK_TOGGLE: {
-                    host.getActivity().toggleAccessoryStackCollapsed();
-                    return ok().put("collapsed", host.getActivity().isAccessoryStackCollapsed());
+                    host.toggleAccessoryStackCollapsed();
+                    return ok().put("collapsed", host.isAccessoryStackCollapsed());
                 }
                 case TOOL_MOUSE_TOGGLE:
                     return ok().put("mouseMode", host.toggleMouseMode());

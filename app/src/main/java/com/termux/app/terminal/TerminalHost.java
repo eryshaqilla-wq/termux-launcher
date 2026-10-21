@@ -68,6 +68,13 @@ public interface TerminalHost extends SoftKeyboardPolicy {
     /** Shows or hides the terminal toolbar, as the fn+q/fn+k writing mode keys do. */
     void toggleTerminalToolbar();
 
+    /** Toggles between full dock and compact 1-row extra keys mode. */
+    default void toggleAccessoryStackCollapsed() {}
+
+    default boolean isAccessoryStackCollapsed() {
+        return false;
+    }
+
     /** Asks the flush dock to re-measure after anything that changes terminal geometry. */
     void requestFlushDockGeometryUpdate();
 

@@ -84,6 +84,8 @@ class FakeTerminalHost implements TerminalHost {
     boolean hasToolbar = true;
     boolean terminalViewSelected;
     int toolbarToggles;
+    boolean accessoryStackCollapsed;
+    int accessoryStackToggles;
     int flushDockRequests;
     int paneFontSize;
     boolean overlaysConsume;
@@ -261,6 +263,16 @@ class FakeTerminalHost implements TerminalHost {
     @Override public void toggleTerminalToolbar() {
         record("toggleTerminalToolbar");
         toolbarToggles++;
+    }
+
+    @Override public void toggleAccessoryStackCollapsed() {
+        record("toggleAccessoryStackCollapsed");
+        accessoryStackToggles++;
+        accessoryStackCollapsed = !accessoryStackCollapsed;
+    }
+
+    @Override public boolean isAccessoryStackCollapsed() {
+        return accessoryStackCollapsed;
     }
 
     @Override public void requestFlushDockGeometryUpdate() {
