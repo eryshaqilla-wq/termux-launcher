@@ -86,29 +86,6 @@
             android:clipToPadding="false"
             android:orientation="vertical">
 
-        <FrameLayout
-            android:id="@+id/accessory_underlay_host"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_alignParentBottom="true"
-            android:clipChildren="true"
-            android:clipToPadding="true"
-            android:visibility="gone">
-
-            <ImageView
-                android:id="@+id/accessory_underlay_blur_backdrop"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="fitXY"
-                android:visibility="gone" />
-
-            <View
-                android:id="@+id/accessory_underlay_scrim"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="?attr/termuxColorSurfacePanelHigh" />
-        </FrameLayout>
-
         <LinearLayout
             android:id="@+id/terminal_content_column"
             android:layout_alignParentTop="true"

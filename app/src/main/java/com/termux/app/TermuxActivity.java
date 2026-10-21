@@ -3931,7 +3931,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 findViewById(R.id.terminal_status_bar_wallpaper_backdrop),
                 findViewById(R.id.terminal_window_bar_wallpaper_backdrop),
                 findViewById(R.id.accessory_blur_backdrop),
-                findViewById(R.id.accessory_underlay_blur_backdrop),
                 findViewById(R.id.inapp_keyboard_view_host),
                 findViewById(R.id.accessory_under_keyboard_stack),
                 findViewById(R.id.command_palette_wallpaper_backdrop),
@@ -5805,110 +5804,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mChrome.ledger().reset(SurfaceDirtyLedger.Backdrop.ACCESSORY);
     }
 
-    private int mLastAccessoryUnderlayHeightPx = 0;
-    private boolean mCloseUnderlayGracePeriodActive = false;
-    private final Runnable mCloseUnderlayResetRunnable = () -> {
-        mCloseUnderlayGracePeriodActive = false;
-        updateAccessoryUnderlayState(buildChromeSpec());
-    };
-
-    private void startCloseUnderlayGracePeriod() {
-        mCloseUnderlayGracePeriodActive = true;
-        updateAccessoryUnderlayState(buildChromeSpec());
-        View root = findViewById(R.id.activity_termux_root_view);
-        if (root != null) {
-            root.removeCallbacks(mCloseUnderlayResetRunnable);
-            root.postDelayed(mCloseUnderlayResetRunnable, 180);
-        }
-    }
-
-    private void clearAccessoryUnderlayBackdrop() {
-        mCloseUnderlayGracePeriodActive = false;
-        View underlayHost = findViewById(R.id.accessory_underlay_host);
-        if (underlayHost != null) {
-            underlayHost.setVisibility(View.GONE);
-        }
-        ImageView underlayBlur = findViewById(R.id.accessory_underlay_blur_backdrop);
-        if (underlayBlur != null) {
-            underlayBlur.setImageDrawable(null);
-            underlayBlur.setVisibility(View.GONE);
-        }
-    }
-
-    private void updateAccessoryUnderlayState(@NonNull ChromeSpec state) {
-        View underlayHost = findViewById(R.id.accessory_underlay_host);
-        if (underlayHost == null) return;
-        boolean keyboardOrTouchpadActive = state.keyboardShown
-            || isTouchpadShown()
-            || mKeyboardGeometry.isOpenRevealPending();
-        boolean closeTransitionActive = mCloseUnderlayGracePeriodActive
-            || mKeyboardGeometry.isCloseGeometryPending();
-        boolean needed = shouldUseWallpaperPassthroughMode()
-            && (keyboardOrTouchpadActive || closeTransitionActive);
-        if (!needed) {
-            underlayHost.setVisibility(View.GONE);
-            ImageView underlayBlur = findViewById(R.id.accessory_underlay_blur_backdrop);
-            if (underlayBlur != null) {
-                underlayBlur.setImageDrawable(null);
-                underlayBlur.setVisibility(View.GONE);
-            }
-            return;
-        }
-
-        int underlayHostHeight;
-        if (keyboardOrTouchpadActive) {
-            int measuredHeight = mAppliedContentReservationPx > 0
-                ? mAppliedContentReservationPx
-                : (mKeyboardGeometry.desiredHeightPx() + mAppliedDockContentHeightPx);
-            if (measuredHeight <= 0) {
-                measuredHeight = Math.round(dpToPx(310));
-            }
-            mLastAccessoryUnderlayHeightPx = measuredHeight;
-            underlayHostHeight = measuredHeight;
-        } else {
-            underlayHostHeight = mLastAccessoryUnderlayHeightPx > 0
-                ? mLastAccessoryUnderlayHeightPx
-                : Math.round(dpToPx(310));
-        }
-
-        ViewGroup.LayoutParams lp = underlayHost.getLayoutParams();
-        if (lp != null && lp.height != underlayHostHeight) {
-            lp.height = underlayHostHeight;
-            underlayHost.setLayoutParams(lp);
-        }
-        underlayHost.setVisibility(View.VISIBLE);
-
-        View underlayScrim = findViewById(R.id.accessory_underlay_scrim);
-        if (underlayScrim != null) {
-            underlayScrim.setBackground(frameStandsDown() ? null
-                : mChrome.glass().dockSurface(state.barAlpha, 0f, 1f, false));
-            underlayScrim.setAlpha(1f);
-        }
-        ImageView underlayBlur = findViewById(R.id.accessory_underlay_blur_backdrop);
-        if (underlayBlur != null) {
-            int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
-            if (ChromePolicy.dockBlurEnabled(blurRadiusDp)) {
-                View wallpaperFrame = findViewById(R.id.activity_termux_root_view);
-                if (wallpaperFrame != null) {
-                    Bitmap frame = mChrome.blurCache().obtain(blurRadiusDp, wallpaperFrame);
-                    Rect frameRect = mChrome.blurCache().frameRectRef();
-                    if (frame != null && !frame.isRecycled()) {
-                        underlayBlur.setImageDrawable(new com.termux.app.chrome.SharedFrameDrawable(
-                            frame, frameRect, mWallpaperParallax,
-                            com.termux.app.chrome.GlassAnchor.layout(underlayBlur, mAccessoryStackLift)));
-                        underlayBlur.setVisibility(View.VISIBLE);
-                    } else {
-                        underlayBlur.setVisibility(View.GONE);
-                    }
-                } else {
-                    underlayBlur.setVisibility(View.GONE);
-                }
-            } else {
-                underlayBlur.setVisibility(View.GONE);
-            }
-        }
-    }
-
     /**
      * Lets the app drawer's plane reach the physical screen edges.
      *
@@ -6600,14 +6495,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * measurement is never affected by extra sibling views.
      */
     private void applyInAppKeyboardSurfaceState(@NonNull ChromeSpec state) {
-        try {
-            doApplyInAppKeyboardSurfaceState(state);
-        } finally {
-            updateAccessoryUnderlayState(state);
-        }
-    }
-
-    private void doApplyInAppKeyboardSurfaceState(@NonNull ChromeSpec state) {
         View surfaceHost = findViewById(R.id.inapp_keyboard_view_host);
         if (surfaceHost == null) {
             return;
@@ -7647,7 +7534,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int[] frostIds = {R.id.command_palette_wallpaper_backdrop, R.id.terminal_sheet_wallpaper_backdrop,
             R.id.app_drawer_wallpaper_backdrop, R.id.terminal_window_bar_wallpaper_backdrop,
             R.id.terminal_status_bar_wallpaper_backdrop, R.id.accessory_blur_backdrop,
-            R.id.accessory_underlay_blur_backdrop,
             R.id.place_off_dock_plank_frost, R.id.place_az_bar_host_frost};
         for (int frostId : frostIds) {
             ImageView frost = findViewById(frostId);
@@ -8027,7 +7913,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the live blur views have nothing left to contribute — and each one that keeps capturing
         // redraws the whole window, terminal text included, on the UI thread.
         updateAccessoryRenderEffectBackdrop(state);
-        updateAccessoryUnderlayState(state);
         mChrome.requestSync(ChromeRenderer.SCOPE_TOP_PANE_FROST);
         mKeyboardGeometry.completePendingOpenReveal(state);
         mKeyboardGeometry.completePendingCloseGeometry(state);
@@ -8222,7 +8107,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
             @Override public void onKeyboardClosed() {
                 mKeybindHintPresenter.hideAfterLinger();
-                startCloseUnderlayGracePeriod();
             }
 
             @Override public void requestApplyInsets() {
@@ -8633,8 +8517,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // (mAccessoryStackLift); a transform alone redraws nothing, so they are re-aimed here.
             View backdrop = hotView(R.id.accessory_blur_backdrop);
             if (backdrop != null && backdrop.getVisibility() == View.VISIBLE) backdrop.invalidate();
-            View underlayBlur = hotView(R.id.accessory_underlay_blur_backdrop);
-            if (underlayBlur != null && underlayBlur.getVisibility() == View.VISIBLE) underlayBlur.invalidate();
             View keyboardHost = hotView(R.id.inapp_keyboard_view_host);
             if (keyboardHost != null && keyboardHost.getBackground() != null) keyboardHost.invalidate();
             View under = hotView(R.id.accessory_under_keyboard_stack);
@@ -14258,10 +14140,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean accessoryHeightChanged = updateAccessoryStackContainerHeight(accessoryStackContainer, combinedHeight);
         // What the container's layout listener holds the laid-out keyboard to.
         mKeyboardGeometry.noteReservedHeightPx(state.keyboardHeight);
-        if (state.keyboardShown || isTouchpadShown()) {
-            mLastAccessoryUnderlayHeightPx = Math.max(mLastAccessoryUnderlayHeightPx, combinedHeight);
-        }
-        updateAccessoryUnderlayState(state);
         boolean accessoryMarginChanged = updateAccessoryStackContainerBottomMargin(
             accessoryStackContainer,
             accessoryBottomMarginPx
@@ -20875,7 +20753,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         new com.termux.app.x11.DisplayFrameContentPolicy();
     /** Set while the frame the touchpad stands in is being raised or lowered for the pad's sake. */
     private boolean mRaisingDisplayFrameKeyboard;
-    private boolean mPendingReleaseFrameOnPadDetach;
     @Nullable private com.termux.app.x11.DisplayTouchpadView mDisplayTouchpad;
     /** The keyboard's clipboard panel, over the keys the way the touchpad is; built on first use. */
     @Nullable private ClipboardPanelController mClipboardPanel;
@@ -21120,10 +20997,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             hideDisplaySystemKeyboard();
         }
         dressInAppKeyboardHost();
-        if (decision.releaseFrame) {
-            mPendingReleaseFrameOnPadDetach = true;
-        }
         syncDisplayTouchpad();
+        // The frame the pad raised for itself goes down with the pad, so the mouse key closes
+        // exactly what it opened and the user is not left with a keyboard to dismiss.
+        if (decision.releaseFrame) lowerDisplayFrameKeyboard();
         syncMouseModeMark();
         mKeyboardGeometry.markHeightDirty();
         setTerminalToolbarHeight(false);
@@ -21240,17 +21117,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             dressInAppKeyboardHost();
             releaseDisplayTouchpadWait();
             mDisplayTouchpadWaitRound = 0;
-            if (pad == null) {
-                if (mPendingReleaseFrameOnPadDetach) {
-                    mPendingReleaseFrameOnPadDetach = false;
-                    startCloseUnderlayGracePeriod();
-                    lowerDisplayFrameKeyboard();
-                } else if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
-                    startCloseUnderlayGracePeriod();
-                    container.setVisibility(View.GONE);
-                }
-                return;
+            if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
+                container.setVisibility(View.GONE);
             }
+            if (pad == null) return;
             final com.termux.app.x11.DisplayTouchpadView leaving = pad;
             mDisplayTouchpad = null;
             View keys = mAttachedInAppKeyboardView;
@@ -21262,13 +21132,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             Runnable detach = () -> {
                 if (leaving.getParent() instanceof ViewGroup) {
                     ((ViewGroup) leaving.getParent()).removeView(leaving);
-                }
-                startCloseUnderlayGracePeriod();
-                if (mPendingReleaseFrameOnPadDetach) {
-                    mPendingReleaseFrameOnPadDetach = false;
-                    lowerDisplayFrameKeyboard();
-                } else if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
-                    container.setVisibility(View.GONE);
                 }
                 mKeyboardGeometry.markHeightDirty();
                 setTerminalToolbarHeight(false);
