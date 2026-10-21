@@ -1241,7 +1241,8 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             + dp(ChipWatermarkGeometry.TITLE_NUDGE_DP) + dp(3.5f) * 2);
         applyChipWatermark(tab, item, selected ? 1f : 0f);
         tab.setSelected(selected);
-        tab.setFocusable(true);
+        tab.setFocusable(false);
+        tab.setFocusableInTouchMode(false);
         return tab;
     }
 
@@ -2144,17 +2145,37 @@ public final class TerminalWindowBar extends HorizontalScrollView {
 
     @NonNull
     public static String directoryName(@Nullable String cwd, @Nullable String title, @Nullable String environmentLabel) {
-        String fromTitle = extractDirectoryFromTitle(title);
-        if (fromTitle != null && !fromTitle.isEmpty() && !"home".equalsIgnoreCase(fromTitle)) {
-            return middleEllipsize(leafName(fromTitle), LABEL_MAX_CHARS);
-        }
         String path = clean(cwd);
+        // 1. If cwd is a specific non-home directory, actual navigation in native Termux wins:
         if (path != null && !path.equals(TermuxConstants.TERMUX_HOME_DIR_PATH) && !path.equals("~")) {
             return middleEllipsize(leafName(path), LABEL_MAX_CHARS);
         }
+
+        // 2. Title inspection:
+        String fromTitle = extractDirectoryFromTitle(title);
+        if (fromTitle != null && !fromTitle.isEmpty() && !"home".equalsIgnoreCase(fromTitle) && !"Dashboard".equalsIgnoreCase(fromTitle)) {
+            String leaf = leafName(fromTitle);
+            if ("home".equalsIgnoreCase(leaf) || "~".equals(fromTitle)) {
+                if (environmentLabel != null && !environmentLabel.trim().isEmpty()) {
+                    return middleEllipsize(environmentLabel.trim(), LABEL_MAX_CHARS);
+                }
+                return "home";
+            }
+            if (environmentLabel != null && !environmentLabel.trim().isEmpty() && "root".equalsIgnoreCase(leaf)) {
+                return middleEllipsize(environmentLabel.trim(), LABEL_MAX_CHARS);
+            }
+            return middleEllipsize(leaf, LABEL_MAX_CHARS);
+        }
+
+        // 3. Fallback to detected chroot environment label:
         if (environmentLabel != null && !environmentLabel.trim().isEmpty()) {
             return middleEllipsize(environmentLabel.trim(), LABEL_MAX_CHARS);
         }
+
+        if ("Dashboard".equalsIgnoreCase(fromTitle)) {
+            return "Dashboard";
+        }
+
         return "home";
     }
 

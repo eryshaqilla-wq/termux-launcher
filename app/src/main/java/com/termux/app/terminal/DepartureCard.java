@@ -75,6 +75,9 @@ public final class DepartureCard {
         view.setImageBitmap(bitmap);
         // Captured at reduced resolution; stretched back over the surface. It only ever moves.
         view.setScaleType(ImageView.ScaleType.FIT_XY);
+        view.setFocusable(false);
+        view.setFocusableInTouchMode(false);
+        view.setClickable(false);
         if (translucent) {
             view.setBackground(null);
             view.setElevation(0f);

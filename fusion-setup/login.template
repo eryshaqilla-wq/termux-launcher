@@ -260,6 +260,8 @@ if [ $selected -eq 1 ]; then
 fi
 
 # Fallback aman: Selalu berikan shell Termux yang aktif (Zsh jika ada, fallback Bash)
+printf "\033]0;home\007"
+printf "\033]2;home\007"
 if [ -x "$PREFIX/bin/zsh" ]; then
     exec -a "-zsh" "$PREFIX/bin/zsh" "$@"
 else

@@ -22804,29 +22804,30 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int pid = session.getPid();
         if (pid <= 0) return null;
 
+        StringBuilder sb = new StringBuilder();
         String cmd = readProcCmdline(pid);
-        if (cmd == null || cmd.isEmpty()) {
-            if (mWindowForegroundResolver != null) {
-                com.termux.app.statusbar.WindowForegroundResolver.ForegroundInfo info =
-                    mWindowForegroundResolver.get(pid);
-                if (info != null && info.command != null && !info.command.isEmpty()) {
-                    cmd = TextUtils.join(" ", info.command);
-                }
+        if (cmd != null) {
+            sb.append(cmd).append(" ");
+        }
+        if (mWindowForegroundResolver != null) {
+            com.termux.app.statusbar.WindowForegroundResolver.ForegroundInfo info =
+                mWindowForegroundResolver.get(pid);
+            if (info != null && info.command != null && !info.command.isEmpty()) {
+                sb.append(TextUtils.join(" ", info.command)).append(" ");
             }
         }
 
-        if (cmd != null && !cmd.isEmpty()) {
-            String lower = cmd.toLowerCase(java.util.Locale.ROOT);
-            if (lower.contains("nhsystem") || lower.contains("kalifs") || lower.contains("kali-arm64")
-                    || lower.contains("nethunter") || lower.contains("chroot /data/local/nhsystem")) {
-                return "NetHunter";
-            }
-            if (lower.contains("droidspaces")) {
-                return "Droidspaces";
-            }
-            if (lower.contains("proot-distro") || lower.contains("proot")) {
-                return "PRoot";
-            }
+        String full = sb.toString().toLowerCase(java.util.Locale.ROOT);
+        if (full.contains("nhsystem") || full.contains("kalifs") || full.contains("kali-arm64")
+                || full.contains("nethunter") || full.contains("chroot /data/local/nhsystem")
+                || full.contains("bashnh")) {
+            return "NetHunter";
+        }
+        if (full.contains("droidspaces")) {
+            return "Droidspaces";
+        }
+        if (full.contains("proot-distro") || full.contains("proot")) {
+            return "PRoot";
         }
         return null;
     }
@@ -23508,7 +23509,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         surfaceHost.setClipBounds(new android.graphics.Rect(
             0, 0, surfaceHost.getWidth(), surfaceHost.getHeight()));
         animateTerminalDeparture(surfaceHost, offset, horizontal, settle, durationMs);
-        Runnable unclip = () -> surfaceHost.setClipBounds(null);
+        Runnable unclip = () -> {
+            surfaceHost.setClipBounds(null);
+            TerminalView active = mTerminalView;
+            if (active != null) {
+                bindTerminalInputFocus(active);
+            }
+        };
         paneHost.animate().cancel();
         paneHost.setTranslationY(0f);
         if (horizontal) {
@@ -23663,6 +23670,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 surfaceHost.removeView(ghost);
                 ghost.setImageDrawable(null);
                 departure.recycle();
+                TerminalView active = mTerminalView;
+                if (active != null) {
+                    bindTerminalInputFocus(active);
+                }
             })
             .start();
     }
@@ -24176,6 +24187,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         rebuildDrawerSessions();
     }
 
+    void bindTerminalInputFocus(@Nullable TerminalView v) {
+        if (v == null) return;
+        if (!v.hasFocus()) {
+            v.requestFocus();
+        }
+        try {
+            android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.restartInput(v);
+                if (isImeVisible()) {
+                    imm.showSoftInput(v, 0);
+                    androidx.core.view.WindowCompat.getInsetsController(getWindow(), v)
+                        .show(androidx.core.view.WindowInsetsCompat.Type.ime());
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** Bridges {@link com.termux.app.terminal.TerminalPaneController} back into the activity. */
     private final class PaneHost implements com.termux.app.terminal.TerminalPaneController.Host {
         @Override @Nullable public TerminalSession createShell(@Nullable String cwd) {
@@ -24292,6 +24323,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mTermuxService != null) mTermuxService.killTermuxSession(session);
         }
 
+        void bindTerminalInputFocus(@Nullable TerminalView v) {
+            TermuxActivity.this.bindTerminalInputFocus(v);
+        }
+
         @Override public void onActivePaneChanged() {
             TerminalView v = mPaneController.getActivePaneView();
             if (v != null) {
@@ -24302,19 +24337,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 for (TermuxTerminalExtraKeys pageClient : mTermuxTerminalExtraKeysPages) {
                     if (pageClient != null) pageClient.setTerminalView(v);
                 }
-                v.post(() -> {
-                    if (!v.hasFocus()) {
-                        v.requestFocus();
-                    }
-                    try {
-                        android.view.inputmethod.InputMethodManager imm =
-                            (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                        if (imm != null) {
-                            imm.restartInput(v);
-                        }
-                    } catch (Throwable ignored) {
-                    }
-                });
+                bindTerminalInputFocus(v);
+                v.post(() -> bindTerminalInputFocus(v));
+                v.postDelayed(() -> bindTerminalInputFocus(v), 120);
             }
             mCurrentTabPrimary = mPaneController.getActiveSession();
             // Every window switch lands here — the bar, the space bar's swipes, the browser — so
