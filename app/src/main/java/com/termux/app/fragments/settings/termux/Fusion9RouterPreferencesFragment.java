@@ -27,7 +27,7 @@ import java.util.List;
 
 /**
  * Halaman Pengaturan Utama 9Router & AI Routing di Termux-Launcher.
- * Menyediakan kontrol on/off background service, status 5 akun, autostart,
+ * Menyediakan kontrol on/off background service, status akun dinamis, autostart,
  * deteksi dinamis chroot/container di /data/local, pilihan target runtime,
  * auto-install, shortcut WebUI dashboard di Webview, dan integrasi Root / Non-Root.
  */
