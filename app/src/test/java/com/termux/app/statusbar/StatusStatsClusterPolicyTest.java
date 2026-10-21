@@ -11,8 +11,8 @@ import static org.junit.Assert.assertTrue;
 /** The CPU/RAM/weather cluster's order, centring and dot visibility. */
 public class StatusStatsClusterPolicyTest {
 
-    @Test public void onlyTheWidgetsPlaceCentresAndReverses() {
-        assertTrue(StatusStatsClusterPolicy.centeredReversed(PaneWallPage.WIDGETS));
+    @Test public void statsClusterNeverReverses() {
+        assertFalse(StatusStatsClusterPolicy.centeredReversed(PaneWallPage.WIDGETS));
         assertFalse(StatusStatsClusterPolicy.centeredReversed(PaneWallPage.TERMINAL));
         assertFalse(StatusStatsClusterPolicy.centeredReversed(PaneWallPage.DISPLAY));
     }

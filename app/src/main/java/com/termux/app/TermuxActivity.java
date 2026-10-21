@@ -19711,51 +19711,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * measured translation, so a stat toggling off in Settings or the weather text changing width
      * re-centres for free on the next layout pass instead of needing a recompute here.
      */
+    /**
+     * The CPU/RAM/Battery/weather cluster keeps its consistent order at the row's end across
+     * all canvases. The spacer is hidden and translation reset to 0 so indicators never swap.
+     */
     private void applyStatsClusterArrangement() {
         ViewGroup cluster = findViewById(R.id.terminal_status_stats_cluster);
         View spacer = findViewById(R.id.terminal_status_stats_center_spacer);
-        if (cluster == null || spacer == null) return;
-        boolean reversed = com.termux.app.statusbar.StatusStatsClusterPolicy
-            .centeredReversed(currentWallPage());
-        spacer.setVisibility(reversed ? View.VISIBLE : View.GONE);
-        // The spacer only balances the strip's weight; the fixed end widgets and paddings still
-        // pull the cluster off the row's centre by half their width, so the residual is corrected
-        // after every layout from the real bounds.
-        if (cluster.getTag(R.id.terminal_status_stats_cluster) == null) {
-            cluster.setTag(R.id.terminal_status_stats_cluster, Boolean.TRUE);
-            cluster.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-                if (!isStatusBarVertical() && com.termux.app.statusbar.StatusStatsClusterPolicy
-                        .centeredReversed(currentWallPage())) {
-                    fitWeatherToRow(true);
-                    centerStatsClusterOnRow((ViewGroup) v);
-                } else if (v.getTranslationX() != 0f) {
-                    v.setTranslationX(0f);
-                }
-            });
-            // The AI glyph or the mouse arriving at the row's end takes room from the cluster
-            // without moving it, so their own layout re-fits it too.
-            View endWidgets = findViewById(R.id.terminal_status_widgets);
-            if (endWidgets != null) {
-                endWidgets.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-                    if (l == ol && r == or) return;
-                    if (isStatusBarVertical() || !com.termux.app.statusbar.StatusStatsClusterPolicy
-                            .centeredReversed(currentWallPage())) return;
-                    fitWeatherToRow(true);
-                    centerStatsClusterOnRow(cluster);
-                });
-            }
+        if (cluster == null) return;
+        if (spacer != null) spacer.setVisibility(View.GONE);
+        if (cluster.getTranslationX() != 0f) {
+            cluster.setTranslationX(0f);
         }
-        // A column's cluster centres itself by weight; there is no leftover width to correct for.
-        if (!reversed || isStatusBarVertical()) cluster.setTranslationX(0f);
-        else cluster.post(() -> centerStatsClusterOnRow(cluster));
         int count = cluster.getChildCount();
-        boolean currentlyReversed = count > 0
-            && cluster.getChildAt(0).getId() == R.id.terminal_status_widget_weather;
-        if (reversed == currentlyReversed) return;
-        View[] children = new View[count];
-        for (int i = 0; i < count; i++) children[i] = cluster.getChildAt(i);
-        cluster.removeAllViews();
-        for (int i = count - 1; i >= 0; i--) cluster.addView(children[i]);
+        if (count > 0 && cluster.getChildAt(0).getId() != R.id.terminal_status_widget_cpu) {
+            View[] children = new View[count];
+            for (int i = 0; i < count; i++) children[i] = cluster.getChildAt(i);
+            cluster.removeAllViews();
+            for (int i = count - 1; i >= 0; i--) cluster.addView(children[i]);
+        }
     }
 
     /**
@@ -22883,13 +22857,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** The status widgets and their dots, in the order the row lays them out. */
     private static final int[] STATUS_INK_WIDGET_IDS = {
         R.id.terminal_status_widget_cpu, R.id.terminal_status_widget_ram,
-        R.id.terminal_status_widget_weather, R.id.terminal_status_widget_battery,
+        R.id.terminal_status_widget_battery, R.id.terminal_status_widget_weather,
         R.id.terminal_status_widget_ai, R.id.terminal_status_widget_mouse,
     };
 
     private static final int[] STATUS_INK_DOT_IDS = {
-        R.id.terminal_status_dot_cpu_ram, R.id.terminal_status_dot_ram_weather,
-        R.id.terminal_status_dot_battery,
+        R.id.terminal_status_dot_cpu_ram, R.id.terminal_status_dot_battery,
+        R.id.terminal_status_dot_ram_weather,
         R.id.terminal_status_dot_ai, R.id.terminal_status_dot_mouse,
     };
 
@@ -23062,16 +23036,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             cpuRamDot.setColorRole(
                 com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
         }
-        if (ramWeatherDot != null) {
-            boolean show = weatherOn && (cpuOn || ramOn);
-            ramWeatherDot.setVisibility(show ? View.VISIBLE : View.GONE);
-            ramWeatherDot.setColorRole(
-                com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
-        }
         if (batteryDot != null) {
-            boolean show = batteryOn && (weatherOn || ramOn || cpuOn);
+            boolean show = batteryOn && (cpuOn || ramOn);
             batteryDot.setVisibility(show ? View.VISIBLE : View.GONE);
             batteryDot.setColorRole(
+                com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
+        }
+        if (ramWeatherDot != null) {
+            boolean show = weatherOn && (cpuOn || ramOn || batteryOn);
+            ramWeatherDot.setVisibility(show ? View.VISIBLE : View.GONE);
+            ramWeatherDot.setColorRole(
                 com.termux.app.statusbar.StatusBarWidgetView.ColorRole.SECONDARY);
         }
 

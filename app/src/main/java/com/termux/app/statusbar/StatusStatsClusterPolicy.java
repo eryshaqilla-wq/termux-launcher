@@ -15,9 +15,10 @@ public final class StatusStatsClusterPolicy {
     private StatusStatsClusterPolicy() {}
 
     /** Whether the cluster reads Weather · RAM · CPU and centres in the row, instead of the
-     *  default CPU · RAM · Weather at the row's end. */
+     *  default CPU · RAM · Weather at the row's end. Always false so the status indicator order
+     *  remains consistent across all canvases. */
     public static boolean centeredReversed(@NonNull PaneWallPage page) {
-        return page == PaneWallPage.WIDGETS;
+        return false;
     }
 
     /**
