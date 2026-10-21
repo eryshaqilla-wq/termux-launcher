@@ -1307,6 +1307,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean mWallGroundPainted;
 
     private float mTerminalToolbarDefaultHeight;
+    private boolean mIsAccessoryStackCollapsed;
+    @Nullable private View mDockRestorePillHost;
+    private float mTwoFingerStartX;
+    private float mTwoFingerStartY;
+    private float mTwoFingerStartSpan;
+    private boolean mTwoFingerCandidate;
+    private boolean mTwoFingerGestureTriggered;
     private final Handler mAzGestureHandler = new Handler(Looper.getMainLooper());
     /**
      * The A–Z scrub's decision machine. It owns every mode, threshold and timer the gesture is
@@ -1786,9 +1793,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setTermuxTerminalViewAndClients();
         createWidgetPaneController();
         setTerminalWindowBar();
+        if (mPreferences != null) {
+            mIsAccessoryStackCollapsed = mPreferences.isAccessoryStackCollapsed();
+        }
         setTerminalToolbarView(savedInstanceState);
         syncPinnedAppsHost();
         initializeInAppKeyboard(savedInstanceState);
+        setupDockRestorePill();
         // Only a fresh launch may enter adjust mode: after process death the system re-delivers
         // the original launch intent with the extra still set, which must not re-enter it.
         if (savedInstanceState == null) {
@@ -2188,6 +2199,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public boolean dispatchTouchEvent(MotionEvent ev) {
         Trace.beginSection("Touch.dispatch");
         try {
+            if (checkTwoFingerSwipe(ev)) {
+                return true;
+            }
             // A finger on the A-Z pull tab is the letters' and nothing else's: the pane under the
             // tab neither tilts for it nor reads it as a tap on the terminal.
             if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
@@ -5609,12 +5623,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the place stands on a screen edge — the apps rail, an extra keys column — is a column
         // laid out beside the content root, and its row collapses like a switched-off one.
         PlaceLayout layout = currentPlaceLayout();
-        boolean appsRowEnabled = PlaceChromePolicy.appsRowShown(layout);
+        boolean appsRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.appsRowShown(layout);
         // The dock's own row. A place that stands the bar on another edge gives the dock nothing:
         // the row goes, and with it the whole stack when it was the only thing on it.
-        boolean azRowEnabled = PlaceChromePolicy.azRowOnDock(layout);
-        boolean extraKeysRowEnabled = PlaceChromePolicy.extraKeysRowShown(layout);
-        boolean dockShown = PlaceChromePolicy.dockShown(layout);
+        boolean azRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.azRowOnDock(layout);
+        boolean extraKeysRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.extraKeysRowShown(layout);
+        boolean dockShown = !mIsAccessoryStackCollapsed && PlaceChromePolicy.dockShown(layout);
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         float barAlpha = mPreferences.getAppBarOpacity() / 100f;
         return new ChromeSpec(
@@ -7761,7 +7775,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!state.toolbarShown) {
             if (accessoryContainer != null) {
                 accessoryContainer.setVisibility(
-                    shouldShowAccessoryStack(false, state.keyboardShown,
+                    !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(false, state.keyboardShown,
                         bottomStatusBandPx() > 0) ? View.VISIBLE : View.GONE);
             }
             if (extraKeysBackground != null) {
@@ -7806,12 +7820,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mDockPlankController.setEnabled(false);
             }
             mChrome.requestSync(ChromeRenderer.SCOPE_TOP_PANE_FROST);
+            if (mDockRestorePillHost != null) {
+                if (mIsAccessoryStackCollapsed) {
+                    mDockRestorePillHost.setVisibility(View.VISIBLE);
+                    mDockRestorePillHost.bringToFront();
+                    styleDockRestorePill(mDockRestorePillHost);
+                } else {
+                    mDockRestorePillHost.setVisibility(View.GONE);
+                }
+            }
             return;
+        }
+
+        if (mDockRestorePillHost != null) {
+            mDockRestorePillHost.setVisibility(View.GONE);
         }
 
         if (accessoryContainer != null)
             accessoryContainer.setVisibility(
-                shouldShowAccessoryStack(true, state.keyboardShown,
+                !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(true, state.keyboardShown,
                     bottomStatusBandPx() > 0) ? View.VISIBLE : View.GONE);
         if (accessorySurfaceHost != null) {
             accessorySurfaceHost.setVisibility(View.VISIBLE);
@@ -12572,6 +12599,171 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
     }
 
+    public void setAccessoryStackCollapsed(boolean collapsed, boolean animate) {
+        if (mIsAccessoryStackCollapsed == collapsed && mDockRestorePillHost != null) {
+            return;
+        }
+        mIsAccessoryStackCollapsed = collapsed;
+        if (mPreferences != null) {
+            mPreferences.setAccessoryStackCollapsed(collapsed);
+        }
+
+        View accessoryContainer = findViewById(R.id.accessory_stack_container);
+        if (mDockRestorePillHost == null) {
+            mDockRestorePillHost = findViewById(R.id.dock_restore_pill_host);
+        }
+
+        if (collapsed) {
+            if (accessoryContainer != null) {
+                accessoryContainer.setVisibility(View.GONE);
+            }
+            if (mDockRestorePillHost != null) {
+                mDockRestorePillHost.setVisibility(View.VISIBLE);
+                mDockRestorePillHost.bringToFront();
+                styleDockRestorePill(mDockRestorePillHost);
+                com.termux.app.haptics.Haptics.tick(mDockRestorePillHost, android.view.HapticFeedbackConstants.CLOCK_TICK);
+            }
+        } else {
+            if (mDockRestorePillHost != null) {
+                mDockRestorePillHost.setVisibility(View.GONE);
+            }
+            if (accessoryContainer != null) {
+                accessoryContainer.setVisibility(View.VISIBLE);
+                com.termux.app.haptics.Haptics.tick(accessoryContainer, android.view.HapticFeedbackConstants.CLOCK_TICK);
+            }
+        }
+
+        applyChromeSpec(buildChromeSpec());
+        setTerminalToolbarView(null);
+        mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
+        if (mTerminalView != null) {
+            mTerminalView.post(mTerminalView::updateSize);
+        }
+        if (mPaneController != null) {
+            mGeometry.resizeGridAfterLayout();
+        }
+    }
+
+    private void setupDockRestorePill() {
+        mDockRestorePillHost = findViewById(R.id.dock_restore_pill_host);
+        if (mDockRestorePillHost != null) {
+            styleDockRestorePill(mDockRestorePillHost);
+            if (mIsAccessoryStackCollapsed) {
+                mDockRestorePillHost.setVisibility(View.VISIBLE);
+                mDockRestorePillHost.bringToFront();
+            } else {
+                mDockRestorePillHost.setVisibility(View.GONE);
+            }
+        }
+    }
+
+    private void styleDockRestorePill(@Nullable View pillHost) {
+        if (pillHost == null || mPreferences == null) return;
+        com.github.mmin18.widget.RealtimeBlurView blurView =
+            pillHost.findViewById(R.id.dock_restore_pill_blur);
+        if (blurView != null) {
+            int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
+            applyRealtimeBlurRadius(blurView, blurRadiusDp);
+            blurView.setVisibility(ChromePolicy.dockBlurEnabled(blurRadiusDp) ? View.VISIBLE : View.GONE);
+        }
+        TextView button = pillHost.findViewById(R.id.dock_restore_pill_button);
+        if (button != null) {
+            button.setOnClickListener(v -> setAccessoryStackCollapsed(false, true));
+            if (mChrome != null && mChrome.glass() != null) {
+                float barAlpha = mPreferences.getAppBarOpacity() / 100f;
+                int grain = mPreferences.getDockGlassGrain();
+                float cornerRadiusPx = dpToPx(99f);
+                try {
+                    button.setBackground(mChrome.glass().surface(
+                        com.termux.app.chrome.LowOpacityGlass.floored(barAlpha, 0.85f),
+                        0f, 1f, false, grain, cornerRadiusPx, true));
+                } catch (Throwable ignored) {
+                    // Fallback to XML ripple drawable
+                }
+            }
+        }
+        ViewGroup.MarginLayoutParams lp = (ViewGroup.MarginLayoutParams) pillHost.getLayoutParams();
+        if (lp != null) {
+            int bottomMargin = Math.max(Math.round(dpToPx(14f)), mNavBarHeight + Math.round(dpToPx(8f)));
+            if (lp.bottomMargin != bottomMargin) {
+                lp.bottomMargin = bottomMargin;
+                pillHost.setLayoutParams(lp);
+            }
+        }
+    }
+
+    private boolean checkTwoFingerSwipe(@NonNull MotionEvent ev) {
+        int action = ev.getActionMasked();
+        int pointerCount = ev.getPointerCount();
+
+        if (action == MotionEvent.ACTION_POINTER_DOWN && pointerCount == 2) {
+            float x0 = ev.getX(0);
+            float y0 = ev.getY(0);
+            float x1 = ev.getX(1);
+            float y1 = ev.getY(1);
+            mTwoFingerStartX = (x0 + x1) / 2f;
+            mTwoFingerStartY = (y0 + y1) / 2f;
+            mTwoFingerStartSpan = (float) Math.hypot(x1 - x0, y1 - y0);
+            mTwoFingerCandidate = true;
+            mTwoFingerGestureTriggered = false;
+            return false;
+        }
+
+        if (action == MotionEvent.ACTION_MOVE && mTwoFingerCandidate && pointerCount == 2) {
+            float x0 = ev.getX(0);
+            float y0 = ev.getY(0);
+            float x1 = ev.getX(1);
+            float y1 = ev.getY(1);
+            float currentX = (x0 + x1) / 2f;
+            float currentY = (y0 + y1) / 2f;
+            float currentSpan = (float) Math.hypot(x1 - x0, y1 - y0);
+
+            float deltaSpan = Math.abs(currentSpan - mTwoFingerStartSpan);
+            float deltaX = currentX - mTwoFingerStartX;
+            float deltaY = currentY - mTwoFingerStartY;
+
+            float spanTolerancePx = dpToPx(50f);
+            if (deltaSpan > spanTolerancePx && deltaSpan > Math.abs(deltaX)) {
+                mTwoFingerCandidate = false;
+                return false;
+            }
+
+            if (Math.abs(deltaX) > Math.abs(deltaY) * 1.3f) {
+                float thresholdPx = dpToPx(60f);
+                if (deltaX > thresholdPx) {
+                    mTwoFingerGestureTriggered = true;
+                    mTwoFingerCandidate = false;
+                    if (!mIsAccessoryStackCollapsed) {
+                        setAccessoryStackCollapsed(true, true);
+                    }
+                    return true;
+                } else if (deltaX < -thresholdPx) {
+                    mTwoFingerGestureTriggered = true;
+                    mTwoFingerCandidate = false;
+                    if (mIsAccessoryStackCollapsed) {
+                        setAccessoryStackCollapsed(false, true);
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (action == MotionEvent.ACTION_POINTER_UP
+            || action == MotionEvent.ACTION_UP
+            || action == MotionEvent.ACTION_CANCEL) {
+            mTwoFingerCandidate = false;
+            if (mTwoFingerGestureTriggered) {
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    mTwoFingerGestureTriggered = false;
+                }
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * The launcher's preferences, with the three sizes reading through the layout.
      *
@@ -14007,7 +14199,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // same gap from it the dock would (ChromePolicy.bottomEdgeGapPx): a gone stack's margin
         // positions nothing, so the content carries the gap itself. The reservation below counts
         // the margin either way, so it is the room the layout really gives.
-        boolean stackShown = shouldShowAccessoryStack(state.toolbarShown, state.keyboardShown,
+        boolean stackShown = !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(state.toolbarShown, state.keyboardShown,
             statusBandPx > 0);
         int contentEdgeGapPx = stackShown ? 0 : accessoryBottomMarginPx;
         boolean overlapChanged = applyContentBottomMargin(contentEdgeGapPx, keyboardOverlapPx);

@@ -169,6 +169,14 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         return !currentValue;
     }
 
+    public boolean isAccessoryStackCollapsed() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences, TERMUX_APP.KEY_ACCESSORY_STACK_COLLAPSED, TERMUX_APP.DEFAULT_VALUE_ACCESSORY_STACK_COLLAPSED);
+    }
+
+    public void setAccessoryStackCollapsed(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_ACCESSORY_STACK_COLLAPSED, value, false);
+    }
+
     public int getAppLauncherButtonCount() {
         int buttonCount = SharedPreferenceUtils.getIntStoredAsString(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_BUTTON_COUNT, TERMUX_APP.DEFAULT_APP_LAUNCHER_BUTTON_COUNT);
         return DataUtils.clamp(buttonCount, 1, 20);

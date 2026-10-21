@@ -115,6 +115,13 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_VALUE_SHOW_TERMINAL_TOOLBAR = true;
 
         /**
+         * Defines the key for whether the bottom accessory stack (dock, extra keys, az row) is collapsed for full canvas mode.
+         */
+        public static final String KEY_ACCESSORY_STACK_COLLAPSED = "is_accessory_stack_collapsed";
+
+        public static final boolean DEFAULT_VALUE_ACCESSORY_STACK_COLLAPSED = false;
+
+        /**
          * Defines the key for app launcher button count.
          */
         public static final String KEY_APP_LAUNCHER_BUTTON_COUNT = "app_launcher_button_count";
