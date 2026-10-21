@@ -7771,6 +7771,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!state.appsRowEnabled && mSuggestionBarView != null)
             mSuggestionBarView.cancelActiveDockDrag();
         if (!state.toolbarShown) {
+            View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
+            View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
+            if (appsBarRowHost != null) {
+                appsBarRowHost.setVisibility(View.GONE);
+            }
+            if (appsBarAzHost != null) {
+                appsBarAzHost.setVisibility(View.GONE);
+            }
             if (accessoryContainer != null) {
                 accessoryContainer.setVisibility(
                     !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(false, state.keyboardShown,
@@ -7827,6 +7835,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     bottomStatusBandPx() > 0) ? View.VISIBLE : View.GONE);
         if (accessorySurfaceHost != null) {
             accessorySurfaceHost.setVisibility(View.VISIBLE);
+        }
+        View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
+        View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
+        if (appsBarRowHost != null) {
+            appsBarRowHost.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (appsBarAzHost != null) {
+            appsBarAzHost.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
         }
         if (appsBarViewPager != null) {
             appsBarViewPager.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
@@ -12571,8 +12587,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void setTerminalToolbarView(Bundle savedInstanceState) {
         rebuildExtraKeysPageClients();
         final ViewPager terminalToolbarViewPager = getTerminalToolbarViewPager();
-        ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
-        mTerminalToolbarDefaultHeight = layoutParams.height;
+        if (mTerminalToolbarDefaultHeight <= 0) {
+            ViewGroup.LayoutParams layoutParams = terminalToolbarViewPager.getLayoutParams();
+            if (layoutParams != null && layoutParams.height > 0) {
+                mTerminalToolbarDefaultHeight = layoutParams.height;
+            } else {
+                mTerminalToolbarDefaultHeight = DockLayoutPolicy.baseToolbarHeightPx(getResources().getDisplayMetrics().density);
+            }
+        }
         updateAppLauncherBarHeight();
         setTerminalToolbarHeight();
         mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME);
@@ -12598,9 +12620,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             com.termux.app.haptics.Haptics.tick(accessoryContainer, android.view.HapticFeedbackConstants.CLOCK_TICK);
         }
 
+        mExtraKeysViews.clear();
+        mExtraKeysView = null;
         rebuildTerminalToolbarPages();
         applyChromeSpec(buildChromeSpec());
-        setTerminalToolbarView(null);
+        setTerminalToolbarHeight();
         mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
         if (mTerminalView != null) {
             mTerminalView.post(mTerminalView::updateSize);
@@ -13320,9 +13344,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void rebuildTerminalToolbarPages() {
         ViewPager pager = getTerminalToolbarViewPager();
         if (pager == null || pager.getAdapter() == null) return;
-        int page = Math.min(pager.getCurrentItem(), getExtraKeysPageCount());
+        int targetPage = mIsAccessoryStackCollapsed ? 0 : Math.min(pager.getCurrentItem(), Math.max(0, getExtraKeysPageCount() - 1));
+        pager.setCurrentItem(0, false);
         pager.getAdapter().notifyDataSetChanged();
-        pager.setCurrentItem(page, false);
+        pager.setCurrentItem(targetPage, false);
     }
 
     /**
@@ -16983,6 +17008,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * wherever the place stands the keys, so nothing has to ask which surface is holding it.
      */
     private ExtraKeysView getExtraKeysView() {
+        if (mIsAccessoryStackCollapsed) {
+            ExtraKeysView compact = getExtraKeysView(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX);
+            if (compact != null) return compact;
+        }
         return mExtraKeysView;
     }
 
