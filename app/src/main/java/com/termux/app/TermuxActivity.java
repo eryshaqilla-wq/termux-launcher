@@ -19892,7 +19892,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View spacer = findViewById(R.id.terminal_status_stats_center_spacer);
         if (cluster == null) return;
         if (spacer != null) spacer.setVisibility(View.GONE);
-        if (cluster.getTranslationX() != 0f) {
+        if (mWallOffsetPx == 0f && cluster.getTranslationX() != 0f) {
             cluster.setTranslationX(0f);
         }
         int count = cluster.getChildCount();
@@ -19965,6 +19965,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mTmpStripClip.set(dx, dy, dx + strip.getWidth(), dy + strip.getHeight());
                 strip.setClipBounds(mTmpStripClip);
             }
+        }
+        ViewGroup cluster = hotView(R.id.terminal_status_stats_cluster);
+        if (cluster != null) {
+            cluster.setTranslationX(vertical ? 0f : offsetPx);
+            cluster.setTranslationY(vertical ? offsetPx : 0f);
+            cluster.setAlpha(alpha);
+        }
+        View endWidgets = hotView(R.id.terminal_status_widgets);
+        if (endWidgets != null) {
+            endWidgets.setTranslationX(vertical ? 0f : offsetPx);
+            endWidgets.setTranslationY(vertical ? offsetPx : 0f);
+            endWidgets.setAlpha(alpha);
         }
         if (mPaneWallController == null) return;
         java.util.List<com.termux.app.wall.PaneWallPage> pages = mPaneWallController.pages();
