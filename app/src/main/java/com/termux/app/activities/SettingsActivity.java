@@ -596,6 +596,8 @@ public class SettingsActivity extends AppCompatActivity implements PreferenceFra
          */
         private static final Map<String, int[]> CHILD_XML_RESOURCES = new HashMap<>();
         static {
+            CHILD_XML_RESOURCES.put("fusion_9router", new int[]{
+                R.xml.fusion_9router_preferences});
             CHILD_XML_RESOURCES.put("wallpaper_style", new int[]{
                 R.xml.termux_style_preferences, R.xml.termux_fonts_preferences});
             CHILD_XML_RESOURCES.put("terminal", new int[]{

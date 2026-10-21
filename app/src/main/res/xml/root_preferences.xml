@@ -6,6 +6,17 @@
         app:title="@string/settings_search_hint"
         app:persistent="false" />
 
+    <PreferenceCategory app:key="root_9router" app:title="@string/settings_root_9router_header">
+
+        <Preference
+            app:key="fusion_9router"
+            app:icon="@drawable/ic_symbol_smart_toy"
+            app:title="@string/settings_destination_9router"
+            app:summary="@string/settings_destination_9router_summary"
+            app:fragment="com.termux.app.fragments.settings.termux.Fusion9RouterPreferencesFragment" />
+
+    </PreferenceCategory>
+
     <ListPreference
         app:key="app_launcher_use_case_mode"
         app:icon="@drawable/ic_symbol_stacks"

@@ -1,0 +1,63 @@
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory
+        app:key="pref_9router_status_category"
+        app:title="@string/settings_9router_category_status">
+
+        <com.termux.app.fragments.settings.StatusCardPreference
+            app:key="pref_9router_status_card"
+            app:persistent="false"
+            app:selectable="false" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="pref_9router_service_category"
+        app:title="@string/settings_9router_category_service">
+
+        <androidx.preference.SwitchPreferenceCompat
+            app:key="pref_9router_service_switch"
+            app:title="@string/settings_9router_service_title"
+            app:summary="@string/settings_9router_service_summary"
+            app:persistent="false" />
+
+        <androidx.preference.SwitchPreferenceCompat
+            app:key="pref_9router_autostart"
+            app:title="@string/settings_9router_autostart_title"
+            app:summary="@string/settings_9router_autostart_summary"
+            app:defaultValue="false" />
+
+        <androidx.preference.SwitchPreferenceCompat
+            app:key="pref_9router_mitm_switch"
+            app:title="@string/settings_9router_mitm_title"
+            app:summary="@string/settings_9router_mitm_summary"
+            app:defaultValue="true" />
+
+    </PreferenceCategory>
+
+    <PreferenceCategory
+        app:key="pref_9router_actions_category"
+        app:title="@string/settings_9router_category_actions">
+
+        <Preference
+            app:key="pref_9router_open_webui"
+            app:title="@string/settings_9router_open_webui_title"
+            app:summary="@string/settings_9router_open_webui_summary"
+            app:persistent="false" />
+
+        <Preference
+            app:key="pref_9router_sync_accounts"
+            app:title="@string/settings_9router_sync_accounts_title"
+            app:summary="@string/settings_9router_sync_accounts_summary"
+            app:persistent="false" />
+
+        <Preference
+            app:key="pref_9router_copy_endpoint"
+            app:title="@string/settings_9router_copy_endpoint_title"
+            app:summary="@string/settings_9router_copy_endpoint_summary"
+            app:persistent="false" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>
