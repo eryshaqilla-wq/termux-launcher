@@ -59,4 +59,12 @@ public class DefaultExtraKeysTest {
             TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE, ExtraKeysConstants.CONTROL_CHARS_ALIASES);
         assertEquals(0, info.getMatrix().length);
     }
+
+    @Test
+    public void defaultExtraKeysCompactParses() throws Exception {
+        ExtraKeysInfo info = new ExtraKeysInfo(TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_COMPACT,
+            TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STYLE, ExtraKeysConstants.CONTROL_CHARS_ALIASES);
+        assertEquals(1, info.getMatrix().length);
+        assertEquals(7, info.getMatrix()[0].length);
+    }
 }

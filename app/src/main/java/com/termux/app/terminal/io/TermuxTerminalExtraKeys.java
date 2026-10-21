@@ -73,6 +73,9 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             // {@link #getExtraKeysStyleInternalPropertyValueFromValue(String)}
             String pageKey = PAGE_PROPERTY_KEYS[Math.max(0, Math.min(i, PAGE_PROPERTY_KEYS.length - 1))];
             String extrakeys = (String) mActivity.getProperties().getInternalPropertyValue(pageKey, false);
+            if (extrakeys == null || extrakeys.trim().isEmpty()) {
+                extrakeys = PAGE_DEFAULT_VALUES[Math.max(0, Math.min(i, PAGE_DEFAULT_VALUES.length - 1))];
+            }
             // The shipped row carries a switch for each place; the ones whose place the wall
             // does not have are dropped from it — and from it only, since a row the user wrote
             // keeps every key and has the dead ones greyed instead.
@@ -85,8 +88,9 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             }
             mExtraKeysInfo = new ExtraKeysInfo(extrakeys, extraKeysStyle, ExtraKeysConstants.CONTROL_CHARS_ALIASES);
         } catch (JSONException e) {
-            com.termux.app.notice.AppNotice.show(mActivity, "Could not load and set the \"" + TermuxPropertyConstants.KEY_EXTRA_KEYS + "\" property from the properties file: " + e.toString(), true);
-            Logger.logStackTraceWithMessage(LOG_TAG, "Could not load and set the \"" + TermuxPropertyConstants.KEY_EXTRA_KEYS + "\" property from the properties file: ", e);
+            String pageKey = PAGE_PROPERTY_KEYS[Math.max(0, Math.min(i, PAGE_PROPERTY_KEYS.length - 1))];
+            com.termux.app.notice.AppNotice.show(mActivity, "Could not load and set the \"" + pageKey + "\" property from the properties file: " + e.toString(), true);
+            Logger.logStackTraceWithMessage(LOG_TAG, "Could not load and set the \"" + pageKey + "\" property from the properties file: ", e);
             try {
                 mExtraKeysInfo = new ExtraKeysInfo(
                     PAGE_DEFAULT_VALUES[Math.max(0, Math.min(i, PAGE_DEFAULT_VALUES.length - 1))],
