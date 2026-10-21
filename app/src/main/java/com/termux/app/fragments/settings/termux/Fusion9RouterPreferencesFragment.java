@@ -41,6 +41,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
     private static final String PREF_OPEN_WEBUI = "pref_9router_open_webui";
     private static final String PREF_SYNC_ACCOUNTS = "pref_9router_sync_accounts";
     private static final String PREF_COPY_ENDPOINT = "pref_9router_copy_endpoint";
+    private static final String PREF_COPY_APIKEY = "pref_9router_copy_apikey";
 
     private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private boolean mIsUpdatingUi = false;
@@ -151,17 +152,22 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
             openWebUi.setOnPreferenceClickListener(preference -> {
                 Toast.makeText(context, "Membuka Dashboard 9Router...", Toast.LENGTH_SHORT).show();
                 Fusion9RouterHelper.openDashboard(context);
+                if (getActivity() != null) {
+                    getActivity().finish();
+                }
                 return true;
             });
         }
 
-        // 4. Sinkronkan 5 Akun Antigravity
+        // 4. Sinkronkan Akun Antigravity
         Preference syncAccounts = findPreference(PREF_SYNC_ACCOUNTS);
         if (syncAccounts != null) {
             syncAccounts.setOnPreferenceClickListener(preference -> {
                 Toast.makeText(context, "Menyinkronkan akun Antigravity...", Toast.LENGTH_SHORT).show();
                 Fusion9RouterHelper.syncAccounts(context, () -> {
-                    Toast.makeText(context, "5 Akun Antigravity berhasil disinkronkan!", Toast.LENGTH_SHORT).show();
+                    int count = Fusion9RouterHelper.getAccountCount(context);
+                    String msg = count > 0 ? (count + " Akun Antigravity berhasil disinkronkan!") : "Sinkronisasi akun selesai.";
+                    mMainHandler.post(() -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show());
                     refreshState();
                 });
                 return true;
@@ -181,6 +187,30 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 return true;
             });
         }
+
+        // 6. Salin 9Router API Key
+        Preference copyApiKey = findPreference(PREF_COPY_APIKEY);
+        if (copyApiKey != null) {
+            copyApiKey.setOnPreferenceClickListener(preference -> {
+                new Thread(() -> {
+                    String key = Fusion9RouterHelper.getApiKey(context);
+                    mMainHandler.post(() -> {
+                        if (key != null && !key.isEmpty()) {
+                            ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+                            if (clipboard != null) {
+                                ClipData clip = ClipData.newPlainText("9Router API Key", key);
+                                clipboard.setPrimaryClip(clip);
+                                String preview = key.length() > 14 ? (key.substring(0, 10) + "...") : key;
+                                Toast.makeText(context, "API Key disalin: " + preview, Toast.LENGTH_SHORT).show();
+                            }
+                        } else {
+                            Toast.makeText(context, "API Key belum tersedia di database 9Router", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }).start();
+                return true;
+            });
+        }
     }
 
     /**
@@ -193,7 +223,8 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
             final boolean isInstalled = target.isInstalled();
             final boolean isRunning = isInstalled && Fusion9RouterHelper.isServiceRunning();
             final boolean isMitm = isInstalled && Fusion9RouterHelper.isMitmRunning();
-            final int accounts = Fusion9RouterHelper.getAccountCount();
+            final int accounts = Fusion9RouterHelper.getAccountCount(context);
+            final String apiKey = Fusion9RouterHelper.getApiKey(context);
 
             final StringBuilder summary = new StringBuilder();
             if (!isInstalled) {
@@ -204,7 +235,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 summary.append("Engine   : 9Router Daemon (CJS On-Demand)\n");
                 summary.append("Port API : 20128 (Aktif)\n");
                 summary.append("MITM 443 : ").append(isMitm ? "Aktif (SSL Intercept)\n" : "Nonaktif\n");
-                summary.append("Akun     : ").append(accounts).append(" Akun Terhubung\n");
+                summary.append("Akun     : ").append(accounts > 0 ? (accounts + " Akun Terhubung\n") : "Belum Ada Akun\n");
                 summary.append("Target   : ").append(target.displayName);
             } else {
                 summary.append("Status   : Siaga (Hemat Daya / 0% RAM)\n");
@@ -262,6 +293,22 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 Preference syncAccounts = findPreference(PREF_SYNC_ACCOUNTS);
                 if (syncAccounts != null) {
                     syncAccounts.setEnabled(isInstalled);
+                    if (accounts > 0) {
+                        syncAccounts.setSummary("Perbarui dan sinkronkan " + accounts + " token akun dari .agy-accounts");
+                    } else {
+                        syncAccounts.setSummary(R.string.settings_9router_sync_accounts_summary);
+                    }
+                }
+
+                Preference copyApiKeyPref = findPreference(PREF_COPY_APIKEY);
+                if (copyApiKeyPref != null) {
+                    copyApiKeyPref.setEnabled(isInstalled);
+                    if (apiKey != null && !apiKey.isEmpty()) {
+                        String masked = apiKey.length() > 14 ? (apiKey.substring(0, 7) + "..." + apiKey.substring(apiKey.length() - 4)) : apiKey;
+                        copyApiKeyPref.setSummary(masked + " (Ketuk untuk menyalin)");
+                    } else {
+                        copyApiKeyPref.setSummary(R.string.settings_9router_copy_apikey_summary);
+                    }
                 }
 
                 mIsUpdatingUi = false;

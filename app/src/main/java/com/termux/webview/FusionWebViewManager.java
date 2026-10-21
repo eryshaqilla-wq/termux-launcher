@@ -480,6 +480,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FrameLayout frameLayout = this.mPaneHost;
         if (frameLayout != null) {
             frameLayout.setVisibility(0);
+            frameLayout.bringToFront();
         }
         if (str == null || str.length() == 0) {
             str = "https://google.com";

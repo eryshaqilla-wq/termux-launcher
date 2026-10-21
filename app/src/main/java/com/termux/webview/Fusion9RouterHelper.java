@@ -2,6 +2,8 @@ package com.termux.webview;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -10,6 +12,7 @@ import androidx.preference.PreferenceManager;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -223,14 +226,19 @@ public class Fusion9RouterHelper {
     }
 
     /**
-     * Menghitung jumlah akun Antigravity yang tersimpan di disk.
+     * Menghitung jumlah akun Antigravity yang tersimpan di disk atau database SQLite 9Router.
+     * Mengembalikan 0 jika belum ada akun (100% dinamis).
      */
-    public static int getAccountCount() {
-        String[] paths = new String[]{
-            "/root/.agy-accounts",
-            "/data/local/nhsystem/kali-arm64/root/.agy-accounts",
-            "/data/data/com.termux/files/home/.agy-accounts"
-        };
+    public static int getAccountCount(Context context) {
+        TargetEnvironment target = getSelectedTarget(context);
+        List<String> paths = new ArrayList<>();
+        if (target != null && target.rootfsPath != null && !target.rootfsPath.isEmpty()) {
+            paths.add(target.rootfsPath + "/root/.agy-accounts");
+        }
+        paths.add("/root/.agy-accounts");
+        paths.add("/data/local/nhsystem/kali-arm64/root/.agy-accounts");
+        paths.add("/data/data/com.termux/files/home/.agy-accounts");
+
         for (String p : paths) {
             try {
                 File dir = new File(p);
@@ -243,7 +251,157 @@ public class Fusion9RouterHelper {
             } catch (Exception ignored) {
             }
         }
-        return 5;
+
+        // Coba baca dari tabel providerConnections di database SQLite 9Router
+        int dbCount = getDbAccountCount(context);
+        if (dbCount > 0) {
+            return dbCount;
+        }
+
+        // Jika akses file dibatasi permission, coba hitung via su
+        if (target != null && target.isRoot && target.rootfsPath != null) {
+            try {
+                Process p;
+                if (target.type == RunnerType.DROIDSPACES) {
+                    String dsName = target.id.replace("ds_", "");
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-c",
+                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /bin/sh -c 'ls -1 /root/.agy-accounts/*.json 2>/dev/null | wc -l'"});
+                } else {
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
+                        "chroot " + target.rootfsPath + " /bin/sh -c 'ls -1 /root/.agy-accounts/*.json 2>/dev/null | wc -l'"});
+                }
+                BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                String line = reader.readLine();
+                if (line != null && !line.trim().isEmpty()) {
+                    int c = Integer.parseInt(line.trim());
+                    if (c > 0) return c;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        return 0;
+    }
+
+    public static int getAccountCount() {
+        return getAccountCount(null);
+    }
+
+    /**
+     * Membaca jumlah akun aktif langsung dari tabel providerConnections data.sqlite.
+     */
+    public static int getDbAccountCount(Context context) {
+        TargetEnvironment target = getSelectedTarget(context);
+        List<String> paths = new ArrayList<>();
+        if (target != null && target.rootfsPath != null && !target.rootfsPath.isEmpty()) {
+            paths.add(target.rootfsPath + "/root/.9router/db/data.sqlite");
+        }
+        paths.add("/root/.9router/db/data.sqlite");
+        paths.add("/data/local/nhsystem/kali-arm64/root/.9router/db/data.sqlite");
+        paths.add("/data/data/com.termux/files/home/.9router/db/data.sqlite");
+
+        for (String p : paths) {
+            File f = new File(p);
+            if (f.exists()) {
+                SQLiteDatabase db = null;
+                Cursor cursor = null;
+                try {
+                    db = SQLiteDatabase.openDatabase(p, null, SQLiteDatabase.OPEN_READONLY);
+                    cursor = db.rawQuery("SELECT count(*) FROM providerConnections WHERE provider = 'antigravity'", null);
+                    if (cursor != null && cursor.moveToFirst()) {
+                        return cursor.getInt(0);
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    if (cursor != null) try { cursor.close(); } catch (Exception ignored) {}
+                    if (db != null) try { db.close(); } catch (Exception ignored) {}
+                }
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Mengambil API Key 9Router dari database SQLite.
+     */
+    public static String getApiKey(Context context) {
+        TargetEnvironment target = getSelectedTarget(context);
+        List<String> paths = new ArrayList<>();
+        if (target != null && target.rootfsPath != null && !target.rootfsPath.isEmpty()) {
+            paths.add(target.rootfsPath + "/root/.9router/db/data.sqlite");
+        }
+        paths.add("/root/.9router/db/data.sqlite");
+        paths.add("/data/local/nhsystem/kali-arm64/root/.9router/db/data.sqlite");
+        paths.add("/data/data/com.termux/files/home/.9router/db/data.sqlite");
+
+        for (String p : paths) {
+            File f = new File(p);
+            if (f.exists()) {
+                SQLiteDatabase db = null;
+                Cursor cursor = null;
+                try {
+                    db = SQLiteDatabase.openDatabase(p, null, SQLiteDatabase.OPEN_READONLY);
+                    cursor = db.rawQuery("SELECT key FROM apiKeys WHERE isActive = 1 LIMIT 1", null);
+                    if (cursor != null && cursor.moveToFirst()) {
+                        String k = cursor.getString(0);
+                        if (k != null && !k.trim().isEmpty()) {
+                            return k.trim();
+                        }
+                    }
+                    if (cursor != null) cursor.close();
+                    cursor = db.rawQuery("SELECT key FROM apiKeys LIMIT 1", null);
+                    if (cursor != null && cursor.moveToFirst()) {
+                        String k = cursor.getString(0);
+                        if (k != null && !k.trim().isEmpty()) {
+                            return k.trim();
+                        }
+                    }
+                } catch (Exception ignored) {
+                } finally {
+                    if (cursor != null) try { cursor.close(); } catch (Exception ignored) {}
+                    if (db != null) try { db.close(); } catch (Exception ignored) {}
+                }
+            }
+        }
+
+        // Fallback jika file direct dibatasi permission
+        if (target != null && target.isRoot && target.rootfsPath != null) {
+            try {
+                Process p;
+                if (target.type == RunnerType.DROIDSPACES) {
+                    String dsName = target.id.replace("ds_", "");
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-c",
+                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /bin/sh -c 'sqlite3 /root/.9router/db/data.sqlite \"SELECT key FROM apiKeys LIMIT 1;\" 2>/dev/null'"});
+                } else {
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
+                        "chroot " + target.rootfsPath + " /bin/sh -c 'sqlite3 /root/.9router/db/data.sqlite \"SELECT key FROM apiKeys LIMIT 1;\" 2>/dev/null'"});
+                }
+                BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                String line = reader.readLine();
+                if (line != null && !line.trim().isEmpty()) {
+                    return line.trim();
+                }
+            } catch (Exception ignored) {
+            }
+        } else {
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{
+                    "/data/data/com.termux/files/usr/bin/bash", "-c",
+                    "sqlite3 $HOME/.9router/db/data.sqlite \"SELECT key FROM apiKeys LIMIT 1;\" 2>/dev/null"});
+                BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                String line = reader.readLine();
+                if (line != null && !line.trim().isEmpty()) {
+                    return line.trim();
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        return null;
+    }
+
+    public static String getApiKey() {
+        return getApiKey(null);
     }
 
     /**
@@ -328,14 +486,26 @@ public class Fusion9RouterHelper {
 
     /**
      * Membuka halaman visual WebUI 9router di Webview Termux.
+     * Otomatis mengaktifkan background service jika belum berjalan.
      */
     public static void openDashboard(Context context) {
+        if (!isServiceRunning()) {
+            startService(context, null);
+        }
+        boolean opened = false;
         try {
             FusionWebViewManager manager = FusionWebViewManager.getInstance();
             if (manager != null) {
                 manager.addNewTab(DASHBOARD_URL);
+                opened = true;
             }
         } catch (Exception ignored) {
+        }
+        if (!opened && context != null) {
+            try {
+                runAsyncCommand(context, null, "termux-ipc webview " + DASHBOARD_URL, null);
+            } catch (Exception ignored) {
+            }
         }
     }
 }

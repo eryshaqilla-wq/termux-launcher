@@ -718,6 +718,7 @@ public class SettingsActivity extends AppCompatActivity implements PreferenceFra
             }
             // A switch on a page below can have moved the surfaces off the preset.
             refreshUseAsSummary();
+            refresh9RouterSummary();
         }
 
         @Override
@@ -782,6 +783,29 @@ public class SettingsActivity extends AppCompatActivity implements PreferenceFra
             row.setSummary(summary);
             // The search box restores this when a query is cleared, so it has to follow the mode.
             mOriginalSummaries.put(KEY_USE_AS, summary);
+        }
+
+        private void refresh9RouterSummary() {
+            Preference row = findPreference("fusion_9router");
+            Context context = getContext();
+            if (row == null || context == null) return;
+            new Thread(() -> {
+                int count = com.termux.webview.Fusion9RouterHelper.getAccountCount(context);
+                boolean running = com.termux.webview.Fusion9RouterHelper.isServiceRunning();
+                String statusStr = running ? "Aktif" : "Siaga";
+                final String summaryText;
+                if (count > 0) {
+                    summaryText = statusStr + " • Rotasi " + count + " akun & dashboard";
+                } else {
+                    summaryText = statusStr + " • Rotasi multi-akun & dashboard";
+                }
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        row.setSummary(summaryText);
+                        mOriginalSummaries.put("fusion_9router", summaryText);
+                    });
+                }
+            }).start();
         }
 
         /**
