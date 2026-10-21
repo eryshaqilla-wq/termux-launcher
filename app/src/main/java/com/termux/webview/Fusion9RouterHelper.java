@@ -26,6 +26,25 @@ public class Fusion9RouterHelper {
     }
 
     /**
+     * Memeriksa apakah binary/paket 9router sudah terpasang di sistem yang terdeteksi.
+     */
+    public static boolean isInstalled() {
+        RunnerType r = getDetectedRunner();
+        if (r == RunnerType.NETHUNTER) {
+            return new File("/data/local/nhsystem/kali-arm64/usr/local/bin/9router").exists()
+                || new File("/data/local/nhsystem/kali-arm64/usr/bin/9router").exists()
+                || new File("/usr/local/bin/9router").exists();
+        } else if (r == RunnerType.DROIDSPACES) {
+            return new File("/data/local/Droidspaces/ubuntu/usr/local/bin/9router").exists()
+                || new File("/data/local/Droidspaces/ubuntu/usr/bin/9router").exists()
+                || new File("/usr/local/bin/9router").exists();
+        } else {
+            return new File("/data/data/com.termux/files/usr/bin/9router").exists()
+                || new File("/data/data/com.termux/files/usr/lib/node_modules/9router").exists();
+        }
+    }
+
+    /**
      * Memeriksa apakah port server API 9router (20128) sedang aktif.
      */
     public static boolean isServiceRunning() {
@@ -138,6 +157,19 @@ public class Fusion9RouterHelper {
 
     public static void stopService(final Runnable onDone) {
         runAsyncCommand("/usr/local/bin/stop-9router", onDone);
+    }
+
+    public static void installRouter(final Runnable onDone) {
+        RunnerType r = getDetectedRunner();
+        String cmd;
+        if (r == RunnerType.NETHUNTER) {
+            cmd = "npm install -g 9router";
+        } else if (r == RunnerType.DROIDSPACES) {
+            cmd = "npm install -g 9router";
+        } else {
+            cmd = "pkg update -y && pkg install -y nodejs-lts && npm install -g 9router";
+        }
+        runAsyncCommand(cmd, onDone);
     }
 
     public static void syncAccounts(final Runnable onDone) {

@@ -23,12 +23,14 @@ import com.termux.webview.Fusion9RouterHelper;
 /**
  * Halaman Pengaturan Utama 9Router & AI Routing di Termux-Launcher.
  * Menyediakan kontrol on/off background service, status 5 akun, autostart,
+ * deteksi instalasi, auto-install (Root Chroot / Non-Root Native Termux),
  * shortcut WebUI dashboard di Webview, dan integrasi Root / Non-Root.
  */
 @Keep
 public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFragment {
 
     private static final String PREF_STATUS_CARD = "pref_9router_status_card";
+    private static final String PREF_INSTALL = "pref_9router_install";
     private static final String PREF_SERVICE_SWITCH = "pref_9router_service_switch";
     private static final String PREF_AUTOSTART = "pref_9router_autostart";
     private static final String PREF_MITM_SWITCH = "pref_9router_mitm_switch";
@@ -58,6 +60,24 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
     private void bindPreferences() {
         Context context = getContext();
         if (context == null) return;
+
+        // 0. Tombol Pasang / Install 9Router jika belum terpasang
+        Preference installPref = findPreference(PREF_INSTALL);
+        if (installPref != null) {
+            installPref.setOnPreferenceClickListener(preference -> {
+                boolean isRoot = Fusion9RouterHelper.isRootAvailable();
+                String targetEnv = isRoot ? "Linux Chroot" : "Native Termux";
+                Toast.makeText(context, "Memulai instalasi 9Router di " + targetEnv + "...", Toast.LENGTH_LONG).show();
+                installPref.setEnabled(false);
+                installPref.setSummary("Sedang mengunduh dan memasang paket via npm...");
+                Fusion9RouterHelper.installRouter(() -> {
+                    Toast.makeText(context, "Instalasi 9Router berhasil!", Toast.LENGTH_SHORT).show();
+                    installPref.setEnabled(true);
+                    refreshState();
+                });
+                return true;
+            });
+        }
 
         // 1. Switch Service ON / OFF
         SwitchPreferenceCompat serviceSwitch = findPreference(PREF_SERVICE_SWITCH);
@@ -134,13 +154,19 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
      */
     private void refreshState() {
         new Thread(() -> {
-            final boolean isRunning = Fusion9RouterHelper.isServiceRunning();
-            final boolean isMitm = Fusion9RouterHelper.isMitmRunning();
+            final boolean isInstalled = Fusion9RouterHelper.isInstalled();
+            final boolean isRunning = isInstalled && Fusion9RouterHelper.isServiceRunning();
+            final boolean isMitm = isInstalled && Fusion9RouterHelper.isMitmRunning();
             final int accounts = Fusion9RouterHelper.getAccountCount();
             final String runnerName = Fusion9RouterHelper.getRunnerDisplayName();
+            final boolean isRoot = Fusion9RouterHelper.isRootAvailable();
 
             final StringBuilder summary = new StringBuilder();
-            if (isRunning) {
+            if (!isInstalled) {
+                summary.append("Status   : Belum Terpasang\n");
+                summary.append("Target   : ").append(isRoot ? "Linux Container (Root)" : "Native Termux (Non-Root)").append("\n");
+                summary.append("Panduan  : Tekan tombol pasang di bawah untuk instalasi otomatis.");
+            } else if (isRunning) {
                 summary.append("Engine   : 9Router Daemon (CJS)\n");
                 summary.append("Port API : 20128 (Aktif)\n");
                 summary.append("MITM 443 : ").append(isMitm ? "Aktif (SSL Intercept)\n" : "Nonaktif\n");
@@ -154,16 +180,41 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
 
             mMainHandler.post(() -> {
                 mIsUpdatingUi = true;
+
                 StatusCardPreference statusCard = findPreference(PREF_STATUS_CARD);
                 if (statusCard != null) {
-                    statusCard.setStatus(isRunning ? "Layanan Aktif" : "Layanan Nonaktif", isRunning);
+                    String statusLabel = !isInstalled ? "Belum Terpasang" : (isRunning ? "Layanan Aktif" : "Layanan Nonaktif");
+                    statusCard.setStatus(statusLabel, isRunning);
                     statusCard.setSummary(summary.toString());
+                }
+
+                Preference installPref = findPreference(PREF_INSTALL);
+                if (installPref != null) {
+                    if (!isInstalled) {
+                        installPref.setVisible(true);
+                        installPref.setTitle("Pasang 9Router (" + (isRoot ? "Root Chroot" : "Native Termux") + ")");
+                        installPref.setSummary("Tekan untuk mengunduh & memasang 9router secara otomatis");
+                    } else {
+                        installPref.setVisible(false);
+                    }
                 }
 
                 SwitchPreferenceCompat serviceSwitch = findPreference(PREF_SERVICE_SWITCH);
                 if (serviceSwitch != null) {
+                    serviceSwitch.setEnabled(isInstalled);
                     serviceSwitch.setChecked(isRunning);
                 }
+
+                Preference openWebUi = findPreference(PREF_OPEN_WEBUI);
+                if (openWebUi != null) {
+                    openWebUi.setEnabled(isInstalled);
+                }
+
+                Preference syncAccounts = findPreference(PREF_SYNC_ACCOUNTS);
+                if (syncAccounts != null) {
+                    syncAccounts.setEnabled(isInstalled);
+                }
+
                 mIsUpdatingUi = false;
             });
         }).start();

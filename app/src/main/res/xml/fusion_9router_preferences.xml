@@ -16,6 +16,12 @@
         app:key="pref_9router_service_category"
         app:title="@string/settings_9router_category_service">
 
+        <Preference
+            app:key="pref_9router_install"
+            app:title="@string/settings_9router_install_title"
+            app:summary="@string/settings_9router_install_summary"
+            app:persistent="false" />
+
         <androidx.preference.SwitchPreferenceCompat
             app:key="pref_9router_service_switch"
             app:title="@string/settings_9router_service_title"
