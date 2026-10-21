@@ -111,6 +111,10 @@
     <string name="settings_9router_open_webui_summary">Akses tampilan visual 9router di Webview Termux</string>
     <string name="settings_9router_sync_accounts_title">Sinkronkan Akun Antigravity</string>
     <string name="settings_9router_sync_accounts_summary">Perbarui dan sinkronkan token akun dari .agy-accounts ke 9Router</string>
+    <string name="settings_9router_autoconfig_clients_title">Auto-Config Klien AI (OpenCode, OpenClaw...)</string>
+    <string name="settings_9router_autoconfig_clients_summary">Deteksi &amp; hubungkan klien terpasang ke 9Router</string>
+    <string name="settings_9router_models_title">Model 9Router</string>
+    <string name="settings_9router_models_summary">ag/gemini-3.8-flash-medium • Pilihan model &amp; rotasi aktif</string>
     <string name="settings_9router_copy_endpoint_title">Salin Endpoint OpenAI (OpenCode)</string>
     <string name="settings_9router_copy_endpoint_summary">http://127.0.0.1:20128/v1</string>
     <string name="settings_9router_copy_apikey_title">Salin 9Router API Key</string>

@@ -1211,6 +1211,7 @@ elif [ "$CHOSEN_9R_TYPE" = "native" ]; then
     mkdir -p "$HOME/wallet"
     [ -f "/root/wallet/9router.cjs" ] && cp -f "/root/wallet/9router.cjs" "$HOME/wallet/9router.cjs"
     chmod 755 "$HOME/wallet/9router.cjs" 2>/dev/null || true
+    [ -f "/usr/local/bin/9router-autoconfig" ] && cp -f "/usr/local/bin/9router-autoconfig" "$PREFIX/bin/9router-autoconfig" && chmod 755 "$PREFIX/bin/9router-autoconfig" 2>/dev/null || true
 else
     echo -e "  ${GREEN}➔ Target Terpilih: Container Chroot ($CHOSEN_9R_PATH)${RESET}"
     read -p "    Unduh & pasang paket npm 9router di dalam container $CHOSEN_9R_PATH? [Y/n]: " DO_INSTALL_9R
@@ -1222,7 +1223,7 @@ else
     [ -f "/root/wallet/9router.cjs" ] && su -c "cp -f /root/wallet/9router.cjs '$CHOSEN_9R_PATH/root/wallet/9router.cjs'"
     su -c "chmod 755 '$CHOSEN_9R_PATH/root/wallet/9router.cjs' 2>/dev/null || true"
     # Pasang helper scripts di container
-    for scr in start-9router stop-9router 9router-web sync-agy-to-9router; do
+    for scr in start-9router stop-9router 9router-web sync-agy-to-9router 9router-autoconfig; do
         if [ -f "/usr/local/bin/$scr" ]; then
             su -c "cp -f '/usr/local/bin/$scr' '$CHOSEN_9R_PATH/usr/local/bin/$scr' && chmod 755 '$CHOSEN_9R_PATH/usr/local/bin/$scr'"
         fi

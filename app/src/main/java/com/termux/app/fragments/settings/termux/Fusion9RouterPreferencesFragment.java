@@ -15,12 +15,14 @@ import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.SwitchPreferenceCompat;
 
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.R;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.fragments.settings.StatusCardPreference;
 import com.termux.webview.Fusion9RouterHelper;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -40,6 +42,8 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
     private static final String PREF_MITM_SWITCH = "pref_9router_mitm_switch";
     private static final String PREF_OPEN_WEBUI = "pref_9router_open_webui";
     private static final String PREF_SYNC_ACCOUNTS = "pref_9router_sync_accounts";
+    private static final String PREF_AUTOCONFIG_CLIENTS = "pref_9router_autoconfig_clients";
+    private static final String PREF_MODELS_INFO = "pref_9router_models_info";
     private static final String PREF_COPY_ENDPOINT = "pref_9router_copy_endpoint";
     private static final String PREF_COPY_APIKEY = "pref_9router_copy_apikey";
 
@@ -174,6 +178,93 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
             });
         }
 
+        // 4b. Auto-Config Klien AI (OpenCode, OpenClaw, Hermes, Aider, dll)
+        Preference autoConfigPref = findPreference(PREF_AUTOCONFIG_CLIENTS);
+        if (autoConfigPref != null) {
+            autoConfigPref.setOnPreferenceClickListener(preference -> {
+                Toast.makeText(context, "Memindai klien AI terpasang...", Toast.LENGTH_SHORT).show();
+                new Thread(() -> {
+                    final Fusion9RouterHelper.AutoConfigData data = Fusion9RouterHelper.getAutoConfigData(context);
+                    mMainHandler.post(() -> {
+                        if (data == null || data.clients.isEmpty()) {
+                            new MaterialAlertDialogBuilder(context)
+                                .setTitle("Tidak Ada Klien Terdeteksi")
+                                .setMessage("Belum ada klien AI (OpenCode, OpenClaw, Aider, dll) yang terpasang di target lingkungan ini.\n\nPasang OpenCode terlebih dahulu untuk menghubungkannya ke 9Router.")
+                                .setPositiveButton("OK", null)
+                                .show();
+                            return;
+                        }
+
+                        // Hanya tampilkan klien yang terpasang
+                        final List<Fusion9RouterHelper.ClientConfigInfo> clients = data.clients;
+                        final CharSequence[] items = new CharSequence[clients.size()];
+                        final boolean[] checkedItems = new boolean[clients.size()];
+                        final boolean[] selectedResults = new boolean[clients.size()];
+
+                        for (int i = 0; i < clients.size(); i++) {
+                            Fusion9RouterHelper.ClientConfigInfo c = clients.get(i);
+                            String statusBadge = c.isConfigured ? "[🟢 Terhubung] " : "[⚪ Belum Terhubung] ";
+                            items[i] = statusBadge + c.name + " (" + c.version + ")";
+                            checkedItems[i] = c.isConfigured;
+                            selectedResults[i] = c.isConfigured;
+                        }
+
+                        new MaterialAlertDialogBuilder(context)
+                            .setTitle("Klien AI (Model: " + data.defaultModel + ")")
+                            .setMultiChoiceItems(items, checkedItems, (dialog, which, isChecked) -> {
+                                selectedResults[which] = isChecked;
+                            })
+                            .setPositiveButton("Terapkan", (dialog, which) -> {
+                                List<String> toApply = new ArrayList<>();
+                                for (int i = 0; i < selectedResults.length; i++) {
+                                    if (selectedResults[i]) {
+                                        toApply.add(clients.get(i).id);
+                                    }
+                                }
+                                if (toApply.isEmpty()) {
+                                    Toast.makeText(context, "Tidak ada klien yang dipilih.", Toast.LENGTH_SHORT).show();
+                                    return;
+                                }
+                                Toast.makeText(context, "Menerapkan konfigurasi 9Router...", Toast.LENGTH_SHORT).show();
+                                Fusion9RouterHelper.applyAutoConfig(context, toApply, () -> {
+                                    Toast.makeText(context, "Konfigurasi 9Router berhasil diterapkan ke " + toApply.size() + " klien!", Toast.LENGTH_LONG).show();
+                                    refreshState();
+                                });
+                            })
+                            .setNegativeButton("Batal", null)
+                            .show();
+                    });
+                }).start();
+                return true;
+            });
+        }
+
+        // 4c. Info Model 9Router
+        Preference modelsPref = findPreference(PREF_MODELS_INFO);
+        if (modelsPref != null) {
+            modelsPref.setOnPreferenceClickListener(preference -> {
+                new Thread(() -> {
+                    final Fusion9RouterHelper.AutoConfigData data = Fusion9RouterHelper.getAutoConfigData(context);
+                    mMainHandler.post(() -> {
+                        StringBuilder sb = new StringBuilder();
+                        sb.append("Model Utama 9Router:\n").append(data.defaultModel).append("\n\n");
+                        sb.append("Daftar Varian Model Terdaftar:\n");
+                        for (String m : data.models) {
+                            sb.append("• ").append(m).append("\n");
+                        }
+                        sb.append("\nCatatan: Pemilihan model dikontrol langsung di 9Router, klien AI otomatis mewarisi routing dan rotasi 5 akun Antigravity.");
+
+                        new MaterialAlertDialogBuilder(context)
+                            .setTitle("Model 9Router (Google Antigravity)")
+                            .setMessage(sb.toString())
+                            .setPositiveButton("Tutup", null)
+                            .show();
+                    });
+                }).start();
+                return true;
+            });
+        }
+
         // 5. Salin Endpoint OpenAI
         Preference copyEndpoint = findPreference(PREF_COPY_ENDPOINT);
         if (copyEndpoint != null) {
@@ -225,6 +316,8 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
             final boolean isMitm = isInstalled && Fusion9RouterHelper.isMitmRunning();
             final int accounts = Fusion9RouterHelper.getAccountCount(context);
             final String apiKey = Fusion9RouterHelper.getApiKey(context);
+            final Fusion9RouterHelper.AutoConfigData autoConfigData = Fusion9RouterHelper.getAutoConfigData(context);
+            final String defaultModel = autoConfigData != null && autoConfigData.defaultModel != null ? autoConfigData.defaultModel : "ag/gemini-3.8-flash-medium";
 
             final StringBuilder summary = new StringBuilder();
             if (!isInstalled) {
@@ -236,10 +329,12 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 summary.append("Port API : 20128 (Aktif)\n");
                 summary.append("MITM 443 : ").append(isMitm ? "Aktif (SSL Intercept)\n" : "Nonaktif\n");
                 summary.append("Akun     : ").append(accounts > 0 ? (accounts + " Akun Terhubung\n") : "Belum Ada Akun\n");
+                summary.append("Model    : ").append(defaultModel).append("\n");
                 summary.append("Target   : ").append(target.displayName);
             } else {
                 summary.append("Status   : Siaga (Hemat Daya / 0% RAM)\n");
                 summary.append("Port API : 20128 (Nonaktif)\n");
+                summary.append("Model    : ").append(defaultModel).append("\n");
                 summary.append("Target   : ").append(target.displayName);
             }
 
@@ -298,6 +393,27 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                     } else {
                         syncAccounts.setSummary(R.string.settings_9router_sync_accounts_summary);
                     }
+                }
+
+                Preference autoConfigPref = findPreference(PREF_AUTOCONFIG_CLIENTS);
+                if (autoConfigPref != null) {
+                    autoConfigPref.setEnabled(isInstalled);
+                    if (autoConfigData == null || autoConfigData.clients.isEmpty()) {
+                        autoConfigPref.setSummary("Tidak ada klien AI terdeteksi");
+                    } else {
+                        int confCount = 0;
+                        for (Fusion9RouterHelper.ClientConfigInfo c : autoConfigData.clients) {
+                            if (c.isConfigured) confCount++;
+                        }
+                        autoConfigPref.setSummary(confCount + "/" + autoConfigData.clients.size() + " klien AI terhubung • Ketuk untuk konfigurasi");
+                    }
+                }
+
+                Preference modelsPref = findPreference(PREF_MODELS_INFO);
+                if (modelsPref != null) {
+                    modelsPref.setEnabled(isInstalled);
+                    int variantCount = autoConfigData != null ? autoConfigData.models.size() : 0;
+                    modelsPref.setSummary("Model Utama: " + defaultModel + " (" + variantCount + " varian tersedia)");
                 }
 
                 Preference copyApiKeyPref = findPreference(PREF_COPY_APIKEY);

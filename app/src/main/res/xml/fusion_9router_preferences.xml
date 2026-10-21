@@ -65,6 +65,18 @@
             app:persistent="false" />
 
         <Preference
+            app:key="pref_9router_autoconfig_clients"
+            app:title="@string/settings_9router_autoconfig_clients_title"
+            app:summary="@string/settings_9router_autoconfig_clients_summary"
+            app:persistent="false" />
+
+        <Preference
+            app:key="pref_9router_models_info"
+            app:title="@string/settings_9router_models_title"
+            app:summary="@string/settings_9router_models_summary"
+            app:persistent="false" />
+
+        <Preference
             app:key="pref_9router_copy_endpoint"
             app:title="@string/settings_9router_copy_endpoint_title"
             app:summary="@string/settings_9router_copy_endpoint_summary"

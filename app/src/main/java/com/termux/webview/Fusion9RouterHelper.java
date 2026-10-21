@@ -9,6 +9,9 @@ import android.os.Looper;
 
 import androidx.preference.PreferenceManager;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -507,5 +510,112 @@ public class Fusion9RouterHelper {
             } catch (Exception ignored) {
             }
         }
+    }
+
+    public static class ClientConfigInfo {
+        public String id;
+        public String name;
+        public String version;
+        public boolean isConfigured;
+        public String configPath;
+    }
+
+    public static class AutoConfigData {
+        public String endpoint = LOCAL_BASE_URL;
+        public String defaultModel = "ag/gemini-3.8-flash-medium";
+        public List<String> models = new ArrayList<>();
+        public List<ClientConfigInfo> clients = new ArrayList<>();
+    }
+
+    /**
+     * Mengambil model default dari 9router catalog atau database.
+     */
+    public static String getDefaultModel(Context context) {
+        AutoConfigData data = getAutoConfigData(context);
+        return data != null && data.defaultModel != null ? data.defaultModel : "ag/gemini-3.8-flash-medium";
+    }
+
+    /**
+     * Membaca data klien AI yang terpasang dan model aktif via 9router-autoconfig --json.
+     */
+    public static AutoConfigData getAutoConfigData(Context context) {
+        TargetEnvironment target = getSelectedTarget(context);
+        AutoConfigData result = new AutoConfigData();
+        String jsonStr = null;
+
+        try {
+            Process p;
+            String cmd = "/usr/local/bin/9router-autoconfig --json 2>/dev/null || node /root/wallet/9router.cjs autoconfig --json 2>/dev/null";
+            if (target != null && target.isRoot && target.rootfsPath != null) {
+                if (target.type == RunnerType.DROIDSPACES) {
+                    String dsName = target.id.replace("ds_", "");
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-c",
+                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /bin/sh -c '" + cmd + "'"});
+                } else {
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
+                        "chroot " + target.rootfsPath + " /bin/sh -c '" + cmd + "'"});
+                }
+            } else {
+                p = Runtime.getRuntime().exec(new String[]{
+                    "/data/data/com.termux/files/usr/bin/bash", "-c", cmd});
+            }
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+            p.waitFor();
+            jsonStr = sb.toString().trim();
+        } catch (Exception ignored) {
+        }
+
+        if (jsonStr != null && jsonStr.startsWith("{")) {
+            try {
+                JSONObject obj = new JSONObject(jsonStr);
+                if (obj.has("defaultModel")) {
+                    result.defaultModel = obj.getString("defaultModel");
+                }
+                if (obj.has("endpoint")) {
+                    result.endpoint = obj.getString("endpoint");
+                }
+                if (obj.has("models")) {
+                    JSONArray mArr = obj.getJSONArray("models");
+                    for (int i = 0; i < mArr.length(); i++) {
+                        result.models.add(mArr.getString(i));
+                    }
+                }
+                if (obj.has("clients")) {
+                    JSONArray cArr = obj.getJSONArray("clients");
+                    for (int i = 0; i < cArr.length(); i++) {
+                        JSONObject cObj = cArr.getJSONObject(i);
+                        ClientConfigInfo info = new ClientConfigInfo();
+                        info.id = cObj.getString("id");
+                        info.name = cObj.getString("name");
+                        info.version = cObj.optString("version", "");
+                        info.isConfigured = cObj.optBoolean("isConfigured", false);
+                        info.configPath = cObj.optString("configPath", "");
+                        result.clients.add(info);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        return result;
+    }
+
+    public static void applyAutoConfig(Context context, List<String> clientIds, final Runnable onDone) {
+        if (clientIds == null || clientIds.isEmpty()) {
+            if (onDone != null) onDone.run();
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String id : clientIds) {
+            sb.append(" ").append(id);
+        }
+        String cmd = "/usr/local/bin/9router-autoconfig apply" + sb.toString();
+        runAsyncCommand(context, null, cmd, onDone);
     }
 }
