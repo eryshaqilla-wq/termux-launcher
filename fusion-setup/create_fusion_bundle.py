@@ -144,6 +144,39 @@ echo "Pemantau (.cjs/.py) tidak ditemukan di $TARGET_DIR"
 exit 1
 """)
 
+# Wrapper 9router (Multi-Account AI Gateway)
+with open(os.path.join(BUNDLE_DIR, "bin/9router"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/9router.cjs" ]; then
+    cd "$TARGET_DIR" && exec node 9router.cjs "$@"
+fi
+
+if [ -d "/data/local/nhsystem/kali-arm64" ] && command -v su >/dev/null 2>&1; then
+    exec su -mm -c 'chroot /data/local/nhsystem/kali-arm64 /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin 9router "$@"' dummy "$@"
+elif [ -x "/data/local/Droidspaces/bin/droidspaces" ] && command -v su >/dev/null 2>&1; then
+    exec su -c '/data/local/Droidspaces/bin/droidspaces enter -- 9router "$@"' dummy "$@"
+fi
+
+if command -v 9router >/dev/null 2>&1 && [ "$(command -v 9router)" != "$0" ]; then
+    exec 9router "$@"
+fi
+
+echo "9router (.cjs atau npm binary) tidak ditemukan di sistem."
+exit 1
+""")
+
 if os.path.exists("/usr/local/bin/agy-copilot"):
     shutil.copy2("/usr/local/bin/agy-copilot", os.path.join(BUNDLE_DIR, "bin/agy-copilot"))
 
@@ -151,19 +184,19 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
     os.chmod(os.path.join(BUNDLE_DIR, "bin", b), 0o755)
 
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
-# 1. Salin Standalone CJS Suite (dari /project/node2cjs/)
-node2cjs_dir = "/project/node2cjs"
-if os.path.exists(node2cjs_dir):
-    for f_cjs in [
-        "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "tele_session_string.txt",
-        "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
-        "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
-        "ai_config.json", "ai_selectors.json"
-    ]:
-        src_path = os.path.join(node2cjs_dir, f_cjs)
+# 1. Salin Standalone CJS Suite (dari /project/node2cjs/ atau /root/wallet/)
+for f_cjs in [
+    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "9router.cjs", "tele_session_string.txt",
+    "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
+    "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
+    "ai_config.json", "ai_selectors.json"
+]:
+    for src_dir in ["/project/node2cjs", "/root/wallet"]:
+        src_path = os.path.join(src_dir, f_cjs)
         if os.path.exists(src_path):
             shutil.copy2(src_path, os.path.join(BUNDLE_DIR, "wallet", f_cjs))
-    print("✓ Added CJS suite (wallet.cjs, x_webview.cjs, pemantau.cjs) to bundle")
+            break
+print("✓ Added CJS suite (wallet.cjs, x_webview.cjs, pemantau.cjs, 9router.cjs) to bundle")
 
 # 2. Salin Regular JS/Python Suite (dari /root/wallet/ atau /project/node2cjs/)
 for f_js in ["wallet.js", "x_webview.js", "pemantautelegram.py", "package.json", "chains_db.json"]:
@@ -303,6 +336,7 @@ for target in [
     os.path.join(ASSETS_DIR, "x_webview.js"),
     os.path.join(ASSETS_DIR, "x_webview.cjs"),
     os.path.join(ASSETS_DIR, "pemantau.cjs"),
+    os.path.join(ASSETS_DIR, "9router.cjs"),
     os.path.join(ASSETS_DIR, "pemantautelegram.py"),
     os.path.join(ASSETS_DIR, "wallets_db.json"),
     os.path.join(ASSETS_DIR, "chains_db.json"),
@@ -328,6 +362,9 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet")):
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/pemantau")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(ASSETS_DIR, "pemantau"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(FUSION_SETUP_DIR, "pemantau"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/9router")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(ASSETS_DIR, "9router"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(FUSION_SETUP_DIR, "9router"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "termux.properties")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "termux.properties"), os.path.join(ASSETS_DIR, "termux.properties"))
 

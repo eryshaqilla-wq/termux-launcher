@@ -1,0 +1,29 @@
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/9router.cjs" ]; then
+    cd "$TARGET_DIR" && exec node 9router.cjs "$@"
+fi
+
+if [ -d "/data/local/nhsystem/kali-arm64" ] && command -v su >/dev/null 2>&1; then
+    exec su -mm -c 'chroot /data/local/nhsystem/kali-arm64 /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin 9router "$@"' dummy "$@"
+elif [ -x "/data/local/Droidspaces/bin/droidspaces" ] && command -v su >/dev/null 2>&1; then
+    exec su -c '/data/local/Droidspaces/bin/droidspaces enter -- 9router "$@"' dummy "$@"
+fi
+
+if command -v 9router >/dev/null 2>&1 && [ "$(command -v 9router)" != "$0" ]; then
+    exec 9router "$@"
+fi
+
+echo "9router (.cjs atau npm binary) tidak ditemukan di sistem."
+exit 1

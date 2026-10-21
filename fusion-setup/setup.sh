@@ -737,6 +737,40 @@ exit 1
 EOF_P
 chmod 755 "$PREFIX/bin/pemantau"
 
+# Wrapper 9router CLI (Multi-Account AI Router)
+cat << 'EOF_9R' > "$PREFIX/bin/9router"
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/9router.cjs" ]; then
+    cd "$TARGET_DIR" && exec node 9router.cjs "$@"
+fi
+
+if [ -d "/data/local/nhsystem/kali-arm64" ] && command -v su >/dev/null 2>&1; then
+    exec su -mm -c 'chroot /data/local/nhsystem/kali-arm64 /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin 9router "$@"' dummy "$@"
+elif [ -x "/data/local/Droidspaces/bin/droidspaces" ] && command -v su >/dev/null 2>&1; then
+    exec su -c '/data/local/Droidspaces/bin/droidspaces enter -- 9router "$@"' dummy "$@"
+fi
+
+if command -v 9router >/dev/null 2>&1 && [ "$(command -v 9router)" != "$0" ]; then
+    exec 9router "$@"
+fi
+
+echo "9router (.cjs atau npm binary) tidak ditemukan di sistem."
+exit 1
+EOF_9R
+chmod 755 "$PREFIX/bin/9router"
+
 # Pasang copilot symlink jika ada
 if [ -f "$PREFIX/bin/agy-copilot" ]; then
     ln -sf "$PREFIX/bin/agy-copilot" "$PREFIX/bin/copilot"
@@ -1097,7 +1131,7 @@ fi
 # Fallback ekstraksi aset wallet dari APK jika belum lengkap
 BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
 if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ] && command -v unzip >/dev/null 2>&1; then
-    for w_asset in wallet.cjs x_webview.cjs pemantau.cjs wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
+    for w_asset in 9router.cjs wallet.cjs x_webview.cjs pemantau.cjs wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
         unzip -j -o "$BASE_APK" "assets/fusion/$w_asset" -d "$HOME/wallet/" 2>/dev/null || true
     done
 fi
@@ -1155,6 +1189,8 @@ alias ll="ls -l"
 alias la="ls -A"
 alias l="ls -CF"
 alias wallet="wallet"
+alias 9router="9router"
+alias router="9router"
 alias pemantau="pemantau"
 alias pmt="pemantau"
 alias patchright="node ./wallet/patchright.js"
