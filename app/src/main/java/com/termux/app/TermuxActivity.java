@@ -16,6 +16,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ShortcutInfo;
 import android.content.res.Configuration;
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.BitmapShader;
@@ -6765,6 +6768,162 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return veil == null ? null : new LayoutNeutralDrawable(veil);
     }
 
+    @Nullable private ValueAnimator mDockCurtainAnimator;
+
+    /**
+     * Builds the seamless frosted glass background for the underside dock curtain, matching the Extra Keys
+     * dock in blur radius, glass grain, opacity, tint strength, and seamless rimless material.
+     */
+    @NonNull
+    private Drawable buildDockCurtainSurfaceBackground(@NonNull View curtainHost) {
+        if (mChrome == null || mChrome.glass() == null) {
+            int fallbackColor = resolveExtraKeysBackgroundColor();
+            return new ColorDrawable(fallbackColor);
+        }
+        float density = getResources().getDisplayMetrics().density;
+        int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
+        float barAlpha = mPreferences != null ? mPreferences.getAppBarOpacity() / 100f : 1f;
+        int dockGrain = mPreferences != null ? mPreferences.getDockGlassGrain()
+            : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN;
+        int dockTintStrength = mPreferences != null ? mPreferences.getDockTintStrength()
+            : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_SURFACE_BASE_TINT;
+
+        com.termux.app.chrome.GlassStack.Spec spec = com.termux.app.chrome.GlassStack.Spec.of(
+                blurRadiusDp, barAlpha, dockGrain, 0f, mFancierGlassLook)
+            .withRim(false)
+            .withSlice(defaultDockGlassFootFraction(), false)
+            .withSeams(com.termux.app.chrome.ChromeEdgeRule.ALL)
+            .withTintStrength(dockTintStrength)
+            .withBand(null);
+
+        com.termux.app.chrome.SharedFrameDrawable backdrop = null;
+        if (ChromePolicy.dockBlurEnabled(blurRadiusDp)) {
+            ChromeSpec specState = buildChromeSpec();
+            Bitmap frame = obtainInAppKeyboardBackdropFrame(specState, curtainHost);
+            if (frame != null) {
+                backdrop = new com.termux.app.chrome.SharedFrameDrawable(frame,
+                    mInAppKeyboardBackdropFrameRect, mWallpaperParallax,
+                    com.termux.app.chrome.GlassAnchor.layout(curtainHost, mAccessoryStackLift));
+            }
+        }
+        return new LayoutNeutralDrawable(com.termux.app.chrome.GlassStack.build(mChrome.glass(),
+            spec, density, backdrop));
+    }
+
+    private void animateDockCurtainClose(int initialHeight) {
+        View curtain = findViewById(R.id.accessory_dock_curtain);
+        if (curtain == null) return;
+        if (mDockCurtainAnimator != null) {
+            mDockCurtainAnimator.cancel();
+            mDockCurtainAnimator = null;
+        }
+        if (initialHeight <= 0) {
+            curtain.setVisibility(View.GONE);
+            if (curtain.getLayoutParams() != null) {
+                curtain.getLayoutParams().height = 0;
+            }
+            return;
+        }
+
+        curtain.setBackground(buildDockCurtainSurfaceBackground(curtain));
+        ViewGroup.LayoutParams lp = curtain.getLayoutParams();
+        if (lp != null) {
+            lp.height = initialHeight;
+            curtain.setLayoutParams(lp);
+        }
+        curtain.setVisibility(View.VISIBLE);
+
+        if (isReducedMotionEnabled()) {
+            curtain.setVisibility(View.GONE);
+            if (lp != null) lp.height = 0;
+            return;
+        }
+
+        long duration = com.termux.app.terminal.Motion.FLOAT_DEPTH_MS;
+        ValueAnimator anim = ValueAnimator.ofInt(initialHeight, 0);
+        anim.setDuration(duration);
+        anim.setInterpolator(com.termux.app.terminal.Motion.settle());
+        anim.addUpdateListener(animation -> {
+            int h = (Integer) animation.getAnimatedValue();
+            ViewGroup.LayoutParams params = curtain.getLayoutParams();
+            if (params != null) {
+                params.height = h;
+                curtain.setLayoutParams(params);
+            }
+        });
+        anim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                curtain.setVisibility(View.GONE);
+                ViewGroup.LayoutParams params = curtain.getLayoutParams();
+                if (params != null) {
+                    params.height = 0;
+                    curtain.setLayoutParams(params);
+                }
+                mDockCurtainAnimator = null;
+                mKeyboardGeometry.markHeightDirty();
+                mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD,
+                    GeometryScheduler.ResizePolicy.NOW);
+                mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
+            }
+        });
+        mDockCurtainAnimator = anim;
+        anim.start();
+    }
+
+    private void animateDockCurtainOpen(int targetHeight, @NonNull Runnable onRevealed) {
+        View curtain = findViewById(R.id.accessory_dock_curtain);
+        if (curtain == null || targetHeight <= 0 || isReducedMotionEnabled()) {
+            if (curtain != null) {
+                curtain.setVisibility(View.GONE);
+                if (curtain.getLayoutParams() != null) curtain.getLayoutParams().height = 0;
+            }
+            onRevealed.run();
+            return;
+        }
+        if (mDockCurtainAnimator != null) {
+            mDockCurtainAnimator.cancel();
+            mDockCurtainAnimator = null;
+        }
+
+        curtain.setBackground(buildDockCurtainSurfaceBackground(curtain));
+        ViewGroup.LayoutParams lp = curtain.getLayoutParams();
+        int fromHeight = (lp != null && curtain.getVisibility() == View.VISIBLE) ? Math.max(0, lp.height) : 0;
+        if (lp != null) {
+            lp.height = fromHeight;
+            curtain.setLayoutParams(lp);
+        }
+        curtain.setVisibility(View.VISIBLE);
+
+        long duration = com.termux.app.terminal.Motion.FLOAT_DEPTH_MS;
+        ValueAnimator anim = ValueAnimator.ofInt(fromHeight, targetHeight);
+        anim.setDuration(duration);
+        anim.setInterpolator(com.termux.app.terminal.Motion.settle());
+        anim.addUpdateListener(animation -> {
+            int h = (Integer) animation.getAnimatedValue();
+            ViewGroup.LayoutParams params = curtain.getLayoutParams();
+            if (params != null) {
+                params.height = h;
+                curtain.setLayoutParams(params);
+            }
+        });
+        anim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                mDockCurtainAnimator = null;
+                onRevealed.run();
+                curtain.setVisibility(View.GONE);
+                ViewGroup.LayoutParams params = curtain.getLayoutParams();
+                if (params != null) {
+                    params.height = 0;
+                    curtain.setLayoutParams(params);
+                }
+            }
+        });
+        mDockCurtainAnimator = anim;
+        anim.start();
+    }
+
     /**
      * Asks the keyboard band (appearance-layout-editor SPEC §2) what the host's glass has to become
      * for a letter key's label to read on its cap, and names the band for the surface to draw
@@ -8850,6 +9009,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Override
     public void onDestroy() {
+        if (mDockCurtainAnimator != null) {
+            mDockCurtainAnimator.cancel();
+            mDockCurtainAnimator = null;
+        }
         super.onDestroy();
         Logger.logDebug(LOG_TAG, "onDestroy");
         com.termux.app.x11.ChrootDistro.setOnSyncCompleted(null);
@@ -12212,7 +12375,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // visible for the reveal gate to observe destination layout at all.
             if (mFloatingKeyboard != null)
                 mFloatingKeyboard.onKeyboardVisibilityRequested(visible);
-            mKeyboardGeometry.onVisibilityRequested(visible);
+            View container = findViewById(R.id.inapp_keyboard_container);
+            if (!visible && container != null && container.getVisibility() != View.GONE && !isDisplayTouchpadFrame()) {
+                int closingH = container.getHeight() > 0 ? container.getHeight() : mKeyboardGeometry.desiredHeightPx();
+                mKeyboardGeometry.onVisibilityRequested(false);
+                if (closingH > 0 && mDockCurtainAnimator == null) {
+                    animateDockCurtainClose(closingH);
+                }
+            } else {
+                mKeyboardGeometry.onVisibilityRequested(visible);
+            }
             // The one place the in-app keyboard's visibility is decided, whichever control asked.
             // A pre-roll for the wall's slide is not a keyboard settling anywhere.
             if (mFirstBootTour != null && !mQuietKeyboardChange)
@@ -21094,18 +21266,40 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View container = findViewById(R.id.inapp_keyboard_container);
         boolean willRaiseKeyboard = ours && mInAppKeyboard != null && mInAppKeyboard.isEnabled() && !mInAppKeyboard.isVisible();
         if (wanted) {
-            if (container != null) {
-                if (!willRaiseKeyboard) {
-                    container.setVisibility(View.VISIBLE);
+            int targetH = mKeyboardGeometry.desiredHeightPx();
+            if (targetH <= 0) targetH = Math.round(240f * density);
+            boolean wasClosed = container == null || container.getVisibility() == View.GONE;
+            if (wasClosed && !reduced) {
+                animateDockCurtainOpen(targetH, () -> {
+                    if (container != null) {
+                        if (!willRaiseKeyboard) {
+                            container.setVisibility(View.VISIBLE);
+                        }
+                        if (container.getLayoutParams() != null) {
+                            container.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                        }
+                    }
+                    if (host != null) {
+                        host.setVisibility(View.VISIBLE);
+                        if (host.getLayoutParams() != null) {
+                            host.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                        }
+                    }
+                });
+            } else {
+                if (container != null) {
+                    if (!willRaiseKeyboard) {
+                        container.setVisibility(View.VISIBLE);
+                    }
+                    if (container.getLayoutParams() != null) {
+                        container.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    }
                 }
-                if (container.getLayoutParams() != null) {
-                    container.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
-                }
-            }
-            if (host != null) {
-                host.setVisibility(View.VISIBLE);
-                if (host.getLayoutParams() != null) {
-                    host.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                if (host != null) {
+                    host.setVisibility(View.VISIBLE);
+                    if (host.getLayoutParams() != null) {
+                        host.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    }
                 }
             }
             if (willRaiseKeyboard) {
@@ -21117,10 +21311,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             dressInAppKeyboardHost();
             releaseDisplayTouchpadWait();
             mDisplayTouchpadWaitRound = 0;
-            if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
-                container.setVisibility(View.GONE);
+            int closingHeight = 0;
+            if (container != null) {
+                closingHeight = container.getHeight() > 0 ? container.getHeight()
+                    : (host != null && host.getHeight() > 0 ? host.getHeight() : mKeyboardGeometry.desiredHeightPx());
+                if (mInAppKeyboard == null || !mInAppKeyboard.isVisible()) {
+                    container.setVisibility(View.GONE);
+                }
             }
-            if (pad == null) return;
+            if (pad == null) {
+                if (closingHeight > 0 && mDockCurtainAnimator == null) {
+                    animateDockCurtainClose(closingHeight);
+                }
+                return;
+            }
             final com.termux.app.x11.DisplayTouchpadView leaving = pad;
             mDisplayTouchpad = null;
             View keys = mAttachedInAppKeyboardView;
@@ -21145,6 +21349,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             } else {
                 leaving.animate().alpha(0f).translationY(dpToPx(12)).setDuration(duration)
                     .setInterpolator(settle).withEndAction(detach).start();
+            }
+            if (closingHeight > 0 && mDockCurtainAnimator == null) {
+                animateDockCurtainClose(closingHeight);
             }
             return;
         }

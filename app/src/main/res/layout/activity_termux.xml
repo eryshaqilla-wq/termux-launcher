@@ -863,6 +863,14 @@
                 android:clipChildren="false"
                 android:clipToPadding="false">
 
+                <FrameLayout
+                    android:id="@+id/accessory_dock_curtain"
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:clickable="false"
+                    android:focusable="false"
+                    android:visibility="gone" />
+
                 <LinearLayout
                     android:id="@+id/inapp_keyboard_container"
                     android:layout_width="match_parent"
