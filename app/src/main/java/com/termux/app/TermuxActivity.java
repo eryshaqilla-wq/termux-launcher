@@ -22816,7 +22816,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         if (cmd != null && !cmd.isEmpty()) {
-            String lower = cmd.toLowerCase(Locale.ROOT);
+            String lower = cmd.toLowerCase(java.util.Locale.ROOT);
             if (lower.contains("nhsystem") || lower.contains("kalifs") || lower.contains("kali-arm64")
                     || lower.contains("nethunter") || lower.contains("chroot /data/local/nhsystem")) {
                 return "NetHunter";
