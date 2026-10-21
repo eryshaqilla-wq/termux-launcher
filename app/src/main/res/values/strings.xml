@@ -96,6 +96,8 @@
     <string name="settings_destination_9router_summary">Background proxy, rotasi 5 akun &amp; dashboard</string>
     <string name="settings_9router_category_status">Status Layanan</string>
     <string name="settings_9router_category_service">Kontrol Layanan</string>
+    <string name="settings_9router_target_runtime_title">Target Lingkungan Runtime</string>
+    <string name="settings_9router_target_runtime_dialog_title">Pilih Target Chroot / Container</string>
     <string name="settings_9router_install_title">Pasang 9Router</string>
     <string name="settings_9router_install_summary">Unduh dan pasang paket 9router secara otomatis</string>
     <string name="settings_9router_service_title">Layanan 9Router</string>

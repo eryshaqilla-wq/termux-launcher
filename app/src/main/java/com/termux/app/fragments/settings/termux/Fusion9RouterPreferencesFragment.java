@@ -11,6 +11,7 @@ import android.widget.Toast;
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.SwitchPreferenceCompat;
 
@@ -20,16 +21,19 @@ import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.app.fragments.settings.StatusCardPreference;
 import com.termux.webview.Fusion9RouterHelper;
 
+import java.util.List;
+
 /**
  * Halaman Pengaturan Utama 9Router & AI Routing di Termux-Launcher.
  * Menyediakan kontrol on/off background service, status 5 akun, autostart,
- * deteksi instalasi, auto-install (Root Chroot / Non-Root Native Termux),
- * shortcut WebUI dashboard di Webview, dan integrasi Root / Non-Root.
+ * deteksi dinamis chroot/container di /data/local, pilihan target runtime,
+ * auto-install, shortcut WebUI dashboard di Webview, dan integrasi Root / Non-Root.
  */
 @Keep
 public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFragment {
 
     private static final String PREF_STATUS_CARD = "pref_9router_status_card";
+    private static final String PREF_TARGET_RUNTIME = "pref_9router_target_runtime";
     private static final String PREF_INSTALL = "pref_9router_install";
     private static final String PREF_SERVICE_SWITCH = "pref_9router_service_switch";
     private static final String PREF_AUTOSTART = "pref_9router_autostart";
@@ -61,17 +65,47 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         Context context = getContext();
         if (context == null) return;
 
-        // 0. Tombol Pasang / Install 9Router jika belum terpasang
+        // 0a. Target Lingkungan Runtime (Auto-Detected dari /data/local dan Native Termux)
+        ListPreference targetPref = findPreference(PREF_TARGET_RUNTIME);
+        if (targetPref != null) {
+            List<Fusion9RouterHelper.TargetEnvironment> targets = Fusion9RouterHelper.scanAvailableTargets();
+            CharSequence[] entries = new CharSequence[targets.size()];
+            CharSequence[] entryValues = new CharSequence[targets.size()];
+            for (int i = 0; i < targets.size(); i++) {
+                entries[i] = targets.get(i).displayName;
+                entryValues[i] = targets.get(i).id;
+            }
+            targetPref.setEntries(entries);
+            targetPref.setEntryValues(entryValues);
+
+            Fusion9RouterHelper.TargetEnvironment current = Fusion9RouterHelper.getSelectedTarget(context);
+            targetPref.setValue(current.id);
+            targetPref.setSummary(current.displayName);
+
+            targetPref.setOnPreferenceChangeListener((preference, newValue) -> {
+                String newId = (String) newValue;
+                for (Fusion9RouterHelper.TargetEnvironment t : targets) {
+                    if (t.id.equals(newId)) {
+                        targetPref.setSummary(t.displayName);
+                        Toast.makeText(context, "Target diubah: " + t.displayName, Toast.LENGTH_SHORT).show();
+                        break;
+                    }
+                }
+                mMainHandler.post(this::refreshState);
+                return true;
+            });
+        }
+
+        // 0b. Tombol Pasang / Install 9Router di target terpilih
         Preference installPref = findPreference(PREF_INSTALL);
         if (installPref != null) {
             installPref.setOnPreferenceClickListener(preference -> {
-                boolean isRoot = Fusion9RouterHelper.isRootAvailable();
-                String targetEnv = isRoot ? "Linux Chroot" : "Native Termux";
-                Toast.makeText(context, "Memulai instalasi 9Router di " + targetEnv + "...", Toast.LENGTH_LONG).show();
+                Fusion9RouterHelper.TargetEnvironment target = Fusion9RouterHelper.getSelectedTarget(context);
+                Toast.makeText(context, "Memulai instalasi 9Router di " + target.displayName + "...", Toast.LENGTH_LONG).show();
                 installPref.setEnabled(false);
                 installPref.setSummary("Sedang mengunduh dan memasang paket via npm...");
-                Fusion9RouterHelper.installRouter(() -> {
-                    Toast.makeText(context, "Instalasi 9Router berhasil!", Toast.LENGTH_SHORT).show();
+                Fusion9RouterHelper.installRouter(context, target, () -> {
+                    Toast.makeText(context, "Instalasi 9Router di " + target.displayName + " berhasil!", Toast.LENGTH_SHORT).show();
                     installPref.setEnabled(true);
                     refreshState();
                 });
@@ -87,13 +121,13 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 boolean shouldStart = (Boolean) newValue;
                 if (shouldStart) {
                     Toast.makeText(context, "Menjalankan 9Router di background...", Toast.LENGTH_SHORT).show();
-                    Fusion9RouterHelper.startService(() -> {
+                    Fusion9RouterHelper.startService(context, () -> {
                         Toast.makeText(context, "9Router aktif di port 20128!", Toast.LENGTH_SHORT).show();
                         refreshState();
                     });
                 } else {
                     Toast.makeText(context, "Menghentikan service 9Router...", Toast.LENGTH_SHORT).show();
-                    Fusion9RouterHelper.stopService(() -> {
+                    Fusion9RouterHelper.stopService(context, () -> {
                         Toast.makeText(context, "9Router telah dihentikan.", Toast.LENGTH_SHORT).show();
                         refreshState();
                     });
@@ -105,9 +139,9 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         // 2. MITM Port 443 Switch
         SwitchPreferenceCompat mitmSwitch = findPreference(PREF_MITM_SWITCH);
         if (mitmSwitch != null) {
-            if (!Fusion9RouterHelper.isRootAvailable()) {
+            if (!Fusion9RouterHelper.isRootAvailable(context)) {
                 mitmSwitch.setEnabled(false);
-                mitmSwitch.setSummary("Memerlukan Hak Akses Root (NetHunter / Droidspaces)");
+                mitmSwitch.setSummary("Memerlukan Hak Akses Root (Chroot di /data/local)");
             }
         }
 
@@ -126,7 +160,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         if (syncAccounts != null) {
             syncAccounts.setOnPreferenceClickListener(preference -> {
                 Toast.makeText(context, "Menyinkronkan akun Antigravity...", Toast.LENGTH_SHORT).show();
-                Fusion9RouterHelper.syncAccounts(() -> {
+                Fusion9RouterHelper.syncAccounts(context, () -> {
                     Toast.makeText(context, "5 Akun Antigravity berhasil disinkronkan!", Toast.LENGTH_SHORT).show();
                     refreshState();
                 });
@@ -153,33 +187,38 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
      * Memperbarui status kartu dan switch di latar belakang agar UI tetap responsif.
      */
     private void refreshState() {
+        Context context = getContext();
         new Thread(() -> {
-            final boolean isInstalled = Fusion9RouterHelper.isInstalled();
+            final Fusion9RouterHelper.TargetEnvironment target = Fusion9RouterHelper.getSelectedTarget(context);
+            final boolean isInstalled = target.isInstalled();
             final boolean isRunning = isInstalled && Fusion9RouterHelper.isServiceRunning();
             final boolean isMitm = isInstalled && Fusion9RouterHelper.isMitmRunning();
             final int accounts = Fusion9RouterHelper.getAccountCount();
-            final String runnerName = Fusion9RouterHelper.getRunnerDisplayName();
-            final boolean isRoot = Fusion9RouterHelper.isRootAvailable();
 
             final StringBuilder summary = new StringBuilder();
             if (!isInstalled) {
                 summary.append("Status   : Belum Terpasang\n");
-                summary.append("Target   : ").append(isRoot ? "Linux Container (Root)" : "Native Termux (Non-Root)").append("\n");
+                summary.append("Target   : ").append(target.displayName).append("\n");
                 summary.append("Panduan  : Tekan tombol pasang di bawah untuk instalasi otomatis.");
             } else if (isRunning) {
-                summary.append("Engine   : 9Router Daemon (CJS)\n");
+                summary.append("Engine   : 9Router Daemon (CJS On-Demand)\n");
                 summary.append("Port API : 20128 (Aktif)\n");
                 summary.append("MITM 443 : ").append(isMitm ? "Aktif (SSL Intercept)\n" : "Nonaktif\n");
                 summary.append("Akun     : ").append(accounts).append(" Akun Terhubung\n");
-                summary.append("Runner   : ").append(runnerName);
+                summary.append("Target   : ").append(target.displayName);
             } else {
                 summary.append("Status   : Siaga (Hemat Daya / 0% RAM)\n");
                 summary.append("Port API : 20128 (Nonaktif)\n");
-                summary.append("Runner   : ").append(runnerName);
+                summary.append("Target   : ").append(target.displayName);
             }
 
             mMainHandler.post(() -> {
                 mIsUpdatingUi = true;
+
+                ListPreference targetPref = findPreference(PREF_TARGET_RUNTIME);
+                if (targetPref != null) {
+                    targetPref.setSummary(target.displayName);
+                }
 
                 StatusCardPreference statusCard = findPreference(PREF_STATUS_CARD);
                 if (statusCard != null) {
@@ -192,8 +231,8 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 if (installPref != null) {
                     if (!isInstalled) {
                         installPref.setVisible(true);
-                        installPref.setTitle("Pasang 9Router (" + (isRoot ? "Root Chroot" : "Native Termux") + ")");
-                        installPref.setSummary("Tekan untuk mengunduh & memasang 9router secara otomatis");
+                        installPref.setTitle("Pasang 9Router");
+                        installPref.setSummary("Pasang 9Router ke: " + target.displayName);
                     } else {
                         installPref.setVisible(false);
                     }
@@ -203,6 +242,16 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 if (serviceSwitch != null) {
                     serviceSwitch.setEnabled(isInstalled);
                     serviceSwitch.setChecked(isRunning);
+                }
+
+                SwitchPreferenceCompat mitmSwitch = findPreference(PREF_MITM_SWITCH);
+                if (mitmSwitch != null) {
+                    mitmSwitch.setEnabled(target.isRoot && isInstalled);
+                    if (!target.isRoot) {
+                        mitmSwitch.setSummary("Memerlukan Hak Akses Root (Chroot di /data/local)");
+                    } else {
+                        mitmSwitch.setSummary(R.string.settings_9router_mitm_summary);
+                    }
                 }
 
                 Preference openWebUi = findPreference(PREF_OPEN_WEBUI);

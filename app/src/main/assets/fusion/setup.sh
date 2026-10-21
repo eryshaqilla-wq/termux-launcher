@@ -1120,6 +1120,115 @@ EOF
 chmod 644 "$HOME/.fusion_env"
 echo -e "  ${GREEN}✔ Konfigurasi dinamis disimpan di $HOME/.fusion_env${RESET}"
 
+# ==============================================================================
+# ⚡ DETEKSI DAN PEMILIHAN TARGET 9ROUTER MULTI-ACCOUNT GATEWAY
+# ==============================================================================
+echo -e "\n  ${MAGENTA}${BOLD}⚡ Pilihan Target Instalasi 9Router & AI Multi-Account Gateway:${RESET}"
+
+TARGET_9R_OPTIONS=()
+TARGET_9R_PATHS=()
+TARGET_9R_TYPES=()
+
+if [ $IS_ROOT -eq 1 ]; then
+    # 1. NetHunter di /data/local/nhsystem/
+    for nh_c in /data/local/nhsystem/kali-arm64 /data/local/nhsystem/kalifs; do
+        if su -c "[ -d '$nh_c' ]" 2>/dev/null; then
+            TARGET_9R_OPTIONS+=("Kali NetHunter ($nh_c) [Rekomendasi Root - MITM Port 443 Support]")
+            TARGET_9R_PATHS+=("$nh_c")
+            TARGET_9R_TYPES+=("nethunter")
+        fi
+    done
+
+    # 2. Droidspaces Containers & spaces di /data/local/Droidspaces/
+    if su -c "[ -d '/data/local/Droidspaces' ]" 2>/dev/null; then
+        for ds_root in /data/local/Droidspaces/Containers /data/local/Droidspaces/spaces; do
+            if su -c "[ -d '$ds_root' ]" 2>/dev/null; then
+                for sub in $(su -c "ls -1 '$ds_root' 2>/dev/null" | grep -v '^\.'); do
+                    sub_path="$ds_root/$sub"
+                    if su -c "[ -d '$sub_path/rootfs' ]" 2>/dev/null; then
+                        sub_path="$sub_path/rootfs"
+                    fi
+                    TARGET_9R_OPTIONS+=("Droidspaces: $sub ($sub_path)")
+                    TARGET_9R_PATHS+=("$sub_path")
+                    TARGET_9R_TYPES+=("droidspaces")
+                done
+            fi
+        done
+    fi
+
+    # 3. Custom Chroot lainnya di /data/local
+    for extra_c in /data/local/ubuntu /data/local/debian /data/local/kali /data/local/chroot; do
+        if su -c "[ -d '$extra_c' ]" 2>/dev/null; then
+            TARGET_9R_OPTIONS+=("Custom Linux Chroot: $(basename "$extra_c") ($extra_c)")
+            TARGET_9R_PATHS+=("$extra_c")
+            TARGET_9R_TYPES+=("custom")
+        fi
+    done
+fi
+
+# 4. Selalu sediakan opsi Native Termux Host
+TARGET_9R_OPTIONS+=("Native Termux Host ($PREFIX - Non-Root / Standalone Port 20128)")
+TARGET_9R_PATHS+=("$PREFIX")
+TARGET_9R_TYPES+=("native")
+
+# 5. Opsi Lewati
+TARGET_9R_OPTIONS+=("Lewati instalasi 9Router untuk sekarang")
+TARGET_9R_PATHS+=("skip")
+TARGET_9R_TYPES+=("skip")
+
+echo -e "    Ditemukan target lingkungan di /data/local & host:"
+for idx in "${!TARGET_9R_OPTIONS[@]}"; do
+    num=$((idx + 1))
+    echo -e "    $num) ${TARGET_9R_OPTIONS[$idx]}"
+done
+
+read -p "    Pilih lokasi instalasi 9Router [1-${#TARGET_9R_OPTIONS[@]}, def: 1]: " ROUTER_SEL
+[ -z "$ROUTER_SEL" ] && ROUTER_SEL="1"
+SEL_IDX=$((ROUTER_SEL - 1))
+if [ $SEL_IDX -lt 0 ] || [ $SEL_IDX -ge ${#TARGET_9R_OPTIONS[@]} ]; then
+    SEL_IDX=0
+fi
+
+CHOSEN_9R_TYPE="${TARGET_9R_TYPES[$SEL_IDX]}"
+CHOSEN_9R_PATH="${TARGET_9R_PATHS[$SEL_IDX]}"
+
+mkdir -p "$FUSION_HOME"
+echo "$CHOSEN_9R_PATH" > "$FUSION_HOME/9router_target.conf"
+
+cat << EOF >> "$HOME/.fusion_env"
+export FUSION_9ROUTER_TARGET="$CHOSEN_9R_TYPE"
+export FUSION_9ROUTER_CHROOT="$CHOSEN_9R_PATH"
+EOF
+
+if [ "$CHOSEN_9R_TYPE" = "skip" ]; then
+    echo -e "  ${GRAY}➔ Instalasi 9Router dilewati. Bisa dipasang nanti dari Settings Launcher.${RESET}"
+elif [ "$CHOSEN_9R_TYPE" = "native" ]; then
+    echo -e "  ${GREEN}➔ Target Terpilih: Native Termux Host${RESET}"
+    read -p "    Unduh & pasang paket npm 9router di Termux host sekarang? [Y/n]: " DO_INSTALL_9R
+    if [ "${DO_INSTALL_9R,,}" != "n" ]; then
+        spin "Memasang nodejs & 9router di Termux..." su -c "true" && pkg install -y nodejs-lts && npm install -g 9router
+    fi
+    mkdir -p "$HOME/wallet"
+    [ -f "/root/wallet/9router.cjs" ] && cp -f "/root/wallet/9router.cjs" "$HOME/wallet/9router.cjs"
+    chmod 755 "$HOME/wallet/9router.cjs" 2>/dev/null || true
+else
+    echo -e "  ${GREEN}➔ Target Terpilih: Container Chroot ($CHOSEN_9R_PATH)${RESET}"
+    read -p "    Unduh & pasang paket npm 9router di dalam container $CHOSEN_9R_PATH? [Y/n]: " DO_INSTALL_9R
+    if [ "${DO_INSTALL_9R,,}" != "n" ]; then
+        spin "Memasang 9router di dalam container..." su -mm -c "chroot '$CHOSEN_9R_PATH' /bin/sh -c 'npm install -g 9router 2>/dev/null || true'"
+    fi
+    # Pasang 9router.cjs ke container
+    su -c "mkdir -p '$CHOSEN_9R_PATH/root/wallet'"
+    [ -f "/root/wallet/9router.cjs" ] && su -c "cp -f /root/wallet/9router.cjs '$CHOSEN_9R_PATH/root/wallet/9router.cjs'"
+    su -c "chmod 755 '$CHOSEN_9R_PATH/root/wallet/9router.cjs' 2>/dev/null || true"
+    # Pasang helper scripts di container
+    for scr in start-9router stop-9router 9router-web sync-agy-to-9router; do
+        if [ -f "/usr/local/bin/$scr" ]; then
+            su -c "cp -f '/usr/local/bin/$scr' '$CHOSEN_9R_PATH/usr/local/bin/$scr' && chmod 755 '$CHOSEN_9R_PATH/usr/local/bin/$scr'"
+        fi
+    done
+fi
+
 mkdir -p "$HOME/wallet"
 if [ -d "$FUSION_HOME/wallet" ]; then
     cp -rf "$FUSION_HOME/wallet/"* "$HOME/wallet/"
