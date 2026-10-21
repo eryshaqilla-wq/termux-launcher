@@ -412,7 +412,11 @@ public class ExtraKeysEditorFragment extends Fragment {
         for (int page = 0; page < pages.size(); page++) {
             final int index = page;
             Chip chip = new Chip(context);
-            chip.setText(getString(R.string.settings_extra_keys_page, page + 1));
+            if (page == TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
+                chip.setText(R.string.settings_extra_keys_compact_page);
+            } else {
+                chip.setText(getString(R.string.settings_extra_keys_page, page + 1));
+            }
             chip.setCheckable(true);
             chip.setCheckedIconVisible(false);
             chip.setId(View.generateViewId());
@@ -442,7 +446,9 @@ public class ExtraKeysEditorFragment extends Fragment {
             View child = pageChips.getChildAt(i);
             if (child instanceof Chip) ((Chip) child).setChecked(i == currentPage);
         }
-        if (page().isEmpty()) {
+        if (currentPage == TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
+            pageHint.setText(R.string.settings_extra_keys_compact_page_hint);
+        } else if (page().isEmpty()) {
             pageHint.setText(currentPage == 0
                 ? R.string.settings_extra_keys_page_hint_first_empty
                 : R.string.settings_extra_keys_page_hint_empty);
@@ -857,7 +863,9 @@ public class ExtraKeysEditorFragment extends Fragment {
             markDirty();
             refreshAll();
         };
-        if (page().isEmpty()) {
+        if (currentPage == TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
+            pageHint.setText(R.string.settings_extra_keys_compact_page_hint);
+        } else if (page().isEmpty()) {
             apply.run();
             return;
         }

@@ -1308,7 +1308,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private float mTerminalToolbarDefaultHeight;
     private boolean mIsAccessoryStackCollapsed;
-    @Nullable private View mDockRestorePillHost;
     private float mTwoFingerStartX;
     private float mTwoFingerStartY;
     private float mTwoFingerStartSpan;
@@ -1750,9 +1749,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         content.setOnApplyWindowInsetsListener((v, insets) -> {
             WindowInsetsCompat insetsCompat = WindowInsetsCompat.toWindowInsetsCompat(insets, v);
             mNavBarHeight = insetsCompat.getInsets(Type.systemBars()).bottom;
-            if (mIsAccessoryStackCollapsed && mDockRestorePillHost != null) {
-                styleDockRestorePill(mDockRestorePillHost);
-            }
             applyAppDrawerEdgeBleed(insetsCompat);
             mImeLiftPx = computeDockImeLiftPx(insetsCompat);
             applyDockImeOffset(0);
@@ -1802,7 +1798,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setTerminalToolbarView(savedInstanceState);
         syncPinnedAppsHost();
         initializeInAppKeyboard(savedInstanceState);
-        setupDockRestorePill();
         // Only a fresh launch may enter adjust mode: after process death the system re-delivers
         // the original launch intent with the extra still set, which must not re-enter it.
         if (savedInstanceState == null) {
@@ -5630,8 +5625,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The dock's own row. A place that stands the bar on another edge gives the dock nothing:
         // the row goes, and with it the whole stack when it was the only thing on it.
         boolean azRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.azRowOnDock(layout);
-        boolean extraKeysRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.extraKeysRowShown(layout);
-        boolean dockShown = !mIsAccessoryStackCollapsed && PlaceChromePolicy.dockShown(layout);
+        boolean extraKeysRowEnabled = PlaceChromePolicy.extraKeysRowShown(layout);
+        boolean dockShown = appsRowEnabled || azRowEnabled || extraKeysRowEnabled;
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         float barAlpha = mPreferences.getAppBarOpacity() / 100f;
         return new ChromeSpec(
@@ -7823,31 +7818,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 mDockPlankController.setEnabled(false);
             }
             mChrome.requestSync(ChromeRenderer.SCOPE_TOP_PANE_FROST);
-            if (mDockRestorePillHost != null) {
-                if (mIsAccessoryStackCollapsed && !state.keyboardShown && !isImeVisible()) {
-                    mDockRestorePillHost.setVisibility(View.VISIBLE);
-                    mDockRestorePillHost.bringToFront();
-                    styleDockRestorePill(mDockRestorePillHost);
-                } else {
-                    mDockRestorePillHost.setVisibility(View.GONE);
-                }
-            }
             return;
-        }
-
-        if (mDockRestorePillHost != null) {
-            if (mIsAccessoryStackCollapsed && !state.keyboardShown && !isImeVisible()) {
-                mDockRestorePillHost.setVisibility(View.VISIBLE);
-                mDockRestorePillHost.bringToFront();
-                styleDockRestorePill(mDockRestorePillHost);
-            } else {
-                mDockRestorePillHost.setVisibility(View.GONE);
-            }
         }
 
         if (accessoryContainer != null)
             accessoryContainer.setVisibility(
-                !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(true, state.keyboardShown,
+                shouldShowAccessoryStack(true, state.keyboardShown,
                     bottomStatusBandPx() > 0) ? View.VISIBLE : View.GONE);
         if (accessorySurfaceHost != null) {
             accessorySurfaceHost.setVisibility(View.VISIBLE);
@@ -12609,7 +12585,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public void setAccessoryStackCollapsed(boolean collapsed, boolean animate) {
-        if (mIsAccessoryStackCollapsed == collapsed && mDockRestorePillHost != null) {
+        if (mIsAccessoryStackCollapsed == collapsed) {
             return;
         }
         mIsAccessoryStackCollapsed = collapsed;
@@ -12618,30 +12594,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         View accessoryContainer = findViewById(R.id.accessory_stack_container);
-        if (mDockRestorePillHost == null) {
-            mDockRestorePillHost = findViewById(R.id.dock_restore_pill_host);
+        if (accessoryContainer != null) {
+            com.termux.app.haptics.Haptics.tick(accessoryContainer, android.view.HapticFeedbackConstants.CLOCK_TICK);
         }
 
-        if (collapsed) {
-            if (accessoryContainer != null) {
-                accessoryContainer.setVisibility(View.GONE);
-            }
-            if (mDockRestorePillHost != null) {
-                mDockRestorePillHost.setVisibility(View.VISIBLE);
-                mDockRestorePillHost.bringToFront();
-                styleDockRestorePill(mDockRestorePillHost);
-                com.termux.app.haptics.Haptics.tick(mDockRestorePillHost, android.view.HapticFeedbackConstants.CLOCK_TICK);
-            }
-        } else {
-            if (mDockRestorePillHost != null) {
-                mDockRestorePillHost.setVisibility(View.GONE);
-            }
-            if (accessoryContainer != null) {
-                accessoryContainer.setVisibility(View.VISIBLE);
-                com.termux.app.haptics.Haptics.tick(accessoryContainer, android.view.HapticFeedbackConstants.CLOCK_TICK);
-            }
-        }
-
+        rebuildTerminalToolbarPages();
         applyChromeSpec(buildChromeSpec());
         setTerminalToolbarView(null);
         mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
@@ -12653,53 +12610,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
-    private int getDockRestoreChinHeightPx() {
-        int minChinPx = Math.round(dpToPx(24f));
-        return Math.max(mNavBarHeight, minChinPx);
+    public void toggleAccessoryStackCollapsed() {
+        setAccessoryStackCollapsed(!mIsAccessoryStackCollapsed, true);
     }
 
-    private void setupDockRestorePill() {
-        mDockRestorePillHost = findViewById(R.id.dock_restore_pill_host);
-        if (mDockRestorePillHost != null) {
-            styleDockRestorePill(mDockRestorePillHost);
-            if (mIsAccessoryStackCollapsed && !isInAppKeyboardShown() && !isImeVisible()) {
-                mDockRestorePillHost.setVisibility(View.VISIBLE);
-                mDockRestorePillHost.bringToFront();
-            } else {
-                mDockRestorePillHost.setVisibility(View.GONE);
-            }
-        }
-    }
-
-    private void styleDockRestorePill(@Nullable View pillHost) {
-        if (pillHost == null) return;
-        int chinHeight = getDockRestoreChinHeightPx();
-        ViewGroup.LayoutParams lp = pillHost.getLayoutParams();
-        if (lp != null && lp.height != chinHeight) {
-            lp.height = chinHeight;
-            pillHost.setLayoutParams(lp);
-        }
-
-        View touchArea = pillHost.findViewById(R.id.dock_restore_pill_touch_area);
-        if (touchArea != null) {
-            touchArea.setOnClickListener(v -> setAccessoryStackCollapsed(false, true));
-        }
-
-        View pillBar = pillHost.findViewById(R.id.dock_restore_pill_bar);
-        if (pillBar != null && mPreferences != null) {
-            float cornerRadiusPx = dpToPx(99f);
-            if (mChrome != null && mChrome.glass() != null) {
-                float barAlpha = mPreferences.getAppBarOpacity() / 100f;
-                int grain = mPreferences.getDockGlassGrain();
-                try {
-                    pillBar.setBackground(mChrome.glass().surface(
-                        com.termux.app.chrome.LowOpacityGlass.floored(barAlpha, 0.75f),
-                        0f, 1f, false, grain, cornerRadiusPx, false));
-                } catch (Throwable ignored) {
-                    // Fallback to XML shape drawable
-                }
-            }
-        }
+    public boolean isAccessoryStackCollapsed() {
+        return mIsAccessoryStackCollapsed;
     }
 
     private boolean checkTwoFingerSwipe(@NonNull MotionEvent ev) {
@@ -13153,8 +13069,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** The keys' width in the column: the row's height turned on its side. */
     private int extraKeysColumnKeysWidthPx() {
         int matrix = 0;
-        if (mTermuxTerminalExtraKeys != null && mTermuxTerminalExtraKeys.getExtraKeysInfo() != null) {
-            matrix = mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length;
+        TermuxTerminalExtraKeys activeKeys = mIsAccessoryStackCollapsed
+            ? getTermuxTerminalExtraKeys(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX)
+            : mTermuxTerminalExtraKeys;
+        if (activeKeys != null && activeKeys.getExtraKeysInfo() != null) {
+            matrix = activeKeys.getExtraKeysInfo().getMatrix().length;
         }
         return AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(
             Math.round(mTerminalToolbarDefaultHeight), matrix,
@@ -14080,8 +13999,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup.LayoutParams toolbarLayoutParams = terminalToolbarViewPager.getLayoutParams();
 
         int matrix = 0;
-        if (mTermuxTerminalExtraKeys != null && mTermuxTerminalExtraKeys.getExtraKeysInfo() != null) {
-            matrix = mTermuxTerminalExtraKeys.getExtraKeysInfo().getMatrix().length;
+        TermuxTerminalExtraKeys activeKeys = mIsAccessoryStackCollapsed
+            ? getTermuxTerminalExtraKeys(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX)
+            : mTermuxTerminalExtraKeys;
+        if (activeKeys != null && activeKeys.getExtraKeysInfo() != null) {
+            matrix = activeKeys.getExtraKeysInfo().getMatrix().length;
         }
 
         int measuredToolbarHeightPx = AccessoryStackLayoutPolicy.computeTerminalToolbarHeightPx(
@@ -14209,21 +14131,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // same gap from it the dock would (ChromePolicy.bottomEdgeGapPx): a gone stack's margin
         // positions nothing, so the content carries the gap itself. The reservation below counts
         // the margin either way, so it is the room the layout really gives.
-        boolean stackShown = !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(state.toolbarShown, state.keyboardShown,
+        boolean stackShown = shouldShowAccessoryStack(state.toolbarShown, state.keyboardShown,
             statusBandPx > 0);
-        int contentEdgeGapPx;
-        if (stackShown) {
-            contentEdgeGapPx = 0;
-        } else if (state.keyboardShown || isImeVisible()) {
-            contentEdgeGapPx = accessoryBottomMarginPx;
-        } else {
-            // Full canvas mode: reserve chin height for the Android navigation pill so terminal canvas
-            // remains a clean, unclipped rectangle above the phone's physical corner curve.
-            contentEdgeGapPx = getDockRestoreChinHeightPx();
-        }
+        int contentEdgeGapPx = stackShown ? 0 : accessoryBottomMarginPx;
         boolean overlapChanged = applyContentBottomMargin(contentEdgeGapPx, keyboardOverlapPx);
         int contentReservationPx = KeyboardOverlayPolicy.contentReservationPx(
-            combinedHeight, contentEdgeGapPx, keyboardOverlapPx);
+            combinedHeight, accessoryBottomMarginPx, keyboardOverlapPx);
         boolean contentReservationChanged = contentReservationPx != mAppliedContentReservationPx;
         mAppliedContentReservationPx = contentReservationPx;
         boolean keyboardShownChanged = mKeyboardGeometry.applyKeyboardShown(state.keyboardShown);
@@ -14570,8 +14483,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             .configuredCornerRadiusDp(preferencesAvailable
                 ? mPreferences.getAppLauncherDockCornerRadius()
                 : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_APP_LAUNCHER_DOCK_CORNER_RADIUS)
-            .appsRowEnabledPref(PlaceChromePolicy.appsShown(layout))
-            .azRowEnabledPref(PlaceChromePolicy.azRowOnDock(layout))
+            .appsRowEnabledPref(!mIsAccessoryStackCollapsed && PlaceChromePolicy.appsShown(layout))
+            .azRowEnabledPref(!mIsAccessoryStackCollapsed && PlaceChromePolicy.azRowOnDock(layout))
             // Which rows end up over and under the letters — the resolved order, not the switches —
             // so the A-Z row knows whether to carry a crown and a chin.
             .rowOverAz(AccessoryStackLayoutPolicy.rowOverAz(bottomStack))
@@ -17075,6 +16988,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public TermuxTerminalExtraKeys getTermuxTerminalExtraKeys(int page) {
         if (mTermuxTerminalExtraKeysPages.isEmpty()) rebuildExtraKeysPageClients();
+        if (mIsAccessoryStackCollapsed) {
+            if (mTermuxTerminalExtraKeysPages.size() > TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
+                return mTermuxTerminalExtraKeysPages.get(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX);
+            }
+        }
         if (page < 0 || page >= mTermuxTerminalExtraKeysPages.size()) page = 0;
         return mTermuxTerminalExtraKeysPages.get(page);
     }
@@ -17089,8 +17007,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * than leaving a blank one to swipe into.
      */
     public int getExtraKeysPageCount() {
+        if (mIsAccessoryStackCollapsed) {
+            return 1;
+        }
         if (mTermuxTerminalExtraKeysPages.isEmpty()) rebuildExtraKeysPageClients();
-        return Math.max(1, mTermuxTerminalExtraKeysPages.size());
+        int normalCount = 0;
+        for (int i = 0; i < Math.min(2, mTermuxTerminalExtraKeysPages.size()); i++) {
+            if (i == 0 || !mTermuxTerminalExtraKeysPages.get(i).isEmpty()) {
+                normalCount++;
+            }
+        }
+        return Math.max(1, normalCount);
     }
 
     /** Rebuilds one client per configured key page. Cheap: it only re-parses the properties. */
@@ -17099,8 +17026,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         for (int page = 0; page < TermuxTerminalExtraKeys.PAGE_PROPERTY_KEYS.length; page++) {
             TermuxTerminalExtraKeys client = new TermuxTerminalExtraKeys(this, mTerminalView,
                 mTermuxTerminalViewClient, mTermuxTerminalSessionActivityClient, page);
-            // Page 1 stays even when empty: the row is the surface the pager is built around.
-            if (page > 0 && client.isEmpty()) break;
             mTermuxTerminalExtraKeysPages.add(client);
         }
         if (mTermuxTerminalExtraKeysPages.isEmpty()) {

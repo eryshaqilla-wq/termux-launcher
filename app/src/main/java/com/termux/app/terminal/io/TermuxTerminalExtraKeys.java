@@ -26,13 +26,17 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
     public static final String[] PAGE_PROPERTY_KEYS = {
         TermuxPropertyConstants.KEY_EXTRA_KEYS,
         TermuxPropertyConstants.KEY_EXTRA_KEYS2,
+        TermuxPropertyConstants.KEY_EXTRA_KEYS_COMPACT,
     };
 
     /** The default value of each page, index-aligned with {@link #PAGE_PROPERTY_KEYS}. */
     public static final String[] PAGE_DEFAULT_VALUES = {
         TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
         TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS2,
+        TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_COMPACT,
     };
+
+    public static final int COMPACT_PAGE_INDEX = 2;
 
     private ExtraKeysInfo mExtraKeysInfo;
 
@@ -120,6 +124,8 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             TerminalView terminalView = mActivity.getTerminalView();
             if (terminalView != null && terminalView.mEmulator != null)
                 terminalView.mEmulator.toggleAutoScrollDisabled();
+        } else if ("DOCK".equals(key) || "DOCK_TOGGLE".equals(key)) {
+            mActivity.toggleAccessoryStackCollapsed();
         } else if (key != null && key.startsWith(LAUNCHER_TOOL_KEY_PREFIX)) {
             runLauncherToolKey(key.substring(LAUNCHER_TOOL_KEY_PREFIX.length()));
         } else {
@@ -189,6 +195,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
 
     /** Tools whose effect is its own readout: the wall's places, mouse mode, which chips itself, and dictation's pill. */
     private static boolean announcesItself(@NonNull String key) {
+        if ("DOCK".equals(key) || "DOCK_TOGGLE".equals(key)) return true;
         if (!key.startsWith(LAUNCHER_TOOL_KEY_PREFIX)) return false;
         String spec = key.substring(LAUNCHER_TOOL_KEY_PREFIX.length());
         int colon = spec.indexOf(':');

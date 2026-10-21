@@ -89,6 +89,7 @@ public final class TerminalActionDispatcher {
     public static final String TOOL_WALL_WIDGETS = "wall.widgets";
     public static final String TOOL_WALL_TERMINAL = "wall.terminal";
     public static final String TOOL_WALL_DISPLAY = "wall.display";
+    public static final String TOOL_DOCK_TOGGLE = "dock.toggle";
     public static final String TOOL_MOUSE_TOGGLE = "mouse.toggle";
     public static final String TOOL_PANE_SPLIT = "pane.split";
     /** Panes opened and driven through the local API (agents, scripts); see AgentPaneRegistry. */
@@ -302,6 +303,7 @@ public final class TerminalActionDispatcher {
             case TOOL_WALL_WIDGETS:
             case TOOL_WALL_TERMINAL:
             case TOOL_WALL_DISPLAY:
+            case TOOL_DOCK_TOGGLE:
             case TOOL_MOUSE_TOGGLE:
             case TOOL_PANE_TOGGLE_FLOAT:
             case TOOL_PANE_OPEN:
@@ -632,6 +634,10 @@ public final class TerminalActionDispatcher {
                         return error(400, "bad_request", "That place is not on this install's wall");
                     }
                     return ok().put("page", page);
+                }
+                case TOOL_DOCK_TOGGLE: {
+                    host.getActivity().toggleAccessoryStackCollapsed();
+                    return ok().put("collapsed", host.getActivity().isAccessoryStackCollapsed());
                 }
                 case TOOL_MOUSE_TOGGLE:
                     return ok().put("mouseMode", host.toggleMouseMode());

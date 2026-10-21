@@ -61,7 +61,7 @@ public final class ExtraKeysPresets {
     public static final String[] MODIFIER_KEYS = {"CTRL", "ALT", "SHIFT", "FN"};
 
     /** Keys the row handles itself rather than sending to the terminal. */
-    public static final String[] ROW_KEYS = {"KEYBOARD", "PASTE", "SCROLL"};
+    public static final String[] ROW_KEYS = {"KEYBOARD", "PASTE", "SCROLL", "DOCK"};
 
     private static final List<QuickKey> QUICK_KEYS = Collections.unmodifiableList(Arrays.asList(
         new QuickKey("CTRL", "CTRL"),
@@ -86,7 +86,8 @@ public final class ExtraKeysPresets {
         new QuickKey("/", "/"),
         new QuickKey("|", "|"),
         new QuickKey("~", "~"),
-        new QuickKey("KEYBOARD", "⌨")));
+        new QuickKey("KEYBOARD", "⌨"),
+        new QuickKey("DOCK", "DOCK")));
 
     private ExtraKeysPresets() {}
 

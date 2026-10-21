@@ -1134,52 +1134,6 @@
             android:focusable="false"
             android:visibility="gone" />
 
-        <!-- Full-Canvas Android Navigation Pill Chin -->
-        <FrameLayout
-            android:id="@+id/dock_restore_pill_host"
-            android:layout_width="match_parent"
-            android:layout_height="24dp"
-            android:layout_alignParentBottom="true"
-            android:layout_centerHorizontal="true"
-            android:elevation="24dp"
-            android:clipChildren="false"
-            android:clipToPadding="false"
-            android:visibility="gone">
-
-            <ImageView
-                android:id="@+id/dock_restore_pill_wallpaper_backdrop"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:scaleType="fitXY"
-                android:importantForAccessibility="no"
-                android:visibility="gone" />
-
-            <com.github.mmin18.widget.RealtimeBlurView
-                android:id="@+id/dock_restore_pill_blur"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                app:realtimeBlurRadius="10dp"
-                app:realtimeOverlayColor="@android:color/transparent"
-                android:visibility="gone" />
-
-            <FrameLayout
-                android:id="@+id/dock_restore_pill_touch_area"
-                android:layout_width="160dp"
-                android:layout_height="match_parent"
-                android:layout_gravity="center"
-                android:clickable="true"
-                android:focusable="true"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="@string/dock_restore_pill_content_description">
-
-                <View
-                    android:id="@+id/dock_restore_pill_bar"
-                    android:layout_width="72dp"
-                    android:layout_height="4.5dp"
-                    android:layout_gravity="center"
-                    android:background="@drawable/dock_restore_pill_background" />
-            </FrameLayout>
-        </FrameLayout>
         </RelativeLayout>
         <!-- App drawer overlay plane. A full-bleed sibling of the padded content root, so it paints
              over the whole accessory stack while still losing to the command palette in z. It is

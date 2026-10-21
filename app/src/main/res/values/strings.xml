@@ -8,7 +8,10 @@
     ]>
 
 <resources>
-    <string name="dock_restore_pill_content_description">Restore dock and extra keys</string>
+    <string name="settings_extra_keys_compact_page">Compact Dock</string>
+    <string name="settings_extra_keys_compact_page_hint">Baris tunggal yang ditampilkan saat mode dock diminimalkan (Hide).</string>
+    <string name="tool_dock_toggle">Toggle Dock</string>
+    <string name="tool_desc_dock_toggle">Toggle between full dock and compact 1-row extra keys.</string>
     <string name="widget_add">Add widget</string>
     <string name="widget_empty_hint">Long-press to add widgets</string>
     <string name="widget_menu_edit_widgets">Edit widgets</string>

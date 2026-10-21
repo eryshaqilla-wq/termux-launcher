@@ -111,6 +111,7 @@ public class ExtraKeysConstants {
                 put("PASTE", "⎘");
                 // U+21F3
                 put("SCROLL", "⇳");
+                put("DOCK", "DOCK");
             }
         };
 

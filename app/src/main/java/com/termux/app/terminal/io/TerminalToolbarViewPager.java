@@ -54,13 +54,15 @@ public class TerminalToolbarViewPager {
             View layout;
             int keyPages = mActivity.getExtraKeysPageCount();
             if (position < keyPages) {
+                int pageIndex = mActivity.isAccessoryStackCollapsed()
+                    ? TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX : position;
                 // The page is the activity's own key view, lent here: the same instance the
                 // portable host takes when the place stands the keys on another edge, so a latched
                 // modifier and the picked colours survive the move either way.
-                ExtraKeysView extraKeysView = mActivity.lendExtraKeysPage(position);
+                ExtraKeysView extraKeysView = mActivity.lendExtraKeysPage(pageIndex);
                 extraKeysView.setVertical(false);
                 layout = extraKeysView;
-                extraKeysView.setExtraKeysViewClient(mActivity.getTermuxTerminalExtraKeys(position));
+                extraKeysView.setExtraKeysViewClient(mActivity.getTermuxTerminalExtraKeys(pageIndex));
                 extraKeysView.setButtonTextAllCaps(mActivity.getProperties().shouldExtraKeysTextBeAllCaps());
                 // Left swipe from the last key page reaches the text input; from an earlier one it
                 // is just the next key page, which the pager already handles.
@@ -68,9 +70,9 @@ public class TerminalToolbarViewPager {
                 extraKeysView.setToolbarTextInputSwipeListener(() ->
                     mActivity.getTerminalToolbarViewPager().setCurrentItem(textInputPage, true));
                 extraKeysView.setPageIndicator(position, keyPages);
-                mActivity.setExtraKeysView(extraKeysView, position);
+                mActivity.setExtraKeysView(extraKeysView, pageIndex);
                 extraKeysView.reload(
-                    mActivity.getTermuxTerminalExtraKeys(position).getExtraKeysInfo(),
+                    mActivity.getTermuxTerminalExtraKeys(pageIndex).getExtraKeysInfo(),
                     mActivity.getTerminalToolbarDefaultHeight());
             } else {
                 layout = inflater.inflate(R.layout.view_terminal_toolbar_text_input, collection, false);

@@ -397,6 +397,7 @@ public final class LauncherToolRegistry {
     public static final String TOOL_WALL_WIDGETS = "wall.widgets";
     public static final String TOOL_WALL_TERMINAL = "wall.terminal";
     public static final String TOOL_WALL_DISPLAY = "wall.display";
+    public static final String TOOL_DOCK_TOGGLE = "dock.toggle";
     public static final String TOOL_MOUSE_TOGGLE = "mouse.toggle";
     public static final String TOOL_PANE_TOGGLE_FLOAT = "pane.toggle_float";
     public static final String TOOL_PANE_OPEN = "pane.open";
@@ -651,6 +652,10 @@ public final class LauncherToolRegistry {
             "Show the pane wall's Display place.",
             schemaEmpty(), ToolRisk.LOW, false, ToolExecutor.TERMINAL,
             CATEGORY_WALL, R.string.tool_wall_display, R.string.tool_desc_wall_display, null);
+        addUi(map, TOOL_DOCK_TOGGLE,
+            "Toggle between full dock and compact 1-row extra keys.",
+            schemaEmpty(), ToolRisk.LOW, false, ToolExecutor.TERMINAL,
+            CATEGORY_WALL, R.string.tool_dock_toggle, R.string.tool_desc_dock_toggle, null);
         // The mouse key: bindable on the row, the in-app keyboard and a chord. In the terminal
         // it makes every touch the mouse; on the Display place it swaps the keyboard for a touchpad.
         addUi(map, TOOL_MOUSE_TOGGLE,

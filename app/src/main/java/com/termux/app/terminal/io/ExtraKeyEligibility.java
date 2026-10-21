@@ -90,6 +90,7 @@ public final class ExtraKeyEligibility {
     public static final String KEY_DRAWER = "DRAWER";
     public static final String KEY_PASTE = "PASTE";
     public static final String KEY_SCROLL = "SCROLL";
+    public static final String KEY_DOCK = "DOCK";
 
     /** The modifiers, which live outside {@code PRIMARY_KEY_CODES_FOR_STRINGS}. */
     private static final String[] MODIFIERS = {"CTRL", "ALT", "SHIFT", "FN"};
@@ -103,6 +104,7 @@ public final class ExtraKeyEligibility {
         rowKeys.put(KEY_DRAWER, Band.SESSION_OVERLAY);
         rowKeys.put(KEY_PASTE, Band.TERMINAL_TOOL);
         rowKeys.put(KEY_SCROLL, Band.TERMINAL_TOOL);
+        rowKeys.put(KEY_DOCK, Band.LAUNCHER);
         ROW_KEYS = Collections.unmodifiableMap(rowKeys);
 
         Map<String, Band> tools = new HashMap<>();
@@ -128,6 +130,7 @@ public final class ExtraKeyEligibility {
         tools.put(LauncherToolRegistry.TOOL_VOICE_DICTATE, Band.LAUNCHER);
         // The dock and the key row are chrome every place wears.
         tools.put(LauncherToolRegistry.TOOL_TERMINAL_TOGGLE_TOOLBAR, Band.LAUNCHER);
+        tools.put(LauncherToolRegistry.TOOL_DOCK_TOGGLE, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_EXTRA_KEYS_EDIT, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_APP_OPEN_SETTINGS, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_APP_OPEN_HELP, Band.LAUNCHER);
