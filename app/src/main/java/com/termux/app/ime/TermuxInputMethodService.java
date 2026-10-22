@@ -70,6 +70,11 @@ public class TermuxInputMethodService extends InputMethodService {
     }
 
     @Override
+    public View onCreateCandidatesView() {
+        return null;
+    }
+
+    @Override
     public boolean onEvaluateInputViewShown() {
         super.onEvaluateInputViewShown();
         return true;
@@ -86,6 +91,8 @@ public class TermuxInputMethodService extends InputMethodService {
         if (win != null) {
             win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
             win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            win.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+            win.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
         }
         applyWindowStyling(win);
     }
@@ -257,6 +264,11 @@ public class TermuxInputMethodService extends InputMethodService {
         if (win == null) return;
         win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        win.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
+        win.clearFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            win.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+        }
         Context context = this;
         String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
         int bgColor = InAppKeyboardPaletteFactory.isSolidTheme(theme)
@@ -275,8 +287,9 @@ public class TermuxInputMethodService extends InputMethodService {
         View decorView = win.getDecorView();
         if (decorView != null) {
             decorView.setBackgroundColor(Color.TRANSPARENT);
+            int flags = decorView.getSystemUiVisibility();
+            flags &= ~View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                int flags = decorView.getSystemUiVisibility();
                 boolean isLight = (theme != null && theme.contains("light"))
                     || (Color.red(bgColor) * 0.299 + Color.green(bgColor) * 0.587 + Color.blue(bgColor) * 0.114 > 160);
                 if (isLight) {
@@ -284,8 +297,8 @@ public class TermuxInputMethodService extends InputMethodService {
                 } else {
                     flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
                 }
-                decorView.setSystemUiVisibility(flags);
             }
+            decorView.setSystemUiVisibility(flags);
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -299,11 +312,14 @@ public class TermuxInputMethodService extends InputMethodService {
     @Override
     public void onComputeInsets(InputMethodService.Insets outInsets) {
         super.onComputeInsets(outInsets);
-        if (mKeyboardWrapper != null) {
-            int top = mKeyboardWrapper.getTop();
-            outInsets.contentTopInsets = top;
-            outInsets.visibleTopInsets = top;
-            outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_CONTENT;
+        if (mKeyboardWrapper != null && mKeyboardWrapper.getVisibility() == View.VISIBLE && mKeyboardWrapper.getHeight() > 0) {
+            int[] loc = new int[2];
+            mKeyboardWrapper.getLocationInWindow(loc);
+            if (loc[1] >= 0) {
+                outInsets.contentTopInsets = loc[1];
+                outInsets.visibleTopInsets = loc[1];
+                outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_CONTENT;
+            }
         }
     }
 
