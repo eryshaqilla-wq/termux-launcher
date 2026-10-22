@@ -2,17 +2,18 @@ package com.termux.app.ime;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.provider.Settings;
 
 import androidx.annotation.NonNull;
 
-import java.io.BufferedReader;
+import com.termux.app.x11.ChrootDistro;
+
 import java.io.File;
-import java.io.InputStreamReader;
 
 /**
  * Helper to query and control the global Android Navigation Bar keyboard button (down arrow).
- * Auto-detects root access (su) and WRITE_SECURE_SETTINGS permission.
+ * Auto-detects root access (su) and WRITE_SECURE_SETTINGS permission safely without hanging CI runners.
  */
 public final class SystemNavBarHelper {
 
@@ -45,40 +46,46 @@ public final class SystemNavBarHelper {
     }
 
     /**
-     * Detects if root access (su) is available and functional.
-     * Caches the result to prevent repeated process spawns.
+     * Detects if root access (su) is available.
+     * Uses Android root binary locations and ChrootDistro check to avoid hanging on host/CI machines.
      */
     public static boolean isRootAvailable() {
         if (sIsRootAvailable != null) {
             return sIsRootAvailable;
         }
 
-        // Fast check for common su binaries
-        boolean hasBinary = false;
-        String[] paths = {
-            "/system/bin/su", "/system/xbin/su", "/sbin/su",
-            "/data/adb/ksu/bin/su", "/data/adb/ap/bin/su", "/data/adb/magisk/su"
-        };
-        for (String path : paths) {
-            if (new File(path).exists()) {
-                hasBinary = true;
-                break;
-            }
-        }
-
-        // Verify root execution
-        try {
-            Process process = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            String line = reader.readLine();
-            int exitCode = process.waitFor();
-            boolean rootOk = (exitCode == 0 && line != null && (line.contains("uid=0") || line.contains("root")));
-            sIsRootAvailable = rootOk;
-            return rootOk;
-        } catch (Throwable t) {
+        // Avoid invoking su on host machines running Robolectric tests
+        if ("robolectric".equalsIgnoreCase(Build.FINGERPRINT)
+                || "robolectric".equalsIgnoreCase(Build.HARDWARE)
+                || "robolectric".equalsIgnoreCase(Build.DEVICE)) {
             sIsRootAvailable = false;
             return false;
         }
+
+        // Check well-known Android root binary paths
+        String[] paths = {
+            "/system/bin/su",
+            "/system/xbin/su",
+            "/sbin/su",
+            "/system/sd/xbin/su",
+            "/system/bin/failsafe/su",
+            "/data/local/xbin/su",
+            "/data/local/bin/su",
+            "/data/local/su",
+            "/data/adb/ksu/bin/su",
+            "/data/adb/ap/bin/su",
+            "/data/adb/magisk/su"
+        };
+        for (String path : paths) {
+            if (new File(path).exists()) {
+                sIsRootAvailable = true;
+                return true;
+            }
+        }
+
+        boolean root = ChrootDistro.isRootAvailable();
+        sIsRootAvailable = root;
+        return root;
     }
 
     /**
@@ -111,15 +118,21 @@ public final class SystemNavBarHelper {
             // Permission not granted directly, fall back to root
         } catch (Throwable ignored) {}
 
-        // 2. Fall back to root su
+        // 2. Fall back to root su on Android device
         try {
             Process process = Runtime.getRuntime().exec(new String[]{
                 "su", "-c", "settings put secure " + SETTING_KEY + " " + value
             });
+            process.getOutputStream().close();
             int exit = process.waitFor();
             return exit == 0;
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    @androidx.annotation.VisibleForTesting
+    static void resetRootCacheForTesting() {
+        sIsRootAvailable = null;
     }
 }
