@@ -6265,16 +6265,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             });
         }
-        ImageView sw = findViewById(R.id.inapp_keyboard_nav_switch);
-        if (sw != null) {
-            sw.setOnClickListener(v -> {
-                android.view.inputmethod.InputMethodManager imm =
-                    (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-                if (imm != null) {
-                    imm.showInputMethodPicker();
-                }
-            });
-        }
     }
 
     private void syncInAppKeyboardNavStrip() {
@@ -6291,25 +6281,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (hide != null) {
                 hide.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN);
             }
-            ImageView sw = findViewById(R.id.inapp_keyboard_nav_switch);
-            if (sw != null) {
-                sw.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN);
-            }
-            String activeTheme;
-            if (isWholeFrameTouchpadShown()) {
-                activeTheme = getActiveTouchpadTheme();
-            } else {
-                activeTheme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
-            }
-            if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
-                int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, activeTheme);
-                navStrip.setBackgroundColor(solidColor);
-            } else {
-                navStrip.setBackgroundColor(Color.TRANSPARENT);
-            }
+            navStrip.setBackground(buildInAppKeyboardNavStripSurface(buildChromeSpec(), navStrip));
         } else {
             navStrip.setVisibility(View.GONE);
+            navStrip.setBackground(null);
         }
+    }
+
+    @NonNull
+    private Drawable buildInAppKeyboardNavStripSurface(@NonNull ChromeSpec state, @NonNull View navStrip) {
+        String activeTheme;
+        if (isWholeFrameTouchpadShown()) {
+            activeTheme = getActiveTouchpadTheme();
+        } else {
+            activeTheme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
+        }
+        if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
+            int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, activeTheme);
+            return new ColorDrawable(solidColor);
+        }
+        if (shouldUseUnifiedDefaultKeyboardGlassSurface(state) && isUnifiedAccessoryBackdropReady(state)) {
+            return buildDecorNavBarTint(state);
+        }
+        return buildInAppKeyboardSurfaceBackground(state, navStrip, false, 0f);
     }
 
     /**
@@ -6727,13 +6721,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void applyInAppKeyboardSurfaceState(@NonNull ChromeSpec state) {
         syncInAppKeyboardNavStrip();
         View surfaceHost = findViewById(R.id.inapp_keyboard_view_host);
+        View navStrip = findViewById(R.id.inapp_keyboard_nav_strip);
         if (surfaceHost == null) {
             return;
         }
         if (!state.keyboardShown) {
             surfaceHost.setBackground(null);
+            if (navStrip != null) navStrip.setBackground(null);
             clearInAppKeyboardBackdrop();
             return;
+        }
+
+        if (navStrip != null && navStrip.getVisibility() == View.VISIBLE) {
+            navStrip.setBackground(buildInAppKeyboardNavStripSurface(state, navStrip));
+        } else if (navStrip != null) {
+            navStrip.setBackground(null);
         }
 
         String activeTheme;

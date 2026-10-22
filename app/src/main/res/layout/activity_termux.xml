@@ -989,15 +989,15 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content" />
 
-                    <!-- Bottom navigation strip for in-app keyboard and mouse touchpad (down arrow & keyboard switch) -->
+                    <!-- Bottom navigation strip for in-app keyboard and mouse touchpad (down arrow) -->
                     <LinearLayout
                         android:id="@+id/inapp_keyboard_nav_strip"
                         android:layout_width="match_parent"
                         android:layout_height="36dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
                         android:visibility="gone">
 
                         <ImageView
@@ -1009,23 +1009,7 @@
                             android:clickable="true"
                             android:focusable="true"
                             android:contentDescription="Hide Keyboard or Mouse"
-                            android:src="@drawable/ic_keyboard_hide_arrow" />
-
-                        <View
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:layout_weight="1" />
-
-                        <ImageView
-                            android:id="@+id/inapp_keyboard_nav_switch"
-                            android:layout_width="48dp"
-                            android:layout_height="36dp"
-                            android:scaleType="centerInside"
-                            android:background="?android:attr/selectableItemBackgroundBorderless"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:contentDescription="Switch Input Method"
-                            android:src="@drawable/ic_keyboard_switch" />
+                            android:src="@drawable/ic_sysbar_back_down" />
                     </LinearLayout>
                 </LinearLayout>
 

@@ -52,6 +52,7 @@ public class TermuxInputMethodService extends InputMethodService {
 
     @Override
     public void onCreate() {
+        setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
         super.onCreate();
         mPreferences = TermuxAppSharedPreferences.build(this);
         mKeyEventHandler = new ImeKeyEventHandler(this);
@@ -61,6 +62,17 @@ public class TermuxInputMethodService extends InputMethodService {
     public boolean onEvaluateFullscreenMode() {
         // Prevent fullscreen extract edit box in landscape so user can see what they type
         return false;
+    }
+
+    @Override
+    public boolean onEvaluateInputViewShown() {
+        super.onEvaluateInputViewShown();
+        return true;
+    }
+
+    @Override
+    public boolean onShowInputRequested(int flags, boolean configChange) {
+        return true;
     }
 
     @Override
@@ -201,9 +213,14 @@ public class TermuxInputMethodService extends InputMethodService {
 
         // Key popup preview overlay (identical to in-app keyboard popup)
         mKeyPopup = new KeyPopupController(mInputContainer, mKeyboardView);
-        int popupPrimary = palette.actionKeyBackground != 0 ? (palette.actionKeyBackground | 0xFF000000) : 0xFFE9B308;
-        int popupInk = palette.labelColor != 0 ? (palette.labelColor | 0xFF000000) : 0xFFF2EFE8;
+        int popupPrimary = (scheme.hasPinnedSwatches() && scheme.getSwatch(1) != 0)
+            ? scheme.getSwatch(1)
+            : (palette.actionKeyBackground != 0 ? (palette.actionKeyBackground | 0xFF000000) : KeyPopupPalette.resolve(context).primary);
+        int popupInk = (scheme.hasPinnedSwatches() && scheme.getSwatch(3) != 0)
+            ? scheme.getSwatch(3)
+            : (palette.labelColor != 0 ? (palette.labelColor | 0xFF000000) : KeyPopupPalette.resolve(context).ink);
         mKeyPopup.overlay().setPalette(new KeyPopupPalette(popupPrimary, popupInk));
+        mKeyPopup.overlay().setTypefaces(mKeyboardView.labelFont(), juloo.keyboard2.Theme.getKeyFont(context), NerdFontSpans.typeface(context));
         boolean popupEnabled = mPreferences == null || mPreferences.isInAppKeyboardKeyPopupEnabled();
         mKeyPopup.setEnabled(popupEnabled);
 
