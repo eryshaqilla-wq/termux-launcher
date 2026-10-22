@@ -1,10 +1,12 @@
 package com.termux.app.ime;
 
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 
 import android.app.Application;
 import android.os.Build;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -31,5 +33,18 @@ public class TermuxInputMethodServiceTest {
     public void inputViewCreatesSuccessfully() {
         View view = mService.onCreateInputView();
         assertNotNull(view);
+    }
+
+    @Test
+    public void fullscreenModeIsAlwaysDisabled() {
+        assertFalse(mService.onEvaluateFullscreenMode());
+    }
+
+    @Test
+    public void startAndFinishInputViewRunCleanly() {
+        mService.onCreateInputView();
+        EditorInfo info = new EditorInfo();
+        mService.onStartInputView(info, false);
+        mService.onFinishInputView(false);
     }
 }

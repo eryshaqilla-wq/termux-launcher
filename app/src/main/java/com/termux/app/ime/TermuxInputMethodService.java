@@ -1,10 +1,16 @@
 package com.termux.app.ime;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.Typeface;
 import android.inputmethodservice.InputMethodService;
+import android.os.Build;
+import android.util.DisplayMetrics;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 
@@ -36,13 +42,25 @@ public class TermuxInputMethodService extends InputMethodService {
     private Keyboard2View mKeyboardView;
     private FrameLayout mInputContainer;
     private ImeKeyEventHandler mKeyEventHandler;
-    private String mAppliedTheme = "";
+    private String mAppliedSettingsSignature = "";
 
     @Override
     public void onCreate() {
         super.onCreate();
         mPreferences = TermuxAppSharedPreferences.build(this);
         mKeyEventHandler = new ImeKeyEventHandler(this);
+    }
+
+    @Override
+    public boolean onEvaluateFullscreenMode() {
+        // Prevent fullscreen extract edit box in landscape so user can see what they type
+        return false;
+    }
+
+    @Override
+    public void onConfigureWindow(Window win, boolean isFullscreen, boolean isCandidatesOnly) {
+        super.onConfigureWindow(win, isFullscreen, isCandidatesOnly);
+        applyWindowStyling(win);
     }
 
     @Override
@@ -66,7 +84,7 @@ public class TermuxInputMethodService extends InputMethodService {
 
         Context context = this;
         String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
-        mAppliedTheme = theme;
+        mAppliedSettingsSignature = computeSettingsSignature();
 
         int bgColor = InAppKeyboardPaletteFactory.isSolidTheme(theme)
             ? InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme)
@@ -74,7 +92,20 @@ public class TermuxInputMethodService extends InputMethodService {
 
         mInputContainer.setBackgroundColor(bgColor);
 
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+
         Config.Builder configBuilder = new Config.Builder(getResources(), mKeyEventHandler);
+        // Important: In a system IME, do not cap keyboard height to 42% of the input frame!
+        configBuilder.maxKeyboardHeightFraction = 1.0f;
+        // Standard Android keyboard row heights: 54dp in portrait, 44dp in landscape
+        configBuilder.rowHeightPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, landscape ? 44f : 54f, dm);
+        // Comfortable chin padding at the bottom above gesture navigation bar
+        int userBottomPadding = mPreferences != null ? mPreferences.getInAppKeyboardBottomPadding() : 0;
+        configBuilder.bottomMarginPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, Math.max(8f, userBottomPadding), dm);
+
         configBuilder.hapticEnabled = mPreferences != null && mPreferences.isInAppKeyboardHapticsEnabled();
         configBuilder.keySoundEnabled = mPreferences != null && mPreferences.isInAppKeyboardKeySoundEnabled();
         configBuilder.labelFont = loadLabelFont();
@@ -97,7 +128,11 @@ public class TermuxInputMethodService extends InputMethodService {
             mKeyboardView.setKeyMarginScale(marginScale);
             float radiusDp = mPreferences.getInAppKeyboardKeyCornerRadiusDp();
             if (radiusDp >= 0f) {
-                mKeyboardView.setKeyCornerRadiusOverride(radiusDp * getResources().getDisplayMetrics().density);
+                mKeyboardView.setKeyCornerRadiusOverride(radiusDp * dm.density);
+            }
+            float heightScale = mPreferences.getInAppKeyboardHeightScale();
+            if (heightScale > 0f) {
+                mKeyboardView.setHeightScale(heightScale);
             }
         }
 
@@ -110,8 +145,57 @@ public class TermuxInputMethodService extends InputMethodService {
             mKeyboardView.setKeyboard(LayoutModifier.modify(layout, options, getResources()));
         }
 
-        mInputContainer.addView(mKeyboardView, new FrameLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        FrameLayout.LayoutParams kbdLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        kbdLp.gravity = Gravity.BOTTOM;
+        mInputContainer.addView(mKeyboardView, kbdLp);
+
+        // Synchronize window navigation bar and background
+        applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
+    }
+
+    private void applyWindowStyling(@Nullable Window win) {
+        if (win == null) return;
+        Context context = this;
+        String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
+        int bgColor = InAppKeyboardPaletteFactory.isSolidTheme(theme)
+            ? InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme)
+            : 0xFF1F1F1F;
+
+        View decorView = win.getDecorView();
+        if (decorView != null) {
+            decorView.setBackgroundColor(bgColor);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                int flags = decorView.getSystemUiVisibility();
+                boolean isLight = theme != null && theme.contains("light");
+                if (isLight) {
+                    flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                } else {
+                    flags &= ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                }
+                decorView.setSystemUiVisibility(flags);
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            win.setNavigationBarColor(bgColor);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            win.setNavigationBarDividerColor(0);
+        }
+    }
+
+    private String computeSettingsSignature() {
+        if (mPreferences == null) return "";
+        return mPreferences.getInAppKeyboardTheme() + "|"
+            + mPreferences.getInAppKeyboardHeightScale() + "|"
+            + mPreferences.getInAppKeyboardKeyMarginScale() + "|"
+            + mPreferences.getInAppKeyboardKeyCornerRadiusDp() + "|"
+            + mPreferences.getInAppKeyboardExtraKeys() + "|"
+            + mPreferences.getInAppKeyboardFontPath() + "|"
+            + mPreferences.getInAppKeyboardBottomPadding() + "|"
+            + mPreferences.isInAppKeyboardHapticsEnabled() + "|"
+            + mPreferences.isInAppKeyboardKeySoundEnabled();
     }
 
     @Override
@@ -121,12 +205,12 @@ public class TermuxInputMethodService extends InputMethodService {
             mKeyEventHandler.reset();
         }
 
-        // Refresh theme if changed in settings
-        if (mPreferences != null) {
-            String currentTheme = mPreferences.getInAppKeyboardTheme();
-            if (!currentTheme.equals(mAppliedTheme)) {
-                rebuildKeyboardView();
-            }
+        // Refresh keyboard view if any keyboard preferences changed in Settings
+        String currentSignature = computeSettingsSignature();
+        if (!currentSignature.equals(mAppliedSettingsSignature)) {
+            rebuildKeyboardView();
+        } else {
+            applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
         }
     }
 
