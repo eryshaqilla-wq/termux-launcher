@@ -111,17 +111,19 @@ public final class SystemNavBarHelper {
 
         // 1. Try directly via ContentResolver (works if WRITE_SECURE_SETTINGS is granted)
         try {
-            if (Settings.Secure.putInt(context.getContentResolver(), SETTING_KEY, value)) {
-                return true;
-            }
+            Settings.Secure.putInt(context.getContentResolver(), SETTING_KEY, value);
         } catch (SecurityException ignored) {
             // Permission not granted directly, fall back to root
+        } catch (Throwable ignored) {}
+
+        try {
+            Settings.Global.putInt(context.getContentResolver(), SETTING_KEY, value);
         } catch (Throwable ignored) {}
 
         // 2. Fall back to root su on Android device
         try {
             Process process = Runtime.getRuntime().exec(new String[]{
-                "su", "-c", "settings put secure " + SETTING_KEY + " " + value
+                "su", "-c", "settings put secure " + SETTING_KEY + " " + value + " 2>/dev/null; settings put global " + SETTING_KEY + " " + value + " 2>/dev/null"
             });
             process.getOutputStream().close();
             int exit = process.waitFor();

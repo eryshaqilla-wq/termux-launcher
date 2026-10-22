@@ -64,6 +64,13 @@ public class TermuxInputMethodService extends InputMethodService {
     }
 
     @Override
+    public void onWindowShown() {
+        super.onWindowShown();
+        updateBackDisposition();
+        applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
+    }
+
+    @Override
     public View onCreateInputView() {
         Context context = this;
         if (mPreferences == null) {
@@ -75,6 +82,7 @@ public class TermuxInputMethodService extends InputMethodService {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         rebuildKeyboardView();
+        updateBackDisposition();
         return mInputContainer;
     }
 
@@ -105,6 +113,10 @@ public class TermuxInputMethodService extends InputMethodService {
         int userBottomPadding = mPreferences != null ? mPreferences.getInAppKeyboardBottomPadding() : 0;
         configBuilder.bottomMarginPx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP, Math.max(8f, userBottomPadding), dm);
+        // Horizontal side insets matching Termux settings
+        int horizontalInset = mPreferences != null ? mPreferences.getInAppKeyboardHorizontalInset() : 0;
+        configBuilder.horizontalMarginPx = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, Math.max(3f, horizontalInset), dm);
 
         configBuilder.hapticEnabled = mPreferences != null && mPreferences.isInAppKeyboardHapticsEnabled();
         configBuilder.keySoundEnabled = mPreferences != null && mPreferences.isInAppKeyboardKeySoundEnabled();
@@ -122,7 +134,7 @@ public class TermuxInputMethodService extends InputMethodService {
 
         mKeyboardView = new Keyboard2View(context, configBuilder.build(), palette);
 
-        // Sizing & Appearance
+        // Sizing & Appearance synchronized with Termux preferences
         if (mPreferences != null) {
             float marginScale = mPreferences.getInAppKeyboardKeyMarginScale();
             mKeyboardView.setKeyMarginScale(marginScale);
@@ -134,6 +146,8 @@ public class TermuxInputMethodService extends InputMethodService {
             if (heightScale > 0f) {
                 mKeyboardView.setHeightScale(heightScale);
             }
+            int keyOpacity = mPreferences.getInAppKeyboardKeyOpacity();
+            mKeyboardView.setKeyOpacity(keyOpacity < 0 ? -1f : keyOpacity / 100f);
         }
 
         // Layout
@@ -152,6 +166,16 @@ public class TermuxInputMethodService extends InputMethodService {
 
         // Synchronize window navigation bar and background
         applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
+        updateBackDisposition();
+    }
+
+    private void updateBackDisposition() {
+        boolean showButton = mPreferences != null
+            ? mPreferences.isNavBarKeyboardButtonEnabled()
+            : SystemNavBarHelper.isNavBarKeyboardButtonEnabled(this);
+        setBackDisposition(showButton
+            ? InputMethodService.BACK_DISPOSITION_DEFAULT
+            : InputMethodService.BACK_DISPOSITION_ADJUST_NOTHING);
     }
 
     private void applyWindowStyling(@Nullable Window win) {
@@ -194,6 +218,9 @@ public class TermuxInputMethodService extends InputMethodService {
             + mPreferences.getInAppKeyboardExtraKeys() + "|"
             + mPreferences.getInAppKeyboardFontPath() + "|"
             + mPreferences.getInAppKeyboardBottomPadding() + "|"
+            + mPreferences.getInAppKeyboardHorizontalInset() + "|"
+            + mPreferences.getInAppKeyboardKeyOpacity() + "|"
+            + mPreferences.isNavBarKeyboardButtonEnabled() + "|"
             + mPreferences.isInAppKeyboardHapticsEnabled() + "|"
             + mPreferences.isInAppKeyboardKeySoundEnabled();
     }
@@ -204,6 +231,8 @@ public class TermuxInputMethodService extends InputMethodService {
         if (mKeyEventHandler != null) {
             mKeyEventHandler.reset();
         }
+
+        updateBackDisposition();
 
         // Refresh keyboard view if any keyboard preferences changed in Settings
         String currentSignature = computeSettingsSignature();

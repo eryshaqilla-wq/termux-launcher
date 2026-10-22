@@ -1764,6 +1764,18 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             TERMUX_APP.KEY_IN_APP_KEYBOARD_TAP_CORRECTION, value, false);
     }
 
+    /** Whether the navigation bar keyboard down arrow button is enabled. */
+    public boolean isNavBarKeyboardButtonEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_KEYBOARD_SHOW_NAV_BAR_BUTTON,
+            TERMUX_APP.DEFAULT_KEYBOARD_SHOW_NAV_BAR_BUTTON);
+    }
+
+    public void setNavBarKeyboardButtonEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_KEYBOARD_SHOW_NAV_BAR_BUTTON, value, false);
+    }
+
     /** {@code system} or {@code on_device}; anything else stored reads as the default. */
     public String getInAppKeyboardVoiceEngine() {
         String value = SharedPreferenceUtils.getString(mSharedPreferences,

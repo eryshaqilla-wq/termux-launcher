@@ -850,6 +850,11 @@ public final class TermuxPreferenceConstants {
 
         public static final boolean DEFAULT_IN_APP_KEYBOARD_TAP_CORRECTION = false;
 
+        /** Defines the key for whether the navigation bar keyboard down arrow button is enabled. */
+        public static final String KEY_KEYBOARD_SHOW_NAV_BAR_BUTTON = "keyboard_show_nav_bar_button";
+
+        public static final boolean DEFAULT_KEYBOARD_SHOW_NAV_BAR_BUTTON = true;
+
         /**
          * Which engine the in-app keyboard's voice key uses: {@code system} (the Android
          * recognizer, an activity) or {@code on_device} (the installed Whisper speech model in the

@@ -45,6 +45,7 @@ public class TermuxInputMethodServiceTest {
         mService.onCreateInputView();
         EditorInfo info = new EditorInfo();
         mService.onStartInputView(info, false);
+        mService.onWindowShown();
         mService.onFinishInputView(false);
     }
 }

@@ -134,21 +134,23 @@ public class KeyboardPreferencesFragment extends MaterialPreferenceFragment {
                 navBarButtonPreference.setSummary(R.string.settings_keyboard_show_nav_bar_button_no_root);
             } else {
                 navBarButtonPreference.setEnabled(true);
-                boolean isEnabled = SystemNavBarHelper.isNavBarKeyboardButtonEnabled(context);
+                boolean isEnabled = mPreferences != null
+                    ? mPreferences.isNavBarKeyboardButtonEnabled()
+                    : SystemNavBarHelper.isNavBarKeyboardButtonEnabled(context);
                 navBarButtonPreference.setChecked(isEnabled);
                 navBarButtonPreference.setSummary(isEnabled
                     ? R.string.settings_keyboard_show_nav_bar_button_summary_on
                     : R.string.settings_keyboard_show_nav_bar_button_summary_off);
                 navBarButtonPreference.setOnPreferenceChangeListener((preference, newValue) -> {
                     boolean enabled = (Boolean) newValue;
-                    boolean success = SystemNavBarHelper.setNavBarKeyboardButtonEnabled(context, enabled);
-                    if (success) {
-                        navBarButtonPreference.setSummary(enabled
-                            ? R.string.settings_keyboard_show_nav_bar_button_summary_on
-                            : R.string.settings_keyboard_show_nav_bar_button_summary_off);
-                        return true;
+                    if (mPreferences != null) {
+                        mPreferences.setNavBarKeyboardButtonEnabled(enabled);
                     }
-                    return false;
+                    SystemNavBarHelper.setNavBarKeyboardButtonEnabled(context, enabled);
+                    navBarButtonPreference.setSummary(enabled
+                        ? R.string.settings_keyboard_show_nav_bar_button_summary_on
+                        : R.string.settings_keyboard_show_nav_bar_button_summary_off);
+                    return true;
                 });
             }
         }
@@ -490,6 +492,9 @@ class KeyboardPreferencesDataStore extends PreferenceDataStore {
                     mContext, false);
                 break;
             case "keyboard_show_nav_bar_button":
+                if (mPreferences != null) {
+                    mPreferences.setNavBarKeyboardButtonEnabled(value);
+                }
                 SystemNavBarHelper.setNavBarKeyboardButtonEnabled(mContext, value);
                 break;
             default:
@@ -528,7 +533,9 @@ class KeyboardPreferencesDataStore extends PreferenceDataStore {
                     || !"false".equals(stored.trim().toLowerCase(Locale.ROOT));
             }
             case "keyboard_show_nav_bar_button":
-                return SystemNavBarHelper.isNavBarKeyboardButtonEnabled(mContext);
+                return mPreferences != null
+                    ? mPreferences.isNavBarKeyboardButtonEnabled()
+                    : SystemNavBarHelper.isNavBarKeyboardButtonEnabled(mContext);
             default:
                 return defValue;
         }
