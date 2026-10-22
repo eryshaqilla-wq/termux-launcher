@@ -6300,6 +6300,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, activeTheme);
             return new ColorDrawable(solidColor);
         }
+        if (shouldUseUnifiedDefaultKeyboardGlassSurface(state) || isWholeFrameTouchpadShown()) {
+            if (isUnifiedAccessoryBackdropReady(state)) {
+                return mChrome.glass().dockSurface(state.barAlpha, 0f, 1f, false);
+            }
+        }
         return buildInAppKeyboardSurfaceBackground(state, navStrip, false, 0f);
     }
 
@@ -6937,7 +6942,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             || !KeyboardMaterialPolicy.opacityApplies(inAppKeyboardForm(), inAppKeyboardOverlays());
         Integer schemeBackground = normalized ? null : resolveInAppKeyboardSchemeBackgroundColor();
         boolean wholePad = isWholeFrameTouchpadShown();
-        int blurRadiusDp = wholePad ? getEffectiveExtraKeysBlurRadius() : getEffectiveInAppKeyboardBlurRadius();
+        boolean unifiedDock = wholePad || shouldUseUnifiedDefaultKeyboardGlassSurface(state);
+        int blurRadiusDp = unifiedDock ? getEffectiveExtraKeysBlurRadius() : getEffectiveInAppKeyboardBlurRadius();
         // Render only the keyboard's slice of the shared light model — the under-pill nav strip
         // renders the remainder so the single foot lands under the pill (see the slice overload).
         // Docked, the keyboard is a slice of the frame: only the edge the model says faces the
@@ -6947,7 +6953,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int modelRim = capsule ? com.termux.app.chrome.ChromeEdgeRule.ALL
             : chromeRimEdges(KEYBOARD_PIECES);
         com.termux.app.chrome.GlassStack.Spec spec;
-        if (wholePad) {
+        if (unifiedDock) {
             int dockGrain = mPreferences != null
                 ? mPreferences.getDockGlassGrain()
                 : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN;
