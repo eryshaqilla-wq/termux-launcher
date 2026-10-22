@@ -108,3 +108,6 @@ project-docs/reference/layout-editor-v2/layout-editor-v2.zip
 fusion-setup/theme/
 fusion-setup/x_webview.js
 
+# Output of a skills installer (local, never committed)
+.agents/
+skills-lock.json

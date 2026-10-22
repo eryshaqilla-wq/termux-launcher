@@ -101,6 +101,10 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         if (fancierGlass != null) {
             fancierGlass.setVisible(com.termux.app.chrome.FancierGlassPolicy.offered(Build.VERSION.SDK_INT));
         }
+        SwitchPreferenceCompat motionLight = findPreference("fancier_glass_motion_light");
+        if (motionLight != null) {
+            motionLight.setVisible(com.termux.app.chrome.FancierGlassPolicy.offered(Build.VERSION.SDK_INT));
+        }
         configureVisualEffectsPreset(context);
     }
 
@@ -138,11 +142,13 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
     private void updateVisualEffectsKnobsState(boolean v0239PresetActive) {
         SwitchPreferenceCompat blur = findPreference("wallpaper_blur_enabled");
         SwitchPreferenceCompat fancier = findPreference("fancier_glass");
+        SwitchPreferenceCompat motionLight = findPreference("fancier_glass_motion_light");
         SwitchPreferenceCompat grain = findPreference("film_grain_enabled");
         SwitchPreferenceCompat parallax = findPreference("wallpaper_parallax");
         SwitchPreferenceCompat touchWobble = findPreference("touch_wobble_effect");
         if (blur != null) blur.setEnabled(!v0239PresetActive);
         if (fancier != null) fancier.setEnabled(!v0239PresetActive);
+        if (motionLight != null) motionLight.setEnabled(!v0239PresetActive);
         if (grain != null) grain.setEnabled(!v0239PresetActive);
         if (parallax != null) parallax.setEnabled(!v0239PresetActive);
         if (touchWobble != null) touchWobble.setEnabled(true);
@@ -382,6 +388,11 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
     private static final long STYLE_SYNC_DEBOUNCE_MS = 140L;
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
+    /** Look › Glass › Living glass. */
+    static final String KEY_MOTION_LIGHT =
+        com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP
+            .KEY_FANCIER_GLASS_MOTION_LIGHT;
+
     private final Context mContext;
 
     private final TermuxAppSharedPreferences mPreferences;
@@ -474,6 +485,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 LauncherSchemeTheme.invalidate();
                 scheduleTermuxActivityStylingSync(true);
                 break;
+            case KEY_MOTION_LIGHT:
+                // Read by each pane as a motion starts: nothing to restyle.
+                mPreferences.setFancierGlassMotionLightEnabled(value);
+                break;
             case "app_launcher_bw_icons":
                 mPreferences.setAppLauncherBwIconsEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -553,6 +568,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isTouchWobbleEffectEnabled();
             case "terminal_dynamic_colors_enabled":
                 return mPreferences.isTerminalDynamicColorsEnabled();
+            case KEY_MOTION_LIGHT:
+                return mPreferences.isFancierGlassMotionLightEnabled();
             case "app_launcher_bw_icons":
                 return mPreferences.isAppLauncherBwIconsEnabled();
             case "show_in_recents_when_not_default":

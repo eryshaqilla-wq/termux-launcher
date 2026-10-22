@@ -78,6 +78,11 @@
             app:summary="@string/settings_fancier_glass_summary"
             android:defaultValue="true" />
         <SwitchPreferenceCompat
+            app:key="fancier_glass_motion_light"
+            app:title="@string/settings_motion_light_title"
+            app:summary="@string/settings_motion_light_summary"
+            android:defaultValue="true" />
+        <SwitchPreferenceCompat
             app:key="film_grain_enabled"
             app:title="@string/settings_film_grain_title"
             app:summary="@string/settings_film_grain_summary"
