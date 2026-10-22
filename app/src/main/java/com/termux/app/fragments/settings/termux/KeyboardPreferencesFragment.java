@@ -134,8 +134,9 @@ public class KeyboardPreferencesFragment extends MaterialPreferenceFragment {
                 navBarButtonPreference.setSummary(R.string.settings_keyboard_show_nav_bar_button_no_root);
             } else {
                 navBarButtonPreference.setEnabled(true);
-                boolean isEnabled = mPreferences != null
-                    ? mPreferences.isNavBarKeyboardButtonEnabled()
+                TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context);
+                boolean isEnabled = preferences != null
+                    ? preferences.isNavBarKeyboardButtonEnabled()
                     : SystemNavBarHelper.isNavBarKeyboardButtonEnabled(context);
                 navBarButtonPreference.setChecked(isEnabled);
                 navBarButtonPreference.setSummary(isEnabled
@@ -143,8 +144,8 @@ public class KeyboardPreferencesFragment extends MaterialPreferenceFragment {
                     : R.string.settings_keyboard_show_nav_bar_button_summary_off);
                 navBarButtonPreference.setOnPreferenceChangeListener((preference, newValue) -> {
                     boolean enabled = (Boolean) newValue;
-                    if (mPreferences != null) {
-                        mPreferences.setNavBarKeyboardButtonEnabled(enabled);
+                    if (preferences != null) {
+                        preferences.setNavBarKeyboardButtonEnabled(enabled);
                     }
                     SystemNavBarHelper.setNavBarKeyboardButtonEnabled(context, enabled);
                     navBarButtonPreference.setSummary(enabled
