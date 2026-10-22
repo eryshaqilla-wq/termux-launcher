@@ -1440,9 +1440,13 @@ public final class TermuxInAppKeyboard {
     private juloo.keyboard2.Theme.Palette createPalette() {
         Context context = requireContainer().getContext();
         String theme = mPreferences.getInAppKeyboardTheme();
-        juloo.keyboard2.Theme.Palette palette =
-            InAppKeyboardPaletteFactory.createGlass(context, theme,
+        juloo.keyboard2.Theme.Palette palette;
+        if (InAppKeyboardPaletteFactory.isSolidTheme(theme)) {
+            palette = InAppKeyboardPaletteFactory.createSolid(context, theme);
+        } else {
+            palette = InAppKeyboardPaletteFactory.createGlass(context, theme,
                 com.termux.app.chrome.GlassLook.of(mPreferences));
+        }
         InAppKeyboardColorScheme scheme = InAppKeyboardColorScheme.fromJson(context,
             mPreferences.getInAppKeyboardColorScheme());
         return scheme.shouldApplyImportedPalette(theme) ? scheme.applyToPalette(palette) : palette;

@@ -226,6 +226,124 @@ public final class InAppKeyboardPaletteFactory {
     }
 
     /**
+     * Returns true if the given theme is a solid (opaque) built-in keyboard theme.
+     */
+    public static boolean isSolidTheme(String variant) {
+        if (variant == null) return false;
+        switch (variant) {
+            case "gboard_dark":
+            case "gboard_black":
+            case "gboard_light":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * Resolves the solid background color for solid built-in keyboard themes.
+     */
+    @ColorInt
+    public static int getSolidBackgroundColor(@NonNull Context context, String variant) {
+        if ("gboard_black".equals(variant)) {
+            return 0xFF000000;
+        } else if ("gboard_light".equals(variant)) {
+            return 0xFFECEFF1;
+        } else {
+            // gboard_dark default
+            return 0xFF1F1F1F;
+        }
+    }
+
+    /**
+     * Builds a solid (opaque) palette modeled after Gboard Dark, AMOLED Black, or Gboard Light.
+     * All keycaps, surfaces, and labels are 100% opaque, high contrast, and immune to wallpaper bleed.
+     */
+    @NonNull
+    public static Theme.Palette createSolid(@NonNull Context context, String variant) {
+        float density = context.getResources().getDisplayMetrics().density;
+        int keyboardBg = getSolidBackgroundColor(context, variant);
+        int key;
+        int function;
+        int space;
+        int action;
+        int activated;
+        int label;
+        int subLabel;
+        int actionLabel;
+        int actionSubLabel;
+        int functionLabel;
+        int activatedLabel;
+        int pressedLabel;
+        int lockedLabel;
+        int border;
+        boolean borderEnabled;
+        float borderWidth = 0.5f * density;
+        float borderRadius = 8f * density;
+
+        if ("gboard_black".equals(variant)) {
+            // AMOLED Black
+            key = 0xFF161616;
+            function = 0xFF101010;
+            space = 0xFF161616;
+            action = 0xFF8AB4F8;
+            activated = 0xFF2A2A2A;
+            label = 0xFFFFFFFF;
+            subLabel = 0xFF9E9E9E;
+            actionLabel = 0xFF041E49;
+            actionSubLabel = 0xFF041E49;
+            functionLabel = 0xFFE0E0E0;
+            activatedLabel = 0xFFFFFFFF;
+            pressedLabel = 0xFFFFFFFF;
+            lockedLabel = 0xFF8AB4F8;
+            border = 0xFF282828;
+            borderEnabled = true;
+        } else if ("gboard_light".equals(variant)) {
+            // Gboard Light
+            key = 0xFFFFFFFF;
+            function = 0xFFDADCE0;
+            space = 0xFFFFFFFF;
+            action = 0xFF1A73E8;
+            activated = 0xFFD2E3FC;
+            label = 0xFF1F1F1F;
+            subLabel = 0xFF5F6368;
+            actionLabel = 0xFFFFFFFF;
+            actionSubLabel = 0xFFFFFFFF;
+            functionLabel = 0xFF3C4043;
+            activatedLabel = 0xFF1F1F1F;
+            pressedLabel = 0xFF1F1F1F;
+            lockedLabel = 0xFF1A73E8;
+            border = 0xFFD0D4D9;
+            borderEnabled = true;
+        } else {
+            // Gboard Dark (Default solid)
+            key = 0xFF2D2F31;
+            function = 0xFF242628;
+            space = 0xFF2D2F31;
+            action = 0xFF8AB4F8;
+            activated = 0xFF3C4043;
+            label = 0xFFE3E3E3;
+            subLabel = 0xFF9AA0A6;
+            actionLabel = 0xFF041E49;
+            actionSubLabel = 0xFF041E49;
+            functionLabel = 0xFFD2D2D2;
+            activatedLabel = 0xFFFFFFFF;
+            pressedLabel = 0xFFFFFFFF;
+            lockedLabel = 0xFF8AB4F8;
+            border = 0xFF383A3D;
+            borderEnabled = true;
+        }
+
+        return new Theme.Palette(
+            keyboardBg, key, action, space, activated,
+            label, subLabel, activatedLabel, pressedLabel, lockedLabel,
+            border, borderEnabled, borderWidth, borderRadius, 1.0f,
+            0.25f, 0.5f, actionLabel, actionSubLabel, null,
+            0, 0, function, functionLabel
+        );
+    }
+
+    /**
      * {@link #createGlass(Context, String)} on the surface the preset draws. Under a
      * {@code scheme} look nothing changes. Under an Obsidian look the capsule is the look's tint,
      * not the theme's panel colour, so the chips, their legends and the glass they are contrasted

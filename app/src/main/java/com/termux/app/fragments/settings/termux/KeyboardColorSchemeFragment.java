@@ -107,6 +107,7 @@ public class KeyboardColorSchemeFragment extends Fragment {
     private ActivityResultLauncher<String[]> mFontPickerLauncher;
     private FrameLayout mPreviewHolder;
     private TextView mFontSummary;
+    private TextView mThemeSummary;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -317,12 +318,93 @@ public class KeyboardColorSchemeFragment extends Fragment {
 
     /**
      * The keyboard theme is no longer chosen by hand: "custom" while an imported palette exists,
-     * otherwise "system" (which follows day/night).
+     * otherwise "system" (which follows day/night). Solid preset themes are preserved.
      */
     private void syncThemePreference() {
+        String current = mPreferences.getInAppKeyboardTheme();
+        if (InAppKeyboardPaletteFactory.isSolidTheme(current))
+            return;
         String wanted = mScheme.hasImportedPalette() ? "custom" : "system";
-        if (!wanted.equals(mPreferences.getInAppKeyboardTheme()))
+        if (!wanted.equals(current))
             mPreferences.setInAppKeyboardTheme(wanted);
+    }
+
+    /** A two-line row, title over summary, that opens the keyboard theme preset picker. */
+    @NonNull
+    private View buildThemeRow(@NonNull android.content.Context context) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.VERTICAL);
+        android.util.TypedValue ripple = new android.util.TypedValue();
+        context.getTheme().resolveAttribute(
+            android.R.attr.selectableItemBackground, ripple, true);
+        row.setBackgroundResource(ripple.resourceId);
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setMinimumHeight(dp(48));
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPaddingRelative(dp(8), dp(8), dp(8), dp(8));
+        TextView title = new TextView(context);
+        title.setTextAppearance(
+            com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
+        title.setText(R.string.termux_in_app_keyboard_theme_title);
+        row.addView(title);
+        mThemeSummary = new TextView(context);
+        mThemeSummary.setTextAppearance(
+            com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+        mThemeSummary.setTextColor(MaterialColors.getColor(context,
+            com.google.android.material.R.attr.colorOnSurfaceVariant, Color.GRAY));
+        row.addView(mThemeSummary);
+        row.setOnClickListener(view -> showThemeDialog());
+        updateThemeSummary();
+        return row;
+    }
+
+    private void updateThemeSummary() {
+        if (mThemeSummary == null) return;
+        String theme = mPreferences.getInAppKeyboardTheme();
+        int summaryRes;
+        switch (theme) {
+            case "gboard_dark":
+                summaryRes = R.string.termux_in_app_keyboard_theme_gboard_dark;
+                break;
+            case "gboard_black":
+                summaryRes = R.string.termux_in_app_keyboard_theme_gboard_black;
+                break;
+            case "gboard_light":
+                summaryRes = R.string.termux_in_app_keyboard_theme_gboard_light;
+                break;
+            case "system":
+            default:
+                summaryRes = R.string.termux_in_app_keyboard_theme_default;
+                break;
+        }
+        mThemeSummary.setText(summaryRes);
+    }
+
+    private void showThemeDialog() {
+        String[] values = getResources().getStringArray(R.array.termux_in_app_keyboard_theme_values);
+        String[] entries = getResources().getStringArray(R.array.termux_in_app_keyboard_theme_entries);
+        String current = mPreferences.getInAppKeyboardTheme();
+        int selectedIndex = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(current)) {
+                selectedIndex = i;
+                break;
+            }
+        }
+
+        new MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.termux_in_app_keyboard_theme_title)
+            .setSingleChoiceItems(entries, selectedIndex, (dialog, which) -> {
+                if (which >= 0 && which < values.length) {
+                    mPreferences.setInAppKeyboardTheme(values[which]);
+                    updateThemeSummary();
+                    rebuildPreview();
+                }
+                dialog.dismiss();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 
     /** A two-line row, title over summary, that opens the pick/reset flow. */
@@ -436,12 +518,17 @@ public class KeyboardColorSchemeFragment extends Fragment {
         }
     }
 
-    /** Glass preview palette: the imported palette when active, then the background override. */
+    /** Preview palette: solid palette for solid themes, glass palette for glass themes, then custom overrides. */
     @NonNull
     private Theme.Palette buildPreviewPalette(@NonNull android.content.Context context) {
         String theme = mPreferences.getInAppKeyboardTheme();
-        Theme.Palette palette = InAppKeyboardPaletteFactory.createGlass(context, theme,
-            com.termux.app.chrome.GlassLook.of(mPreferences));
+        Theme.Palette palette;
+        if (InAppKeyboardPaletteFactory.isSolidTheme(theme)) {
+            palette = InAppKeyboardPaletteFactory.createSolid(context, theme);
+        } else {
+            palette = InAppKeyboardPaletteFactory.createGlass(context, theme,
+                com.termux.app.chrome.GlassLook.of(mPreferences));
+        }
         if (mScheme.shouldApplyImportedPalette(theme))
             palette = mScheme.applyToPalette(palette);
         // Production paints this color into the activity's glass backdrop behind a transparent
@@ -527,6 +614,8 @@ public class KeyboardColorSchemeFragment extends Fragment {
         heading.addView(edit);
         content.addView(heading);
 
+        content.addView(buildThemeRow(context), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         content.addView(buildTypefaceRow(context), new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -538,6 +627,7 @@ public class KeyboardColorSchemeFragment extends Fragment {
     public void onResume() {
         super.onResume();
         requireActivity().setTitle(R.string.keyboard_theme_title);
+        updateThemeSummary();
         // The wallpaper may have changed while this screen sat in the background; dynamic slots
         // have to show what the keyboard will actually use.
         if (mScheme != null && mKeyboard != null
@@ -561,6 +651,8 @@ public class KeyboardColorSchemeFragment extends Fragment {
     }
 
     private void applyFollowTheme(boolean clearPaintedKeys) {
+        mPreferences.setInAppKeyboardTheme("system");
+        updateThemeSummary();
         if (clearPaintedKeys) {
             mPreferences.setInAppKeyboardColorScheme("");
             mScheme = InAppKeyboardColorScheme.fromJson(requireContext(), "");

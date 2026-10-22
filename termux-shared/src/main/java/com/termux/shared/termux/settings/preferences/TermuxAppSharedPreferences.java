@@ -1729,6 +1729,9 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             case "light":
             case "dark":
             case "custom":
+            case "gboard_dark":
+            case "gboard_black":
+            case "gboard_light":
                 return true;
             default:
                 return false;

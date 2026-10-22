@@ -19,6 +19,12 @@
 
     <PreferenceCategory app:key="keyboard_built_in" app:title="@string/settings_keyboard_built_in_header">
         <Preference
+            app:key="keyboard_sub_theme"
+            app:persistent="false"
+            app:title="@string/keyboard_theme_title"
+            app:summary="@string/keyboard_theme_summary"
+            app:fragment="com.termux.app.fragments.settings.termux.KeyboardColorSchemeFragment" />
+        <Preference
             app:key="keyboard_sub_layout"
             app:persistent="false"
             app:title="@string/settings_keyboard_sub_layout_title"

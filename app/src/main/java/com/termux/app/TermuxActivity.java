@@ -148,6 +148,7 @@ import com.termux.app.terminal.inappkeyboard.ClipboardPanelController;
 import com.termux.app.terminal.inappkeyboard.ClipboardPanelView;
 import com.termux.app.terminal.inappkeyboard.FloatingKeyboardController;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardHost;
+import com.termux.app.terminal.inappkeyboard.InAppKeyboardPaletteFactory;
 import com.termux.app.terminal.inappkeyboard.KeyboardGeometryChoreographer;
 import com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard;
 import com.termux.app.terminal.inappkeyboard.voice.DictationMarks;
@@ -5892,6 +5893,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (isWholeFrameTouchpadShown()) {
             return state.toolbarShown && !isRoundedDockStyle();
         }
+        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
+            return false;
+        }
         return ChromePolicy.shouldUseUnifiedDefaultKeyboardGlassSurface(state.toolbarShown,
             state.keyboardShown, isRoundedDockStyle(), isInAppKeyboardGlassSurface())
             && !hasInAppKeyboardBackgroundOverride()
@@ -5931,6 +5935,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * opaque fill. Nothing produces a backdrop for any of them, so nothing may wait on one.
      */
     private boolean paintsNoInAppKeyboardBackdrop() {
+        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
+            return true;
+        }
         return inAppKeyboardMaterial() != KeyboardMaterialPolicy.Material.GLASS;
     }
 
@@ -6132,6 +6139,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float foot = defaultDockGlassFootFraction();
         if (!state.keyboardShown || isWholeFrameTouchpadShown())
             return mChrome.glass().dockSurface(state.barAlpha, foot, 1f, false);
+        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
+            int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, mPreferences.getInAppKeyboardTheme());
+            return new ColorDrawable(solidColor);
+        }
         // A keyboard overlaying its place is an opaque panel that answers to neither the slider
         // nor the scheme colour, so the strip takes the same fill: at the glass alpha it would
         // leave the material stopping at the keyboard's bottom edge, which is the very seam
@@ -6365,8 +6376,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
 
-    /** The keyboard always renders on the same glass material path as the dock. */
+    /** The keyboard renders on the glass material path unless a solid preset theme is active. */
     private boolean isInAppKeyboardGlassSurface() {
+        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
+            return false;
+        }
         return true;
     }
 
@@ -6501,6 +6515,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (!state.keyboardShown) {
             surfaceHost.setBackground(null);
+            clearInAppKeyboardBackdrop();
+            return;
+        }
+
+        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
+            int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, mPreferences.getInAppKeyboardTheme());
+            surfaceHost.setBackgroundColor(solidColor);
             clearInAppKeyboardBackdrop();
             return;
         }

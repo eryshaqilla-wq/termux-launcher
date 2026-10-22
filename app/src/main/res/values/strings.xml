@@ -1043,6 +1043,10 @@
                 <string name="termux_in_app_keyboard_theme_system">System</string>
                 <string name="termux_in_app_keyboard_theme_light">Light</string>
                 <string name="termux_in_app_keyboard_theme_dark">Dark</string>
+                <string name="termux_in_app_keyboard_theme_default">Default (Frosted Glass)</string>
+                <string name="termux_in_app_keyboard_theme_gboard_dark">Gboard Dark (Solid)</string>
+                <string name="termux_in_app_keyboard_theme_gboard_black">AMOLED Black (Solid)</string>
+                <string name="termux_in_app_keyboard_theme_gboard_light">Gboard Light (Solid)</string>
                 <string name="termux_in_app_keyboard_theme_imported">Imported · %1$s</string>
                 <string name="termux_keyboard_color_scheme_edit_colors">Edit colors</string>
                 <string name="termux_keyboard_color_scheme_save_colors">Save colors</string>
@@ -1129,14 +1133,16 @@
                 <string name="keyboard_layout_ring_single">Only one layout is in the cycle — add more in Settings ▸ Keyboard ▸ Layouts</string>
                 <string name="termux_keyboard_docs_keys_summary">Every key name and value you can use in a layout</string>
                 <string-array name="termux_in_app_keyboard_theme_entries">
-                    <item>System</item>
-                    <item>Light</item>
-                    <item>Dark</item>
+                    <item>Default (Frosted Glass)</item>
+                    <item>Gboard Dark (Solid)</item>
+                    <item>AMOLED Black (Solid)</item>
+                    <item>Gboard Light (Solid)</item>
                 </string-array>
                 <string-array name="termux_in_app_keyboard_theme_values">
                     <item>system</item>
-                    <item>light</item>
-                    <item>dark</item>
+                    <item>gboard_dark</item>
+                    <item>gboard_black</item>
+                    <item>gboard_light</item>
                 </string-array>
                 <string name="termux_in_app_keyboard_haptics_summary">Gentle haptic tick for every key.</string>
 

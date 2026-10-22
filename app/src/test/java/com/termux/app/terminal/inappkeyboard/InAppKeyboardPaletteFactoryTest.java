@@ -200,4 +200,22 @@ public class InAppKeyboardPaletteFactoryTest {
             ColorUtils.compositeColors(palette.functionKeyBackground, obsidian | 0xFF000000))
             >= 4.5d);
     }
+
+    @Test
+    public void solidVariantsBuildOpaquePalettesWithReadableLabels() {
+        for (String variant : new String[] {"gboard_dark", "gboard_black", "gboard_light"}) {
+            assertTrue(variant + " is solid theme", InAppKeyboardPaletteFactory.isSolidTheme(variant));
+            Theme.Palette palette = InAppKeyboardPaletteFactory.createSolid(context, variant);
+
+            assertNotNull(variant, palette);
+            assertNotEquals(variant + " background is opaque", Color.TRANSPARENT, palette.keyboardBackground);
+            assertEquals(variant + " full opacity", 1.0f, palette.opacity, 0.001f);
+            assertTrue(variant + " primary label contrast",
+                ColorUtils.calculateContrast(palette.labelColor, palette.keyBackground) >= 4.5d);
+            assertTrue(variant + " action label contrast",
+                ColorUtils.calculateContrast(palette.actionLabelColor, palette.actionKeyBackground) >= 4.5d);
+            assertTrue(variant + " function label contrast",
+                ColorUtils.calculateContrast(palette.functionLabelColor, palette.functionKeyBackground) >= 4.5d);
+        }
+    }
 }
