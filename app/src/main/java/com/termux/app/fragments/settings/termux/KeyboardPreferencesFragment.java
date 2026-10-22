@@ -12,12 +12,14 @@ import androidx.preference.MultiSelectListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
 import androidx.preference.PreferenceManager;
+import androidx.preference.SwitchPreferenceCompat;
 
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.termux.app.notice.AppNotice;
 import com.termux.R;
 import com.termux.ai.TaiSpeechModels;
 import com.termux.app.TermuxActivity;
+import com.termux.app.ime.SystemNavBarHelper;
 import com.termux.app.settings.TermuxPropertiesFile;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.SegmentedPillPreference;
@@ -122,6 +124,33 @@ public class KeyboardPreferencesFragment extends MaterialPreferenceFragment {
                 updateBuiltInKeyboardRows("built_in".equals(newValue));
                 return true;
             });
+        }
+
+        SwitchPreferenceCompat navBarButtonPreference = findPreference("keyboard_show_nav_bar_button");
+        if (navBarButtonPreference != null) {
+            boolean canControl = SystemNavBarHelper.canControlNavBarKeyboardButton(context);
+            if (!canControl) {
+                navBarButtonPreference.setEnabled(false);
+                navBarButtonPreference.setSummary(R.string.settings_keyboard_show_nav_bar_button_no_root);
+            } else {
+                navBarButtonPreference.setEnabled(true);
+                boolean isEnabled = SystemNavBarHelper.isNavBarKeyboardButtonEnabled(context);
+                navBarButtonPreference.setChecked(isEnabled);
+                navBarButtonPreference.setSummary(isEnabled
+                    ? R.string.settings_keyboard_show_nav_bar_button_summary_on
+                    : R.string.settings_keyboard_show_nav_bar_button_summary_off);
+                navBarButtonPreference.setOnPreferenceChangeListener((preference, newValue) -> {
+                    boolean enabled = (Boolean) newValue;
+                    boolean success = SystemNavBarHelper.setNavBarKeyboardButtonEnabled(context, enabled);
+                    if (success) {
+                        navBarButtonPreference.setSummary(enabled
+                            ? R.string.settings_keyboard_show_nav_bar_button_summary_on
+                            : R.string.settings_keyboard_show_nav_bar_button_summary_off);
+                        return true;
+                    }
+                    return false;
+                });
+            }
         }
 
 
@@ -460,6 +489,9 @@ class KeyboardPreferencesDataStore extends PreferenceDataStore {
                 TermuxActivity.requestTermuxActivityStylingOnNextResume(
                     mContext, false);
                 break;
+            case "keyboard_show_nav_bar_button":
+                SystemNavBarHelper.setNavBarKeyboardButtonEnabled(mContext, value);
+                break;
             default:
                 break;
         }
@@ -495,6 +527,8 @@ class KeyboardPreferencesDataStore extends PreferenceDataStore {
                 return stored == null
                     || !"false".equals(stored.trim().toLowerCase(Locale.ROOT));
             }
+            case "keyboard_show_nav_bar_button":
+                return SystemNavBarHelper.isNavBarKeyboardButtonEnabled(mContext);
             default:
                 return defValue;
         }

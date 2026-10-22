@@ -469,6 +469,10 @@
     <string name="settings_hide_keyboard_hardware_summary">While a hardware keyboard is connected.</string>
     <string name="settings_pass_ctrl_space_title">Android language shortcut</string>
     <string name="settings_pass_ctrl_space_summary">Ctrl+Space switches Android keyboard languages. Off sends it to the terminal.</string>
+    <string name="settings_keyboard_show_nav_bar_button_title">Tombol Bilah Navigasi Keyboard</string>
+    <string name="settings_keyboard_show_nav_bar_button_summary_on">Ikon panah bawah (⌄) ditampilkan pada bilah navigasi saat keyboard aktif (global).</string>
+    <string name="settings_keyboard_show_nav_bar_button_summary_off">Ikon panah bawah (⌄) disembunyikan dari bilah navigasi saat keyboard aktif (global).</string>
+    <string name="settings_keyboard_show_nav_bar_button_no_root">Memerlukan akses root atau izin WRITE_SECURE_SETTINGS untuk mengubah setelan ini.</string>
     <string name="settings_typeface_title">Typeface</string>
     <string name="settings_keyboard_bottom_padding_title">Bottom padding</string>
     <string name="settings_keyboard_bottom_padding_summary">Lift the bottom key row away from the edge of the screen.</string>

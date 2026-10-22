@@ -9,6 +9,11 @@
             app:entries="@array/settings_keyboard_input_method_entries"
             app:entryValues="@array/settings_keyboard_input_method_values"
             app:defaultValue="built_in" />
+        <SwitchPreferenceCompat
+            app:key="keyboard_show_nav_bar_button"
+            app:title="@string/settings_keyboard_show_nav_bar_button_title"
+            app:summary="@string/settings_keyboard_show_nav_bar_button_summary_on"
+            android:defaultValue="true" />
         <Preference
             app:key="keyboard_sub_voice"
             app:persistent="false"
