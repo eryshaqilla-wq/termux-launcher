@@ -230,14 +230,14 @@ public final class InAppKeyboardPaletteFactory {
      */
     public static boolean isSolidTheme(String variant) {
         if (variant == null) return false;
-        switch (variant) {
-            case "gboard_dark":
-            case "gboard_black":
-            case "gboard_light":
-                return true;
-            default:
-                return false;
-        }
+        return variant.startsWith("gboard_");
+    }
+
+    /**
+     * Returns true if the variant specifies a borderless keyboard style.
+     */
+    public static boolean isBorderless(String variant) {
+        return variant != null && variant.endsWith("_borderless");
     }
 
     /**
@@ -245,9 +245,9 @@ public final class InAppKeyboardPaletteFactory {
      */
     @ColorInt
     public static int getSolidBackgroundColor(@NonNull Context context, String variant) {
-        if ("gboard_black".equals(variant)) {
+        if (variant != null && variant.contains("black")) {
             return 0xFF000000;
-        } else if ("gboard_light".equals(variant)) {
+        } else if (variant != null && variant.contains("light")) {
             return 0xFFECEFF1;
         } else {
             // gboard_dark default
@@ -256,13 +256,15 @@ public final class InAppKeyboardPaletteFactory {
     }
 
     /**
-     * Builds a solid (opaque) palette modeled after Gboard Dark, AMOLED Black, or Gboard Light.
+     * Builds a solid (opaque) palette modeled after Gboard Dark, AMOLED Black, or Gboard Light,
+     * in both bordered and borderless editions.
      * All keycaps, surfaces, and labels are 100% opaque, high contrast, and immune to wallpaper bleed.
      */
     @NonNull
     public static Theme.Palette createSolid(@NonNull Context context, String variant) {
         float density = context.getResources().getDisplayMetrics().density;
         int keyboardBg = getSolidBackgroundColor(context, variant);
+        boolean borderless = isBorderless(variant);
         int key;
         int function;
         int space;
@@ -277,15 +279,15 @@ public final class InAppKeyboardPaletteFactory {
         int pressedLabel;
         int lockedLabel;
         int border;
-        boolean borderEnabled;
-        float borderWidth = 0.5f * density;
+        boolean borderEnabled = !borderless;
+        float borderWidth = borderless ? 0f : (0.5f * density);
         float borderRadius = 8f * density;
 
-        if ("gboard_black".equals(variant)) {
+        if (variant != null && variant.contains("black")) {
             // AMOLED Black
-            key = 0xFF161616;
-            function = 0xFF101010;
-            space = 0xFF161616;
+            key = borderless ? 0xFF000000 : 0xFF161616;
+            function = borderless ? 0xFF000000 : 0xFF101010;
+            space = borderless ? 0xFF000000 : 0xFF161616;
             action = 0xFF8AB4F8;
             activated = 0xFF2A2A2A;
             label = 0xFFFFFFFF;
@@ -296,13 +298,12 @@ public final class InAppKeyboardPaletteFactory {
             activatedLabel = 0xFFFFFFFF;
             pressedLabel = 0xFFFFFFFF;
             lockedLabel = 0xFF8AB4F8;
-            border = 0xFF282828;
-            borderEnabled = true;
-        } else if ("gboard_light".equals(variant)) {
+            border = borderless ? 0x00000000 : 0xFF282828;
+        } else if (variant != null && variant.contains("light")) {
             // Gboard Light
-            key = 0xFFFFFFFF;
-            function = 0xFFDADCE0;
-            space = 0xFFFFFFFF;
+            key = borderless ? 0xFFECEFF1 : 0xFFFFFFFF;
+            function = borderless ? 0xFFECEFF1 : 0xFFDADCE0;
+            space = borderless ? 0xFFECEFF1 : 0xFFFFFFFF;
             action = 0xFF1A73E8;
             activated = 0xFFD2E3FC;
             label = 0xFF1F1F1F;
@@ -313,13 +314,12 @@ public final class InAppKeyboardPaletteFactory {
             activatedLabel = 0xFF1F1F1F;
             pressedLabel = 0xFF1F1F1F;
             lockedLabel = 0xFF1A73E8;
-            border = 0xFFD0D4D9;
-            borderEnabled = true;
+            border = borderless ? 0x00000000 : 0xFFD0D4D9;
         } else {
             // Gboard Dark (Default solid)
-            key = 0xFF2D2F31;
-            function = 0xFF242628;
-            space = 0xFF2D2F31;
+            key = borderless ? 0xFF1F1F1F : 0xFF2D2F31;
+            function = borderless ? 0xFF1F1F1F : 0xFF242628;
+            space = borderless ? 0xFF1F1F1F : 0xFF2D2F31;
             action = 0xFF8AB4F8;
             activated = 0xFF3C4043;
             label = 0xFFE3E3E3;
@@ -330,8 +330,7 @@ public final class InAppKeyboardPaletteFactory {
             activatedLabel = 0xFFFFFFFF;
             pressedLabel = 0xFFFFFFFF;
             lockedLabel = 0xFF8AB4F8;
-            border = 0xFF383A3D;
-            borderEnabled = true;
+            border = borderless ? 0x00000000 : 0xFF383A3D;
         }
 
         return new Theme.Palette(

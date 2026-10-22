@@ -367,11 +367,20 @@ public class KeyboardColorSchemeFragment extends Fragment {
             case "gboard_dark":
                 summaryRes = R.string.termux_in_app_keyboard_theme_gboard_dark;
                 break;
+            case "gboard_dark_borderless":
+                summaryRes = R.string.termux_in_app_keyboard_theme_gboard_dark_borderless;
+                break;
             case "gboard_black":
                 summaryRes = R.string.termux_in_app_keyboard_theme_gboard_black;
                 break;
+            case "gboard_black_borderless":
+                summaryRes = R.string.termux_in_app_keyboard_theme_gboard_black_borderless;
+                break;
             case "gboard_light":
                 summaryRes = R.string.termux_in_app_keyboard_theme_gboard_light;
+                break;
+            case "gboard_light_borderless":
+                summaryRes = R.string.termux_in_app_keyboard_theme_gboard_light_borderless;
                 break;
             case "system":
             default:

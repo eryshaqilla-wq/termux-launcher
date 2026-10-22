@@ -203,7 +203,11 @@ public class InAppKeyboardPaletteFactoryTest {
 
     @Test
     public void solidVariantsBuildOpaquePalettesWithReadableLabels() {
-        for (String variant : new String[] {"gboard_dark", "gboard_black", "gboard_light"}) {
+        for (String variant : new String[] {
+            "gboard_dark", "gboard_dark_borderless",
+            "gboard_black", "gboard_black_borderless",
+            "gboard_light", "gboard_light_borderless"
+        }) {
             assertTrue(variant + " is solid theme", InAppKeyboardPaletteFactory.isSolidTheme(variant));
             Theme.Palette palette = InAppKeyboardPaletteFactory.createSolid(context, variant);
 
@@ -216,6 +220,16 @@ public class InAppKeyboardPaletteFactoryTest {
                 ColorUtils.calculateContrast(palette.actionLabelColor, palette.actionKeyBackground) >= 4.5d);
             assertTrue(variant + " function label contrast",
                 ColorUtils.calculateContrast(palette.functionLabelColor, palette.functionKeyBackground) >= 4.5d);
+
+            if (variant.endsWith("_borderless")) {
+                assertTrue(variant + " borderless flag", InAppKeyboardPaletteFactory.isBorderless(variant));
+                assertEquals(variant + " no border enabled", false, palette.borderEnabled);
+                assertEquals(variant + " zero border width", 0f, palette.borderWidth, 0.001f);
+                assertEquals(variant + " seamless key background", palette.keyboardBackground, palette.keyBackground);
+            } else {
+                assertFalse(variant + " not borderless", InAppKeyboardPaletteFactory.isBorderless(variant));
+                assertTrue(variant + " border enabled", palette.borderEnabled);
+            }
         }
     }
 }
