@@ -22,6 +22,8 @@ import com.termux.R;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardColorScheme;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardExtraKeys;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardPaletteFactory;
+import com.termux.app.terminal.inappkeyboard.KeyPopupController;
+import com.termux.app.terminal.inappkeyboard.KeyPopupPalette;
 import com.termux.shared.termux.font.FileTypefaces;
 import com.termux.shared.termux.font.NerdFontSpans;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -43,6 +45,8 @@ public class TermuxInputMethodService extends InputMethodService {
     private TermuxAppSharedPreferences mPreferences;
     private Keyboard2View mKeyboardView;
     private FrameLayout mInputContainer;
+    private FrameLayout mKeyboardWrapper;
+    private KeyPopupController mKeyPopup;
     private ImeKeyEventHandler mKeyEventHandler;
     private String mAppliedSettingsSignature = "";
 
@@ -82,6 +86,8 @@ public class TermuxInputMethodService extends InputMethodService {
         mInputContainer = new FrameLayout(context);
         mInputContainer.setLayoutParams(new ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        mInputContainer.setClipChildren(false);
+        mInputContainer.setClipToPadding(false);
 
         rebuildKeyboardView();
         updateBackDisposition();
@@ -90,6 +96,10 @@ public class TermuxInputMethodService extends InputMethodService {
 
     private void rebuildKeyboardView() {
         if (mInputContainer == null) return;
+        if (mKeyPopup != null) {
+            mKeyPopup.destroy();
+            mKeyPopup = null;
+        }
         mInputContainer.removeAllViews();
 
         Context context = this;
@@ -99,8 +109,6 @@ public class TermuxInputMethodService extends InputMethodService {
         int bgColor = InAppKeyboardPaletteFactory.isSolidTheme(theme)
             ? InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme)
             : 0xFF1F1F1F; // Default opaque dark for system IME window
-
-        mInputContainer.setBackgroundColor(bgColor);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
         boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
@@ -142,7 +150,6 @@ public class TermuxInputMethodService extends InputMethodService {
         Integer customBg = scheme.resolvedKeyboardBackground();
         if (customBg != null) {
             bgColor = customBg;
-            mInputContainer.setBackgroundColor(bgColor);
         }
 
         mKeyboardView = new Keyboard2View(context, configBuilder.build(), palette);
@@ -175,10 +182,31 @@ public class TermuxInputMethodService extends InputMethodService {
             mKeyboardView.setKeyboard(LayoutModifier.modify(layout, options, getResources()));
         }
 
+        int popupSpacePx = Math.round(44f * dm.density);
+        FrameLayout keyboardWrapper = new FrameLayout(context);
+        keyboardWrapper.setBackgroundColor(bgColor);
+        keyboardWrapper.setClipChildren(false);
+        keyboardWrapper.setClipToPadding(false);
+
         FrameLayout.LayoutParams kbdLp = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         kbdLp.gravity = Gravity.BOTTOM;
-        mInputContainer.addView(mKeyboardView, kbdLp);
+        keyboardWrapper.addView(mKeyboardView, kbdLp);
+
+        FrameLayout.LayoutParams wrapLp = new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        wrapLp.topMargin = popupSpacePx;
+        wrapLp.gravity = Gravity.BOTTOM;
+        mInputContainer.addView(keyboardWrapper, wrapLp);
+        mKeyboardWrapper = keyboardWrapper;
+
+        // Key popup preview overlay (identical to in-app keyboard popup)
+        mKeyPopup = new KeyPopupController(mInputContainer, mKeyboardView);
+        int popupPrimary = palette.actionKeyBackground != 0 ? (palette.actionKeyBackground | 0xFF000000) : 0xFFE9B308;
+        int popupInk = palette.labelColor != 0 ? (palette.labelColor | 0xFF000000) : 0xFFF2EFE8;
+        mKeyPopup.overlay().setPalette(new KeyPopupPalette(popupPrimary, popupInk));
+        boolean popupEnabled = mPreferences == null || mPreferences.isInAppKeyboardKeyPopupEnabled();
+        mKeyPopup.setEnabled(popupEnabled);
 
         // Synchronize window navigation bar and background
         applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
@@ -213,7 +241,7 @@ public class TermuxInputMethodService extends InputMethodService {
 
         View decorView = win.getDecorView();
         if (decorView != null) {
-            decorView.setBackgroundColor(bgColor);
+            decorView.setBackgroundColor(Color.TRANSPARENT);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 int flags = decorView.getSystemUiVisibility();
                 boolean isLight = (theme != null && theme.contains("light"))
@@ -235,10 +263,31 @@ public class TermuxInputMethodService extends InputMethodService {
         }
     }
 
+    @Override
+    public void onComputeInsets(InputMethodService.Insets outInsets) {
+        super.onComputeInsets(outInsets);
+        if (mKeyboardWrapper != null) {
+            int top = mKeyboardWrapper.getTop();
+            outInsets.contentTopInsets = top;
+            outInsets.visibleTopInsets = top;
+            outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_CONTENT;
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if (mKeyPopup != null) {
+            mKeyPopup.destroy();
+            mKeyPopup = null;
+        }
+    }
+
     private String computeSettingsSignature() {
         if (mPreferences == null) return "";
         return mPreferences.getInAppKeyboardTheme() + "|"
             + mPreferences.getInAppKeyboardColorScheme() + "|"
+            + mPreferences.isInAppKeyboardKeyPopupEnabled() + "|"
             + mPreferences.getInAppKeyboardHeightScale() + "|"
             + mPreferences.getInAppKeyboardKeyMarginScale() + "|"
             + mPreferences.getInAppKeyboardKeyCornerRadiusDp() + "|"

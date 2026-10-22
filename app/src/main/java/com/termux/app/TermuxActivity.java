@@ -61,6 +61,7 @@ import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.util.DisplayMetrics;
 import android.util.LruCache;
+import android.util.TypedValue;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -6212,7 +6213,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (theme != null && theme.contains("light")) {
             return true;
         }
-        Integer customBg = resolveInAppKeyboardSchemeBackground();
+        Integer customBg = resolveInAppKeyboardSchemeBackgroundColor();
         if (customBg != null) {
             double luminance = (0.299 * Color.red(customBg) + 0.587 * Color.green(customBg) + 0.114 * Color.blue(customBg));
             return luminance > 160;
