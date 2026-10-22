@@ -690,19 +690,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             snapshot == null ? "" : snapshot, false);
     }
 
-    /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_APPEARANCE_EDITOR_LAST_GROUP}. */
-    @NonNull
-    public String getAppearanceEditorLastGroup() {
-        return SharedPreferenceUtils.getString(mSharedPreferences,
-            TermuxPreferenceConstants.TERMUX_APP.KEY_APPEARANCE_EDITOR_LAST_GROUP,
-            TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_APPEARANCE_EDITOR_LAST_GROUP, true);
-    }
-
-    public void setAppearanceEditorLastGroup(@NonNull String group) {
-        SharedPreferenceUtils.setString(mSharedPreferences,
-            TermuxPreferenceConstants.TERMUX_APP.KEY_APPEARANCE_EDITOR_LAST_GROUP, group, false);
-    }
-
     /** See {@link TermuxPreferenceConstants.TERMUX_APP#KEY_V0239_EFFECTS_PRESET}. */
     public boolean isV0239EffectsPresetEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,
