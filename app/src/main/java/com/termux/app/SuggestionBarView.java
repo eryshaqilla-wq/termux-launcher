@@ -3817,13 +3817,18 @@ public final class SuggestionBarView extends GridLayout
         }
         if (playRipple) dispatchLaunchRipple(entry, launchSourceView);
         Context context = getContext();
+        if (context instanceof TermuxActivity) {
+            ((TermuxActivity) context).setAppLaunching(true);
+        }
         if (com.termux.app.x11.X11Apps.isLinuxApp(entry.appRef)) {
             // A Linux app: the display's runner takes it, with the same bookkeeping a launch gets.
             if (!LauncherAppLauncher.launchEntry(context, entry)) return;
             if (activeAzLetter != null) clearAzPreview();
             getUsageStatsStore().recordLaunch(entry.appRef.stableId());
             invalidateMostUsedCache();
-            if (terminalView != null) terminalView.clearInputLine();
+            if (terminalView != null && isSearchSurfaceActive()) {
+                terminalView.post(terminalView::clearInputLine);
+            }
             dismissFolderPopup();
             dismissAppContextPopup();
             dismissShortcutsPopup();
@@ -3849,8 +3854,8 @@ public final class SuggestionBarView extends GridLayout
                 }
                 getUsageStatsStore().recordLaunch(entry.appRef.stableId());
                 invalidateMostUsedCache();
-                if (terminalView != null) {
-                    terminalView.clearInputLine();
+                if (terminalView != null && isSearchSurfaceActive()) {
+                    terminalView.post(terminalView::clearInputLine);
                 }
                 dismissFolderPopup();
                 dismissAppContextPopup();
@@ -3943,8 +3948,8 @@ public final class SuggestionBarView extends GridLayout
         getUsageStatsStore().recordLaunch(entry.appRef.stableId());
         invalidateMostUsedCache();
 
-        if (terminalView != null) {
-            terminalView.clearInputLine();
+        if (terminalView != null && isSearchSurfaceActive()) {
+            terminalView.post(terminalView::clearInputLine);
         }
         dismissFolderPopup();
         dismissAppContextPopup();
@@ -3955,13 +3960,15 @@ public final class SuggestionBarView extends GridLayout
         boolean touchAnimation = shouldUseTouchLaunchAnimation(sourceView);
         long launchDelay = touchAnimation ? APP_LAUNCH_TOUCH_DELAY_MS : 0L;
         dispatchLaunchRipple(entry, sourceView);
-        Runnable launch = () -> launchEntry(entry, terminalView,
-            touchAnimation ? sourceView : null, false);
+        Runnable launch = () -> {
+            sourceView.animate().translationY(0f).scaleX(1f).scaleY(1f).setDuration(80L).start();
+            launchEntry(entry, terminalView, touchAnimation ? sourceView : null, false);
+        };
         if (launchDelay == 0L) {
             launch.run();
-        } else {
-            postDelayed(launch, launchDelay);
+            return;
         }
+        postDelayed(launch, launchDelay);
     }
 
     /**
@@ -4262,12 +4269,7 @@ public final class SuggestionBarView extends GridLayout
         }
         int width = Math.max(1, sourceView.getWidth());
         int height = Math.max(1, sourceView.getHeight());
-        ActivityOptions options;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            options = ActivityOptions.makeClipRevealAnimation(sourceView, 0, 0, width, height);
-        } else {
-            options = ActivityOptions.makeScaleUpAnimation(sourceView, 0, 0, width, height);
-        }
+        ActivityOptions options = ActivityOptions.makeBasic();
         return new LaunchAnimationContext(sourceBounds, options.toBundle());
     }
 

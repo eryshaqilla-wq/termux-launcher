@@ -134,6 +134,10 @@ public final class ChromeRenderer {
 
         boolean isActivityVisible();
 
+        default boolean isAppLaunching() {
+            return false;
+        }
+
         boolean wallpaperPassthroughEnabled();
 
         /**
@@ -420,6 +424,10 @@ public final class ChromeRenderer {
     }
 
     private void runRenderSync(@NonNull ChromeSpec spec) {
+        if (mSurfaces.isAppLaunching()) {
+            mRenderSyncPending = false;
+            return;
+        }
         mRenderSyncPending = false;
         mRenderSyncAskedForItself = false;
         // What the pass is for is re-cutting the crops that went stale under settled geometry.
@@ -472,6 +480,9 @@ public final class ChromeRenderer {
             runTopPaneFrost();
         }
         if ((scopes & SCOPE_ACCESSORY_RENDER) != 0) {
+            if (mSurfaces.isAppLaunching()) {
+                return;
+            }
             if (mRenderSyncRunning) {
                 // The pass that would run is the pass asking. It decides for itself, once, at the
                 // end of its run — from whether it left anything stale — rather than each caller

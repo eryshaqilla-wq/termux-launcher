@@ -252,12 +252,12 @@ public final class DockLaunchRippleView extends View {
         float density = getResources().getDisplayMetrics().density;
         float eased = 1f - (1f - progress) * (1f - progress);
         float radius = density * (4f + 14f * eased);
-        int alpha = Math.round(118f * (1f - progress) * mOpacity);
+        int alpha = Math.round(36f * (1f - progress) * mOpacity);
         // Reuse a unit-radius gradient for the press flash; only rebuild when the ripple color changes.
         if (mPressGradient == null || mPressGradientColor != mColor) {
             mPressGradientColor = mColor;
-            mPressColors[0] = withAlpha(mColor, 255);
-            mPressColors[1] = withAlpha(mColor, 85);
+            mPressColors[0] = withAlpha(mColor, 120);
+            mPressColors[1] = withAlpha(mColor, 40);
             mPressColors[2] = Color.TRANSPARENT;
             mPressGradient = new RadialGradient(0f, 0f, 1f, mPressColors, mPressStops,
                 Shader.TileMode.CLAMP);

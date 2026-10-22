@@ -1310,6 +1310,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private float mTerminalToolbarDefaultHeight;
     private boolean mIsAccessoryStackCollapsed;
+    private boolean mIsAppLaunching;
     private float mTwoFingerStartX;
     private float mTwoFingerStartY;
     private float mTwoFingerStartSpan;
@@ -1620,6 +1621,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         @Override public boolean isActivityVisible() {
             return mIsVisible;
+        }
+
+        @Override public boolean isAppLaunching() {
+            return mIsAppLaunching;
         }
 
         @Override public boolean wallpaperPassthroughEnabled() {
@@ -2348,6 +2353,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Override
     public void onResume() {
         super.onResume();
+        mIsAppLaunching = false;
         Logger.logVerbose(LOG_TAG, "onResume");
         // Text left waiting in the pill holds the screen again, its idle release started over.
         mVoiceScreenMayHold = true;
@@ -4594,9 +4600,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (mInAppKeyboard != null) mInAppKeyboard.fadeOutLaunchWave();
             });
 
+        // Keep keyboard stable without jarring key chip wave during app launch transition
         if (!capsule && keyboardShownAtLaunch && mInAppKeyboard != null) {
-            mInAppKeyboard.animateLaunchWave(color, originX + rippleLocation[0],
-                originY + rippleLocation[1]);
+            // mInAppKeyboard.animateLaunchWave omitted to prevent keyboard flicker on launch
         }
     }
 
@@ -12895,6 +12901,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public boolean isAccessoryStackCollapsed() {
         return mIsAccessoryStackCollapsed;
+    }
+
+    public void setAppLaunching(boolean launching) {
+        mIsAppLaunching = launching;
+    }
+
+    public boolean isAppLaunching() {
+        return mIsAppLaunching;
     }
 
     private boolean checkTwoFingerSwipe(@NonNull MotionEvent ev) {
@@ -25461,6 +25475,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            mIsAppLaunching = false;
+        }
         mReturnHold.onFocusChanged(hasFocus, SystemClock.uptimeMillis());
         postReturnHoldFrame();
         if (hasFocus) {
@@ -25877,6 +25894,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         mAccessoryLayoutChangeListener = (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+            if (mIsAppLaunching) {
+                return;
+            }
             int width = right - left;
             int oldWidth = oldRight - oldLeft;
             int height = bottom - top;
@@ -25962,6 +25982,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void onImeVisibilityChanged(boolean visible) {
+        if (mIsAppLaunching) {
+            return;
+        }
         if (!visible && !mAzGesture.isActive()) {
             mSuggestionBarInteractionActive = false;
             if (mSuggestionBarView != null) {
