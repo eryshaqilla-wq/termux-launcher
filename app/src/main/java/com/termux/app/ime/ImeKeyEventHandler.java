@@ -236,9 +236,34 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
 
     private void handleSlider(KeyValue.Slider slider, int count) {
         InputConnection ic = mService.getCurrentInputConnection();
-        if (ic == null) return;
-        int keyCode = (slider == KeyValue.Slider.LEFT) ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_RIGHT;
-        for (int i = 0; i < count; i++) {
+        if (ic == null || count == 0 || slider == null) return;
+        boolean reverse = count < 0;
+        int keyCode;
+        switch (slider) {
+            case Cursor_left:
+                keyCode = reverse ? KeyEvent.KEYCODE_DPAD_RIGHT : KeyEvent.KEYCODE_DPAD_LEFT;
+                break;
+            case Cursor_right:
+                keyCode = reverse ? KeyEvent.KEYCODE_DPAD_LEFT : KeyEvent.KEYCODE_DPAD_RIGHT;
+                break;
+            case Cursor_up:
+                keyCode = reverse ? KeyEvent.KEYCODE_DPAD_DOWN : KeyEvent.KEYCODE_DPAD_UP;
+                break;
+            case Cursor_down:
+                keyCode = reverse ? KeyEvent.KEYCODE_DPAD_UP : KeyEvent.KEYCODE_DPAD_DOWN;
+                break;
+            case Selection_cursor_left:
+                keyCode = KeyEvent.KEYCODE_DPAD_LEFT;
+                break;
+            case Selection_cursor_right:
+                keyCode = KeyEvent.KEYCODE_DPAD_RIGHT;
+                break;
+            default:
+                keyCode = KeyEvent.KEYCODE_DPAD_RIGHT;
+                break;
+        }
+        int repeats = Math.abs(count);
+        for (int i = 0; i < repeats; i++) {
             long now = SystemClock.uptimeMillis();
             ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0));
             ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0));
