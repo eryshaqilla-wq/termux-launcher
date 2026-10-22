@@ -128,32 +128,26 @@ public class KeyboardPreferencesFragment extends MaterialPreferenceFragment {
 
         SwitchPreferenceCompat navBarButtonPreference = findPreference("keyboard_show_nav_bar_button");
         if (navBarButtonPreference != null) {
-            boolean canControl = SystemNavBarHelper.canControlNavBarKeyboardButton(context);
-            if (!canControl) {
-                navBarButtonPreference.setEnabled(false);
-                navBarButtonPreference.setSummary(R.string.settings_keyboard_show_nav_bar_button_no_root);
-            } else {
-                navBarButtonPreference.setEnabled(true);
-                TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context);
-                boolean isEnabled = preferences != null
-                    ? preferences.isNavBarKeyboardButtonEnabled()
-                    : SystemNavBarHelper.isNavBarKeyboardButtonEnabled(context);
-                navBarButtonPreference.setChecked(isEnabled);
-                navBarButtonPreference.setSummary(isEnabled
+            TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(context);
+            boolean isEnabled = preferences != null
+                ? preferences.isNavBarKeyboardButtonEnabled()
+                : true;
+            navBarButtonPreference.setEnabled(true);
+            navBarButtonPreference.setChecked(isEnabled);
+            navBarButtonPreference.setSummary(isEnabled
+                ? R.string.settings_keyboard_show_nav_bar_button_summary_on
+                : R.string.settings_keyboard_show_nav_bar_button_summary_off);
+            navBarButtonPreference.setOnPreferenceChangeListener((preference, newValue) -> {
+                boolean enabled = (Boolean) newValue;
+                if (preferences != null) {
+                    preferences.setNavBarKeyboardButtonEnabled(enabled);
+                }
+                SystemNavBarHelper.setNavBarKeyboardButtonEnabled(context, enabled);
+                navBarButtonPreference.setSummary(enabled
                     ? R.string.settings_keyboard_show_nav_bar_button_summary_on
                     : R.string.settings_keyboard_show_nav_bar_button_summary_off);
-                navBarButtonPreference.setOnPreferenceChangeListener((preference, newValue) -> {
-                    boolean enabled = (Boolean) newValue;
-                    if (preferences != null) {
-                        preferences.setNavBarKeyboardButtonEnabled(enabled);
-                    }
-                    SystemNavBarHelper.setNavBarKeyboardButtonEnabled(context, enabled);
-                    navBarButtonPreference.setSummary(enabled
-                        ? R.string.settings_keyboard_show_nav_bar_button_summary_on
-                        : R.string.settings_keyboard_show_nav_bar_button_summary_off);
-                    return true;
-                });
-            }
+                return true;
+            });
         }
 
 
@@ -497,6 +491,7 @@ class KeyboardPreferencesDataStore extends PreferenceDataStore {
                     mPreferences.setNavBarKeyboardButtonEnabled(value);
                 }
                 SystemNavBarHelper.setNavBarKeyboardButtonEnabled(mContext, value);
+                TermuxActivity.requestTermuxActivityStylingOnNextResume(mContext, false);
                 break;
             default:
                 break;

@@ -1478,6 +1478,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private float mAppDrawerNavStripAlpha = 1f;
     @Nullable private ImageView mDecorNavBarBlurBackdrop;
     @Nullable private View mDecorNavBarTintOverlay;
+    @Nullable private android.widget.LinearLayout mDecorNavBarActionsContainer;
+    @Nullable private ImageView mDecorNavBarHideButton;
+    @Nullable private ImageView mDecorNavBarSwitchButton;
     @Nullable private Bitmap mInAppKeyboardBackdropBitmap;
     /**
      * Memo of the color scheme's keyboard-background override, keyed on the raw persisted JSON.
@@ -5990,6 +5993,72 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ViewGroup.LayoutParams.MATCH_PARENT
         ));
 
+        LinearLayout actionsContainer = new LinearLayout(this);
+        actionsContainer.setOrientation(LinearLayout.HORIZONTAL);
+        actionsContainer.setGravity(Gravity.CENTER_VERTICAL);
+        actionsContainer.setClickable(false);
+        actionsContainer.setFocusable(false);
+        actionsContainer.setVisibility(View.GONE);
+
+        TypedValue rippleValue = new TypedValue();
+        int rippleRes = 0;
+        if (getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, rippleValue, true)) {
+            rippleRes = rippleValue.resourceId;
+        }
+
+        float density = getResources().getDisplayMetrics().density;
+        int buttonWidth = Math.round(56f * density);
+        int pad = Math.round(6f * density);
+
+        ImageView hideButton = new ImageView(this);
+        hideButton.setImageResource(R.drawable.ic_keyboard_hide_arrow);
+        hideButton.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        hideButton.setPadding(pad, 0, pad, 0);
+        hideButton.setContentDescription("Hide Keyboard");
+        hideButton.setHapticFeedbackEnabled(true);
+        if (rippleRes != 0) {
+            hideButton.setBackgroundResource(rippleRes);
+        }
+        hideButton.setOnClickListener(v -> {
+            if (applyDisplayFrameKeyboard(false)) return;
+            if (mInAppKeyboard != null) {
+                mInAppKeyboard.hide(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.USER_EVENT);
+            }
+        });
+        actionsContainer.addView(hideButton, new LinearLayout.LayoutParams(
+            buttonWidth, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        View spacer = new View(this);
+        spacer.setClickable(false);
+        spacer.setFocusable(false);
+        LinearLayout.LayoutParams spacerLp = new LinearLayout.LayoutParams(
+            0, ViewGroup.LayoutParams.MATCH_PARENT, 1.0f);
+        actionsContainer.addView(spacer, spacerLp);
+
+        ImageView switchButton = new ImageView(this);
+        switchButton.setImageResource(R.drawable.ic_keyboard_switch);
+        switchButton.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        switchButton.setPadding(pad, 0, pad, 0);
+        switchButton.setContentDescription("Switch Keyboard");
+        switchButton.setHapticFeedbackEnabled(true);
+        if (rippleRes != 0) {
+            switchButton.setBackgroundResource(rippleRes);
+        }
+        switchButton.setOnClickListener(v -> {
+            android.view.inputmethod.InputMethodManager imm =
+                (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.showInputMethodPicker();
+            }
+        });
+        actionsContainer.addView(switchButton, new LinearLayout.LayoutParams(
+            buttonWidth, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        surfaceOverlay.addView(actionsContainer, new FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
         FrameLayout.LayoutParams overlayParams = new FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             0,
@@ -6007,6 +6076,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mDecorNavBarSurfaceOverlay = surfaceOverlay;
         mDecorNavBarBlurBackdrop = blurBackdrop;
         mDecorNavBarTintOverlay = tintOverlay;
+        mDecorNavBarActionsContainer = actionsContainer;
+        mDecorNavBarHideButton = hideButton;
+        mDecorNavBarSwitchButton = switchButton;
         mChrome.requestSync(ChromeRenderer.SCOPE_NAV_STRIP_BACKDROP);
     }
 
@@ -6030,11 +6102,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mDecorNavBarSurfaceOverlay = null;
         mDecorNavBarBlurBackdrop = null;
         mDecorNavBarTintOverlay = null;
+        mDecorNavBarActionsContainer = null;
+        mDecorNavBarHideButton = null;
+        mDecorNavBarSwitchButton = null;
     }
 
     private void hideDecorNavBarSurfaceOverlay(boolean clearBackdrop) {
         if (mDecorNavBarSurfaceOverlay != null) {
             mDecorNavBarSurfaceOverlay.setVisibility(View.GONE);
+        }
+        if (mDecorNavBarActionsContainer != null) {
+            mDecorNavBarActionsContainer.setVisibility(View.GONE);
         }
         if (clearBackdrop) {
             clearDecorNavBarBackdrop();
@@ -6054,6 +6132,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int targetHeight = baseHeight + bottomOverscanPx;
         int targetBottomMargin = -bottomOverscanPx;
         applyDockSurfaceShape(overlay, false, targetHeight, false, false);
+        if (mDecorNavBarActionsContainer != null) {
+            mDecorNavBarActionsContainer.setPadding(0, 0, 0, bottomOverscanPx);
+        }
         if (params.width != ViewGroup.LayoutParams.MATCH_PARENT ||
             params.height != targetHeight ||
             params.gravity != Gravity.BOTTOM ||
@@ -6101,7 +6182,42 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             clearDecorNavBarBackdrop();
         }
 
+        boolean showNavButtons = state.keyboardShown
+            && !isWholeFrameTouchpadShown()
+            && mPreferences != null
+            && mPreferences.isNavBarKeyboardButtonEnabled();
+
+        if (mDecorNavBarActionsContainer != null) {
+            if (showNavButtons) {
+                mDecorNavBarActionsContainer.setVisibility(View.VISIBLE);
+                boolean isLight = isCurrentKeyboardThemeLight();
+                int iconTint = isLight ? 0xDE000000 : 0xFFFFFFFF;
+                if (mDecorNavBarHideButton != null) {
+                    mDecorNavBarHideButton.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN);
+                }
+                if (mDecorNavBarSwitchButton != null) {
+                    mDecorNavBarSwitchButton.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN);
+                }
+            } else {
+                mDecorNavBarActionsContainer.setVisibility(View.GONE);
+            }
+        }
+
         overlay.setVisibility(View.VISIBLE);
+    }
+
+    private boolean isCurrentKeyboardThemeLight() {
+        if (mPreferences == null) return false;
+        String theme = mPreferences.getInAppKeyboardTheme();
+        if (theme != null && theme.contains("light")) {
+            return true;
+        }
+        Integer customBg = resolveInAppKeyboardSchemeBackground();
+        if (customBg != null) {
+            double luminance = (0.299 * Color.red(customBg) + 0.587 * Color.green(customBg) + 0.114 * Color.blue(customBg));
+            return luminance > 160;
+        }
+        return false;
     }
 
     /**

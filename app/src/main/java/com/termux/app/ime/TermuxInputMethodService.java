@@ -2,6 +2,7 @@ package com.termux.app.ime;
 
 import android.content.Context;
 import android.content.res.Configuration;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build;
@@ -18,6 +19,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.termux.R;
+import com.termux.app.terminal.inappkeyboard.InAppKeyboardColorScheme;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardExtraKeys;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardPaletteFactory;
 import com.termux.shared.termux.font.FileTypefaces;
@@ -132,7 +134,21 @@ public class TermuxInputMethodService extends InputMethodService {
             palette = InAppKeyboardPaletteFactory.createSolid(context, "gboard_dark");
         }
 
+        InAppKeyboardColorScheme scheme = InAppKeyboardColorScheme.fromJson(context,
+            mPreferences != null ? mPreferences.getInAppKeyboardColorScheme() : "");
+        if (scheme.shouldApplyImportedPalette(theme)) {
+            palette = scheme.applyToPalette(palette);
+        }
+        Integer customBg = scheme.resolvedKeyboardBackground();
+        if (customBg != null) {
+            bgColor = customBg;
+            mInputContainer.setBackgroundColor(bgColor);
+        }
+
         mKeyboardView = new Keyboard2View(context, configBuilder.build(), palette);
+
+        // Apply custom color scheme & key color overrides (e.g. Enter key color)
+        mKeyboardView.setKeyColorOverrides(scheme.resolvedOverrides());
 
         // Sizing & Appearance synchronized with Termux preferences
         if (mPreferences != null) {
@@ -186,12 +202,22 @@ public class TermuxInputMethodService extends InputMethodService {
             ? InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme)
             : 0xFF1F1F1F;
 
+        if (mPreferences != null) {
+            InAppKeyboardColorScheme scheme = InAppKeyboardColorScheme.fromJson(context,
+                mPreferences.getInAppKeyboardColorScheme());
+            Integer customBg = scheme.resolvedKeyboardBackground();
+            if (customBg != null) {
+                bgColor = customBg;
+            }
+        }
+
         View decorView = win.getDecorView();
         if (decorView != null) {
             decorView.setBackgroundColor(bgColor);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 int flags = decorView.getSystemUiVisibility();
-                boolean isLight = theme != null && theme.contains("light");
+                boolean isLight = (theme != null && theme.contains("light"))
+                    || (Color.red(bgColor) * 0.299 + Color.green(bgColor) * 0.587 + Color.blue(bgColor) * 0.114 > 160);
                 if (isLight) {
                     flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
                 } else {
@@ -212,6 +238,7 @@ public class TermuxInputMethodService extends InputMethodService {
     private String computeSettingsSignature() {
         if (mPreferences == null) return "";
         return mPreferences.getInAppKeyboardTheme() + "|"
+            + mPreferences.getInAppKeyboardColorScheme() + "|"
             + mPreferences.getInAppKeyboardHeightScale() + "|"
             + mPreferences.getInAppKeyboardKeyMarginScale() + "|"
             + mPreferences.getInAppKeyboardKeyCornerRadiusDp() + "|"
