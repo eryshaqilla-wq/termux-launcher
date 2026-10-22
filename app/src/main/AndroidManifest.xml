@@ -381,6 +381,19 @@
                 android:resource="@xml/lock_accessibility_service" />
         </service>
 
+        <service
+            android:name="com.termux.app.ime.TermuxInputMethodService"
+            android:label="@string/termux_ime_name"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/termux_method" />
+        </service>
+
         <!-- Shizuku Provider for privileged operations -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

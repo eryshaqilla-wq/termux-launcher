@@ -1033,6 +1033,8 @@
                 <!-- Soft Keyboard -->
 
                 <!-- In-app Keyboard -->
+                <string name="termux_ime_name">Termux Keyboard</string>
+                <string name="termux_ime_subtype_en_us">English (US)</string>
                 <string name="termux_keyboard_preferences_title">Keyboard</string>
                 <string name="termux_keyboard_appearance_header">Appearance</string>
                 <string name="termux_keyboard_credits_text">If you like this keyboard, support its amazing developer ❤</string>
