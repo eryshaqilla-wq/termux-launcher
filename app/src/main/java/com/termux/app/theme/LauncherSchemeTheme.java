@@ -136,24 +136,10 @@ public final class LauncherSchemeTheme {
         setChromeActive(tokens != null);
         if (tokens == null) return false;
 
-        ColorResourcesOverride override = ColorResourcesOverride.getInstance();
-        if (override == null) return false;
-
         try {
-            Resources resources = context.getResources();
-            Integer applied = APPLIED.get(resources);
-            int fingerprint = tokens.hashCode();
-            if (applied != null && applied == fingerprint) {
-                // The values are already loaded on these Resources; the new theme only needs the
-                // overlay that points the Material role attributes at them.
-                context.getTheme().applyStyle(
-                    com.google.android.material.R.style.ThemeOverlay_Material3_PersonalizedColors, true);
-            } else {
-                if (!override.applyIfPossible(context, resourceOverrides(tokens))) {
-                    Logger.logWarn(LOG_TAG, "Scheme colour resources could not be loaded");
-                    return false;
-                }
-                APPLIED.put(resources, fingerprint);
+            if (!applyPersonalizedColors(context, resourceOverrides(tokens))) {
+                Logger.logWarn(LOG_TAG, "Scheme colour resources could not be loaded");
+                return false;
             }
             // Material's overlay only rewires the Material roles. The termuxColor* attributes are
             // the launcher's own indirection and on API 30 they still point at the static palette,
@@ -168,6 +154,33 @@ public final class LauncherSchemeTheme {
             Logger.logStackTraceWithMessage(LOG_TAG, "Error applying scheme colours", e);
             return false;
         }
+    }
+
+    /**
+     * Loads {@code values} over Material's {@code material_personalized_color_*} resources on
+     * {@code activity}'s {@code Resources} and points the theme's Material roles at them, or
+     * returns false. Shared with {@link AppOnlyWallpaperColors}: both palettes live on the same
+     * resources, and only one record of what is loaded there tells a recreate that the values are
+     * already in place — two would let a stale loader added later shadow the one wanted now.
+     */
+    @SuppressLint("RestrictedApi")
+    static synchronized boolean applyPersonalizedColors(@NonNull Context context,
+                                                        @NonNull Map<Integer, Integer> values) {
+        ColorResourcesOverride override = ColorResourcesOverride.getInstance();
+        if (override == null) return false;
+        Resources resources = context.getResources();
+        Integer applied = APPLIED.get(resources);
+        int fingerprint = values.hashCode();
+        if (applied != null && applied == fingerprint) {
+            // The values are already loaded on these Resources; the new theme only needs the
+            // overlay that points the Material role attributes at them.
+            context.getTheme().applyStyle(
+                com.google.android.material.R.style.ThemeOverlay_Material3_PersonalizedColors, true);
+            return true;
+        }
+        if (!override.applyIfPossible(context, values)) return false;
+        APPLIED.put(resources, fingerprint);
+        return true;
     }
 
     /**
