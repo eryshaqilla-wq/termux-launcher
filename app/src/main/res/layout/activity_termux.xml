@@ -1002,8 +1002,9 @@
 
                         <ImageView
                             android:id="@+id/inapp_keyboard_nav_hide"
-                            android:layout_width="48dp"
-                            android:layout_height="36dp"
+                            android:layout_width="36dp"
+                            android:layout_height="32dp"
+                            android:padding="6dp"
                             android:scaleType="centerInside"
                             android:background="?android:attr/selectableItemBackgroundBorderless"
                             android:clickable="true"

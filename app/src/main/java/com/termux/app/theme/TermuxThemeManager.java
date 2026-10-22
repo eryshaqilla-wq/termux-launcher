@@ -1,6 +1,7 @@
 package com.termux.app.theme;
 
 import android.app.Activity;
+import android.content.Context;
 
 import androidx.annotation.NonNull;
 
@@ -19,5 +20,12 @@ public final class TermuxThemeManager {
      */
     public static void applyThemeOverlays(@NonNull Activity activity) {
         LauncherSchemeTheme.apply(activity, TermuxAppSharedPreferences.build(activity));
+    }
+
+    /**
+     * Context overload for services (such as TermuxInputMethodService).
+     */
+    public static void applyThemeOverlays(@NonNull Context context) {
+        LauncherSchemeTheme.apply(context, TermuxAppSharedPreferences.build(context));
     }
 }

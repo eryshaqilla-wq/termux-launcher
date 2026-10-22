@@ -117,9 +117,19 @@ public final class LauncherSchemeTheme {
     @SuppressLint("RestrictedApi")
     public static boolean apply(@NonNull Activity activity,
                                 @Nullable TermuxAppSharedPreferences preferences) {
+        return apply((Context) activity, preferences);
+    }
+
+    /**
+     * Context overload so services (like TermuxInputMethodService) can also carry the terminal
+     * scheme's derived Material roles and palette.
+     */
+    @SuppressLint("RestrictedApi")
+    public static boolean apply(@NonNull Context context,
+                                @Nullable TermuxAppSharedPreferences preferences) {
         boolean enabled = isSupported() && isEnabled(preferences);
         LinkedHashMap<String, Integer> tokens = enabled ? tokens() : null;
-        // apply() runs on every activity create, so it is the natural refresh point for the
+        // apply() runs on every activity/service create, so it is the natural refresh point for the
         // chrome-active cache: a scheme written after the first computation (termux-styling
         // installing a theme, then termux-reload-settings recreating) must flip it without
         // waiting for a settings-screen invalidate().
@@ -130,16 +140,16 @@ public final class LauncherSchemeTheme {
         if (override == null) return false;
 
         try {
-            Resources resources = activity.getResources();
+            Resources resources = context.getResources();
             Integer applied = APPLIED.get(resources);
             int fingerprint = tokens.hashCode();
             if (applied != null && applied == fingerprint) {
                 // The values are already loaded on these Resources; the new theme only needs the
                 // overlay that points the Material role attributes at them.
-                activity.getTheme().applyStyle(
+                context.getTheme().applyStyle(
                     com.google.android.material.R.style.ThemeOverlay_Material3_PersonalizedColors, true);
             } else {
-                if (!override.applyIfPossible(activity, resourceOverrides(tokens))) {
+                if (!override.applyIfPossible(context, resourceOverrides(tokens))) {
                     Logger.logWarn(LOG_TAG, "Scheme colour resources could not be loaded");
                     return false;
                 }
@@ -150,7 +160,7 @@ public final class LauncherSchemeTheme {
             // so they are pointed back at the roles here. The light/dark spelling of the overlay
             // follows the scheme, not the system night mode.
             boolean dark = SchemeTone.isDark(token(tokens, LauncherThemeTokens.SURFACE));
-            activity.getTheme().applyStyle(dark
+            context.getTheme().applyStyle(dark
                 ? R.style.ThemeOverlay_Termux_SchemeColors_Dark
                 : R.style.ThemeOverlay_Termux_SchemeColors_Light, true);
             return true;

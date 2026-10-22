@@ -385,7 +385,7 @@
             android:name="com.termux.app.ime.TermuxInputMethodService"
             android:label="@string/termux_ime_name"
             android:permission="android.permission.BIND_INPUT_METHOD"
-            android:theme="@style/Theme.TermuxActivity.DayNight.NoActionBar"
+            android:theme="@style/Theme.TermuxIME"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />

@@ -6300,9 +6300,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, activeTheme);
             return new ColorDrawable(solidColor);
         }
-        if (shouldUseUnifiedDefaultKeyboardGlassSurface(state) && isUnifiedAccessoryBackdropReady(state)) {
-            return buildDecorNavBarTint(state);
-        }
         return buildInAppKeyboardSurfaceBackground(state, navStrip, false, 0f);
     }
 

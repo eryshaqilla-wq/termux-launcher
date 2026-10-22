@@ -23,6 +23,15 @@
     <style name="Theme.TermuxApp.Light.DarkActionBar" parent="Theme.TermuxApp.DayNight.DarkActionBar"/>
     <style name="Theme.TermuxApp.Light.NoActionBar" parent="Theme.TermuxApp.DayNight.NoActionBar"/>
 
+    <!-- Termux InputMethodService theme: Translucent/transparent window to prevent full-screen blackout -->
+    <style name="Theme.TermuxIME" parent="Theme.TermuxActivity.DayNight.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:colorBackgroundCacheHint">@null</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
+
     <!-- TermuxActivity DayNight NoActionBar theme. -->
     <style name="Theme.TermuxActivity.DayNight.NoActionBar" parent="Theme.TermuxApp.DayNight.NoActionBar">
         <item name="android:windowBackground">?attr/termuxColorSurfaceBase</item>

@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build;
 import android.util.DisplayMetrics;
@@ -12,6 +13,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
+import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.widget.FrameLayout;
 
@@ -24,6 +26,8 @@ import com.termux.app.terminal.inappkeyboard.InAppKeyboardExtraKeys;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardPaletteFactory;
 import com.termux.app.terminal.inappkeyboard.KeyPopupController;
 import com.termux.app.terminal.inappkeyboard.KeyPopupPalette;
+import com.termux.app.terminal.inappkeyboard.LauncherKeyboardLayouts;
+import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.termux.font.FileTypefaces;
 import com.termux.shared.termux.font.NerdFontSpans;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -52,9 +56,10 @@ public class TermuxInputMethodService extends InputMethodService {
 
     @Override
     public void onCreate() {
-        setTheme(R.style.Theme_TermuxActivity_DayNight_NoActionBar);
+        setTheme(R.style.Theme_TermuxIME);
         super.onCreate();
         mPreferences = TermuxAppSharedPreferences.build(this);
+        TermuxThemeManager.applyThemeOverlays(this);
         mKeyEventHandler = new ImeKeyEventHandler(this);
     }
 
@@ -78,6 +83,10 @@ public class TermuxInputMethodService extends InputMethodService {
     @Override
     public void onConfigureWindow(Window win, boolean isFullscreen, boolean isCandidatesOnly) {
         super.onConfigureWindow(win, isFullscreen, isCandidatesOnly);
+        if (win != null) {
+            win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        }
         applyWindowStyling(win);
     }
 
@@ -166,7 +175,12 @@ public class TermuxInputMethodService extends InputMethodService {
         mKeyboardView = new Keyboard2View(context, configBuilder.build(), palette);
 
         // Layout
-        KeyboardData layout = KeyboardData.load(getResources(), juloo.keyboard2.R.xml.termux_launcher_qwerty);
+        String activeLayoutId = mPreferences != null ? mPreferences.getInAppKeyboardActiveLayout() : null;
+        LauncherKeyboardLayouts.Layout layoutDef = activeLayoutId != null
+            ? LauncherKeyboardLayouts.find(getResources(), activeLayoutId) : null;
+        int layoutResId = (layoutDef != null && layoutDef.xmlResId != 0)
+            ? layoutDef.xmlResId : juloo.keyboard2.R.xml.termux_launcher_qwerty;
+        KeyboardData layout = KeyboardData.load(getResources(), layoutResId);
         if (layout != null) {
             LayoutModifier.LayoutOptions options = new LayoutModifier.LayoutOptions(
                 true, false, true,
@@ -213,12 +227,13 @@ public class TermuxInputMethodService extends InputMethodService {
 
         // Key popup preview overlay (identical to in-app keyboard popup)
         mKeyPopup = new KeyPopupController(mInputContainer, mKeyboardView);
+        KeyPopupPalette defaultPopupPalette = KeyPopupPalette.resolve(context);
         int popupPrimary = (scheme.hasPinnedSwatches() && scheme.getSwatch(1) != 0)
             ? scheme.getSwatch(1)
-            : (palette.actionKeyBackground != 0 ? (palette.actionKeyBackground | 0xFF000000) : KeyPopupPalette.resolve(context).primary);
+            : (palette.actionKeyBackground != 0 ? (palette.actionKeyBackground | 0xFF000000) : defaultPopupPalette.primary);
         int popupInk = (scheme.hasPinnedSwatches() && scheme.getSwatch(3) != 0)
             ? scheme.getSwatch(3)
-            : (palette.labelColor != 0 ? (palette.labelColor | 0xFF000000) : KeyPopupPalette.resolve(context).ink);
+            : (palette.labelColor != 0 ? (palette.labelColor | 0xFF000000) : defaultPopupPalette.ink);
         mKeyPopup.overlay().setPalette(new KeyPopupPalette(popupPrimary, popupInk));
         mKeyPopup.overlay().setTypefaces(mKeyboardView.labelFont(), juloo.keyboard2.Theme.getKeyFont(context), NerdFontSpans.typeface(context));
         boolean popupEnabled = mPreferences == null || mPreferences.isInAppKeyboardKeyPopupEnabled();
@@ -240,6 +255,8 @@ public class TermuxInputMethodService extends InputMethodService {
 
     private void applyWindowStyling(@Nullable Window win) {
         if (win == null) return;
+        win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         Context context = this;
         String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
         int bgColor = InAppKeyboardPaletteFactory.isSolidTheme(theme)
@@ -303,6 +320,8 @@ public class TermuxInputMethodService extends InputMethodService {
         if (mPreferences == null) return "";
         return mPreferences.getInAppKeyboardTheme() + "|"
             + mPreferences.getInAppKeyboardColorScheme() + "|"
+            + mPreferences.getInAppKeyboardActiveLayout() + "|"
+            + InAppKeyboardPaletteFactory.signature(this) + "|"
             + mPreferences.isInAppKeyboardKeyPopupEnabled() + "|"
             + mPreferences.getInAppKeyboardHeightScale() + "|"
             + mPreferences.getInAppKeyboardKeyMarginScale() + "|"
@@ -325,6 +344,7 @@ public class TermuxInputMethodService extends InputMethodService {
         }
 
         mPreferences = TermuxAppSharedPreferences.build(this);
+        TermuxThemeManager.applyThemeOverlays(this);
         updateBackDisposition();
 
         // Refresh keyboard view if any keyboard preferences changed in Settings
