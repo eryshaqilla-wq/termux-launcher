@@ -83,7 +83,7 @@ public class KeyboardColorSchemeFragment extends Fragment {
     /** The page's one gap between blocks, in dp. */
     private static final int GAP_DP = 8;
     /** The smallest share of its natural size the preview shrinks to before the page scrolls. */
-    private static final float PREVIEW_MIN_SCALE = 0.4f;
+    private static final float PREVIEW_MIN_SCALE = 0.2f;
     static final String TAG_SWATCH_GRID = "keyboard_theme_swatch_grid";
     static final String TAG_PALETTE_CARD = "keyboard_theme_palette_card";
     /**
@@ -341,9 +341,9 @@ public class KeyboardColorSchemeFragment extends Fragment {
         row.setBackgroundResource(ripple.resourceId);
         row.setClickable(true);
         row.setFocusable(true);
-        row.setMinimumHeight(dp(48));
+        row.setMinimumHeight(dp(40));
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPaddingRelative(dp(8), dp(8), dp(8), dp(8));
+        row.setPaddingRelative(dp(12), dp(4), dp(12), dp(4));
         TextView title = new TextView(context);
         title.setTextAppearance(
             com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
@@ -428,9 +428,9 @@ public class KeyboardColorSchemeFragment extends Fragment {
         row.setBackgroundResource(ripple.resourceId);
         row.setClickable(true);
         row.setFocusable(true);
-        row.setMinimumHeight(dp(48));
+        row.setMinimumHeight(dp(40));
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPaddingRelative(dp(8), dp(8), dp(8), dp(8));
+        row.setPaddingRelative(dp(12), dp(4), dp(12), dp(4));
         TextView title = new TextView(context);
         title.setTextAppearance(
             com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
@@ -508,9 +508,9 @@ public class KeyboardColorSchemeFragment extends Fragment {
         row.setBackgroundResource(ripple.resourceId);
         row.setClickable(true);
         row.setFocusable(true);
-        row.setMinimumHeight(dp(48));
+        row.setMinimumHeight(dp(40));
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPaddingRelative(dp(8), dp(8), dp(8), dp(8));
+        row.setPaddingRelative(dp(12), dp(4), dp(12), dp(4));
         TextView title = new TextView(context);
         title.setTextAppearance(
             com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
@@ -662,7 +662,7 @@ public class KeyboardColorSchemeFragment extends Fragment {
 
         LinearLayout content = new LinearLayout(context);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(8), dp(8), dp(8), dp(8));
+        content.setPadding(dp(8), dp(4), dp(8), dp(4));
 
         LinearLayout heading = new LinearLayout(context);
         heading.setGravity(Gravity.CENTER_VERTICAL);
@@ -673,7 +673,7 @@ public class KeyboardColorSchemeFragment extends Fragment {
             context, com.google.android.material.R.attr.colorSurfaceContainerHighest,
             Color.DKGRAY)));
         heading.setBackground(capsule);
-        heading.setPaddingRelative(dp(16), 0, dp(4), 0);
+        heading.setPaddingRelative(dp(12), dp(2), dp(4), dp(2));
         // Names the role being painted, so the glyphs below need no text of their own.
         mEditingTitle = new TextView(context);
         mEditingTitle.setTextAppearance(
