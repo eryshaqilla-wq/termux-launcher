@@ -23,7 +23,7 @@ public final class KeyPopupPalette {
     /** The glyph itself: the theme's text-on-surface colour, the same family as the caps' labels. */
     @ColorInt public final int ink;
 
-    KeyPopupPalette(@ColorInt int primary, @ColorInt int ink) {
+    public KeyPopupPalette(@ColorInt int primary, @ColorInt int ink) {
         this.primary = primary;
         this.ink = ink;
     }
