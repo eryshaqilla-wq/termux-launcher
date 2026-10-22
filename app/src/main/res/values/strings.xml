@@ -1046,6 +1046,13 @@
                 <string name="termux_keyboard_credits_github_title">Unexpected Keyboard on GitHub</string>
                 <string name="termux_keyboard_credits_play_title">Unexpected Keyboard on Google Play</string>
                 <string name="termux_in_app_keyboard_theme_title">Theme</string>
+    <string name="termux_touchpad_theme_title">Tema Mouse / Touchpad</string>
+    <string name="termux_touchpad_theme_summary">Pilih tema untuk touchpad mouse (bisa terpisah dari keyboard)</string>
+    <string name="termux_touchpad_theme_system">Default (Frosted Glass)</string>
+    <string name="termux_touchpad_theme_keyboard">Mengikuti Tema Keyboard</string>
+    <string name="termux_touchpad_theme_gboard_dark">Gboard Dark</string>
+    <string name="termux_touchpad_theme_gboard_black">AMOLED Black</string>
+    <string name="termux_touchpad_theme_gboard_light">Gboard Light</string>
                 <string name="termux_in_app_keyboard_theme_system">System</string>
                 <string name="termux_in_app_keyboard_theme_light">Light</string>
                 <string name="termux_in_app_keyboard_theme_dark">Dark</string>
@@ -1158,6 +1165,20 @@
                     <item>gboard_black_borderless</item>
                     <item>gboard_light</item>
                     <item>gboard_light_borderless</item>
+                </string-array>
+                <string-array name="termux_touchpad_theme_entries">
+                    <item>@string/termux_touchpad_theme_system</item>
+                    <item>@string/termux_touchpad_theme_keyboard</item>
+                    <item>@string/termux_touchpad_theme_gboard_dark</item>
+                    <item>@string/termux_touchpad_theme_gboard_black</item>
+                    <item>@string/termux_touchpad_theme_gboard_light</item>
+                </string-array>
+                <string-array name="termux_touchpad_theme_values">
+                    <item>system</item>
+                    <item>keyboard</item>
+                    <item>gboard_dark</item>
+                    <item>gboard_black</item>
+                    <item>gboard_light</item>
                 </string-array>
                 <string name="termux_in_app_keyboard_haptics_summary">Gentle haptic tick for every key.</string>
 

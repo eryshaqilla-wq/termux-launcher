@@ -1709,6 +1709,40 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_IN_APP_KEYBOARD_THEME, value, false);
     }
 
+    @NonNull
+    public String getTouchpadTheme() {
+        if (mSharedPreferences != null) {
+            String value = SharedPreferenceUtils.getString(
+                mSharedPreferences,
+                TERMUX_APP.KEY_TOUCHPAD_THEME,
+                TERMUX_APP.DEFAULT_TOUCHPAD_THEME,
+                true);
+            if (isValidTouchpadTheme(value))
+                return value;
+        }
+        return TERMUX_APP.DEFAULT_TOUCHPAD_THEME;
+    }
+
+    public void setTouchpadTheme(String value) {
+        if (!isValidTouchpadTheme(value))
+            value = TERMUX_APP.DEFAULT_TOUCHPAD_THEME;
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_TOUCHPAD_THEME, value, false);
+    }
+
+    private static boolean isValidTouchpadTheme(String value) {
+        if (value == null) return false;
+        switch (value) {
+            case "system":
+            case "keyboard":
+            case "gboard_dark":
+            case "gboard_black":
+            case "gboard_light":
+                return true;
+            default:
+                return false;
+        }
+    }
+
     public String getInAppKeyboardColorScheme() {
         String value = SharedPreferenceUtils.getString(mSharedPreferences,
             TERMUX_APP.KEY_IN_APP_KEYBOARD_COLOR_SCHEME,

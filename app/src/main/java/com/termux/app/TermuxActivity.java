@@ -2410,6 +2410,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mInAppKeyboard.isExternalTextInputActive())
                 onSystemImeRequested();
         }
+        syncInAppKeyboardNavStrip();
         if (sPendingStyleReloadOnNextResume) {
             boolean recreateActivity = consumePendingStyleReloadRecreateActivity();
             // A display switched off in Settings is torn down before the reload, and a server
@@ -5879,6 +5880,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return false;
     }
 
+    @NonNull
+    private String getActiveTouchpadTheme() {
+        String tpTheme = mPreferences != null ? mPreferences.getTouchpadTheme() : "system";
+        if ("keyboard".equals(tpTheme)) {
+            return mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
+        }
+        return tpTheme;
+    }
+
     /**
      * The default edge-to-edge dock and a glass-matched keyboard are one rectangular material.
      * Render one backdrop through both instead of placing two independently cropped glass layers
@@ -5895,6 +5905,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // and one material spanning the dock and the keyboard would run on down behind that card.
         if (underKeyboardBandsShown()) return false;
         if (isWholeFrameTouchpadShown()) {
+            String activeTheme = getActiveTouchpadTheme();
+            if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
+                return false;
+            }
             return state.toolbarShown && !isRoundedDockStyle();
         }
         if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
@@ -5939,7 +5953,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * opaque fill. Nothing produces a backdrop for any of them, so nothing may wait on one.
      */
     private boolean paintsNoInAppKeyboardBackdrop() {
-        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
+        if (isWholeFrameTouchpadShown()) {
+            String activeTheme = getActiveTouchpadTheme();
+            if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
+                return true;
+            }
+        } else if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
             return true;
         }
         return inAppKeyboardMaterial() != KeyboardMaterialPolicy.Material.GLASS;
@@ -6209,16 +6228,88 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private boolean isCurrentKeyboardThemeLight() {
         if (mPreferences == null) return false;
-        String theme = mPreferences.getInAppKeyboardTheme();
+        String theme;
+        if (isWholeFrameTouchpadShown()) {
+            theme = getActiveTouchpadTheme();
+        } else {
+            theme = mPreferences.getInAppKeyboardTheme();
+        }
         if (theme != null && theme.contains("light")) {
             return true;
+        }
+        if (InAppKeyboardPaletteFactory.isSolidTheme(theme)) {
+            int bg = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, theme);
+            return androidx.core.graphics.ColorUtils.calculateLuminance(bg) > 0.5d;
         }
         Integer customBg = resolveInAppKeyboardSchemeBackgroundColor();
         if (customBg != null) {
             double luminance = (0.299 * Color.red(customBg) + 0.587 * Color.green(customBg) + 0.114 * Color.blue(customBg));
             return luminance > 160;
         }
-        return false;
+        int bg = InAppKeyboardPaletteFactory.resolveDockGlassBaseColor(this);
+        return androidx.core.graphics.ColorUtils.calculateLuminance(bg) > 0.5d;
+    }
+
+    private void initInAppKeyboardNavStrip() {
+        View navStrip = findViewById(R.id.inapp_keyboard_nav_strip);
+        if (navStrip == null) return;
+        ImageView hide = findViewById(R.id.inapp_keyboard_nav_hide);
+        if (hide != null) {
+            hide.setOnClickListener(v -> {
+                if (mFrameContent != null && mFrameContent.isMouseMode()) {
+                    setMouseMode(false);
+                }
+                if (applyDisplayFrameKeyboard(false)) return;
+                if (mInAppKeyboard != null) {
+                    mInAppKeyboard.hide(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.USER_EVENT);
+                }
+            });
+        }
+        ImageView sw = findViewById(R.id.inapp_keyboard_nav_switch);
+        if (sw != null) {
+            sw.setOnClickListener(v -> {
+                android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.showInputMethodPicker();
+                }
+            });
+        }
+    }
+
+    private void syncInAppKeyboardNavStrip() {
+        View navStrip = findViewById(R.id.inapp_keyboard_nav_strip);
+        if (navStrip == null) return;
+        boolean showNavButtons = isInAppKeyboardShown()
+            && mPreferences != null
+            && mPreferences.isNavBarKeyboardButtonEnabled();
+        if (showNavButtons) {
+            navStrip.setVisibility(View.VISIBLE);
+            boolean isLight = isCurrentKeyboardThemeLight();
+            int iconTint = isLight ? 0xDE000000 : 0xFFFFFFFF;
+            ImageView hide = findViewById(R.id.inapp_keyboard_nav_hide);
+            if (hide != null) {
+                hide.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN);
+            }
+            ImageView sw = findViewById(R.id.inapp_keyboard_nav_switch);
+            if (sw != null) {
+                sw.setColorFilter(iconTint, android.graphics.PorterDuff.Mode.SRC_IN);
+            }
+            String activeTheme;
+            if (isWholeFrameTouchpadShown()) {
+                activeTheme = getActiveTouchpadTheme();
+            } else {
+                activeTheme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
+            }
+            if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
+                int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, activeTheme);
+                navStrip.setBackgroundColor(solidColor);
+            } else {
+                navStrip.setBackgroundColor(Color.TRANSPARENT);
+            }
+        } else {
+            navStrip.setVisibility(View.GONE);
+        }
     }
 
     /**
@@ -6254,12 +6345,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @NonNull
     private Drawable buildDecorNavBarTint(@NonNull ChromeSpec state) {
         float foot = defaultDockGlassFootFraction();
-        if (!state.keyboardShown || isWholeFrameTouchpadShown())
+        if (!state.keyboardShown)
             return mChrome.glass().dockSurface(state.barAlpha, foot, 1f, false);
-        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
-            int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, mPreferences.getInAppKeyboardTheme());
+        String activeTheme;
+        if (isWholeFrameTouchpadShown()) {
+            activeTheme = getActiveTouchpadTheme();
+        } else {
+            activeTheme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
+        }
+        if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
+            int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, activeTheme);
             return new ColorDrawable(solidColor);
         }
+        if (isWholeFrameTouchpadShown())
+            return mChrome.glass().dockSurface(state.barAlpha, foot, 1f, false);
         // A keyboard overlaying its place is an opaque panel that answers to neither the slider
         // nor the scheme colour, so the strip takes the same fill: at the glass alpha it would
         // leave the material stopping at the keyboard's bottom edge, which is the very seam
@@ -6626,6 +6725,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * measurement is never affected by extra sibling views.
      */
     private void applyInAppKeyboardSurfaceState(@NonNull ChromeSpec state) {
+        syncInAppKeyboardNavStrip();
         View surfaceHost = findViewById(R.id.inapp_keyboard_view_host);
         if (surfaceHost == null) {
             return;
@@ -6636,8 +6736,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
-        if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
-            int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, mPreferences.getInAppKeyboardTheme());
+        String activeTheme;
+        if (isWholeFrameTouchpadShown()) {
+            activeTheme = getActiveTouchpadTheme();
+        } else {
+            activeTheme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
+        }
+
+        if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
+            int solidColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(this, activeTheme);
             surfaceHost.setBackgroundColor(solidColor);
             clearInAppKeyboardBackdrop();
             return;
@@ -11516,15 +11623,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void initializeInAppKeyboard(@Nullable Bundle savedInstanceState) {
+        initInAppKeyboardNavStrip();
         if (mInAppKeyboard != null || mPreferences == null
-            || !mPreferences.isInAppKeyboardEnabled())
+            || !mPreferences.isInAppKeyboardEnabled()) {
+            syncInAppKeyboardNavStrip();
             return;
+        }
         mInAppKeyboard = new TermuxInAppKeyboard(new InAppKeyboardActivityHost(), mPreferences);
         mFloatingKeyboard = new FloatingKeyboardController(new FloatingKeyboardActivityHost());
         // Every way the keyboard goes up or down that is not the Display place's own text-focus
         // policy - the dock button, the keyboard's hide key, a tool, the wall paging, a
         // preference - is the user's doing to that policy, and reaches it from here alone.
         mInAppKeyboard.setVisibilityListener(shown -> {
+            syncInAppKeyboardNavStrip();
             // A dictation from the voice key belongs to the keyboard that started it: down goes the
             // keyboard, off goes the microphone, and the text waits in the panel. (Focus hides are
             // caught by the session's own level tick.) The Dictate key's runs on without one.
@@ -11546,6 +11657,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mFloatingKeyboard.onKeyboardFormResolved(form);
         mInAppKeyboard.onKeyboardFormChanged(form);
         syncWallKeyboardForRestoredPlace();
+        syncInAppKeyboardNavStrip();
     }
 
     /**
@@ -21218,6 +21330,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void syncDisplayTouchpad() {
         dressInAppKeyboardHost();
+        syncInAppKeyboardNavStrip();
         FrameLayout host = findViewById(R.id.inapp_keyboard_view_host);
         boolean ours = isDisplayTouchpadFrame() && host != null;
         // The frame stops being mouse mode's when the wall leaves the place or the display goes:
@@ -21265,6 +21378,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (!wanted) {
             dressInAppKeyboardHost();
+            syncInAppKeyboardNavStrip();
             releaseDisplayTouchpadWait();
             mDisplayTouchpadWaitRound = 0;
             if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {

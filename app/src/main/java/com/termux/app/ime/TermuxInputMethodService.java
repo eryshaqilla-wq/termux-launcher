@@ -108,7 +108,7 @@ public class TermuxInputMethodService extends InputMethodService {
 
         int bgColor = InAppKeyboardPaletteFactory.isSolidTheme(theme)
             ? InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme)
-            : 0xFF1F1F1F; // Default opaque dark for system IME window
+            : (InAppKeyboardPaletteFactory.resolveDockGlassBaseColor(context) | 0xFF000000);
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
         boolean landscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
@@ -137,9 +137,8 @@ public class TermuxInputMethodService extends InputMethodService {
         if (InAppKeyboardPaletteFactory.isSolidTheme(theme)) {
             palette = InAppKeyboardPaletteFactory.createSolid(context, theme);
         } else {
-            // When default (frosted glass) is picked in Termux, outside Termux we use the Gboard Dark
-            // solid palette so the keyboard is 100% readable and opaque on any external app wallpaper/view.
-            palette = InAppKeyboardPaletteFactory.createSolid(context, "gboard_dark");
+            palette = InAppKeyboardPaletteFactory.createGlass(context, theme,
+                com.termux.app.chrome.GlassLook.of(mPreferences));
         }
 
         InAppKeyboardColorScheme scheme = InAppKeyboardColorScheme.fromJson(context,
@@ -154,7 +153,16 @@ public class TermuxInputMethodService extends InputMethodService {
 
         mKeyboardView = new Keyboard2View(context, configBuilder.build(), palette);
 
-        // Apply custom color scheme & key color overrides (e.g. Enter key color)
+        // Layout
+        KeyboardData layout = KeyboardData.load(getResources(), juloo.keyboard2.R.xml.termux_launcher_qwerty);
+        if (layout != null) {
+            LayoutModifier.LayoutOptions options = new LayoutModifier.LayoutOptions(
+                true, false, true,
+                InAppKeyboardExtraKeys.resolve(mPreferences != null ? mPreferences.getInAppKeyboardExtraKeys() : ""));
+            mKeyboardView.setKeyboard(LayoutModifier.modify(layout, options, getResources()));
+        }
+
+        // Apply custom color scheme & key color overrides (e.g. Enter key color) AFTER setKeyboard
         mKeyboardView.setKeyColorOverrides(scheme.resolvedOverrides());
 
         // Sizing & Appearance synchronized with Termux preferences
@@ -171,15 +179,6 @@ public class TermuxInputMethodService extends InputMethodService {
             }
             int keyOpacity = mPreferences.getInAppKeyboardKeyOpacity();
             mKeyboardView.setKeyOpacity(keyOpacity < 0 ? -1f : keyOpacity / 100f);
-        }
-
-        // Layout
-        KeyboardData layout = KeyboardData.load(getResources(), juloo.keyboard2.R.xml.termux_launcher_qwerty);
-        if (layout != null) {
-            LayoutModifier.LayoutOptions options = new LayoutModifier.LayoutOptions(
-                true, false, true,
-                InAppKeyboardExtraKeys.resolve(mPreferences != null ? mPreferences.getInAppKeyboardExtraKeys() : ""));
-            mKeyboardView.setKeyboard(LayoutModifier.modify(layout, options, getResources()));
         }
 
         int popupSpacePx = Math.round(44f * dm.density);
@@ -228,7 +227,7 @@ public class TermuxInputMethodService extends InputMethodService {
         String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
         int bgColor = InAppKeyboardPaletteFactory.isSolidTheme(theme)
             ? InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme)
-            : 0xFF1F1F1F;
+            : (InAppKeyboardPaletteFactory.resolveDockGlassBaseColor(context) | 0xFF000000);
 
         if (mPreferences != null) {
             InAppKeyboardColorScheme scheme = InAppKeyboardColorScheme.fromJson(context,
@@ -308,6 +307,7 @@ public class TermuxInputMethodService extends InputMethodService {
             mKeyEventHandler.reset();
         }
 
+        mPreferences = TermuxAppSharedPreferences.build(this);
         updateBackDisposition();
 
         // Refresh keyboard view if any keyboard preferences changed in Settings

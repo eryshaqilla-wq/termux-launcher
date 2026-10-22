@@ -108,6 +108,7 @@ public class KeyboardColorSchemeFragment extends Fragment {
     private FrameLayout mPreviewHolder;
     private TextView mFontSummary;
     private TextView mThemeSummary;
+    private TextView mTouchpadThemeSummary;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
@@ -416,6 +417,86 @@ public class KeyboardColorSchemeFragment extends Fragment {
             .show();
     }
 
+    /** A two-line row, title over summary, that opens the mouse touchpad theme picker. */
+    @NonNull
+    private View buildTouchpadThemeRow(@NonNull android.content.Context context) {
+        LinearLayout row = new LinearLayout(context);
+        row.setOrientation(LinearLayout.VERTICAL);
+        android.util.TypedValue ripple = new android.util.TypedValue();
+        context.getTheme().resolveAttribute(
+            android.R.attr.selectableItemBackground, ripple, true);
+        row.setBackgroundResource(ripple.resourceId);
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setMinimumHeight(dp(48));
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPaddingRelative(dp(8), dp(8), dp(8), dp(8));
+        TextView title = new TextView(context);
+        title.setTextAppearance(
+            com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
+        title.setText(R.string.termux_touchpad_theme_title);
+        row.addView(title);
+        mTouchpadThemeSummary = new TextView(context);
+        mTouchpadThemeSummary.setTextAppearance(
+            com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+        mTouchpadThemeSummary.setTextColor(MaterialColors.getColor(context,
+            com.google.android.material.R.attr.colorOnSurfaceVariant, Color.GRAY));
+        row.addView(mTouchpadThemeSummary);
+        row.setOnClickListener(view -> showTouchpadThemeDialog());
+        updateTouchpadThemeSummary();
+        return row;
+    }
+
+    private void updateTouchpadThemeSummary() {
+        if (mTouchpadThemeSummary == null) return;
+        String theme = mPreferences.getTouchpadTheme();
+        int summaryRes;
+        switch (theme) {
+            case "keyboard":
+                summaryRes = R.string.termux_touchpad_theme_keyboard;
+                break;
+            case "gboard_dark":
+                summaryRes = R.string.termux_touchpad_theme_gboard_dark;
+                break;
+            case "gboard_black":
+                summaryRes = R.string.termux_touchpad_theme_gboard_black;
+                break;
+            case "gboard_light":
+                summaryRes = R.string.termux_touchpad_theme_gboard_light;
+                break;
+            case "system":
+            default:
+                summaryRes = R.string.termux_touchpad_theme_system;
+                break;
+        }
+        mTouchpadThemeSummary.setText(summaryRes);
+    }
+
+    private void showTouchpadThemeDialog() {
+        String[] values = getResources().getStringArray(R.array.termux_touchpad_theme_values);
+        String[] entries = getResources().getStringArray(R.array.termux_touchpad_theme_entries);
+        String current = mPreferences.getTouchpadTheme();
+        int selectedIndex = 0;
+        for (int i = 0; i < values.length; i++) {
+            if (values[i].equals(current)) {
+                selectedIndex = i;
+                break;
+            }
+        }
+
+        new MaterialAlertDialogBuilder(requireContext())
+            .setTitle(R.string.termux_touchpad_theme_title)
+            .setSingleChoiceItems(entries, selectedIndex, (dialog, which) -> {
+                if (which >= 0 && which < values.length) {
+                    mPreferences.setTouchpadTheme(values[which]);
+                    updateTouchpadThemeSummary();
+                }
+                dialog.dismiss();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
     /** A two-line row, title over summary, that opens the pick/reset flow. */
     @NonNull
     private View buildTypefaceRow(@NonNull android.content.Context context) {
@@ -625,6 +706,8 @@ public class KeyboardColorSchemeFragment extends Fragment {
 
         content.addView(buildThemeRow(context), new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        content.addView(buildTouchpadThemeRow(context), new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         content.addView(buildTypefaceRow(context), new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -637,6 +720,7 @@ public class KeyboardColorSchemeFragment extends Fragment {
         super.onResume();
         requireActivity().setTitle(R.string.keyboard_theme_title);
         updateThemeSummary();
+        updateTouchpadThemeSummary();
         // The wallpaper may have changed while this screen sat in the background; dynamic slots
         // have to show what the keyboard will actually use.
         if (mScheme != null && mKeyboard != null

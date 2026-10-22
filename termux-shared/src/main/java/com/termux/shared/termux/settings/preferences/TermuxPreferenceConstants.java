@@ -812,6 +812,13 @@ public final class TermuxPreferenceConstants {
 
         public static final String DEFAULT_IN_APP_KEYBOARD_THEME = "system";
 
+        /**
+         * Defines the key for the mouse touchpad theme.
+         */
+        public static final String KEY_TOUCHPAD_THEME = "touchpad_theme";
+
+        public static final String DEFAULT_TOUCHPAD_THEME = "system";
+
         /** JSON containing user-edited swatches and per-key keyboard color assignments. */
         public static final String KEY_IN_APP_KEYBOARD_COLOR_SCHEME =
             "in_app_keyboard_color_scheme";
