@@ -24156,6 +24156,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 == com.termux.app.chrome.ChromeEdgeRule.TopLead.WINDOW_BAR;
             int barStroke = capsuleStatusBar ? com.termux.app.chrome.ChromeEdgeRule.ALL
                 : chromeRimEdges(com.termux.app.place.ChromeShape.PieceId.STATUS);
+            if (mPreferences != null && !mPreferences.isTerminalBorderEnabled()) {
+                barStroke = com.termux.app.chrome.ChromeEdgeRule.NONE;
+            }
             background.setBackground(onPlank ? null
                 : joinsDock
                     ? mChrome.glass().dockSurface(opacity, 0f, 1f, false,
