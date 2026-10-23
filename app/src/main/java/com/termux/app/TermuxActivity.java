@@ -12334,6 +12334,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mQuietKeyboardChange) return;
             mDrawerRaisedKeyboardClaimed = true;
             if (mX11Display != null) mX11Display.onUserKeyboardIntent(shown);
+            if (isDisplayPageShowing()) {
+                syncDisplayStatusKeys();
+            }
         });
         mTermuxTerminalViewClient.setInAppKeyboardController(mInAppKeyboard);
         mInAppKeyboard.onCreate(savedInstanceState);
@@ -21310,6 +21313,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } else {
             raiseDisplayKeyboard(false);
         }
+        if (isDisplayPageShowing()) {
+            syncDisplayStatusKeys();
+        }
     }
 
     private String resolveDisplayKeyGlyph(String key) {
@@ -21344,6 +21350,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup statsCluster = findViewById(R.id.terminal_status_stats_cluster);
         ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
         View statusBarHost = findViewById(R.id.terminal_window_bar_host);
+        View toolbarHost = findViewById(R.id.terminal_toolbar_host);
+        View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
+        View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
+        View accessoryRowStack = findViewById(R.id.accessory_row_stack);
+        View surfaceHost = findViewById(R.id.accessory_surface_host);
+        View stackContainer = findViewById(R.id.accessory_stack_container);
 
         if (!isDisplay) {
             if (quickCluster != null) {
@@ -21359,11 +21371,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 statsCluster.setTranslationY(0f);
             }
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
+            if (toolbarHost != null) toolbarHost.setVisibility(View.VISIBLE);
+            if (appsBarRowHost != null) appsBarRowHost.setVisibility(View.VISIBLE);
+            if (appsBarAzHost != null) appsBarAzHost.setVisibility(View.VISIBLE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(View.VISIBLE);
+            if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
+            if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
-            setTerminalToolbarHeight(true);
-            mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, GeometryScheduler.ResizePolicy.NOW);
-            mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
+            setTerminalToolbarHeight(false);
             return;
         }
 
@@ -21382,11 +21398,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mDisplayFullscreenActive = false;
             mDisplayFullscreenAutoApplied = false;
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
+            if (toolbarHost != null) toolbarHost.setVisibility(View.VISIBLE);
+            if (appsBarRowHost != null) appsBarRowHost.setVisibility(View.VISIBLE);
+            if (appsBarAzHost != null) appsBarAzHost.setVisibility(View.VISIBLE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(View.VISIBLE);
+            if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
+            if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
-            setTerminalToolbarHeight(true);
-            mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, GeometryScheduler.ResizePolicy.NOW);
-            mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
         } else {
             // Display IS running:
             // Auto-fullscreen switch on initial start
@@ -21397,17 +21416,28 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             }
 
+            boolean isFullscreen = mDisplayFullscreenActive;
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
+
+            // Extra keys dock: hidden in fullscreen, or follows switch when not fullscreen
+            boolean showDock = !isFullscreen && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            boolean inAppKeyboardOrPadUp = (mInAppKeyboard != null && mInAppKeyboard.isVisible())
+                || isTouchpadShown() || isWholeFrameTouchpadShown();
+
+            if (toolbarHost != null) toolbarHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (appsBarRowHost != null) appsBarRowHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (appsBarAzHost != null) appsBarAzHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (surfaceHost != null) surfaceHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (stackContainer != null) stackContainer.setVisibility((showDock || inAppKeyboardOrPadUp) ? View.VISIBLE : View.GONE);
 
             // Status bar switch
             boolean showBar = mPreferences == null || mPreferences.isX11ShowStatusBarEnabled();
             if (statusBarHost != null) statusBarHost.setVisibility(showBar ? View.VISIBLE : View.GONE);
-
-            setTerminalToolbarHeight(true);
-            mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, GeometryScheduler.ResizePolicy.NOW);
-            mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
         }
+
+        setTerminalToolbarHeight(false);
 
         if (quickCluster != null) {
             populateDisplayQuickKeys(quickCluster);
@@ -22584,6 +22614,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The mouse key also brings the pad back from behind a keyboard that took the frame for
         // a text field: there it is not mouse mode the user is turning off.
         applyDisplayFrameDecision(mFrameContent.onMouseKey());
+        if (isDisplayPageShowing()) {
+            syncDisplayStatusKeys();
+        }
         return mFrameContent.isMouseMode();
     }
 
@@ -22591,6 +22624,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (mFrameContent.isMouseMode() == enabled) return;
         applyDisplayFrameDecision(enabled
             ? mFrameContent.onMouseModeOn() : mFrameContent.onMouseModeOff());
+        if (isDisplayPageShowing()) {
+            syncDisplayStatusKeys();
+        }
     }
 
     // ---- The Display place's keyboard ---------------------------------------------------------
@@ -24786,8 +24822,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (clock != null) clock.onThemeChanged();
         mDisplayQuickKeysPrimaryInk = ink.inkOn(band, primary, primary, com.termux.app.chrome.OnGlass.TARGET_BODY_TEXT);
         mDisplayQuickKeysMutedInk = muted;
-        if (isDisplayPageShowing()) {
-            syncDisplayStatusKeys();
+        ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
+        if (quickCluster != null && isDisplayPageShowing()) {
+            populateDisplayQuickKeys(quickCluster);
         }
     }
 
