@@ -34,10 +34,25 @@ public class TermuxIpcServer {
                 return;
             }
             int i = this.mAction;
+            com.termux.app.terminal.TerminalHost host = termuxActivity.terminalHost();
             if (i == 0 || i == 2) {
+                if (host != null && host.hideInAppKeyboard(false)) {
+                    return;
+                }
                 com.termux.shared.view.KeyboardUtils.hideSoftKeyboard(termuxActivity, termuxActivity.getCurrentFocus());
             } else if (i == 1 || i == 3) {
+                if (host != null && host.showInAppKeyboard(false)) {
+                    return;
+                }
                 com.termux.shared.view.KeyboardUtils.showSoftKeyboard(termuxActivity, termuxActivity.getTerminalView());
+            } else if (i == 4) {
+                if (host != null && host.showInAppKeyboard(true)) {
+                    return;
+                }
+            } else if (i == 5) {
+                if (host != null && host.hideInAppKeyboard(true)) {
+                    return;
+                }
             }
         }
     }
@@ -140,6 +155,20 @@ public class TermuxIpcServer {
                                 TermuxActivity activity8 = TermuxIpcServer.getActivity();
                                 if (activity8 != null) {
                                     activity8.runOnUiThread(new KeyboardRunnable(activity8, 2));
+                                } else {
+                                    FusionWebViewDispatcher.dispatch(strTrim);
+                                }
+                            } else if (strTrim.equalsIgnoreCase("KEYBOARD_FOCUS_IN") || strTrim.equalsIgnoreCase("FOCUS_IN")) {
+                                TermuxActivity actFocusIn = TermuxIpcServer.getActivity();
+                                if (actFocusIn != null) {
+                                    actFocusIn.runOnUiThread(new KeyboardRunnable(actFocusIn, 4));
+                                } else {
+                                    FusionWebViewDispatcher.dispatch(strTrim);
+                                }
+                            } else if (strTrim.equalsIgnoreCase("KEYBOARD_FOCUS_OUT") || strTrim.equalsIgnoreCase("FOCUS_OUT")) {
+                                TermuxActivity actFocusOut = TermuxIpcServer.getActivity();
+                                if (actFocusOut != null) {
+                                    actFocusOut.runOnUiThread(new KeyboardRunnable(actFocusOut, 5));
                                 } else {
                                     FusionWebViewDispatcher.dispatch(strTrim);
                                 }

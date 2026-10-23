@@ -452,16 +452,30 @@ case "$ACTION" in
         fi
         ;;
     keyboard-hide|hide)
-        res=$(send_cmd "KEYBOARD_HIDE")
+        if [ "${1:-}" = "--focus" ] || [ "${1:-}" = "focus" ]; then
+            res=$(send_cmd "KEYBOARD_FOCUS_OUT")
+        else
+            res=$(send_cmd "KEYBOARD_HIDE")
+        fi
         if [ "$res" != "OK" ]; then
             am broadcast -a terminal.hide_keyboard >/dev/null 2>&1
         fi
         ;;
     keyboard-show|show)
-        res=$(send_cmd "KEYBOARD_SHOW")
+        if [ "${1:-}" = "--focus" ] || [ "${1:-}" = "focus" ]; then
+            res=$(send_cmd "KEYBOARD_FOCUS_IN")
+        else
+            res=$(send_cmd "KEYBOARD_SHOW")
+        fi
         if [ "$res" != "OK" ]; then
             am broadcast -a terminal.show_keyboard >/dev/null 2>&1
         fi
+        ;;
+    keyboard-focus-in|focus-in)
+        res=$(send_cmd "KEYBOARD_FOCUS_IN")
+        ;;
+    keyboard-focus-out|focus-out)
+        res=$(send_cmd "KEYBOARD_FOCUS_OUT")
         ;;
     x11-start)
         adb -s 127.0.0.1:5555 shell "su -c 'magiskpolicy --live \"permissive *\" 2>/dev/null || true; export TMPDIR=/data/local/nhsystem/kali-arm64/tmp; mkdir -p \$TMPDIR; export CLASSPATH=\$(pm path com.termux.x11 | cut -d: -f2); nohup /system/bin/app_process / com.termux.x11.CmdEntryPoint :0 >/dev/null 2>&1 &'" >/dev/null 2>&1

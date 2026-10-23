@@ -1019,7 +1019,11 @@ EOF_ROFI
 export GTK_IM_MODULE=fcitx
 export QT_IM_MODULE=fcitx
 export XMODIFIERS=@im=fcitx
-[ -z "$DBUS_SESSION_BUS_ADDRESS" ] && [ -S "/tmp/termux-x11-im-bus-0" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/termux-x11-im-bus-0"
+if [ -S "/tmp/.X11-unix/termux-x11-im-bus-0" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/.X11-unix/termux-x11-im-bus-0"
+elif [ -S "/tmp/termux-x11-im-bus-0" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/termux-x11-im-bus-0"
+fi
 EOF_FCITX
                 chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/'*
                 # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713

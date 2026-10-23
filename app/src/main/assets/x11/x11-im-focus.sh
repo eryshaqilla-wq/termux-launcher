@@ -60,7 +60,10 @@ esac
 BUS="$BUS_PREFIX-$NUMBER"
 PID_FILE="$BUS.pid"
 LOCK="$BUS.lock"
-TMP_DIR=${BUS_PREFIX%/*}
+case "$BUS_PREFIX" in
+  */.X11-unix/*) TMP_DIR=${BUS_PREFIX%/.X11-unix/*} ;;
+  *) TMP_DIR=${BUS_PREFIX%/*} ;;
+esac
 X_SOCKET="$TMP_DIR/.X11-unix/X$NUMBER"
 
 FCITX=org.fcitx.Fcitx5
@@ -141,7 +144,7 @@ echo "$$" > "$PID_FILE"
 
 exec > "$BUS.log" 2>&1
 
-for tool in fcitx5 dbus-daemon dbus-monitor dbus-send dbus-test-tool launcherctl; do
+for tool in fcitx5 dbus-daemon dbus-monitor dbus-send dbus-test-tool; do
   if ! command -v "$tool" > /dev/null 2>&1; then
     say "$tool is not installed; nothing started"
     exit 0
@@ -189,6 +192,7 @@ rm -f "$BUS"
 dbus-daemon --session --nofork --nopidfile --address="unix:path=$BUS" &
 DAEMON=$!
 if ! within 50 test -S "$BUS"; then say "the session bus did not come up"; exit 0; fi
+chmod 777 "$BUS" 2>/dev/null || true
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$BUS"
 
 # 2. The virtual keyboard's name, before fcitx5 looks for it.
@@ -233,14 +237,20 @@ MONITOR=$!
           echo_from=""
         fi
         say "focus in"
-        launcherctl keyboard show --source focus > /dev/null 2>&1
+        if command -v termux-ipc > /dev/null 2>&1; then
+          termux-ipc keyboard-show --focus > /dev/null 2>&1 || termux-ipc show > /dev/null 2>&1 || true
+        fi
+        command -v launcherctl > /dev/null 2>&1 && launcherctl keyboard show --source focus > /dev/null 2>&1 || true
         ;;
       *member=HideVirtualKeyboard*)
         ui=$(current_ui)
         if [ -z "$ui" ] || [ "$ui" = virtualkeyboard ]; then
           echo_from=""
           say "focus out"
-          launcherctl keyboard hide --source focus > /dev/null 2>&1
+          if command -v termux-ipc > /dev/null 2>&1; then
+            termux-ipc keyboard-hide --focus > /dev/null 2>&1 || termux-ipc hide > /dev/null 2>&1 || true
+          fi
+          command -v launcherctl > /dev/null 2>&1 && launcherctl keyboard hide --source focus > /dev/null 2>&1 || true
         else
           # A key fcitx5 took for hardware switched it out of on-screen mode: switch it back, and
           # let the one show that answers it go by.

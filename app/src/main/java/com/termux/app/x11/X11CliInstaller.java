@@ -75,7 +75,7 @@ public final class X11CliInstaller {
      * {@link #imBusPath}. In the prefix's temporary directory, beside the X sockets themselves.
      */
     static final String IM_BUS_PATH_PREFIX =
-        TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/termux-x11-im-bus";
+        TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH + "/.X11-unix/termux-x11-im-bus";
     private static final String IM_FOCUS_ASSET = "x11/x11-im-focus.sh";
     static final String LOADER_PATH = LIBEXEC_DIR + "/loader.apk";
     /** openbox's configuration for the display: every window maximised, none decorated. */
