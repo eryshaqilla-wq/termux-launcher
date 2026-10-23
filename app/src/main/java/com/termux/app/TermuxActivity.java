@@ -21157,10 +21157,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         float quickAlpha;
         if (current == com.termux.app.wall.PaneWallPage.DISPLAY) {
             quickAlpha = alpha;
-            statsAlpha = (offsetPx > 0f) ? travel : 0f;
-        } else if (current == com.termux.app.wall.PaneWallPage.TERMINAL) {
-            statsAlpha = alpha;
-            quickAlpha = (offsetPx < 0f) ? travel : 0f;
+            statsAlpha = 0f;
         } else {
             statsAlpha = alpha;
             quickAlpha = 0f;
