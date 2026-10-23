@@ -6304,6 +6304,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** Glass, one opaque panel, or nothing at all — see {@link KeyboardMaterialPolicy}. */
     @NonNull
     private KeyboardMaterialPolicy.Material inAppKeyboardMaterial() {
+        if (isWholeFrameTouchpadShown()) {
+            String activeTheme = getActiveTouchpadTheme();
+            if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
+                return KeyboardMaterialPolicy.Material.SOLID;
+            }
+            return KeyboardMaterialPolicy.Material.GLASS;
+        }
         return KeyboardMaterialPolicy.hostMaterial(inAppKeyboardForm(), inAppKeyboardOverlays());
     }
 
@@ -6315,9 +6322,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean paintsNoInAppKeyboardBackdrop() {
         if (isWholeFrameTouchpadShown()) {
             String activeTheme = getActiveTouchpadTheme();
-            if (InAppKeyboardPaletteFactory.isSolidTheme(activeTheme)) {
-                return true;
-            }
+            return InAppKeyboardPaletteFactory.isSolidTheme(activeTheme);
         } else if (mPreferences != null && InAppKeyboardPaletteFactory.isSolidTheme(mPreferences.getInAppKeyboardTheme())) {
             return true;
         }
@@ -7188,6 +7193,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 surfaceHost.setBackground(buildInAppKeyboardSurfaceBackground(
                     state, surfaceHost, false, 0f));
             }
+            return;
+        }
+
+        if (isWholeFrameTouchpadShown()) {
+            // Whole frame touchpad with Frosted Glass: even if not unified with dock,
+            // render the frosted glass backdrop surface without falling into solid overlay.
+            surfaceHost.setBackground(buildInAppKeyboardSurfaceBackground(
+                state, surfaceHost, false, 0f));
             return;
         }
 
@@ -19956,14 +19969,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @NonNull com.termux.app.wall.PaneWallPage place) {
         boolean keyboardUp = place == mLastWallPage ? committedKeyboardVisible()
             : wantsKeyboardOnEnter(place);
+        boolean minimal = false;
+        if (place == com.termux.app.wall.PaneWallPage.DISPLAY && isEmbeddedDisplayRunning()) {
+            boolean showDock = !mDisplayFullscreenActive && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            minimal = !showDock;
+        }
+        if (minimal) {
+            return keyboardUp ? REST_KEYBOARD_UP_MINIMAL : REST_KEYBOARD_DOWN_MINIMAL;
+        }
         return keyboardUp ? REST_KEYBOARD_UP : REST_KEYBOARD_DOWN;
     }
 
-    /** The two rests a place can have (the Rest is immutable), so a slide frame allocates neither. */
+    /** The rests a place can have (the Rest is immutable), so a slide frame allocates neither. */
     private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_UP =
         new com.termux.app.place.PlaceChromeTravel.Rest(true, false);
     private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_DOWN =
         new com.termux.app.place.PlaceChromeTravel.Rest(false, false);
+    private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_UP_MINIMAL =
+        new com.termux.app.place.PlaceChromeTravel.Rest(true, true);
+    private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_DOWN_MINIMAL =
+        new com.termux.app.place.PlaceChromeTravel.Rest(false, true);
     /** {@link #chromeRestOf} as the travel asks it, bound once rather than per frame. */
     private final com.termux.app.place.PlaceChromeTravel.States mChromeRestStates = this::chromeRestOf;
 
@@ -20781,6 +20806,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     // a trace shows whether the chrome lands with the wall or after it.
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                         Trace.setCounter("Wall.offsetPx", Math.round(offsetPx));
+                    if (offsetPx != 0f) {
+                        ensureDockViewsVisibleForTravel();
+                    }
                     syncPlaceBarOffset(offsetPx);
                     // The terminal's own frame line stays put while its page leaves: it fades.
                     syncTerminalFrameLineTravel();
@@ -21344,6 +21372,23 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return key;
     }
 
+    private void ensureDockViewsVisibleForTravel() {
+        View accessoryRowStack = findViewById(R.id.accessory_row_stack);
+        if (accessoryRowStack != null && accessoryRowStack.getVisibility() != View.VISIBLE) {
+            accessoryRowStack.setVisibility(View.VISIBLE);
+            View toolbarHost = findViewById(R.id.terminal_toolbar_host);
+            if (toolbarHost != null) toolbarHost.setVisibility(View.VISIBLE);
+            View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
+            if (appsBarRowHost != null) appsBarRowHost.setVisibility(View.VISIBLE);
+            View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
+            if (appsBarAzHost != null) appsBarAzHost.setVisibility(View.VISIBLE);
+            View stackContainer = findViewById(R.id.accessory_stack_container);
+            if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
+            View surfaceHost = findViewById(R.id.accessory_surface_host);
+            if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
+        }
+    }
+
     private void syncDisplayStatusKeys() {
         boolean isDisplay = isDisplayPageShowing();
         boolean isRunning = isEmbeddedDisplayRunning();
@@ -21429,7 +21474,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (appsBarRowHost != null) appsBarRowHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
             if (appsBarAzHost != null) appsBarAzHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
             if (accessoryRowStack != null) accessoryRowStack.setVisibility(showDock ? View.VISIBLE : View.GONE);
-            if (surfaceHost != null) surfaceHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (surfaceHost != null) surfaceHost.setVisibility((showDock || inAppKeyboardOrPadUp) ? View.VISIBLE : View.GONE);
             if (stackContainer != null) stackContainer.setVisibility((showDock || inAppKeyboardOrPadUp) ? View.VISIBLE : View.GONE);
 
             // Status bar switch
@@ -21459,8 +21504,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (keys.size() >= 5) break;
             }
         }
-
-        quickCluster.removeAllViews();
 
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
         int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
@@ -21492,10 +21535,46 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
         int strokeWidth = Math.round(dpToPx(1));
         int marginE = Math.round(dpToPx(3));
+
+        boolean canReuse = quickCluster.getChildCount() == keys.size();
+        if (canReuse) {
+            for (int i = 0; i < keys.size(); i++) {
+                View child = quickCluster.getChildAt(i);
+                if (!(child instanceof TextView) || !keys.get(i).equals(child.getTag())) {
+                    canReuse = false;
+                    break;
+                }
+            }
+        }
+
+        if (canReuse) {
+            for (int i = 0; i < keys.size(); i++) {
+                TextView btn = (TextView) quickCluster.getChildAt(i);
+                String key = keys.get(i);
+                String glyph = resolveDisplayKeyGlyph(key);
+                if (!glyph.equals(btn.getText().toString())) {
+                    btn.setText(glyph);
+                }
+                btn.setTextColor(activeInk);
+                btn.setEnabled(isRunning);
+                btn.setAlpha(isRunning ? 1.0f : 0.45f);
+                android.graphics.drawable.Drawable bg = btn.getBackground();
+                if (bg instanceof android.graphics.drawable.GradientDrawable) {
+                    android.graphics.drawable.GradientDrawable gd = (android.graphics.drawable.GradientDrawable) bg;
+                    gd.setColor(bgFill);
+                    gd.setStroke(strokeWidth, strokeColor);
+                    gd.setCornerRadius(cornerRadius);
+                }
+            }
+            return;
+        }
+
+        quickCluster.removeAllViews();
         android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
 
         for (String key : keys) {
             TextView btn = new TextView(this);
+            btn.setTag(key);
             String glyph = resolveDisplayKeyGlyph(key);
             btn.setText(glyph);
             if (nerdFont != null) btn.setTypeface(nerdFont);
