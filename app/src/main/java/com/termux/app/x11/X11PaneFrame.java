@@ -1311,8 +1311,12 @@ public final class X11PaneFrame extends PaneContentFrame implements SurfacePage 
         // The page's frame line, as the Widgets page's: the slab's lit rim on glass, the
         // terminal's plain stroke while the border preference is on without it, so the border
         // drag that pages the wall (BorderDrag) finds the same line on every place.
-        boolean border = glass || PaneRim.plainBorderWanted(style);
-        float radiusPx = border ? PaneGlass.radiusPx(style, density) : 0f;
+        boolean borderWanted = style == null || style.paneBorderEnabled();
+        boolean border = borderWanted && (glass || PaneRim.plainBorderWanted(style));
+        float radiusPx = (glass || border) ? PaneGlass.radiusPx(style, density) : 0f;
+        float strokePx = border ? (glass
+            ? com.termux.app.GlassRimRenderer.strokePx(density)
+            : PaneRim.stockStrokePx(density)) : 0f;
         // The page's own slab, fed exactly as a pane's and the Widgets page's are. It stays
         // dressed while a display runs — the surface simply covers it — so the page has the glass
         // it should the moment the display stops, without a pass of its own to run then.
@@ -1322,9 +1326,7 @@ public final class X11PaneFrame extends PaneContentFrame implements SurfacePage 
         // rather than against the bounding box, where the page's own corner mask would paint the
         // wall over its outer corner and it would read as hanging out past the rounded edge.
         if (mControls != null) {
-            mControls.setPaneBorder(radiusPx, glass
-                ? com.termux.app.GlassRimRenderer.strokePx(density)
-                : border ? PaneRim.stockStrokePx(density) : 0f);
+            mControls.setPaneBorder(radiusPx, strokePx);
             PaneGlass.dressTab(style, mControls);
         }
         // The frame must not clip to its shape here: the mask's arcs lie exactly outside the
@@ -1332,6 +1334,7 @@ public final class X11PaneFrame extends PaneContentFrame implements SurfacePage 
         // which no clip reaches. The slab is square for the same reason and the mask rounds it,
         // and the rim draws the rounded edge whichever way the frame is set.
         setPaneShape(radiusPx, false);
+        setRimStrokePx(strokePx);
         // Nothing keeps X windows out of the arcs: like any rounded desktop, the display clips
         // and a terminal that minds its corners pads its own window (kitty's
         // window_padding_width). Reserving the clearance in the window manager instead cost

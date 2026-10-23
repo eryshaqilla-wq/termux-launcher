@@ -593,10 +593,11 @@ public final class WidgetPaneFrame extends PaneContentFrame {
         // the border preference is on without it. Drawn on the page itself, so it moves with the
         // page and fades with the other pages' rims, and so the border drag that pages the wall
         // (BorderDrag) has the same line to find here as on the terminal. Off both, no line.
-        boolean border = glass || PaneRim.plainBorderWanted(style);
-        float radiusPx = border ? requestedRadiusPx : 0f;
-        float strokePx = glass ? com.termux.app.GlassRimRenderer.strokePx(density)
-            : border ? PaneRim.stockStrokePx(density) : 0f;
+        boolean borderWanted = style == null || style.paneBorderEnabled();
+        boolean border = borderWanted && (glass || PaneRim.plainBorderWanted(style));
+        float radiusPx = (glass || border) ? requestedRadiusPx : 0f;
+        float strokePx = border ? (glass ? com.termux.app.GlassRimRenderer.strokePx(density)
+            : PaneRim.stockStrokePx(density)) : 0f;
         // The tab is part of the page's own outline: it sits flush in the corner it came out of,
         // inside the rim's line, and that line is its outer edge. Its material is its own fixed
         // recipe, the app's wallpaper blur under a panel scrim, the same on every screen; with no
@@ -608,7 +609,8 @@ public final class WidgetPaneFrame extends PaneContentFrame {
         // A page is never a divided pane, so its radius is the surface's own. The frame clips to
         // it under any line, as the lone terminal pane's host does under the plain border: a
         // widget's square corner poking past the arc reads as the frame being broken.
-        setPaneShape(radiusPx, border);
+        setPaneShape(radiusPx, glass || border);
+        setRimStrokePx(strokePx);
         // The page is alone on screen while it shows, so it wears the shared rim, the same
         // border as the status bar, dock and keyboard, never the focus colour.
         if (border) mRim.apply(this, glass, radiusPx, PaneBorderStyle.lone(), style);

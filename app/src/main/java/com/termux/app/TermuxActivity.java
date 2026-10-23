@@ -3423,6 +3423,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mPaneController != null) {
                 mPaneController.updateActiveBorders();
             }
+            if (mPaneWallController != null) {
+                mPaneWallController.applyStyle(paneSurfaceStyle());
+            }
             return;
         }
 
@@ -3439,6 +3442,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         updateTerminalGlassFrost();
         if (mPaneController != null) {
             mPaneController.updateActiveBorders();
+        }
+        if (mPaneWallController != null) {
+            mPaneWallController.applyStyle(paneSurfaceStyle());
         }
 
         float innerRadiusPx = Math.max(0f, cornerRadiusPx - paneInsetPx);

@@ -754,7 +754,7 @@
     <string name="settings_film_grain_title">Film grain</string>
     <string name="settings_film_grain_summary">Adds subtle noise texture over glass surfaces. Turn off to reduce canvas redraw overhead.</string>
     <string name="settings_terminal_border_title">Terminal frame border</string>
-    <string name="settings_terminal_border_summary">Draws a 1px outline border around the terminal area.</string>
+    <string name="settings_terminal_border_summary">Draws a 1px outline border around canvas frames (Terminal, Widgets, and Display).</string>
     <string name="settings_touch_wobble_effect_title">Touch tilt &amp; wobble effect</string>
     <string name="settings_touch_wobble_effect_summary">Tilts and wobbles surfaces when touched. Turn off for a completely solid, static touch response.</string>
     <string name="settings_fancier_glass_header">Fancier Glass</string>
