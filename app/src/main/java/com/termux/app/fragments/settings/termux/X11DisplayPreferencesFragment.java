@@ -97,7 +97,7 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                 @SuppressWarnings("unchecked")
                 Set<String> selected = ((MultiSelectListPreference) preference).getValues();
                 if (selected == null || selected.isEmpty()) {
-                    return getString(R.string.none);
+                    return "-";
                 }
                 return String.join(", ", selected);
             });
