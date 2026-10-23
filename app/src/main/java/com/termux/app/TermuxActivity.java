@@ -21339,8 +21339,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (toolbarHost != null) toolbarHost.setVisibility(state.extraKeysRowEnabled ? View.VISIBLE : View.GONE);
             if (appsBarRowHost != null) appsBarRowHost.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
             if (appsBarAzHost != null) appsBarAzHost.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
-            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
-            if (surfaceHost != null) surfaceHost.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
+            if (surfaceHost != null) surfaceHost.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
             return;
@@ -21365,8 +21365,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (toolbarHost != null) toolbarHost.setVisibility(state.extraKeysRowEnabled ? View.VISIBLE : View.GONE);
             if (appsBarRowHost != null) appsBarRowHost.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
             if (appsBarAzHost != null) appsBarAzHost.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
-            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
-            if (surfaceHost != null) surfaceHost.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
+            if (surfaceHost != null) surfaceHost.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
         } else {
