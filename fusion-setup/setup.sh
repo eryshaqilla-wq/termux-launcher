@@ -493,9 +493,9 @@ else
     echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, npm, python, git, curl, zsh, termux-api)${RESET}"
 fi
 
-# Cek & Pasang paket GUI/X11 & Audio di Native Termux (bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl)
+# Cek & Pasang paket GUI/X11, Input Method & Audio di Native Termux (bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl, fcitx5)
 GUI_PKGS_OK=1
-for gpkg in bspwm sxhkd rofi polybar picom feh pulseaudio; do
+for gpkg in bspwm sxhkd rofi polybar picom feh pulseaudio fcitx5; do
     if ! command -v "$gpkg" >/dev/null 2>&1; then
         GUI_PKGS_OK=0
         break
@@ -506,13 +506,13 @@ if [ ! -f "$PREFIX/bin/virgl_test_server_android" ]; then
 fi
 
 if [ $GUI_PKGS_OK -eq 0 ]; then
-    spin "Memasang x11-repo & dependensi bspwm/audio di Termux..." bash -c '
+    spin "Memasang x11-repo & dependensi bspwm/fcitx5/audio di Termux..." bash -c '
         pkg install -y x11-repo 2>/dev/null || true
-        pkg install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android 2>/dev/null || true
+        pkg install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android fcitx5 fcitx5-gtk3 fcitx5-qt 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android fcitx5 fcitx5-gtk3 fcitx5-qt 2>/dev/null || true
     '
-    echo -e "  ${GREEN}✔ bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio & virgl terpasang di Termux${RESET}"
+    echo -e "  ${GREEN}✔ bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl & fcitx5 terpasang di Termux${RESET}"
 else
-    echo -e "  ${GREEN}✔ Paket GUI & Audio Native Termux sudah lengkap (bspwm, pulseaudio, virgl)${RESET}"
+    echo -e "  ${GREEN}✔ Paket GUI, Audio & Fcitx5 Native Termux sudah lengkap${RESET}"
 fi
 
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
@@ -908,7 +908,7 @@ EOF_PALSA
             if command -v proot-distro >/dev/null 2>&1; then
                 spin "Memasang bspwm, audio & tools di PRoot $DISPLAY_NAME..." proot-distro login "$DISTRO_NAME" -- /bin/sh -c '
                     export DEBIAN_FRONTEND=noninteractive
-                    apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                    apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
                 '
             fi
             if [ -n "$THEME_SRC" ]; then
@@ -930,12 +930,12 @@ EOF_PALSA
                 if [ -x '/data/local/Droidspaces/bin/droidspaces' ] && [ -n '$CUSTOM_LINUX_NAME' ] && [ '$CUSTOM_LINUX_NAME' != 'NetHunter' ]; then
                     /data/local/Droidspaces/bin/droidspaces --name='$CUSTOM_LINUX_NAME' run /bin/sh -c '
                         export DEBIAN_FRONTEND=noninteractive
-                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
                     ' >/dev/null 2>&1 || true
                 else
                     chroot '$CONTAINER_ROOTFS' /bin/sh -c '
                         export DEBIAN_FRONTEND=noninteractive
-                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
                     ' >/dev/null 2>&1 || true
                 fi
             "
@@ -998,6 +998,29 @@ elif [ -f \"\$WDIR/pemantau.cjs\" ]; then
   cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"
 fi
 EOF_RP
+                cat << 'EOF_ROFI' > '$CONTAINER_ROOTFS/usr/local/bin/rofi'
+#!/usr/bin/env bash
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc show >/dev/null 2>&1 || true
+elif [ -x "/usr/local/termux-shims/termux-ipc" ]; then
+    /usr/local/termux-shims/termux-ipc show >/dev/null 2>&1 || true
+fi
+/usr/bin/rofi "$@"
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+elif [ -x "/usr/local/termux-shims/termux-ipc" ]; then
+    /usr/local/termux-shims/termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI
+                mkdir -p '$CONTAINER_ROOTFS/etc/profile.d'
+                cat << 'EOF_FCITX' > '$CONTAINER_ROOTFS/etc/profile.d/fcitx5.sh'
+export GTK_IM_MODULE=fcitx
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+[ -z "$DBUS_SESSION_BUS_ADDRESS" ] && [ -S "/tmp/termux-x11-im-bus-0" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/termux-x11-im-bus-0"
+EOF_FCITX
                 chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/'*
                 # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
                 if [ -d '$CONTAINER_ROOTFS/etc/pulse' ]; then
