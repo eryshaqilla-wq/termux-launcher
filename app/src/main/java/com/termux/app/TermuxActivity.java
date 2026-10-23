@@ -21232,7 +21232,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         String alias = com.termux.shared.termux.extrakeys.ExtraKeysConstants.CONTROL_CHARS_ALIASES.get(key);
         if (alias != null) return alias;
-        alias = com.termux.shared.termux.extrakeys.ExtraKeysConstants.WELL_KNOWN_CHARACTERS_DISPLAY.get(key);
+        alias = com.termux.shared.termux.extrakeys.ExtraKeysConstants.EXTRA_KEY_DISPLAY_MAPS.DEFAULT_CHAR_DISPLAY.get(key);
         if (alias != null) return alias;
         return key;
     }
