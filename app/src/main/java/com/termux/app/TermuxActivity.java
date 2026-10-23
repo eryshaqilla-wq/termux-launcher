@@ -9400,7 +9400,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View decorView = getWindow().getDecorView();
         WindowInsetsControllerCompat insetsController = WindowCompat.getInsetsController(
             getWindow(), decorView);
-        boolean fullscreen = mProperties.isUsingFullScreen();
+        boolean fullscreen = (mProperties != null && mProperties.isUsingFullScreen())
+            || (isDisplayPageShowing() && mDisplayFullscreenActive);
         if (fullscreen) {
             insetsController.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
@@ -9417,7 +9418,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Both normal and fullscreen modes are edge-to-edge. Fullscreen previously restored
         // decor-fitting immediately before hiding the bars, leaving the wallpaper/content frame
         // cropped below the old status-bar inset (most visible during transient-bar gestures).
-        boolean edgeToEdge = enable || (mProperties != null && mProperties.isUsingFullScreen());
+        boolean edgeToEdge = enable || (mProperties != null && mProperties.isUsingFullScreen())
+            || (isDisplayPageShowing() && mDisplayFullscreenActive);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), !edgeToEdge);
 
         if (mTermuxActivityRootView != null) {
@@ -21149,11 +21151,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 strip.setClipBounds(mTmpStripClip);
             }
         }
+        com.termux.app.wall.PaneWallPage current = mPaneWallController != null
+            ? mPaneWallController.currentPage() : currentWallPage();
+        float statsAlpha;
+        float quickAlpha;
+        if (current == com.termux.app.wall.PaneWallPage.DISPLAY) {
+            quickAlpha = alpha;
+            statsAlpha = (offsetPx > 0f) ? travel : 0f;
+        } else if (current == com.termux.app.wall.PaneWallPage.TERMINAL) {
+            statsAlpha = alpha;
+            quickAlpha = (offsetPx < 0f) ? travel : 0f;
+        } else {
+            statsAlpha = alpha;
+            quickAlpha = 0f;
+        }
+
         ViewGroup cluster = hotView(R.id.terminal_status_stats_cluster);
         if (cluster != null) {
             cluster.setTranslationX(vertical ? 0f : offsetPx);
             cluster.setTranslationY(vertical ? offsetPx : 0f);
-            cluster.setAlpha(alpha);
+            cluster.setAlpha(statsAlpha);
+            cluster.setVisibility(statsAlpha > 0.01f ? View.VISIBLE : View.GONE);
+        }
+        ViewGroup quickCluster = hotView(R.id.display_quick_keys_cluster);
+        if (quickCluster != null) {
+            if (quickCluster.getChildCount() == 0 && quickAlpha > 0.01f) {
+                populateDisplayQuickKeys(quickCluster);
+            }
+            quickCluster.setTranslationX(vertical ? 0f : offsetPx);
+            quickCluster.setTranslationY(vertical ? offsetPx : 0f);
+            quickCluster.setAlpha(quickAlpha);
+            quickCluster.setVisibility(quickAlpha > 0.01f ? View.VISIBLE : View.GONE);
         }
         View endWidgets = hotView(R.id.terminal_status_widgets);
         if (endWidgets != null) {
@@ -21163,7 +21191,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (mPaneWallController == null) return;
         java.util.List<com.termux.app.wall.PaneWallPage> pages = mPaneWallController.pages();
-        com.termux.app.wall.PaneWallPage current = mPaneWallController.currentPage();
         com.termux.app.statusbar.StatusBarLensView lens = hotView(R.id.terminal_status_lens);
         if (lens != null) lens.setWallState(pages, current, offsetPx, width);
     }
@@ -21211,18 +21238,51 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void setDisplayFullscreen(boolean fullscreen) {
         if (mDisplayFullscreenActive == fullscreen) return;
         mDisplayFullscreenActive = fullscreen;
+        applyFullscreenMode();
+        applySeamlessStatusBackgroundModeIfNeeded();
         syncDisplayStatusKeys();
     }
 
+    private boolean isDisplayKeyboardUp() {
+        if (displayTakesSystemKeyboard()) return isImeVisible();
+        if (isDisplayTouchpadFrame()) return mFrameContent != null && mFrameContent.isKeyboardContent();
+        return mInAppKeyboard != null && mInAppKeyboard.isVisible();
+    }
+
+    private boolean raiseDisplayKeyboard(boolean fromFocus) {
+        boolean system = displayTakesSystemKeyboard();
+        if (!system && (mInAppKeyboard == null || !mInAppKeyboard.isEnabled())) return false;
+        if (!system && mInAppKeyboard.isTurnedOff()) {
+            if (fromFocus) return false;
+            mInAppKeyboard.setTurnedOff(false);
+            return true;
+        }
+        if (fromFocus && mX11Display != null && mX11Display.onTextFocusSignal(true)) return true;
+        if (system) return applyDisplaySystemKeyboard(true);
+        if (!fromFocus && applyDisplayFrameKeyboard(true)) return true;
+        mInAppKeyboard.show(fromFocus
+            ? com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.FOCUS
+            : com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.TOOL);
+        return true;
+    }
+
+    private boolean lowerDisplayKeyboard(boolean fromFocus) {
+        boolean system = displayTakesSystemKeyboard();
+        if (!system && (mInAppKeyboard == null || !mInAppKeyboard.isEnabled())) return false;
+        if (fromFocus && mX11Display != null && mX11Display.onTextFocusSignal(false)) return true;
+        if (system) return applyDisplaySystemKeyboard(false);
+        if (!fromFocus && applyDisplayFrameKeyboard(false)) return true;
+        mInAppKeyboard.hide(fromFocus
+            ? com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.FOCUS
+            : com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.TOOL);
+        return true;
+    }
+
     private void toggleDisplayKeyboard() {
-        if (!toggleDisplayFrameKeyboard()) {
-            if (displayTakesSystemKeyboard()) {
-                applyDisplaySystemKeyboard(!isImeVisible());
-            } else if (mInAppKeyboard != null) {
-                if (mInAppKeyboard.isTurnedOff()) mInAppKeyboard.setTurnedOff(false);
-                else if (mInAppKeyboard.isVisible()) mInAppKeyboard.hide(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.KEYBOARD_ACTION);
-                else mInAppKeyboard.show(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.KEYBOARD_ACTION);
-            }
+        if (isDisplayKeyboardUp()) {
+            lowerDisplayKeyboard(false);
+        } else {
+            raiseDisplayKeyboard(false);
         }
     }
 
@@ -21258,23 +21318,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup statsCluster = findViewById(R.id.terminal_status_stats_cluster);
         ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
         View statusBarHost = findViewById(R.id.terminal_window_bar_host);
-        View surfaceHost = findViewById(R.id.accessory_surface_host);
-        View stackContainer = findViewById(R.id.accessory_stack_container);
+        View toolbarHost = findViewById(R.id.terminal_toolbar_host);
 
         if (!isDisplay) {
-            if (quickCluster != null) quickCluster.setVisibility(View.GONE);
-            if (statsCluster != null) statsCluster.setVisibility(View.VISIBLE);
+            if (quickCluster != null) {
+                quickCluster.setVisibility(View.GONE);
+                if (quickCluster.getChildCount() == 0) {
+                    populateDisplayQuickKeys(quickCluster);
+                }
+            }
+            if (statsCluster != null) {
+                statsCluster.setVisibility(View.VISIBLE);
+                statsCluster.setAlpha(1.0f);
+                statsCluster.setTranslationX(0f);
+                statsCluster.setTranslationY(0f);
+            }
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
-            if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
-            if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
-            mDisplayFullscreenActive = false;
-            mDisplayFullscreenAutoApplied = false;
+            if (toolbarHost != null) toolbarHost.setVisibility(View.VISIBLE);
+            applyFullscreenMode();
+            applySeamlessStatusBackgroundModeIfNeeded();
             return;
         }
 
         // On Display canvas (canvas kanan):
         if (statsCluster != null) statsCluster.setVisibility(View.GONE);
-        if (quickCluster != null) quickCluster.setVisibility(View.VISIBLE);
+        if (quickCluster != null) {
+            quickCluster.setVisibility(View.VISIBLE);
+            quickCluster.setAlpha(1.0f);
+            quickCluster.setTranslationX(0f);
+            quickCluster.setTranslationY(0f);
+        }
 
         if (!isRunning) {
             // Display is NOT running: switches are NOT active!
@@ -21282,8 +21355,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mDisplayFullscreenActive = false;
             mDisplayFullscreenAutoApplied = false;
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
-            if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
-            if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
+            if (toolbarHost != null) toolbarHost.setVisibility(View.VISIBLE);
+            applyFullscreenMode();
+            applySeamlessStatusBackgroundModeIfNeeded();
         } else {
             // Display IS running:
             // Auto-fullscreen switch on initial start
@@ -21295,20 +21369,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
 
             boolean isFullscreen = mDisplayFullscreenActive;
+            applyFullscreenMode();
+            applySeamlessStatusBackgroundModeIfNeeded();
 
             // Extra keys dock: hidden in fullscreen, or follows switch when not fullscreen
             boolean showDock = !isFullscreen && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
-            if (surfaceHost != null) surfaceHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
-            if (stackContainer != null) stackContainer.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (toolbarHost != null) toolbarHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
 
             // Status bar switch
             boolean showBar = mPreferences == null || mPreferences.isX11ShowStatusBarEnabled();
             if (statusBarHost != null) statusBarHost.setVisibility(showBar ? View.VISIBLE : View.GONE);
         }
 
-        if (quickCluster == null) return;
+        if (quickCluster != null) {
+            populateDisplayQuickKeys(quickCluster);
+        }
+    }
 
-        // Render quick buttons dynamically based on user setting
+    private void populateDisplayQuickKeys(@NonNull ViewGroup quickCluster) {
+        boolean isRunning = isEmbeddedDisplayRunning();
         String config = mPreferences != null ? mPreferences.getX11QuickExtraKeys() : null;
         if (config == null || config.trim().isEmpty()) {
             config = com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS;
@@ -21839,9 +21918,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * touchpad, or the keyboard itself goes.
      */
     private void lowerDisplayKeyboard() {
-        if (applyDisplayFrameKeyboard(false)) return;
-        if (mInAppKeyboard != null) mInAppKeyboard.hide(com.termux.app.terminal.inappkeyboard
-            .TermuxInAppKeyboard.HideReason.KEYBOARD_ACTION);
+        lowerDisplayKeyboard(false);
     }
 
     /**
@@ -26245,39 +26322,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         @Override public boolean showInAppKeyboard(boolean fromFocus) {
-            // On the Display place the phone's own keyboard can be the keyboard, and it answers
-            // even where the launcher's is switched off.
-            boolean system = displayTakesSystemKeyboard();
-            if (!system && (mInAppKeyboard == null || !mInAppKeyboard.isEnabled())) return false;
-            // Switched off, a focus signal is ignored; a person asking by hand turns it back on.
-            if (!system && mInAppKeyboard.isTurnedOff()) {
-                if (fromFocus) return false;
-                mInAppKeyboard.setTurnedOff(false);
-                return true;
-            }
-            // A focus source is a signal, not an order: on the Display place the policy decides
-            // whether it means a keyboard, and it is the one that will close it again.
-            if (fromFocus && mX11Display != null && mX11Display.onTextFocusSignal(true)) return true;
-            if (system) return applyDisplaySystemKeyboard(true);
-            // Asking for it by hand while mouse mode holds the frame brings the keyboard to the
-            // front of it instead of raising a second one.
-            if (!fromFocus && applyDisplayFrameKeyboard(true)) return true;
-            mInAppKeyboard.show(fromFocus
-                ? com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.FOCUS
-                : com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.TOOL);
-            return true;
+            return raiseDisplayKeyboard(fromFocus);
         }
 
         @Override public boolean hideInAppKeyboard(boolean fromFocus) {
-            boolean system = displayTakesSystemKeyboard();
-            if (!system && (mInAppKeyboard == null || !mInAppKeyboard.isEnabled())) return false;
-            if (fromFocus && mX11Display != null && mX11Display.onTextFocusSignal(false)) return true;
-            if (system) return applyDisplaySystemKeyboard(false);
-            if (!fromFocus && applyDisplayFrameKeyboard(false)) return true;
-            mInAppKeyboard.hide(fromFocus
-                ? com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.FOCUS
-                : com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.TOOL);
-            return true;
+            return lowerDisplayKeyboard(fromFocus);
         }
 
         @Override public boolean isKeybindHintPopupVisible() {
