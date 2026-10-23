@@ -6,6 +6,8 @@ import android.os.SystemClock;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.ExtractedText;
+import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
@@ -111,12 +113,11 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
 
     private void handleKeyEvent(int keyCode, InputConnection ic, Pointers.Modifiers modifiers) {
         if (keyCode == KeyEvent.KEYCODE_DEL) {
-            CharSequence selected = ic.getSelectedText(0);
-            if (selected != null && selected.length() > 0) {
-                ic.commitText("", 1);
-            } else {
-                ic.deleteSurroundingText(1, 0);
-            }
+            handleBackspace(ic);
+            return;
+        }
+        if (keyCode == KeyEvent.KEYCODE_FORWARD_DEL) {
+            handleForwardDelete(ic);
             return;
         }
         if (keyCode == KeyEvent.KEYCODE_ENTER) {
@@ -173,7 +174,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                 ic.performContextMenuAction(android.R.id.redo);
                 break;
             case BACKSPACE:
-                ic.deleteSurroundingText(1, 0);
+                handleBackspace(ic);
                 break;
             case SPACE_BAR:
                 ic.commitText(" ", 1);
@@ -181,15 +182,62 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             case DELETE_WORD:
                 deletePreviousWord(ic);
                 break;
+            case FORWARD_DELETE_WORD:
+                deleteNextWord(ic);
+                break;
             default:
                 break;
         }
     }
 
+    private boolean hasActiveSelection(InputConnection ic) {
+        CharSequence selected = ic.getSelectedText(0);
+        if (selected != null && selected.length() > 0) {
+            return true;
+        }
+        try {
+            ExtractedText et = ic.getExtractedText(new ExtractedTextRequest(), 0);
+            if (et != null && et.selectionStart >= 0 && et.selectionEnd >= 0
+                    && et.selectionStart != et.selectionEnd) {
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    private void handleBackspace(InputConnection ic) {
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            return;
+        }
+        if (!ic.deleteSurroundingText(1, 0)) {
+            long now = SystemClock.uptimeMillis();
+            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL, 0, 0));
+            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DEL, 0, 0));
+        }
+    }
+
+    private void handleForwardDelete(InputConnection ic) {
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            return;
+        }
+        if (!ic.deleteSurroundingText(0, 1)) {
+            long now = SystemClock.uptimeMillis();
+            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_FORWARD_DEL, 0, 0));
+            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_FORWARD_DEL, 0, 0));
+        }
+    }
+
     private void deletePreviousWord(InputConnection ic) {
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            return;
+        }
         CharSequence before = ic.getTextBeforeCursor(50, 0);
         if (before == null || before.length() == 0) {
-            ic.deleteSurroundingText(1, 0);
+            handleBackspace(ic);
             return;
         }
         int len = before.length();
@@ -204,7 +252,33 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
         if (deleteCount > 0) {
             ic.deleteSurroundingText(deleteCount, 0);
         } else {
-            ic.deleteSurroundingText(1, 0);
+            handleBackspace(ic);
+        }
+    }
+
+    private void deleteNextWord(InputConnection ic) {
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            return;
+        }
+        CharSequence after = ic.getTextAfterCursor(50, 0);
+        if (after == null || after.length() == 0) {
+            handleForwardDelete(ic);
+            return;
+        }
+        int len = after.length();
+        int i = 0;
+        while (i < len && Character.isWhitespace(after.charAt(i))) {
+            i++;
+        }
+        while (i < len && !Character.isWhitespace(after.charAt(i))) {
+            i++;
+        }
+        int deleteCount = i;
+        if (deleteCount > 0) {
+            ic.deleteSurroundingText(0, deleteCount);
+        } else {
+            handleForwardDelete(ic);
         }
     }
 
@@ -263,10 +337,14 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                 break;
         }
         int repeats = Math.abs(count);
+        int metaState = 0;
+        if (slider == KeyValue.Slider.Selection_cursor_left || slider == KeyValue.Slider.Selection_cursor_right) {
+            metaState = KeyEvent.META_SHIFT_ON | KeyEvent.META_SHIFT_LEFT_ON;
+        }
         for (int i = 0; i < repeats; i++) {
             long now = SystemClock.uptimeMillis();
-            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0));
-            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0));
+            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, metaState));
+            ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0, metaState));
         }
     }
 }
