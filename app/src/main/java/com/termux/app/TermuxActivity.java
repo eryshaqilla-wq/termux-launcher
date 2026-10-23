@@ -5953,7 +5953,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean azRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.azRowOnDock(layout);
         boolean extraKeysRowEnabled = PlaceChromePolicy.extraKeysRowShown(layout);
 
-        if (isDisplayPageShowing() && isEmbeddedDisplayRunning()) {
+        boolean isDisplayAtRest = isDisplayPageShowing()
+            && (mPaneWallController == null || !mPaneWallController.wall().isMoving());
+        if (isDisplayAtRest && isEmbeddedDisplayRunning()) {
             boolean showDock = !mDisplayFullscreenActive && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
             if (!showDock) {
                 appsRowEnabled = false;
@@ -19969,26 +19971,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             @NonNull com.termux.app.wall.PaneWallPage place) {
         boolean keyboardUp = place == mLastWallPage ? committedKeyboardVisible()
             : wantsKeyboardOnEnter(place);
-        boolean minimal = false;
-        if (place == com.termux.app.wall.PaneWallPage.DISPLAY && isEmbeddedDisplayRunning()) {
-            boolean showDock = !mDisplayFullscreenActive && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
-            minimal = !showDock;
-        }
-        if (minimal) {
-            return keyboardUp ? REST_KEYBOARD_UP_MINIMAL : REST_KEYBOARD_DOWN_MINIMAL;
-        }
         return keyboardUp ? REST_KEYBOARD_UP : REST_KEYBOARD_DOWN;
     }
 
-    /** The rests a place can have (the Rest is immutable), so a slide frame allocates neither. */
+    /** The two rests a place can have (the Rest is immutable), so a slide frame allocates neither. */
     private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_UP =
         new com.termux.app.place.PlaceChromeTravel.Rest(true, false);
     private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_DOWN =
         new com.termux.app.place.PlaceChromeTravel.Rest(false, false);
-    private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_UP_MINIMAL =
-        new com.termux.app.place.PlaceChromeTravel.Rest(true, true);
-    private static final com.termux.app.place.PlaceChromeTravel.Rest REST_KEYBOARD_DOWN_MINIMAL =
-        new com.termux.app.place.PlaceChromeTravel.Rest(false, true);
     /** {@link #chromeRestOf} as the travel asks it, bound once rather than per frame. */
     private final com.termux.app.place.PlaceChromeTravel.States mChromeRestStates = this::chromeRestOf;
 
@@ -21386,11 +21376,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
             View surfaceHost = findViewById(R.id.accessory_surface_host);
             if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
+            setTerminalToolbarHeight(false);
         }
     }
 
     private void syncDisplayStatusKeys() {
-        boolean isDisplay = isDisplayPageShowing();
+        boolean isDisplay = isDisplayPageShowing()
+            && (mPaneWallController == null || !mPaneWallController.wall().isMoving());
         boolean isRunning = isEmbeddedDisplayRunning();
         ViewGroup statsCluster = findViewById(R.id.terminal_status_stats_cluster);
         ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
