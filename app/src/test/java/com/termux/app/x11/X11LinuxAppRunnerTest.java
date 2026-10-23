@@ -50,8 +50,7 @@ public class X11LinuxAppRunnerTest {
         String script = X11LinuxAppRunner.script(app("gedit"), ":1", Collections.emptyList());
         String fcitx5 = com.termux.shared.termux.TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH
             + "/fcitx5";
-        String bus = com.termux.shared.termux.TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH
-            + "/termux-x11-im-bus-1";
+        String bus = X11CliInstaller.imBusPath(":1");
         // fcitx5 installed, its helper's bus up for this display and the helper that made it
         // still alive: the toolkits load fcitx5's module and find it on the same bus. Anything
         // less and the app runs exactly as before.
