@@ -146,12 +146,14 @@ public class TermuxStylePreferencesFragment extends MaterialPreferenceFragment {
         SwitchPreferenceCompat grain = findPreference("film_grain_enabled");
         SwitchPreferenceCompat parallax = findPreference("wallpaper_parallax");
         SwitchPreferenceCompat touchWobble = findPreference("touch_wobble_effect");
+        SwitchPreferenceCompat border = findPreference("terminal_border_enabled");
         if (blur != null) blur.setEnabled(!v0239PresetActive);
         if (fancier != null) fancier.setEnabled(!v0239PresetActive);
         if (motionLight != null) motionLight.setEnabled(!v0239PresetActive);
         if (grain != null) grain.setEnabled(!v0239PresetActive);
         if (parallax != null) parallax.setEnabled(!v0239PresetActive);
         if (touchWobble != null) touchWobble.setEnabled(true);
+        if (border != null) border.setEnabled(true);
     }
 
     /**
@@ -476,6 +478,10 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setTouchWobbleEffectEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "terminal_border_enabled":
+                mPreferences.setTerminalBorderEnabled(value);
+                scheduleTermuxActivityStylingSync(false);
+                break;
             case "terminal_dynamic_colors_enabled":
                 // This switch is the whole palette decision: on, the terminal and the chrome both
                 // take the wallpaper; off, both take the scheme. Either way the chrome palette
@@ -566,6 +572,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isWallpaperParallaxEnabled();
             case "touch_wobble_effect":
                 return mPreferences.isTouchWobbleEffectEnabled();
+            case "terminal_border_enabled":
+                return mPreferences.isTerminalBorderEnabled();
             case "terminal_dynamic_colors_enabled":
                 return mPreferences.isTerminalDynamicColorsEnabled();
             case KEY_MOTION_LIGHT:

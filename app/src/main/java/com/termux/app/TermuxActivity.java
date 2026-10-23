@@ -3420,6 +3420,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             setupTerminalPlankFx(glass);
             updateTerminalGlassFrost();
+            if (mPaneController != null) {
+                mPaneController.updateActiveBorders();
+            }
             return;
         }
 
@@ -3434,6 +3437,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         setupTerminalPlankFx(false);
         updateTerminalGlassFrost();
+        if (mPaneController != null) {
+            mPaneController.updateActiveBorders();
+        }
 
         float innerRadiusPx = Math.max(0f, cornerRadiusPx - paneInsetPx);
         // Padding the host by the arc's own depth (PaneShape.contentInsetPx) is what keeps the
@@ -3705,7 +3711,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private boolean isTerminalPaneGlassActive() {
         // Under both Styles: a Floating card's slab, or the Docked insert's, which keeps its
         // frost, tint, grain and Legibility veil.
-        return isTerminalGlassConfigured() && mPreferences.isTerminalBorderEnabled();
+        return isTerminalGlassConfigured();
     }
 
     /**

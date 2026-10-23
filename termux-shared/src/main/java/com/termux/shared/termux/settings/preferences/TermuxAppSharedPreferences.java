@@ -3177,7 +3177,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     };
 
     private static final Object[][] PRE_SHIPPED_DEFAULTS = {
-        {TERMUX_APP.KEY_TERMINAL_BORDER_ENABLED, Boolean.FALSE},
+        {TERMUX_APP.KEY_TERMINAL_BORDER_ENABLED, Boolean.TRUE},
         {TERMUX_APP.KEY_TERMINAL_CORNER_RADIUS, 0},
         {TERMUX_APP.KEY_TERMINAL_PANE_GAP, 1},
         {TERMUX_APP.KEY_IN_APP_KEYBOARD_HEIGHT_SCALE, 1.0830541f},
@@ -3663,12 +3663,11 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     /**
-     * Always on. The frame is what the glass rim, the pane inset and the help guide's boxes are
-     * drawn against, so it is no longer a choice; the stored value is kept for old looks that
-     * still carry the key, and ignored.
+     * Whether the 1px outline border around the terminal pane is enabled.
      */
     public boolean isTerminalBorderEnabled() {
-        return true;
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_TERMINAL_BORDER_ENABLED, true);
     }
 
     public void setTerminalBorderEnabled(boolean value) {

@@ -98,6 +98,11 @@
             app:title="@string/settings_touch_wobble_effect_title"
             app:summary="@string/settings_touch_wobble_effect_summary"
             android:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="terminal_border_enabled"
+            app:title="@string/settings_terminal_border_title"
+            app:summary="@string/settings_terminal_border_summary"
+            android:defaultValue="true" />
     </PreferenceCategory>
     <PreferenceCategory app:title="@string/settings_icon_appearance_header">
         <SwitchPreferenceCompat

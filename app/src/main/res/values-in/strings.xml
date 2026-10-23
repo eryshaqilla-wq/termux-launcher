@@ -91,6 +91,8 @@
     <string name="settings_wallpaper_blur_summary">Memburamkan wallpaper di balik bilah kaca dan terminal. Matikan untuk kaca transparan tanpa beban blur.</string>
     <string name="settings_film_grain_title">Film grain</string>
     <string name="settings_film_grain_summary">Menambahkan tekstur butiran halus pada permukaan kaca. Matikan untuk meringankan beban canvas.</string>
+    <string name="settings_terminal_border_title">Garis Bingkai Layar</string>
+    <string name="settings_terminal_border_summary">Tampilkan garis bingkai 1px di sekeliling area terminal.</string>
     <string name="settings_touch_wobble_effect_title">Efek miring &amp; goyang sentuh</string>
     <string name="settings_touch_wobble_effect_summary">Permukaan miring dan goyang saat disentuh. Matikan untuk respon sentuh yang solid dan diam.</string>
     <string name="settings_terminal_cursor_trail_title">Jejak kursor</string>

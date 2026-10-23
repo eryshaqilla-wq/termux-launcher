@@ -3546,6 +3546,7 @@ public class TerminalPaneController {
     private float mDressedGlassRadiusPx = Float.NaN;
     private int mDressedGlassPaneCount = -1;
     private boolean mDressedOpeningLine;
+    private boolean mDressedBorderEnabled;
 
     /**
      * The wall moved the terminal page, or the wallpaper panned under it: every slab re-aims at
@@ -3602,10 +3603,13 @@ public class TerminalPaneController {
         // pane — reaches it from render() and the focus paths, which call it themselves.
         // A Style flip at the same Corners moves no corner but changes which line the panes wear.
         boolean openingLine = mSurfaceStyle != null && mSurfaceStyle.paneOpeningLine();
+        boolean borderEnabled = mSurfaceStyle != null && mSurfaceStyle.paneBorderEnabled();
         boolean shapeMoved = active != mDressedGlassActive || radiusPx != mDressedGlassRadiusPx
             || mPaneFrames.size() != mDressedGlassPaneCount
-            || openingLine != mDressedOpeningLine;
+            || openingLine != mDressedOpeningLine
+            || borderEnabled != mDressedBorderEnabled;
         mDressedOpeningLine = openingLine;
+        mDressedBorderEnabled = borderEnabled;
         mDressedGlassActive = active;
         mDressedGlassRadiusPx = radiusPx;
         mDressedGlassPaneCount = mPaneFrames.size();
@@ -3873,7 +3877,7 @@ public class TerminalPaneController {
             ((ViewGroup) frame.getParent()).removeView(frame);
     }
 
-    private void updateActiveBorders() {
+    public void updateActiveBorders() {
         mUpdatingBorders = true;
         try {
             updateActiveBordersLocked();
@@ -3920,9 +3924,11 @@ public class TerminalPaneController {
             // the same cells. Only glass clips here: a float clips on its own wrapper and a
             // stroke does not clip at all. The frame also learns how wide the border it is about
             // to wear is, so the band it fills behind the grid stops at the border's inner edge.
+            boolean borderWanted = mSurfaceStyle == null || mSurfaceStyle.paneBorderEnabled();
+            boolean skipRim = !borderWanted && border.kind == PaneBorderStyle.Kind.RIM;
             frame.setPaneShape(bare ? 0f : paneRadiusPx(), glassShape);
-            frame.setRimStrokePx(bare ? 0f : paneBorderStrokePx(glassShape, true, density));
-            if (bare) {
+            frame.setRimStrokePx(bare || skipRim ? 0f : paneBorderStrokePx(glassShape, true, density));
+            if (bare || skipRim) {
                 PaneRim gone = mBorderStates.remove(paneSession);
                 if (gone != null) gone.clear(frame);
                 else frame.setForeground(null);
