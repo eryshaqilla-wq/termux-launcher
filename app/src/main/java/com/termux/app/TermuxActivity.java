@@ -2535,6 +2535,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 applyPaneBehaviourPreferences();
             }
             refreshTerminalWindowBar();
+            if (isDisplayPageShowing()) {
+                syncDisplayStatusKeys();
+            }
 
             updateWindowBackgroundForCurrentSession();
             syncTerminalWallpaperRenderingMode();
@@ -5949,6 +5952,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the row goes, and with it the whole stack when it was the only thing on it.
         boolean azRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.azRowOnDock(layout);
         boolean extraKeysRowEnabled = PlaceChromePolicy.extraKeysRowShown(layout);
+
+        if (isDisplayPageShowing() && isEmbeddedDisplayRunning()) {
+            boolean showDock = !mDisplayFullscreenActive && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            if (!showDock) {
+                appsRowEnabled = false;
+                azRowEnabled = false;
+                extraKeysRowEnabled = false;
+            }
+        }
+
         boolean dockShown = appsRowEnabled || azRowEnabled || extraKeysRowEnabled;
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         float barAlpha = mPreferences.getAppBarOpacity() / 100f;
@@ -8515,6 +8528,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (appsBarAzHost != null) {
                 appsBarAzHost.setVisibility(View.GONE);
             }
+            View accessoryRowStack = findViewById(R.id.accessory_row_stack);
+            if (accessoryRowStack != null) {
+                accessoryRowStack.setVisibility(View.GONE);
+            }
+            View toolbarHost = findViewById(R.id.terminal_toolbar_host);
+            if (toolbarHost != null) {
+                toolbarHost.setVisibility(View.GONE);
+            }
             if (accessoryContainer != null) {
                 accessoryContainer.setVisibility(
                     !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(false, state.keyboardShown,
@@ -8571,6 +8592,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     bottomStatusBandPx() > 0) ? View.VISIBLE : View.GONE);
         if (accessorySurfaceHost != null) {
             accessorySurfaceHost.setVisibility(View.VISIBLE);
+        }
+        View accessoryRowStack = findViewById(R.id.accessory_row_stack);
+        if (accessoryRowStack != null) {
+            accessoryRowStack.setVisibility(View.VISIBLE);
+        }
+        View toolbarHost = findViewById(R.id.terminal_toolbar_host);
+        if (toolbarHost != null) {
+            toolbarHost.setVisibility(state.extraKeysRowEnabled ? View.VISIBLE : View.GONE);
         }
         View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
         View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
@@ -21315,11 +21344,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup statsCluster = findViewById(R.id.terminal_status_stats_cluster);
         ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
         View statusBarHost = findViewById(R.id.terminal_window_bar_host);
-        View toolbarHost = findViewById(R.id.terminal_toolbar_host);
-        View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
-        View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
-        View accessoryRowStack = findViewById(R.id.accessory_row_stack);
-        View surfaceHost = findViewById(R.id.accessory_surface_host);
 
         if (!isDisplay) {
             if (quickCluster != null) {
@@ -21335,14 +21359,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 statsCluster.setTranslationY(0f);
             }
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
-            ChromeSpec state = buildChromeSpec();
-            if (toolbarHost != null) toolbarHost.setVisibility(state.extraKeysRowEnabled ? View.VISIBLE : View.GONE);
-            if (appsBarRowHost != null) appsBarRowHost.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
-            if (appsBarAzHost != null) appsBarAzHost.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
-            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
-            if (surfaceHost != null) surfaceHost.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
+            setTerminalToolbarHeight(true);
+            mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, GeometryScheduler.ResizePolicy.NOW);
+            mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
             return;
         }
 
@@ -21361,14 +21382,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mDisplayFullscreenActive = false;
             mDisplayFullscreenAutoApplied = false;
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
-            ChromeSpec state = buildChromeSpec();
-            if (toolbarHost != null) toolbarHost.setVisibility(state.extraKeysRowEnabled ? View.VISIBLE : View.GONE);
-            if (appsBarRowHost != null) appsBarRowHost.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
-            if (appsBarAzHost != null) appsBarAzHost.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
-            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
-            if (surfaceHost != null) surfaceHost.setVisibility(state.toolbarShown ? View.VISIBLE : View.GONE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
+            setTerminalToolbarHeight(true);
+            mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, GeometryScheduler.ResizePolicy.NOW);
+            mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
         } else {
             // Display IS running:
             // Auto-fullscreen switch on initial start
@@ -21379,26 +21397,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             }
 
-            boolean isFullscreen = mDisplayFullscreenActive;
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
-
-            // Extra keys dock: hidden in fullscreen, or follows switch when not fullscreen
-            boolean showDock = !isFullscreen && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
-            ChromeSpec state = buildChromeSpec();
-            if (toolbarHost != null) toolbarHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
-            if (appsBarRowHost != null) appsBarRowHost.setVisibility(showDock ? (state.appsRowEnabled ? View.VISIBLE : View.GONE) : View.GONE);
-            if (appsBarAzHost != null) appsBarAzHost.setVisibility(showDock ? (state.azRowEnabled ? View.VISIBLE : View.GONE) : View.GONE);
-            if (accessoryRowStack != null) accessoryRowStack.setVisibility(showDock ? View.VISIBLE : View.GONE);
-
-            boolean keyboardOrPadUp = isDisplayKeyboardUp() || isTouchpadShown() || isWholeFrameTouchpadShown();
-            if (surfaceHost != null) {
-                surfaceHost.setVisibility((showDock || keyboardOrPadUp) ? View.VISIBLE : View.GONE);
-            }
 
             // Status bar switch
             boolean showBar = mPreferences == null || mPreferences.isX11ShowStatusBarEnabled();
             if (statusBarHost != null) statusBarHost.setVisibility(showBar ? View.VISIBLE : View.GONE);
+
+            setTerminalToolbarHeight(true);
+            mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, GeometryScheduler.ResizePolicy.NOW);
+            mChrome.requestSync(ChromeRenderer.SCOPE_APPLY_THIS_FRAME | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
         }
 
         if (quickCluster != null) {
