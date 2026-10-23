@@ -145,6 +145,9 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                 launcher.setX11WindowManager(value);
             } else if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_RUNTIME_BADGE.equals(key)) {
                 launcher.setX11RuntimeBadge(value);
+            } else if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
+                launcher.setX11QuickExtraKeys(value);
+                notifyDisplay(key);
             } else if (com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE.equals(key)) {
                 android.content.SharedPreferences defaultPrefs = context.getSharedPreferences(
                     com.termux.shared.termux.TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
@@ -170,6 +173,9 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
             }
             if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_RUNTIME_BADGE.equals(key)) {
                 return launcher.getX11RuntimeBadge();
+            }
+            if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
+                return launcher.getX11QuickExtraKeys();
             }
             if (com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE.equals(key)) {
                 android.content.SharedPreferences defaultPrefs = context.getSharedPreferences(
@@ -248,6 +254,18 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                     com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(context)
                         .refreshAsync(null, null);
                     break;
+                case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_FULLSCREEN:
+                    launcher.setX11FullscreenEnabled(value);
+                    notifyDisplay(key);
+                    break;
+                case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_SHOW_STATUS_BAR:
+                    launcher.setX11ShowStatusBarEnabled(value);
+                    notifyDisplay(key);
+                    break;
+                case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_SHOW_EXTRA_KEYS:
+                    launcher.setX11ShowExtraKeysEnabled(value);
+                    notifyDisplay(key);
+                    break;
                 default:
                     break;
             }
@@ -274,6 +292,12 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                     return launcher.isX11KeyboardFollowsTextEnabled();
                 case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_DRAWER_APPS:
                     return launcher.isX11DrawerAppsEnabled();
+                case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_FULLSCREEN:
+                    return launcher.isX11FullscreenEnabled();
+                case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_SHOW_STATUS_BAR:
+                    return launcher.isX11ShowStatusBarEnabled();
+                case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_SHOW_EXTRA_KEYS:
+                    return launcher.isX11ShowExtraKeysEnabled();
                 default:
                     return defValue;
             }

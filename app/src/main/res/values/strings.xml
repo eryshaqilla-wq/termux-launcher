@@ -3330,4 +3330,15 @@
         <item quantity="one">%1$d couldn\'t be added.</item>
         <item quantity="other">%1$d couldn\'t be added.</item>
     </plurals>
+
+    <!-- Display Canvas Preferences -->
+    <string name="settings_x11_group_canvas">Kanvas &amp; Tampilan X11</string>
+    <string name="settings_x11_fullscreen_title">Fullscreen Otomatis Saat Berjalan</string>
+    <string name="settings_x11_fullscreen_summary">Otomatis masuk ke layar penuh saat server X11 atau aplikasi Kiosk aktif.</string>
+    <string name="settings_x11_show_status_bar_title">Tampilkan Bar Status Launcher</string>
+    <string name="settings_x11_show_status_bar_summary">Tampilkan bar status launcher di kanvas Display.</string>
+    <string name="settings_x11_show_extra_keys_title">Tampilkan Dock Extra Keys</string>
+    <string name="settings_x11_show_extra_keys_summary">Tampilkan bilah tombol bawah dan touchpad di kanvas Display.</string>
+    <string name="settings_x11_quick_extra_keys_title">Display Quick Extra Keys</string>
+    <string name="settings_x11_quick_extra_keys_summary">Tombol aksi cepat di bar status kanvas Display (maksimal 5 tombol, pisahkan dengan koma).</string>
 </resources>

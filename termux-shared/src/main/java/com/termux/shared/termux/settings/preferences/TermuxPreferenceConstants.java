@@ -298,6 +298,26 @@ public final class TermuxPreferenceConstants {
 
         public static final String DEFAULT_X11_RUNTIME_BADGE = "termux";
 
+        /** Whether the Display canvas automatically goes fullscreen when X11 is running. */
+        public static final String KEY_X11_FULLSCREEN = "x11_fullscreen";
+
+        public static final boolean DEFAULT_X11_FULLSCREEN = false;
+
+        /** Whether the launcher status bar is visible on the Display canvas. */
+        public static final String KEY_X11_SHOW_STATUS_BAR = "x11_show_status_bar";
+
+        public static final boolean DEFAULT_X11_SHOW_STATUS_BAR = true;
+
+        /** Whether the extra keys dock is visible on the Display canvas. */
+        public static final String KEY_X11_SHOW_EXTRA_KEYS = "x11_show_extra_keys";
+
+        public static final boolean DEFAULT_X11_SHOW_EXTRA_KEYS = true;
+
+        /** Comma-separated list of up to 5 quick extra keys for the Display status bar. */
+        public static final String KEY_X11_QUICK_EXTRA_KEYS = "x11_quick_extra_keys";
+
+        public static final String DEFAULT_X11_QUICK_EXTRA_KEYS = "FULLSCREEN,KEYBOARD,tool:mouse.toggle,TAB,PASTE";
+
         /** The place the pane wall last rested on; the home screen comes back to it. */
         public static final String KEY_WALL_LAST_PAGE = "wall_last_page";
 

@@ -338,6 +338,16 @@
                             android:contentDescription="@string/termux_status_widget_weather_content_description" />
                     </LinearLayout>
 
+                    <LinearLayout
+                        android:id="@+id/display_quick_keys_cluster"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:visibility="gone"
+                        android:clipChildren="false"
+                        android:clipToPadding="false" />
+
                     <!-- Balances the place content strip's weight so the cluster above centres
                          in the row on the Widgets place; gone (so weightless) everywhere else,
                          where the cluster keeps hugging the row's end as it does today. -->

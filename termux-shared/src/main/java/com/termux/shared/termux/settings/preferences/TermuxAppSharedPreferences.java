@@ -1348,6 +1348,47 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_X11_DEFAULTS_APPLIED, value, false);
     }
 
+    public boolean isX11FullscreenEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_X11_FULLSCREEN, TERMUX_APP.DEFAULT_X11_FULLSCREEN);
+    }
+
+    public void setX11FullscreenEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_X11_FULLSCREEN, value, false);
+    }
+
+    public boolean isX11ShowStatusBarEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_X11_SHOW_STATUS_BAR, TERMUX_APP.DEFAULT_X11_SHOW_STATUS_BAR);
+    }
+
+    public void setX11ShowStatusBarEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_X11_SHOW_STATUS_BAR, value, false);
+    }
+
+    public boolean isX11ShowExtraKeysEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_X11_SHOW_EXTRA_KEYS, TERMUX_APP.DEFAULT_X11_SHOW_EXTRA_KEYS);
+    }
+
+    public void setX11ShowExtraKeysEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_X11_SHOW_EXTRA_KEYS, value, false);
+    }
+
+    public String getX11QuickExtraKeys() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS, TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS, false);
+    }
+
+    public void setX11QuickExtraKeys(@Nullable String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS,
+            value == null ? TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS : value.trim(), false);
+    }
+
     /** The name of the wall place last rested on, or null when none was recorded. */
     @Nullable
     public String getWallLastPage() {
