@@ -541,6 +541,35 @@ if [ -n "$THEME_SRC" ]; then
     if [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
         ln -sf "../../Pictures/wallpapers/evening-sky.png" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
     fi
+    # Pasang Smart Touch Rofi Wrapper & Hook di Native Termux
+    if [ -f "$PREFIX/bin/rofi" ] && [ ! -f "$PREFIX/bin/rofi.real" ]; then
+        mv "$PREFIX/bin/rofi" "$PREFIX/bin/rofi.real" 2>/dev/null || true
+    fi
+    if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+        if command -v gcc >/dev/null 2>&1; then
+            gcc -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+        elif command -v clang >/dev/null 2>&1; then
+            clang -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+        fi
+    fi
+    cat << 'EOF_ROFI_NATIVE' > "$PREFIX/bin/rofi"
+#!/usr/bin/env bash
+if [ -f "$PREFIX/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="$PREFIX/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+if [ -x "$PREFIX/bin/rofi.real" ]; then
+    "$PREFIX/bin/rofi.real" "$@"
+else
+    command -p rofi "$@"
+fi
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI_NATIVE
+    chmod +x "$PREFIX/bin/rofi" 2>/dev/null || true
+
     chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/polybar/"*.sh 2>/dev/null || true
     chmod +x "$HOME/.config/bspwm/bspwmrc" "$HOME/.config/polybar/launch.sh" 2>/dev/null || true
     echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) terpasang di Termux ($HOME/.config)${RESET}"
@@ -885,6 +914,30 @@ fi
 EOF_CP
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/pemantau"
 
+            # Pasang Smart Touch Rofi Wrapper & Hook di PRoot
+            mkdir -p "$CONTAINER_ROOTFS/usr/local/lib" "$CONTAINER_ROOTFS/usr/local/src"
+            if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+                cp -f "$SCRIPT_DIR/librofitouch.c" "$CONTAINER_ROOTFS/usr/local/src/librofitouch.c" 2>/dev/null || true
+                if command -v gcc >/dev/null 2>&1; then
+                    gcc -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+                elif command -v clang >/dev/null 2>&1; then
+                    clang -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+                fi
+            fi
+            cat << 'EOF_ROFI_PROOT' > "$CONTAINER_ROOTFS/usr/local/bin/rofi"
+#!/usr/bin/env bash
+if [ -f "/usr/local/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+/usr/bin/rofi "$@"
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI_PROOT
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/rofi"
+
             # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
             if [ -d "$CONTAINER_ROOTFS/etc/pulse" ]; then
                 sed -i 's/^; default-server =.*/default-server = 127.0.0.1:4713/' "$CONTAINER_ROOTFS/etc/pulse/client.conf" 2>/dev/null || true
@@ -998,12 +1051,19 @@ elif [ -f \"\$WDIR/pemantau.cjs\" ]; then
   cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"
 fi
 EOF_RP
+                mkdir -p '$CONTAINER_ROOTFS/usr/local/lib' '$CONTAINER_ROOTFS/usr/local/src'
+                if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+                    cp -f "$SCRIPT_DIR/librofitouch.c" '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
+                    if command -v gcc >/dev/null 2>&1; then
+                        gcc -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+                    elif command -v clang >/dev/null 2>&1; then
+                        clang -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+                    fi
+                fi
                 cat << 'EOF_ROFI' > '$CONTAINER_ROOTFS/usr/local/bin/rofi'
 #!/usr/bin/env bash
-if command -v termux-ipc >/dev/null 2>&1; then
-    termux-ipc show >/dev/null 2>&1 || true
-elif [ -x "/usr/local/termux-shims/termux-ipc" ]; then
-    /usr/local/termux-shims/termux-ipc show >/dev/null 2>&1 || true
+if [ -f "/usr/local/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
 fi
 /usr/bin/rofi "$@"
 ROFI_RC=$?
