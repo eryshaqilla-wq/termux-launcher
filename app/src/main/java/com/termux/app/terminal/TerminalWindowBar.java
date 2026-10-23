@@ -572,6 +572,11 @@ public final class TerminalWindowBar extends HorizontalScrollView {
         applyTabSurfaceStyle();
     }
 
+    public int getSelectedStrokeColor() { return mSelectedStrokeColor; }
+    public int getSelectedFillColor() { return mSelectedFillColor; }
+    public int getSelectedTextColor() { return mSelectedTextColor; }
+    public float getStatusBarRadiusPx() { return mStatusBarRadiusPx; }
+
     public void setWindows(@NonNull List<WindowItem> items, int selectedIndex) {
         boolean typefaceChanged = reloadTerminalTypeface();
         // sameActivity has to be part of the guard: an activity-only flip changes neither the

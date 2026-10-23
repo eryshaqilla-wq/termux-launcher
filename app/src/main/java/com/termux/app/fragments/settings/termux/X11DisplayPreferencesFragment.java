@@ -7,9 +7,11 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.preference.ListPreference;
+import androidx.preference.MultiSelectListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceDataStore;
 import androidx.preference.PreferenceManager;
+import java.util.Set;
 
 import com.termux.R;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
@@ -77,6 +79,27 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
             mode.setOnPreferenceChangeListener((preference, value) -> {
                 applyResolutionRows(String.valueOf(value));
                 return true;
+            });
+        }
+        MultiSelectListPreference quickPref = findPreference(
+            TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS);
+        if (quickPref != null) {
+            quickPref.setOnPreferenceChangeListener((preference, newValue) -> {
+                @SuppressWarnings("unchecked")
+                Set<String> selected = (Set<String>) newValue;
+                if (selected != null && selected.size() > 5) {
+                    android.widget.Toast.makeText(context, "Maksimal 5 tombol aksi cepat!", android.widget.Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+                return true;
+            });
+            quickPref.setSummaryProvider(preference -> {
+                @SuppressWarnings("unchecked")
+                Set<String> selected = ((MultiSelectListPreference) preference).getValues();
+                if (selected == null || selected.isEmpty()) {
+                    return getString(R.string.none);
+                }
+                return String.join(", ", selected);
             });
         }
     }
@@ -184,6 +207,27 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                 return defaultPrefs.getString(com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE, defValue);
             }
             return defValue;
+        }
+
+        @Override
+        public void putStringSet(String key, @Nullable Set<String> values) {
+            if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
+                launcher.setX11QuickExtraKeys(values == null ? "" : String.join(",", values));
+                notifyDisplay(key);
+            }
+        }
+
+        @Override
+        @Nullable
+        public Set<String> getStringSet(String key, @Nullable Set<String> defValues) {
+            if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
+                String stored = launcher.getX11QuickExtraKeys();
+                if (stored == null || stored.trim().isEmpty()) {
+                    stored = TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS;
+                }
+                return new java.util.LinkedHashSet<>(java.util.Arrays.asList(stored.split("[,;]")));
+            }
+            return defValues;
         }
 
         @Override

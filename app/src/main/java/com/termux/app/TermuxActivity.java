@@ -623,6 +623,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @Nullable private String mPendingWallPage;
     @Nullable private com.termux.app.x11.X11DisplayHostController mX11Display;
     private boolean mDisplayFullscreenActive = false;
+    private boolean mDisplayFullscreenAutoApplied = false;
     private int mDisplayQuickKeysPrimaryInk = 0;
     private int mDisplayQuickKeysMutedInk = 0;
     @Nullable private com.termux.app.x11.X11KeyboardBridge mX11KeyboardBridge;
@@ -9399,8 +9400,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View decorView = getWindow().getDecorView();
         WindowInsetsControllerCompat insetsController = WindowCompat.getInsetsController(
             getWindow(), decorView);
-        boolean fullscreen = mProperties.isUsingFullScreen()
-            || (isDisplayPageShowing() && mDisplayFullscreenActive);
+        boolean fullscreen = mProperties.isUsingFullScreen();
         if (fullscreen) {
             insetsController.setSystemBarsBehavior(
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
@@ -9417,8 +9417,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Both normal and fullscreen modes are edge-to-edge. Fullscreen previously restored
         // decor-fitting immediately before hiding the bars, leaving the wallpaper/content frame
         // cropped below the old status-bar inset (most visible during transient-bar gestures).
-        boolean edgeToEdge = enable || (mProperties != null && mProperties.isUsingFullScreen())
-            || (isDisplayPageShowing() && mDisplayFullscreenActive);
+        boolean edgeToEdge = enable || (mProperties != null && mProperties.isUsingFullScreen());
         WindowCompat.setDecorFitsSystemWindows(getWindow(), !edgeToEdge);
 
         if (mTermuxActivityRootView != null) {
@@ -21212,9 +21211,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void setDisplayFullscreen(boolean fullscreen) {
         if (mDisplayFullscreenActive == fullscreen) return;
         mDisplayFullscreenActive = fullscreen;
-        applyFullscreenMode();
-        applySeamlessStatusBackgroundModeIfNeeded();
         syncDisplayStatusKeys();
+    }
+
+    private void toggleDisplayKeyboard() {
+        if (!toggleDisplayFrameKeyboard()) {
+            if (displayTakesSystemKeyboard()) {
+                applyDisplaySystemKeyboard(!isImeVisible());
+            } else if (mInAppKeyboard != null) {
+                if (mInAppKeyboard.isTurnedOff()) mInAppKeyboard.setTurnedOff(false);
+                else if (mInAppKeyboard.isVisible()) mInAppKeyboard.hide(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.KEYBOARD_ACTION);
+                else mInAppKeyboard.show(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.KEYBOARD_ACTION);
+            }
+        }
     }
 
     private String resolveDisplayKeyGlyph(String key) {
@@ -21229,6 +21238,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if ("BOOST".equalsIgnoreCase(key)) {
             return "\uf0e7";
+        }
+        if ("PASTE".equalsIgnoreCase(key)) {
+            return "\uf0ea";
+        }
+        if ("DRAWER".equalsIgnoreCase(key)) {
+            return "\uf0c9";
         }
         String alias = com.termux.shared.termux.extrakeys.ExtraKeysConstants.CONTROL_CHARS_ALIASES.get(key);
         if (alias != null) return alias;
@@ -21250,44 +21265,50 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (quickCluster != null) quickCluster.setVisibility(View.GONE);
             if (statsCluster != null) statsCluster.setVisibility(View.VISIBLE);
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
-            if (mDisplayFullscreenActive && (mProperties == null || !mProperties.isUsingFullScreen())) {
-                mDisplayFullscreenActive = false;
-                applyFullscreenMode();
-                applySeamlessStatusBackgroundModeIfNeeded();
-            }
+            if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
+            if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
+            mDisplayFullscreenActive = false;
+            mDisplayFullscreenAutoApplied = false;
             return;
         }
 
-        // On Display canvas:
+        // On Display canvas (canvas kanan):
         if (statsCluster != null) statsCluster.setVisibility(View.GONE);
         if (quickCluster != null) quickCluster.setVisibility(View.VISIBLE);
 
-        // Status bar switch on Display
-        if (statusBarHost != null) {
-            boolean showBar = mPreferences == null || mPreferences.isX11ShowStatusBarEnabled();
-            statusBarHost.setVisibility(showBar ? View.VISIBLE : View.GONE);
-        }
-
-        // Extra keys dock switch on Display
-        boolean showDock = mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled();
-        if (!showDock) {
-            if (surfaceHost != null) surfaceHost.setVisibility(View.GONE);
-            if (stackContainer != null) stackContainer.setVisibility(View.GONE);
-        }
-
-        // Auto fullscreen switch
-        if (isRunning && mPreferences != null && mPreferences.isX11FullscreenEnabled() && !mDisplayFullscreenActive) {
-            mDisplayFullscreenActive = true;
-            applyFullscreenMode();
-            applySeamlessStatusBackgroundModeIfNeeded();
-        } else if (!isRunning && mDisplayFullscreenActive && (mProperties == null || !mProperties.isUsingFullScreen())) {
+        if (!isRunning) {
+            // Display is NOT running: switches are NOT active!
+            // Everything stays default/visible, fullscreen is false, buttons disabled.
             mDisplayFullscreenActive = false;
-            applyFullscreenMode();
-            applySeamlessStatusBackgroundModeIfNeeded();
+            mDisplayFullscreenAutoApplied = false;
+            if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
+            if (surfaceHost != null) surfaceHost.setVisibility(View.VISIBLE);
+            if (stackContainer != null) stackContainer.setVisibility(View.VISIBLE);
+        } else {
+            // Display IS running:
+            // Auto-fullscreen switch on initial start
+            if (!mDisplayFullscreenAutoApplied) {
+                mDisplayFullscreenAutoApplied = true;
+                if (mPreferences != null && mPreferences.isX11FullscreenEnabled()) {
+                    mDisplayFullscreenActive = true;
+                }
+            }
+
+            boolean isFullscreen = mDisplayFullscreenActive;
+
+            // Extra keys dock: hidden in fullscreen, or follows switch when not fullscreen
+            boolean showDock = !isFullscreen && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            if (surfaceHost != null) surfaceHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (stackContainer != null) stackContainer.setVisibility(showDock ? View.VISIBLE : View.GONE);
+
+            // Status bar switch
+            boolean showBar = mPreferences == null || mPreferences.isX11ShowStatusBarEnabled();
+            if (statusBarHost != null) statusBarHost.setVisibility(showBar ? View.VISIBLE : View.GONE);
         }
 
         if (quickCluster == null) return;
 
+        // Render quick buttons dynamically based on user setting
         String config = mPreferences != null ? mPreferences.getX11QuickExtraKeys() : null;
         if (config == null || config.trim().isEmpty()) {
             config = com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS;
@@ -21303,31 +21324,48 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         quickCluster.removeAllViews();
+
+        com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
         int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
         int muted = mDisplayQuickKeysMutedInk != 0 ? mDisplayQuickKeysMutedInk : 0xFF6C7086;
-        int activeInk = isRunning ? primary : muted;
-        int strokeColor = isRunning ? androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 130)
-                                    : androidx.core.graphics.ColorUtils.setAlphaComponent(muted, 60);
-        int bgFill = isRunning ? androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 22)
-                               : android.graphics.Color.TRANSPARENT;
 
-        float density = getResources().getDisplayMetrics().density;
-        int hPad = Math.round(5f * density);
-        int vPad = Math.round(1f * density);
-        int minW = Math.round(24f * density);
-        int marginE = Math.round(3f * density);
-        int cornerRadius = Math.round(5f * density);
+        int strokeColor;
+        int bgFill;
+        int activeInk;
+        if (isRunning) {
+            strokeColor = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+                ? windowBar.getSelectedStrokeColor()
+                : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
+            bgFill = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+                ? windowBar.getSelectedFillColor()
+                : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
+            activeInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
+                ? windowBar.getSelectedTextColor()
+                : primary;
+        } else {
+            strokeColor = androidx.core.graphics.ColorUtils.setAlphaComponent(muted, 40);
+            bgFill = android.graphics.Color.TRANSPARENT;
+            activeInk = muted;
+        }
+
+        int btnHeight = Math.round(dpToPx(20));
+        int btnSquareW = Math.round(dpToPx(20));
+        float cornerRadius = (windowBar != null && windowBar.getStatusBarRadiusPx() >= 0)
+            ? windowBar.getStatusBarRadiusPx()
+            : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
+        int strokeWidth = Math.round(dpToPx(1));
+        int marginE = Math.round(dpToPx(3));
         android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
 
         for (String key : keys) {
             TextView btn = new TextView(this);
-            btn.setText(resolveDisplayKeyGlyph(key));
+            String glyph = resolveDisplayKeyGlyph(key);
+            btn.setText(glyph);
             if (nerdFont != null) btn.setTypeface(nerdFont);
-            btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 11f);
+            btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f);
+            btn.setIncludeFontPadding(false);
             btn.setTextColor(activeInk);
             btn.setGravity(android.view.Gravity.CENTER);
-            btn.setMinWidth(minW);
-            btn.setPadding(hPad, vPad, hPad, vPad);
             btn.setEnabled(isRunning);
             btn.setAlpha(isRunning ? 1.0f : 0.45f);
 
@@ -21335,7 +21373,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
             gd.setCornerRadius(cornerRadius);
             gd.setColor(bgFill);
-            gd.setStroke(Math.round(1f * density), strokeColor);
+            gd.setStroke(strokeWidth, strokeColor);
             btn.setBackground(gd);
 
             final String actionKey = key;
@@ -21343,6 +21381,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
                 if ("FULLSCREEN".equalsIgnoreCase(actionKey)) {
                     toggleDisplayFullscreen();
+                } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
+                    toggleDisplayKeyboard();
+                } else if ("tool:mouse.toggle".equalsIgnoreCase(actionKey) || "MOUSE".equalsIgnoreCase(actionKey)) {
+                    toggleMouseMode();
                 } else if ("BOOST".equalsIgnoreCase(actionKey)) {
                     new Thread(() -> {
                         try {
@@ -21355,9 +21397,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             });
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                Math.round(22f * density));
+            boolean isTextKey = glyph != null && glyph.length() > 2;
+            int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
+            if (isTextKey) {
+                btn.setMinWidth(btnSquareW);
+                int padH = Math.round(dpToPx(4));
+                btn.setPadding(padH, 0, padH, 0);
+            } else {
+                btn.setWidth(btnSquareW);
+                btn.setPadding(0, 0, 0, 0);
+            }
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(lpWidth, btnHeight);
             lp.setMarginEnd(marginE);
             lp.gravity = android.view.Gravity.CENTER_VERTICAL;
             quickCluster.addView(btn, lp);

@@ -316,7 +316,7 @@ public final class TermuxPreferenceConstants {
         /** Comma-separated list of up to 5 quick extra keys for the Display status bar. */
         public static final String KEY_X11_QUICK_EXTRA_KEYS = "x11_quick_extra_keys";
 
-        public static final String DEFAULT_X11_QUICK_EXTRA_KEYS = "FULLSCREEN,KEYBOARD,tool:mouse.toggle,TAB,PASTE";
+        public static final String DEFAULT_X11_QUICK_EXTRA_KEYS = "FULLSCREEN,KEYBOARD,tool:mouse.toggle";
 
         /** The place the pane wall last rested on; the home screen comes back to it. */
         public static final String KEY_WALL_LAST_PAGE = "wall_last_page";

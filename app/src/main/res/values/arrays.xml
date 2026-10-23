@@ -277,6 +277,55 @@
         <item>litert-lm</item>
         <item>mnn-llm</item>
     </string-array>
+    <string-array name="x11_quick_extra_keys_entries">
+        <item>Fullscreen (Toggle Fullscreen / Windowed)</item>
+        <item>Keyboard (Toggle Soft Keyboard)</item>
+        <item>Mouse / Touchpad (Toggle Touchpad Mode)</item>
+        <item>Boost RAM (Drop Cache)</item>
+        <item>Escape (ESC)</item>
+        <item>Tab (TAB)</item>
+        <item>Control (CTRL)</item>
+        <item>Alt (ALT)</item>
+        <item>Paste Clipboard</item>
+        <item>Drawer (Sessions Drawer)</item>
+        <item>Arrow Up (↑)</item>
+        <item>Arrow Down (↓)</item>
+        <item>Arrow Left (←)</item>
+        <item>Arrow Right (→)</item>
+        <item>Enter</item>
+        <item>Backspace</item>
+        <item>Home</item>
+        <item>End</item>
+        <item>Page Up</item>
+        <item>Page Down</item>
+    </string-array>
+    <string-array name="x11_quick_extra_keys_values">
+        <item>FULLSCREEN</item>
+        <item>KEYBOARD</item>
+        <item>tool:mouse.toggle</item>
+        <item>BOOST</item>
+        <item>ESC</item>
+        <item>TAB</item>
+        <item>CTRL</item>
+        <item>ALT</item>
+        <item>PASTE</item>
+        <item>DRAWER</item>
+        <item>UP</item>
+        <item>DOWN</item>
+        <item>LEFT</item>
+        <item>RIGHT</item>
+        <item>ENTER</item>
+        <item>BKSP</item>
+        <item>HOME</item>
+        <item>END</item>
+        <item>PGUP</item>
+        <item>PGDN</item>
+    </string-array>
+    <string-array name="x11_quick_extra_keys_default_values">
+        <item>FULLSCREEN</item>
+        <item>KEYBOARD</item>
+        <item>tool:mouse.toggle</item>
+    </string-array>
     <string-array name="x11_runtime_badge_entries">
         <item>Termux X11</item>
         <item>Arch Linux</item>
