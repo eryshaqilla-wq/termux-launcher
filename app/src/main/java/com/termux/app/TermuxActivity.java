@@ -21316,6 +21316,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
         View statusBarHost = findViewById(R.id.terminal_window_bar_host);
         View toolbarHost = findViewById(R.id.terminal_toolbar_host);
+        View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
+        View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
+        View accessoryRowStack = findViewById(R.id.accessory_row_stack);
+        View surfaceHost = findViewById(R.id.accessory_surface_host);
 
         if (!isDisplay) {
             if (quickCluster != null) {
@@ -21331,7 +21335,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 statsCluster.setTranslationY(0f);
             }
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
-            if (toolbarHost != null) toolbarHost.setVisibility(View.VISIBLE);
+            ChromeSpec state = buildChromeSpec();
+            if (toolbarHost != null) toolbarHost.setVisibility(state.extraKeysRowEnabled ? View.VISIBLE : View.GONE);
+            if (appsBarRowHost != null) appsBarRowHost.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
+            if (appsBarAzHost != null) appsBarAzHost.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
+            if (surfaceHost != null) surfaceHost.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
             return;
@@ -21352,7 +21361,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mDisplayFullscreenActive = false;
             mDisplayFullscreenAutoApplied = false;
             if (statusBarHost != null) statusBarHost.setVisibility(View.VISIBLE);
-            if (toolbarHost != null) toolbarHost.setVisibility(View.VISIBLE);
+            ChromeSpec state = buildChromeSpec();
+            if (toolbarHost != null) toolbarHost.setVisibility(state.extraKeysRowEnabled ? View.VISIBLE : View.GONE);
+            if (appsBarRowHost != null) appsBarRowHost.setVisibility(state.appsRowEnabled ? View.VISIBLE : View.GONE);
+            if (appsBarAzHost != null) appsBarAzHost.setVisibility(state.azRowEnabled ? View.VISIBLE : View.GONE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
+            if (surfaceHost != null) surfaceHost.setVisibility(state.dockShown ? View.VISIBLE : View.GONE);
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
         } else {
@@ -21371,7 +21385,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
             // Extra keys dock: hidden in fullscreen, or follows switch when not fullscreen
             boolean showDock = !isFullscreen && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            ChromeSpec state = buildChromeSpec();
             if (toolbarHost != null) toolbarHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
+            if (appsBarRowHost != null) appsBarRowHost.setVisibility(showDock ? (state.appsRowEnabled ? View.VISIBLE : View.GONE) : View.GONE);
+            if (appsBarAzHost != null) appsBarAzHost.setVisibility(showDock ? (state.azRowEnabled ? View.VISIBLE : View.GONE) : View.GONE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(showDock ? View.VISIBLE : View.GONE);
+
+            boolean keyboardOrPadUp = isDisplayKeyboardUp() || isTouchpadShown() || isWholeFrameTouchpadShown();
+            if (surfaceHost != null) {
+                surfaceHost.setVisibility((showDock || keyboardOrPadUp) ? View.VISIBLE : View.GONE);
+            }
 
             // Status bar switch
             boolean showBar = mPreferences == null || mPreferences.isX11ShowStatusBarEnabled();
