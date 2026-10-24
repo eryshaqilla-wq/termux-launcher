@@ -1248,7 +1248,7 @@ public final class ChrootDistro {
 
         String kioskRcContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
             + "# Standalone App Kiosk Mode for Termux Launcher\n"
-            + "if [ -d \"/data/data/com.termux/files/usr/bin\" ]; then\n"
+            + "if [ ! -x /usr/bin/bspwm ] && [ -d \"/data/data/com.termux/files/usr/bin\" ]; then\n"
             + "    export PREFIX=\"/data/data/com.termux/files/usr\"\n"
             + "    case \":$PATH:\" in\n"
             + "        *:\"$PREFIX/bin\":*) ;;\n"
