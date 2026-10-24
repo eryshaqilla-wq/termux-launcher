@@ -543,6 +543,10 @@ if [ -n "$THEME_SRC" ]; then
     elif [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
         ln -sf "../../Pictures/wallpapers/evening-sky.png" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
     fi
+    if command -v termux-fix-shebang >/dev/null 2>&1; then
+        termux-fix-shebang "$HOME/.config/bspwm/"* "$HOME/.config/polybar/"* 2>/dev/null || true
+    fi
+    chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/bspwm/"*.py "$HOME/.config/polybar/"*.sh 2>/dev/null || true
     # Pasang Smart Touch Rofi Wrapper & Hook di Native Termux
     if [ -f "$PREFIX/bin/rofi" ] && [ ! -f "$PREFIX/bin/rofi.real" ]; then
         mv "$PREFIX/bin/rofi" "$PREFIX/bin/rofi.real" 2>/dev/null || true
@@ -649,19 +653,68 @@ exec termux-ipc webview "$@"
 EOF
 chmod 755 "$PREFIX/bin/browser"
 
-# Wrapper Native bspwm
-cat << 'EOF_BSPWM' > "$PREFIX/bin/termux-bspwm"
+# Wrapper Native bspwm & Desktop
+cat << 'EOF_BSPWM' > "$PREFIX/bin/termux-desktop-wm"
 #!/data/data/com.termux/files/usr/bin/bash
 # Native BSPWM Desktop for Termux Launcher
+export PREFIX="/data/data/com.termux/files/usr"
+export HOME="${HOME:-/data/data/com.termux/files/home}"
+export PATH="$PREFIX/bin:$PATH"
 export DISPLAY="${DISPLAY:-:0}"
-for _w in $(seq 1 50); do [ -S /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ] && break; sleep 0.1; done
+export PULSE_SERVER="tcp:127.0.0.1:4713"
+export GALLIUM_DRIVER=virpipe
+export MESA_GL_VERSION_OVERRIDE=4.3COMPAT
+export MESA_GLES_VERSION_OVERRIDE=3.2
+export MESA_NO_ERROR=1
+export LIBGL_DRI3_DISABLE=1
+export VTEST_SOCKET_NAME="$PREFIX/tmp/.virgl/.virgl_test"
+
+if [ -d "$PREFIX/tmp" ]; then
+    export TMPDIR="$PREFIX/tmp"
+    export BSPWM_SOCKET="${BSPWM_SOCKET:-$PREFIX/tmp/bspwm_0_0-socket}"
+fi
+
+for _w in $(seq 1 50); do [ -S "$PREFIX/tmp/.X11-unix/X0" ] || [ -S "/tmp/.X11-unix/X0" ] && break; sleep 0.1; done
 pulseaudio --start --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1;172.28.0.0/16 auth-anonymous=1" --exit-idle-time=-1 >/dev/null 2>&1 || true
-export PULSE_SERVER=tcp:127.0.0.1:4713
 pkill -x sxhkd 2>/dev/null || true
 sxhkd &
 exec bspwm
 EOF_BSPWM
+chmod 755 "$PREFIX/bin/termux-desktop-wm"
+cp -f "$PREFIX/bin/termux-desktop-wm" "$PREFIX/bin/termux-bspwm"
 chmod 755 "$PREFIX/bin/termux-bspwm"
+
+# Wrapper Native Standalone Kiosk WM
+cat << 'EOF_KIOSK' > "$PREFIX/bin/termux-kiosk-wm"
+#!/data/data/com.termux/files/usr/bin/bash
+# Native Host Kiosk Window Manager (Standalone App) for Termux Launcher
+export PREFIX="/data/data/com.termux/files/usr"
+export HOME="${HOME:-/data/data/com.termux/files/home}"
+export PATH="$PREFIX/bin:$PATH"
+export DISPLAY="${DISPLAY:-:0}"
+export PULSE_SERVER="tcp:127.0.0.1:4713"
+export GALLIUM_DRIVER=virpipe
+export MESA_GL_VERSION_OVERRIDE=4.3COMPAT
+export MESA_GLES_VERSION_OVERRIDE=3.2
+export MESA_NO_ERROR=1
+export LIBGL_DRI3_DISABLE=1
+export VTEST_SOCKET_NAME="$PREFIX/tmp/.virgl/.virgl_test"
+
+for _w in $(seq 1 50); do [ -S "$PREFIX/tmp/.X11-unix/X0" ] || [ -S "/tmp/.X11-unix/X0" ] && break; sleep 0.1; done
+
+if [ -x "$PREFIX/bin/bspwm" ]; then
+    exec "$PREFIX/bin/bspwm" -c "$HOME/.config/bspwm/kiosk.bspwmrc"
+elif command -v openbox >/dev/null 2>&1; then
+    exec openbox
+elif command -v xfwm4 >/dev/null 2>&1; then
+    exec xfwm4
+elif command -v i3 >/dev/null 2>&1; then
+    exec i3
+else
+    while true; do sleep 3600; done
+fi
+EOF_KIOSK
+chmod 755 "$PREFIX/bin/termux-kiosk-wm"
 
 # Wrapper x (otomasi radar webview)
 cat << 'EOF_X' > "$PREFIX/bin/x"

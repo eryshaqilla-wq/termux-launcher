@@ -160,13 +160,7 @@ public final class ChrootDistro {
             boolean hasDbus = dbusBin.canExecute();
             switch (id) {
                 case "bspwm_kiosk":
-                    return "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
-                        + "bspc config single_monocle true; "
-                        + "bspc config gapless_monocle true; "
-                        + "bspc config borderless_monocle true; "
-                        + "bspc config window_gap 0; "
-                        + "bspc config top_padding 0; "
-                        + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done) & bspwm";
+                    return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + HOST_KIOSK_SCRIPT_NAME;
                 case "openbox_kiosk":
                     File rck = new File(TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/etc/xdg/openbox/rc.xml");
                     return rck.exists() ? "openbox --config-file " + rck.getAbsolutePath() : "openbox";
@@ -191,8 +185,7 @@ public final class ChrootDistro {
                 case "awesome":
                     return "awesome";
                 case "bspwm":
-                    return "[ -x /usr/local/bin/bspwm-session ] && exec /usr/local/bin/bspwm-session || "
-                        + (hasDbus ? "exec dbus-run-session -- bspwm" : "exec bspwm");
+                    return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + HOST_DESKTOP_SCRIPT_NAME;
                 case "fluxbox":
                     return detectedBinary;
                 case "xfce4":
@@ -778,6 +771,8 @@ public final class ChrootDistro {
     public static final String DROIDSPACES_APP_SCRIPT_NAME = "termux-droidspaces-app";
     public static final String CHROOT_KIOSK_SCRIPT_NAME = "termux-chroot-kiosk";
     public static final String DROIDSPACES_KIOSK_SCRIPT_NAME = "termux-droidspaces-kiosk";
+    public static final String HOST_DESKTOP_SCRIPT_NAME = "termux-desktop-wm";
+    public static final String HOST_KIOSK_SCRIPT_NAME = "termux-kiosk-wm";
 
     public static void writeChrootKioskScript(@NonNull String rootPath) {
         writeChrootKioskScript(rootPath, null);
@@ -1158,6 +1153,174 @@ public final class ChrootDistro {
         }
     }
 
+    public static void writeHostDesktopScript(@NonNull Context context, @Nullable String preferredDe) {
+        String binDir = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH;
+        String desktopScriptPath = binDir + "/" + HOST_DESKTOP_SCRIPT_NAME;
+        String bspwmWrapperPath = binDir + "/termux-bspwm";
+
+        String pref = (preferredDe != null) ? preferredDe.trim().toLowerCase(java.util.Locale.ROOT) : "";
+        if ("auto".equals(pref) || pref.isEmpty()) pref = "bspwm";
+
+        String wmExec;
+        if ("openbox".equals(pref)) {
+            wmExec = "if command -v openbox >/dev/null 2>&1; then\n"
+                + "    exec openbox\n"
+                + "elif [ -x \"$PREFIX/bin/bspwm\" ]; then\n"
+                + "    exec \"$PREFIX/bin/bspwm\"\n"
+                + "fi";
+        } else if ("xfce4".equals(pref)) {
+            wmExec = "if command -v xfce4-session >/dev/null 2>&1; then\n"
+                + "    exec xfce4-session\n"
+                + "elif [ -x \"$PREFIX/bin/bspwm\" ]; then\n"
+                + "    exec \"$PREFIX/bin/bspwm\"\n"
+                + "fi";
+        } else {
+            wmExec = "if [ -x \"$PREFIX/bin/bspwm\" ]; then\n"
+                + "    exec \"$PREFIX/bin/bspwm\"\n"
+                + "elif command -v openbox >/dev/null 2>&1; then\n"
+                + "    exec openbox\n"
+                + "elif command -v xfce4-session >/dev/null 2>&1; then\n"
+                + "    exec xfce4-session\n"
+                + "else\n"
+                + "    exec bspwm\n"
+                + "fi";
+        }
+
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Native Host Desktop Runner for Termux Launcher\n\n"
+            + "export PREFIX=\"/data/data/com.termux/files/usr\"\n"
+            + "export HOME=\"${HOME:-/data/data/com.termux/files/home}\"\n"
+            + "export PATH=\"$PREFIX/bin:$PATH\"\n"
+            + "export DISPLAY=\"${DISPLAY:-:0}\"\n"
+            + "export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
+            + "export GALLIUM_DRIVER=virpipe\n"
+            + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
+            + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
+            + "export MESA_NO_ERROR=1\n"
+            + "export LIBGL_DRI3_DISABLE=1\n"
+            + "export VTEST_SOCKET_NAME=\"$PREFIX/tmp/.virgl/.virgl_test\"\n\n"
+            + "if [ -d \"$PREFIX/tmp\" ]; then\n"
+            + "    export TMPDIR=\"$PREFIX/tmp\"\n"
+            + "    export BSPWM_SOCKET=\"${BSPWM_SOCKET:-$PREFIX/tmp/bspwm_0_0-socket}\"\n"
+            + "fi\n\n"
+            + "# Tunggu socket X0 siap\n"
+            + "for _w in $(seq 1 50); do\n"
+            + "    [ -S \"$PREFIX/tmp/.X11-unix/X0\" ] || [ -S \"/tmp/.X11-unix/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n\n"
+            + "# Start PulseAudio TCP daemon\n"
+            + "pulseaudio --start --load=\"module-native-protocol-tcp auth-ip-acl=127.0.0.1;172.28.0.0/16 auth-anonymous=1\" --exit-idle-time=-1 >/dev/null 2>&1 || true\n\n"
+            + "# Hotkey daemon sxhkd untuk BSPWM\n"
+            + "pkill -x sxhkd 2>/dev/null || true\n"
+            + "sxhkd &\n\n"
+            + wmExec + "\n";
+
+        File scriptFile = new File(desktopScriptPath);
+        File bspwmWrapper = new File(bspwmWrapperPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            byte[] bytes = scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            java.nio.file.Files.write(scriptFile.toPath(), bytes);
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+
+            java.nio.file.Files.write(bspwmWrapper.toPath(), bytes);
+            bspwmWrapper.setReadable(true, false);
+            bspwmWrapper.setWritable(true, true);
+            bspwmWrapper.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write host desktop script: " + e.getMessage());
+        }
+    }
+
+    public static void writeHostKioskScript(@NonNull Context context, @Nullable String preferredDe) {
+        String binDir = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH;
+        String kioskScriptPath = binDir + "/" + HOST_KIOSK_SCRIPT_NAME;
+        String homeDir = TermuxConstants.TERMUX_HOME_DIR_PATH;
+        String bspwmDir = homeDir + "/.config/bspwm";
+        String kioskRcPath = bspwmDir + "/kiosk.bspwmrc";
+
+        // 1. Pastikan ~/.config/bspwm/kiosk.bspwmrc tersedia dengan monocle fullscreen tiling
+        File bspwmDirFile = new File(bspwmDir);
+        if (!bspwmDirFile.exists()) bspwmDirFile.mkdirs();
+
+        String kioskRcContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Standalone App Kiosk Mode for Termux Launcher\n"
+            + "if [ -d \"/data/data/com.termux/files/usr/bin\" ]; then\n"
+            + "    export PREFIX=\"/data/data/com.termux/files/usr\"\n"
+            + "    case \":$PATH:\" in\n"
+            + "        *:\"$PREFIX/bin\":*) ;;\n"
+            + "        *) export PATH=\"$PREFIX/bin:$PATH\" ;;\n"
+            + "    esac\n"
+            + "fi\n"
+            + "bspc monitor -d 1\n"
+            + "bspc config border_width 0\n"
+            + "bspc config window_gap 0\n"
+            + "bspc config top_padding 0\n"
+            + "bspc config bottom_padding 0\n"
+            + "bspc config left_padding 0\n"
+            + "bspc config right_padding 0\n"
+            + "bspc config single_monocle true\n"
+            + "bspc config gapless_monocle true\n"
+            + "bspc config borderless_monocle true\n"
+            + "bspc rule -a * state=tiled\n"
+            + "bspc desktop 1 -l monocle\n";
+
+        try {
+            File rcFile = new File(kioskRcPath);
+            java.nio.file.Files.write(rcFile.toPath(), kioskRcContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            rcFile.setReadable(true, false);
+            rcFile.setWritable(true, true);
+            rcFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write host kiosk.bspwmrc: " + e.getMessage());
+        }
+
+        // 2. Tulis $PREFIX/bin/termux-kiosk-wm
+        String scriptContent = "#!/data/data/com.termux/files/usr/bin/bash\n"
+            + "# Native Host Kiosk Window Manager (Standalone App) for Termux Launcher\n\n"
+            + "export PREFIX=\"/data/data/com.termux/files/usr\"\n"
+            + "export HOME=\"${HOME:-/data/data/com.termux/files/home}\"\n"
+            + "export PATH=\"$PREFIX/bin:$PATH\"\n"
+            + "export DISPLAY=\"${DISPLAY:-:0}\"\n"
+            + "export PULSE_SERVER=\"tcp:127.0.0.1:4713\"\n"
+            + "export GALLIUM_DRIVER=virpipe\n"
+            + "export MESA_GL_VERSION_OVERRIDE=4.3COMPAT\n"
+            + "export MESA_GLES_VERSION_OVERRIDE=3.2\n"
+            + "export MESA_NO_ERROR=1\n"
+            + "export LIBGL_DRI3_DISABLE=1\n"
+            + "export VTEST_SOCKET_NAME=\"$PREFIX/tmp/.virgl/.virgl_test\"\n\n"
+            + "for _w in $(seq 1 50); do\n"
+            + "    [ -S \"$PREFIX/tmp/.X11-unix/X0\" ] || [ -S \"/tmp/.X11-unix/X0\" ] && break\n"
+            + "    sleep 0.1\n"
+            + "done\n\n"
+            + "if [ -x \"$PREFIX/bin/bspwm\" ]; then\n"
+            + "    exec \"$PREFIX/bin/bspwm\" -c \"$HOME/.config/bspwm/kiosk.bspwmrc\"\n"
+            + "elif command -v openbox >/dev/null 2>&1; then\n"
+            + "    exec openbox\n"
+            + "elif command -v xfwm4 >/dev/null 2>&1; then\n"
+            + "    exec xfwm4\n"
+            + "elif command -v i3 >/dev/null 2>&1; then\n"
+            + "    exec i3\n"
+            + "else\n"
+            + "    while true; do sleep 3600; done\n"
+            + "fi\n";
+
+        File scriptFile = new File(kioskScriptPath);
+        try {
+            File parent = scriptFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            java.nio.file.Files.write(scriptFile.toPath(), scriptContent.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            scriptFile.setReadable(true, false);
+            scriptFile.setWritable(true, true);
+            scriptFile.setExecutable(true, false);
+        } catch (Exception e) {
+            Logger.logWarn(LOG_TAG, "Failed to write host kiosk script: " + e.getMessage());
+        }
+    }
+
     @NonNull
     public static String getDesktopCommand(@Nullable ChrootEnvironment env, @Nullable DesktopEntry de) {
         if (env != null && env.runnerType == RunnerType.DROIDSPACES) {
@@ -1250,15 +1413,9 @@ public final class ChrootDistro {
                 + " -- /bin/bash -c " + ProotDistro.singleQuote(inner);
         } else {
             // Route X11 (native)
-            String baseCmd;
-            if (selectedEntry != null) {
-                baseCmd = selectedEntry.getHostCommand();
-            } else {
-                TermuxAppSharedPreferences appPrefs = TermuxAppSharedPreferences.build(context);
-                String customWm = appPrefs != null ? appPrefs.getX11WindowManager() : null;
-                baseCmd = (customWm != null && !customWm.trim().isEmpty()) ? customWm : "openbox";
-            }
-            return "env PULSE_SERVER=tcp:127.0.0.1:4713 GALLIUM_DRIVER=virpipe MESA_GL_VERSION_OVERRIDE=4.3COMPAT MESA_GLES_VERSION_OVERRIDE=3.2 MESA_NO_ERROR=1 LIBGL_DRI3_DISABLE=1 VTEST_SOCKET_NAME=/data/data/com.termux/files/usr/tmp/.virgl/.virgl_test " + baseCmd;
+            String selectedDe = (selectedEntry != null) ? selectedEntry.id : null;
+            writeHostDesktopScript(context, selectedDe);
+            return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + HOST_DESKTOP_SCRIPT_NAME;
         }
     }
 
@@ -1316,20 +1473,9 @@ public final class ChrootDistro {
         }
 
         // Host / Native X11 fallback
-        File bspwmBin = new File(TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH, "bspwm");
-        if (bspwmBin.canExecute()) {
-            return "(for k in $(seq 1 50); do bspc query -M >/dev/null 2>&1 && break; sleep 0.1; done; "
-                + "bspc config single_monocle true; "
-                + "bspc config gapless_monocle true; "
-                + "bspc config borderless_monocle true; "
-                + "bspc config window_gap 0; "
-                + "bspc config top_padding 0; "
-                + "bspc config bottom_padding 0; "
-                + "bspc config left_padding 0; "
-                + "bspc config right_padding 0; "
-                + "for d in $(bspc query -D); do bspc desktop \"$d\" -l monocle; done) & bspwm";
-        }
-        return "openbox";
+        String selectedDe = prefs.getString(KEY_SELECTED_DE, "bspwm");
+        writeHostKioskScript(context, selectedDe);
+        return TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/" + HOST_KIOSK_SCRIPT_NAME;
     }
 
     /**
