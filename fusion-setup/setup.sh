@@ -572,6 +572,7 @@ EOF_ROFI_NATIVE
 
     chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/polybar/"*.sh 2>/dev/null || true
     chmod +x "$HOME/.config/bspwm/bspwmrc" "$HOME/.config/polybar/launch.sh" 2>/dev/null || true
+    ln -sf "$HOME/.config/bspwm/rofi-az.sh" "$PREFIX/bin/rofi-az" 2>/dev/null || true
     echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) terpasang di Termux ($HOME/.config)${RESET}"
 fi
 
@@ -964,6 +965,7 @@ fi
 exit $ROFI_RC
 EOF_ROFI_PROOT
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/rofi"
+            ln -sf /root/.config/bspwm/rofi-az.sh "$CONTAINER_ROOTFS/usr/local/bin/rofi-az" 2>/dev/null || true
 
             # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
             if [ -d "$CONTAINER_ROOTFS/etc/pulse" ]; then
@@ -1135,6 +1137,7 @@ elif [ -S "/tmp/termux-x11-im-bus-0" ]; then
 fi
 EOF_FCITX
                 chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/'*
+                ln -sf /root/.config/bspwm/rofi-az.sh '$CONTAINER_ROOTFS/usr/local/bin/rofi-az' 2>/dev/null || true
                 # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
                 if [ -d '$CONTAINER_ROOTFS/etc/pulse' ]; then
                     sed -i 's/^; default-server =.*/default-server = 127.0.0.1:4713/' '$CONTAINER_ROOTFS/etc/pulse/client.conf' 2>/dev/null || true
