@@ -538,7 +538,9 @@ if [ -n "$THEME_SRC" ]; then
     if [ -d "$THEME_SRC/Pictures/wallpapers" ]; then
         cp -rf "$THEME_SRC/Pictures/wallpapers/"* "$HOME/Pictures/wallpapers/" 2>/dev/null || true
     fi
-    if [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
+    if [ -f "$HOME/Pictures/wallpapers/potrait.jpeg" ]; then
+        ln -sf "../../Pictures/wallpapers/potrait.jpeg" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
+    elif [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
         ln -sf "../../Pictures/wallpapers/evening-sky.png" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
     fi
     # Pasang Smart Touch Rofi Wrapper & Hook di Native Termux
@@ -999,7 +1001,7 @@ EOF_PALSA
                 mkdir -p "$CONTAINER_ROOTFS/root/.config" "$CONTAINER_ROOTFS/root/Pictures/wallpapers"
                 [ -d "$THEME_SRC/.config" ] && cp -rf "$THEME_SRC/.config/"* "$CONTAINER_ROOTFS/root/.config/" 2>/dev/null || true
                 [ -d "$THEME_SRC/Pictures/wallpapers" ] && cp -rf "$THEME_SRC/Pictures/wallpapers/"* "$CONTAINER_ROOTFS/root/Pictures/wallpapers/" 2>/dev/null || true
-                ln -sf "../../Pictures/wallpapers/evening-sky.png" "$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper" 2>/dev/null || true
+                [ -f "$THEME_SRC/Pictures/wallpapers/potrait.jpeg" ] && ln -sf "../../Pictures/wallpapers/potrait.jpeg" "$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper" 2>/dev/null || ln -sf "../../Pictures/wallpapers/evening-sky.png" "$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper" 2>/dev/null || true
                 chmod +x "$CONTAINER_ROOTFS/root/.config/bspwm/"*.sh "$CONTAINER_ROOTFS/root/.config/polybar/"*.sh 2>/dev/null || true
                 chmod +x "$CONTAINER_ROOTFS/root/.config/bspwm/bspwmrc" "$CONTAINER_ROOTFS/root/.config/polybar/launch.sh" 2>/dev/null || true
                 echo -e "  ${GREEN}✔ Tema Eso & wallpaper disinkronkan ke PRoot $DISPLAY_NAME (/root/.config/)${RESET}"
@@ -1158,7 +1160,7 @@ EOF_FCITX
                     mkdir -p '$CONTAINER_ROOTFS/root/.config' '$CONTAINER_ROOTFS/root/Pictures/wallpapers'
                     [ -d '$THEME_SRC/.config' ] && cp -rf '$THEME_SRC/.config/'* '$CONTAINER_ROOTFS/root/.config/' 2>/dev/null || true
                     [ -d '$THEME_SRC/Pictures/wallpapers' ] && cp -rf '$THEME_SRC/Pictures/wallpapers/'* '$CONTAINER_ROOTFS/root/Pictures/wallpapers/' 2>/dev/null || true
-                    ln -sf '../../Pictures/wallpapers/evening-sky.png' '$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper' 2>/dev/null || true
+                    [ -f '$THEME_SRC/Pictures/wallpapers/potrait.jpeg' ] && ln -sf '../../Pictures/wallpapers/potrait.jpeg' '$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper' 2>/dev/null || ln -sf '../../Pictures/wallpapers/evening-sky.png' '$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper' 2>/dev/null || true
                     chmod +x '$CONTAINER_ROOTFS/root/.config/bspwm/'*.sh '$CONTAINER_ROOTFS/root/.config/polybar/'*.sh 2>/dev/null || true
                     chmod +x '$CONTAINER_ROOTFS/root/.config/bspwm/bspwmrc' '$CONTAINER_ROOTFS/root/.config/polybar/launch.sh' 2>/dev/null || true
                 "
