@@ -33,6 +33,10 @@ termux-change-repo|switch mirror if downloads fail"
     fi
     ;;
 esac
+setup="$setup
+eso|panduan lengkap ipc & payload fusion
+eso setup|petunjuk eksekusi ./setup"
+
 [ -n "$setup" ] && rows="$rows
 #Setup$setup"
 
