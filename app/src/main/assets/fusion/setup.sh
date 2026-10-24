@@ -493,9 +493,9 @@ else
     echo -e "  ${GREEN}✔ Paket sistem sudah lengkap (node, npm, python, git, curl, zsh, termux-api)${RESET}"
 fi
 
-# Cek & Pasang paket GUI/X11 & Audio di Native Termux (bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl)
+# Cek & Pasang paket GUI/X11, Input Method & Audio di Native Termux (bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl, fcitx5)
 GUI_PKGS_OK=1
-for gpkg in bspwm sxhkd rofi polybar picom feh pulseaudio; do
+for gpkg in bspwm sxhkd rofi polybar picom feh pulseaudio fcitx5; do
     if ! command -v "$gpkg" >/dev/null 2>&1; then
         GUI_PKGS_OK=0
         break
@@ -506,13 +506,13 @@ if [ ! -f "$PREFIX/bin/virgl_test_server_android" ]; then
 fi
 
 if [ $GUI_PKGS_OK -eq 0 ]; then
-    spin "Memasang x11-repo & dependensi bspwm/audio di Termux..." bash -c '
+    spin "Memasang x11-repo & dependensi bspwm/fcitx5/audio di Termux..." bash -c '
         pkg install -y x11-repo 2>/dev/null || true
-        pkg install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android 2>/dev/null || true
+        pkg install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android fcitx5 fcitx5-gtk3 fcitx5-qt 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh pulseaudio virglrenderer-android fcitx5 fcitx5-gtk3 fcitx5-qt 2>/dev/null || true
     '
-    echo -e "  ${GREEN}✔ bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio & virgl terpasang di Termux${RESET}"
+    echo -e "  ${GREEN}✔ bspwm, sxhkd, rofi, polybar, picom, feh, pulseaudio, virgl & fcitx5 terpasang di Termux${RESET}"
 else
-    echo -e "  ${GREEN}✔ Paket GUI & Audio Native Termux sudah lengkap (bspwm, pulseaudio, virgl)${RESET}"
+    echo -e "  ${GREEN}✔ Paket GUI, Audio & Fcitx5 Native Termux sudah lengkap${RESET}"
 fi
 
 if [ -n "$PAYLOAD_TAR" ] && [ -f "$PAYLOAD_TAR" ]; then
@@ -541,6 +541,35 @@ if [ -n "$THEME_SRC" ]; then
     if [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
         ln -sf "../../Pictures/wallpapers/evening-sky.png" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
     fi
+    # Pasang Smart Touch Rofi Wrapper & Hook di Native Termux
+    if [ -f "$PREFIX/bin/rofi" ] && [ ! -f "$PREFIX/bin/rofi.real" ]; then
+        mv "$PREFIX/bin/rofi" "$PREFIX/bin/rofi.real" 2>/dev/null || true
+    fi
+    if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+        if command -v gcc >/dev/null 2>&1; then
+            gcc -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+        elif command -v clang >/dev/null 2>&1; then
+            clang -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+        fi
+    fi
+    cat << 'EOF_ROFI_NATIVE' > "$PREFIX/bin/rofi"
+#!/usr/bin/env bash
+if [ -f "$PREFIX/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="$PREFIX/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+if [ -x "$PREFIX/bin/rofi.real" ]; then
+    "$PREFIX/bin/rofi.real" "$@"
+else
+    command -p rofi "$@"
+fi
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI_NATIVE
+    chmod +x "$PREFIX/bin/rofi" 2>/dev/null || true
+
     chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/polybar/"*.sh 2>/dev/null || true
     chmod +x "$HOME/.config/bspwm/bspwmrc" "$HOME/.config/polybar/launch.sh" 2>/dev/null || true
     echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) terpasang di Termux ($HOME/.config)${RESET}"
@@ -803,18 +832,24 @@ if [ "$LINUX_OPT" = "1" ]; then
         CONTAINER_ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
         if [ -d "$CONTAINER_ROOTFS" ]; then
             mkdir -p "$CONTAINER_ROOTFS/usr/local/bin"
+            mkdir -p "$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin"
+            for b_sym in bash sh env node python3; do
+                if [ -e "$CONTAINER_ROOTFS/usr/bin/$b_sym" ] || [ -e "$CONTAINER_ROOTFS/bin/$b_sym" ]; then
+                    ln -sf "/usr/bin/$b_sym" "$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin/$b_sym" 2>/dev/null || true
+                fi
+            done
             if [ -f "$PREFIX/bin/termux-ipc" ]; then
-                (echo '#!/bin/bash'; tail -n +2 "$PREFIX/bin/termux-ipc") > "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
+                (echo '#!/usr/bin/env bash'; tail -n +2 "$PREFIX/bin/termux-ipc") > "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
                 chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
             fi
             cat << 'EOF_B' > "$CONTAINER_ROOTFS/usr/local/bin/browser"
-#!/bin/bash
+#!/usr/bin/env bash
 exec termux-ipc webview "$@"
 EOF_B
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/browser"
 
             cat << 'EOF_CW' > "$CONTAINER_ROOTFS/usr/local/bin/wallet"
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
@@ -838,7 +873,7 @@ EOF_CW
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/wallet"
 
             cat << 'EOF_CX' > "$CONTAINER_ROOTFS/usr/local/bin/x"
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
@@ -862,7 +897,7 @@ EOF_CX
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/x"
 
             cat << 'EOF_CP' > "$CONTAINER_ROOTFS/usr/local/bin/pemantau"
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
@@ -884,6 +919,51 @@ else
 fi
 EOF_CP
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/pemantau"
+
+            cat << 'EOF_C9' > "$CONTAINER_ROOTFS/usr/local/bin/9router"
+#!/usr/bin/env bash
+[ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+if [ ! -d "$WDIR" ]; then
+    for cand in /wallet /root/wallet "$HOME/wallet" /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then WDIR="$cand"; break; fi
+    done
+fi
+if [ -f "$WDIR/9router.cjs" ]; then
+    cd "$WDIR" && exec node 9router.cjs "$@"
+fi
+if command -v 9router >/dev/null 2>&1 && [ "$(command -v 9router)" != "$0" ]; then
+    exec 9router "$@"
+fi
+echo "9router (.cjs atau npm binary) tidak ditemukan di sistem."
+exit 1
+EOF_C9
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/9router"
+
+            # Pasang Smart Touch Rofi Wrapper & Hook di PRoot
+            mkdir -p "$CONTAINER_ROOTFS/usr/local/lib" "$CONTAINER_ROOTFS/usr/local/src"
+            if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+                cp -f "$SCRIPT_DIR/librofitouch.c" "$CONTAINER_ROOTFS/usr/local/src/librofitouch.c" 2>/dev/null || true
+                if command -v gcc >/dev/null 2>&1; then
+                    gcc -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+                elif command -v clang >/dev/null 2>&1; then
+                    clang -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+                fi
+            fi
+            cat << 'EOF_ROFI_PROOT' > "$CONTAINER_ROOTFS/usr/local/bin/rofi"
+#!/usr/bin/env bash
+if [ -f "/usr/local/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+/usr/bin/rofi "$@"
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI_PROOT
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/rofi"
 
             # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
             if [ -d "$CONTAINER_ROOTFS/etc/pulse" ]; then
@@ -908,7 +988,7 @@ EOF_PALSA
             if command -v proot-distro >/dev/null 2>&1; then
                 spin "Memasang bspwm, audio & tools di PRoot $DISPLAY_NAME..." proot-distro login "$DISTRO_NAME" -- /bin/sh -c '
                     export DEBIAN_FRONTEND=noninteractive
-                    apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                    apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
                 '
             fi
             if [ -n "$THEME_SRC" ]; then
@@ -930,22 +1010,28 @@ EOF_PALSA
                 if [ -x '/data/local/Droidspaces/bin/droidspaces' ] && [ -n '$CUSTOM_LINUX_NAME' ] && [ '$CUSTOM_LINUX_NAME' != 'NetHunter' ]; then
                     /data/local/Droidspaces/bin/droidspaces --name='$CUSTOM_LINUX_NAME' run /bin/sh -c '
                         export DEBIAN_FRONTEND=noninteractive
-                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
                     ' >/dev/null 2>&1 || true
                 else
                     chroot '$CONTAINER_ROOTFS' /bin/sh -c '
                         export DEBIAN_FRONTEND=noninteractive
-                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils 2>/dev/null || true
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
                     ' >/dev/null 2>&1 || true
                 fi
             "
 
             spin "Menginjeksi shims langsung ke rootfs $CUSTOM_LINUX_NAME..." su -c "
                 mkdir -p '$CONTAINER_ROOTFS/usr/local/bin'
-                (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
-                echo -e '#!/bin/bash\nexec termux-ipc webview \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/browser'
+                mkdir -p '$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin'
+                for b_sym in bash sh env node python3; do
+                    if [ -e '$CONTAINER_ROOTFS/usr/bin/'\$b_sym ] || [ -e '$CONTAINER_ROOTFS/bin/'\$b_sym ]; then
+                        ln -sf '/usr/bin/'\$b_sym '$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin/'\$b_sym 2>/dev/null || true
+                    fi
+                done
+                (echo '#!/usr/bin/env bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
+                echo -e '#!/usr/bin/env bash\nexec termux-ipc webview \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/browser'
                 cat << 'EOF_RW' > '$CONTAINER_ROOTFS/usr/local/bin/wallet'
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
 if [ ! -d \"\$WDIR\" ]; then
@@ -963,7 +1049,7 @@ elif [ -f \"\$WDIR/wallet.cjs\" ]; then
 fi
 EOF_RW
                 cat << 'EOF_RX' > '$CONTAINER_ROOTFS/usr/local/bin/x'
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
 if [ ! -d \"\$WDIR\" ]; then
@@ -981,7 +1067,7 @@ elif [ -f \"\$WDIR/x_webview.cjs\" ]; then
 fi
 EOF_RX
                 cat << 'EOF_RP' > '$CONTAINER_ROOTFS/usr/local/bin/pemantau'
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
 if [ ! -d \"\$WDIR\" ]; then
@@ -998,6 +1084,56 @@ elif [ -f \"\$WDIR/pemantau.cjs\" ]; then
   cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"
 fi
 EOF_RP
+                cat << 'EOF_R9' > '$CONTAINER_ROOTFS/usr/local/bin/9router'
+#!/usr/bin/env bash
+[ -f /root/.fusion_env ] && . /root/.fusion_env
+WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+if [ ! -d \"\$WDIR\" ]; then
+  for cand in /wallet /root/wallet \"\$HOME/wallet\" /data/data/com.termux/files/home/wallet; do
+    if [ -d \"\$cand\" ]; then WDIR=\"\$cand\"; break; fi
+  done
+fi
+if [ -f \"\$WDIR/9router.cjs\" ]; then
+  cd \"\$WDIR\" && exec node 9router.cjs \"\$@\"
+fi
+if command -v 9router >/dev/null 2>&1 && [ \"\$(command -v 9router)\" != \"\$0\" ]; then
+  exec 9router \"\$@\"
+fi
+EOF_R9
+                mkdir -p '$CONTAINER_ROOTFS/usr/local/lib' '$CONTAINER_ROOTFS/usr/local/src'
+                if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+                    cp -f "$SCRIPT_DIR/librofitouch.c" '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
+                    if command -v gcc >/dev/null 2>&1; then
+                        gcc -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+                    elif command -v clang >/dev/null 2>&1; then
+                        clang -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+                    fi
+                fi
+                cat << 'EOF_ROFI' > '$CONTAINER_ROOTFS/usr/local/bin/rofi'
+#!/usr/bin/env bash
+if [ -f "/usr/local/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+/usr/bin/rofi "$@"
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+elif [ -x "/usr/local/termux-shims/termux-ipc" ]; then
+    /usr/local/termux-shims/termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI
+                mkdir -p '$CONTAINER_ROOTFS/etc/profile.d'
+                cat << 'EOF_FCITX' > '$CONTAINER_ROOTFS/etc/profile.d/fcitx5.sh'
+export GTK_IM_MODULE=fcitx
+export QT_IM_MODULE=fcitx
+export XMODIFIERS=@im=fcitx
+if [ -S "/tmp/.X11-unix/termux-x11-im-bus-0" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/.X11-unix/termux-x11-im-bus-0"
+elif [ -S "/tmp/termux-x11-im-bus-0" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/termux-x11-im-bus-0"
+fi
+EOF_FCITX
                 chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/'*
                 # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
                 if [ -d '$CONTAINER_ROOTFS/etc/pulse' ]; then
@@ -1035,7 +1171,7 @@ EOF_RP
 
         # Jika Droidspaces sedang berjalan, pastikan juga shims aktif di container
         if [ -x "/data/local/Droidspaces/bin/droidspaces" ] && [ -n "$CUSTOM_LINUX_NAME" ] && [ "$CUSTOM_LINUX_NAME" != "NetHunter" ]; then
-            su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$CUSTOM_LINUX_NAME\" run -- [ -f /usr/local/bin/termux-ipc ] || (mkdir -p /usr/local/bin && (echo '#!/bin/bash'; tail -n +2 /data/data/com.termux/files/usr/bin/termux-ipc) > /usr/local/bin/termux-ipc && chmod 755 /usr/local/bin/termux-ipc)" >/dev/null 2>&1 || true
+            su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$CUSTOM_LINUX_NAME\" run -- [ -f /usr/local/bin/termux-ipc ] || (mkdir -p /usr/local/bin && (echo '#!/usr/bin/env bash'; tail -n +2 /data/data/com.termux/files/usr/bin/termux-ipc) > /usr/local/bin/termux-ipc && chmod 755 /usr/local/bin/termux-ipc)" >/dev/null 2>&1 || true
         fi
     fi
 else
@@ -1211,7 +1347,6 @@ elif [ "$CHOSEN_9R_TYPE" = "native" ]; then
     mkdir -p "$HOME/wallet"
     [ -f "/root/wallet/9router.cjs" ] && cp -f "/root/wallet/9router.cjs" "$HOME/wallet/9router.cjs"
     chmod 755 "$HOME/wallet/9router.cjs" 2>/dev/null || true
-    [ -f "/usr/local/bin/9router-autoconfig" ] && cp -f "/usr/local/bin/9router-autoconfig" "$PREFIX/bin/9router-autoconfig" && chmod 755 "$PREFIX/bin/9router-autoconfig" 2>/dev/null || true
 else
     echo -e "  ${GREEN}➔ Target Terpilih: Container Chroot ($CHOSEN_9R_PATH)${RESET}"
     read -p "    Unduh & pasang paket npm 9router di dalam container $CHOSEN_9R_PATH? [Y/n]: " DO_INSTALL_9R
@@ -1223,7 +1358,7 @@ else
     [ -f "/root/wallet/9router.cjs" ] && su -c "cp -f /root/wallet/9router.cjs '$CHOSEN_9R_PATH/root/wallet/9router.cjs'"
     su -c "chmod 755 '$CHOSEN_9R_PATH/root/wallet/9router.cjs' 2>/dev/null || true"
     # Pasang helper scripts di container
-    for scr in start-9router stop-9router 9router-web sync-agy-to-9router 9router-autoconfig; do
+    for scr in start-9router stop-9router 9router-web sync-agy-to-9router; do
         if [ -f "/usr/local/bin/$scr" ]; then
             su -c "cp -f '/usr/local/bin/$scr' '$CHOSEN_9R_PATH/usr/local/bin/$scr' && chmod 755 '$CHOSEN_9R_PATH/usr/local/bin/$scr'"
         fi

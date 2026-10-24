@@ -832,18 +832,24 @@ if [ "$LINUX_OPT" = "1" ]; then
         CONTAINER_ROOTFS="$PREFIX/var/lib/proot-distro/installed-rootfs/$DISTRO_NAME"
         if [ -d "$CONTAINER_ROOTFS" ]; then
             mkdir -p "$CONTAINER_ROOTFS/usr/local/bin"
+            mkdir -p "$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin"
+            for b_sym in bash sh env node python3; do
+                if [ -e "$CONTAINER_ROOTFS/usr/bin/$b_sym" ] || [ -e "$CONTAINER_ROOTFS/bin/$b_sym" ]; then
+                    ln -sf "/usr/bin/$b_sym" "$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin/$b_sym" 2>/dev/null || true
+                fi
+            done
             if [ -f "$PREFIX/bin/termux-ipc" ]; then
-                (echo '#!/bin/bash'; tail -n +2 "$PREFIX/bin/termux-ipc") > "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
+                (echo '#!/usr/bin/env bash'; tail -n +2 "$PREFIX/bin/termux-ipc") > "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
                 chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
             fi
             cat << 'EOF_B' > "$CONTAINER_ROOTFS/usr/local/bin/browser"
-#!/bin/bash
+#!/usr/bin/env bash
 exec termux-ipc webview "$@"
 EOF_B
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/browser"
 
             cat << 'EOF_CW' > "$CONTAINER_ROOTFS/usr/local/bin/wallet"
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
@@ -867,7 +873,7 @@ EOF_CW
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/wallet"
 
             cat << 'EOF_CX' > "$CONTAINER_ROOTFS/usr/local/bin/x"
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
@@ -891,7 +897,7 @@ EOF_CX
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/x"
 
             cat << 'EOF_CP' > "$CONTAINER_ROOTFS/usr/local/bin/pemantau"
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
 [ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
 WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
@@ -913,6 +919,27 @@ else
 fi
 EOF_CP
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/pemantau"
+
+            cat << 'EOF_C9' > "$CONTAINER_ROOTFS/usr/local/bin/9router"
+#!/usr/bin/env bash
+[ -f "/root/.fusion_env" ] && . "/root/.fusion_env"
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+if [ ! -d "$WDIR" ]; then
+    for cand in /wallet /root/wallet "$HOME/wallet" /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then WDIR="$cand"; break; fi
+    done
+fi
+if [ -f "$WDIR/9router.cjs" ]; then
+    cd "$WDIR" && exec node 9router.cjs "$@"
+fi
+if command -v 9router >/dev/null 2>&1 && [ "$(command -v 9router)" != "$0" ]; then
+    exec 9router "$@"
+fi
+echo "9router (.cjs atau npm binary) tidak ditemukan di sistem."
+exit 1
+EOF_C9
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/9router"
 
             # Pasang Smart Touch Rofi Wrapper & Hook di PRoot
             mkdir -p "$CONTAINER_ROOTFS/usr/local/lib" "$CONTAINER_ROOTFS/usr/local/src"
@@ -995,10 +1022,16 @@ EOF_PALSA
 
             spin "Menginjeksi shims langsung ke rootfs $CUSTOM_LINUX_NAME..." su -c "
                 mkdir -p '$CONTAINER_ROOTFS/usr/local/bin'
-                (echo '#!/bin/bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
-                echo -e '#!/bin/bash\nexec termux-ipc webview \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/browser'
+                mkdir -p '$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin'
+                for b_sym in bash sh env node python3; do
+                    if [ -e '$CONTAINER_ROOTFS/usr/bin/'\$b_sym ] || [ -e '$CONTAINER_ROOTFS/bin/'\$b_sym ]; then
+                        ln -sf '/usr/bin/'\$b_sym '$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin/'\$b_sym 2>/dev/null || true
+                    fi
+                done
+                (echo '#!/usr/bin/env bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
+                echo -e '#!/usr/bin/env bash\nexec termux-ipc webview \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/browser'
                 cat << 'EOF_RW' > '$CONTAINER_ROOTFS/usr/local/bin/wallet'
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
 if [ ! -d \"\$WDIR\" ]; then
@@ -1016,7 +1049,7 @@ elif [ -f \"\$WDIR/wallet.cjs\" ]; then
 fi
 EOF_RW
                 cat << 'EOF_RX' > '$CONTAINER_ROOTFS/usr/local/bin/x'
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
 if [ ! -d \"\$WDIR\" ]; then
@@ -1034,7 +1067,7 @@ elif [ -f \"\$WDIR/x_webview.cjs\" ]; then
 fi
 EOF_RX
                 cat << 'EOF_RP' > '$CONTAINER_ROOTFS/usr/local/bin/pemantau'
-#!/bin/bash
+#!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
 WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
 if [ ! -d \"\$WDIR\" ]; then
@@ -1051,6 +1084,22 @@ elif [ -f \"\$WDIR/pemantau.cjs\" ]; then
   cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"
 fi
 EOF_RP
+                cat << 'EOF_R9' > '$CONTAINER_ROOTFS/usr/local/bin/9router'
+#!/usr/bin/env bash
+[ -f /root/.fusion_env ] && . /root/.fusion_env
+WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
+if [ ! -d \"\$WDIR\" ]; then
+  for cand in /wallet /root/wallet \"\$HOME/wallet\" /data/data/com.termux/files/home/wallet; do
+    if [ -d \"\$cand\" ]; then WDIR=\"\$cand\"; break; fi
+  done
+fi
+if [ -f \"\$WDIR/9router.cjs\" ]; then
+  cd \"\$WDIR\" && exec node 9router.cjs \"\$@\"
+fi
+if command -v 9router >/dev/null 2>&1 && [ \"\$(command -v 9router)\" != \"\$0\" ]; then
+  exec 9router \"\$@\"
+fi
+EOF_R9
                 mkdir -p '$CONTAINER_ROOTFS/usr/local/lib' '$CONTAINER_ROOTFS/usr/local/src'
                 if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
                     cp -f "$SCRIPT_DIR/librofitouch.c" '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
@@ -1122,7 +1171,7 @@ EOF_FCITX
 
         # Jika Droidspaces sedang berjalan, pastikan juga shims aktif di container
         if [ -x "/data/local/Droidspaces/bin/droidspaces" ] && [ -n "$CUSTOM_LINUX_NAME" ] && [ "$CUSTOM_LINUX_NAME" != "NetHunter" ]; then
-            su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$CUSTOM_LINUX_NAME\" run -- [ -f /usr/local/bin/termux-ipc ] || (mkdir -p /usr/local/bin && (echo '#!/bin/bash'; tail -n +2 /data/data/com.termux/files/usr/bin/termux-ipc) > /usr/local/bin/termux-ipc && chmod 755 /usr/local/bin/termux-ipc)" >/dev/null 2>&1 || true
+            su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$CUSTOM_LINUX_NAME\" run -- [ -f /usr/local/bin/termux-ipc ] || (mkdir -p /usr/local/bin && (echo '#!/usr/bin/env bash'; tail -n +2 /data/data/com.termux/files/usr/bin/termux-ipc) > /usr/local/bin/termux-ipc && chmod 755 /usr/local/bin/termux-ipc)" >/dev/null 2>&1 || true
         fi
     fi
 else
