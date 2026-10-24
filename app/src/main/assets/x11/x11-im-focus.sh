@@ -238,7 +238,7 @@ MONITOR=$!
         fi
         say "focus in"
         if command -v termux-ipc > /dev/null 2>&1; then
-          termux-ipc keyboard-show --focus > /dev/null 2>&1 || termux-ipc show > /dev/null 2>&1 || true
+          termux-ipc keyboard-show --focus > /dev/null 2>&1 || true
         fi
         command -v launcherctl > /dev/null 2>&1 && launcherctl keyboard show --source focus > /dev/null 2>&1 || true
         ;;
@@ -248,7 +248,7 @@ MONITOR=$!
           echo_from=""
           say "focus out"
           if command -v termux-ipc > /dev/null 2>&1; then
-            termux-ipc keyboard-hide --focus > /dev/null 2>&1 || termux-ipc hide > /dev/null 2>&1 || true
+            termux-ipc keyboard-hide --focus > /dev/null 2>&1 || true
           fi
           command -v launcherctl > /dev/null 2>&1 && launcherctl keyboard hide --source focus > /dev/null 2>&1 || true
         else

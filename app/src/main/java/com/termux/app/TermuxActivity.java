@@ -21316,24 +21316,34 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             mInAppKeyboard.setTurnedOff(false);
             return true;
         }
-        if (fromFocus && mX11Display != null && mX11Display.onTextFocusSignal(true)) return true;
+        if (fromFocus) {
+            if (mPreferences == null || !mPreferences.isX11KeyboardFollowsTextEnabled()) {
+                return false;
+            }
+            if (mX11Display != null && mX11Display.onTextFocusSignal(true)) return true;
+            return false;
+        }
         if (system) return applyDisplaySystemKeyboard(true);
         if (!fromFocus && applyDisplayFrameKeyboard(true)) return true;
-        mInAppKeyboard.show(fromFocus
-            ? com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.FOCUS
-            : com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.TOOL);
+        mInAppKeyboard.show(
+            com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.ShowReason.TOOL);
         return true;
     }
 
     private boolean lowerDisplayKeyboard(boolean fromFocus) {
         boolean system = displayTakesSystemKeyboard();
         if (!system && (mInAppKeyboard == null || !mInAppKeyboard.isEnabled())) return false;
-        if (fromFocus && mX11Display != null && mX11Display.onTextFocusSignal(false)) return true;
+        if (fromFocus) {
+            if (mPreferences == null || !mPreferences.isX11KeyboardFollowsTextEnabled()) {
+                return false;
+            }
+            if (mX11Display != null && mX11Display.onTextFocusSignal(false)) return true;
+            return false;
+        }
         if (system) return applyDisplaySystemKeyboard(false);
         if (!fromFocus && applyDisplayFrameKeyboard(false)) return true;
-        mInAppKeyboard.hide(fromFocus
-            ? com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.FOCUS
-            : com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.TOOL);
+        mInAppKeyboard.hide(
+            com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.TOOL);
         return true;
     }
 

@@ -238,11 +238,6 @@ setup_src = "/project/termux-launcher/fusion-setup/setup.sh"
 shutil.copy2(setup_src, os.path.join(BUNDLE_DIR, "setup.sh"))
 os.chmod(os.path.join(BUNDLE_DIR, "setup.sh"), 0o755)
 
-librofi_src = "/project/termux-launcher/fusion-setup/librofitouch.c"
-if os.path.exists(librofi_src):
-    shutil.copy2(librofi_src, os.path.join(BUNDLE_DIR, "librofitouch.c"))
-    print("✓ Added librofitouch.c to bundle")
-
 print("--- 2c. Menyiapkan Plugin Zsh & Powerlevel10k Offline ---")
 zsh_plugin_dir = os.path.join(BUNDLE_DIR, "zsh_plugins")
 zsh_theme_dir = os.path.join(BUNDLE_DIR, "zsh_themes")
@@ -353,8 +348,6 @@ for target in [
 
 # 2. Standalone files di assets yang aman (installer & CLI runner umum)
 shutil.copy2(os.path.join(BUNDLE_DIR, "setup.sh"), os.path.join(ASSETS_DIR, "setup.sh"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "librofitouch.c")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "librofitouch.c"), os.path.join(ASSETS_DIR, "librofitouch.c"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc"), os.path.join(ASSETS_DIR, "termux-ipc"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge"), os.path.join(ASSETS_DIR, "termux-ipc-bridge"))

@@ -547,34 +547,11 @@ if [ -n "$THEME_SRC" ]; then
         termux-fix-shebang "$HOME/.config/bspwm/"* "$HOME/.config/polybar/"* 2>/dev/null || true
     fi
     chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/bspwm/"*.py "$HOME/.config/polybar/"*.sh 2>/dev/null || true
-    # Pasang Smart Touch Rofi Wrapper & Hook di Native Termux
-    if [ -f "$PREFIX/bin/rofi" ] && [ ! -f "$PREFIX/bin/rofi.real" ]; then
-        mv "$PREFIX/bin/rofi" "$PREFIX/bin/rofi.real" 2>/dev/null || true
+    # Bersihkan librofitouch hook dan kembalikan binary rofi murni
+    rm -f "$PREFIX/lib/librofitouch.so" 2>/dev/null || true
+    if [ -f "$PREFIX/bin/rofi.real" ]; then
+        mv -f "$PREFIX/bin/rofi.real" "$PREFIX/bin/rofi" 2>/dev/null || true
     fi
-    if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
-        if command -v gcc >/dev/null 2>&1; then
-            gcc -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
-        elif command -v clang >/dev/null 2>&1; then
-            clang -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
-        fi
-    fi
-    cat << 'EOF_ROFI_NATIVE' > "$PREFIX/bin/rofi"
-#!/usr/bin/env bash
-if [ -f "$PREFIX/lib/librofitouch.so" ]; then
-    export LD_PRELOAD="$PREFIX/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
-fi
-if [ -x "$PREFIX/bin/rofi.real" ]; then
-    "$PREFIX/bin/rofi.real" "$@"
-else
-    command -p rofi "$@"
-fi
-ROFI_RC=$?
-if command -v termux-ipc >/dev/null 2>&1; then
-    termux-ipc hide >/dev/null 2>&1 || true
-fi
-exit $ROFI_RC
-EOF_ROFI_NATIVE
-    chmod +x "$PREFIX/bin/rofi" 2>/dev/null || true
 
     chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/polybar/"*.sh "$HOME/.config/bspwm/"*.py 2>/dev/null || true
     chmod +x "$HOME/.config/bspwm/bspwmrc" "$HOME/.config/polybar/launch.sh" 2>/dev/null || true
@@ -998,29 +975,12 @@ exit 1
 EOF_C9
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/9router"
 
-            # Pasang Smart Touch Rofi Wrapper & Hook di PRoot
-            mkdir -p "$CONTAINER_ROOTFS/usr/local/lib" "$CONTAINER_ROOTFS/usr/local/src"
-            if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
-                cp -f "$SCRIPT_DIR/librofitouch.c" "$CONTAINER_ROOTFS/usr/local/src/librofitouch.c" 2>/dev/null || true
-                if command -v gcc >/dev/null 2>&1; then
-                    gcc -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
-                elif command -v clang >/dev/null 2>&1; then
-                    clang -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
-                fi
+            # Bersihkan librofitouch hook dan kembalikan binary rofi murni di PRoot
+            rm -f "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$CONTAINER_ROOTFS/usr/local/src/librofitouch.c" 2>/dev/null || true
+            if [ -f "$CONTAINER_ROOTFS/usr/bin/rofi.real" ]; then
+                mv -f "$CONTAINER_ROOTFS/usr/bin/rofi.real" "$CONTAINER_ROOTFS/usr/bin/rofi" 2>/dev/null || true
             fi
-            cat << 'EOF_ROFI_PROOT' > "$CONTAINER_ROOTFS/usr/local/bin/rofi"
-#!/usr/bin/env bash
-if [ -f "/usr/local/lib/librofitouch.so" ]; then
-    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
-fi
-/usr/bin/rofi "$@"
-ROFI_RC=$?
-if command -v termux-ipc >/dev/null 2>&1; then
-    termux-ipc hide >/dev/null 2>&1 || true
-fi
-exit $ROFI_RC
-EOF_ROFI_PROOT
-            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/rofi"
+            rm -f "$CONTAINER_ROOTFS/usr/local/bin/rofi" 2>/dev/null || true
             ln -sf /root/.config/bspwm/rofi-az.sh "$CONTAINER_ROOTFS/usr/local/bin/rofi-az" 2>/dev/null || true
             ln -sf /root/.config/bspwm/dyn-apps.py "$CONTAINER_ROOTFS/usr/local/bin/dyn-apps" 2>/dev/null || true
 
@@ -1159,29 +1119,12 @@ if command -v 9router >/dev/null 2>&1 && [ \"\$(command -v 9router)\" != \"\$0\"
   exec 9router \"\$@\"
 fi
 EOF_R9
-                mkdir -p '$CONTAINER_ROOTFS/usr/local/lib' '$CONTAINER_ROOTFS/usr/local/src'
-                if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
-                    cp -f "$SCRIPT_DIR/librofitouch.c" '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
-                    if command -v gcc >/dev/null 2>&1; then
-                        gcc -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
-                    elif command -v clang >/dev/null 2>&1; then
-                        clang -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
-                    fi
+                # Bersihkan librofitouch hook dan kembalikan binary rofi murni
+                rm -f '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
+                if [ -f '$CONTAINER_ROOTFS/usr/bin/rofi.real' ]; then
+                    mv -f '$CONTAINER_ROOTFS/usr/bin/rofi.real' '$CONTAINER_ROOTFS/usr/bin/rofi' 2>/dev/null || true
                 fi
-                cat << 'EOF_ROFI' > '$CONTAINER_ROOTFS/usr/local/bin/rofi'
-#!/usr/bin/env bash
-if [ -f "/usr/local/lib/librofitouch.so" ]; then
-    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
-fi
-/usr/bin/rofi "$@"
-ROFI_RC=$?
-if command -v termux-ipc >/dev/null 2>&1; then
-    termux-ipc hide >/dev/null 2>&1 || true
-elif [ -x "/usr/local/termux-shims/termux-ipc" ]; then
-    /usr/local/termux-shims/termux-ipc hide >/dev/null 2>&1 || true
-fi
-exit $ROFI_RC
-EOF_ROFI
+                rm -f '$CONTAINER_ROOTFS/usr/local/bin/rofi' 2>/dev/null || true
                 mkdir -p '$CONTAINER_ROOTFS/etc/profile.d'
                 cat << 'EOF_FCITX' > '$CONTAINER_ROOTFS/etc/profile.d/fcitx5.sh'
 export GTK_IM_MODULE=fcitx

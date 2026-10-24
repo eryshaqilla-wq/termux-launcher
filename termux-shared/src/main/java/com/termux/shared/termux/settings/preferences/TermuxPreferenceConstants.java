@@ -236,7 +236,7 @@ public final class TermuxPreferenceConstants {
          */
         public static final String KEY_X11_KEYBOARD_FOLLOWS_TEXT = "x11_keyboard_follows_text";
 
-        public static final boolean DEFAULT_X11_KEYBOARD_FOLLOWS_TEXT = true;
+        public static final boolean DEFAULT_X11_KEYBOARD_FOLLOWS_TEXT = false;
 
         /**
          * Type into the display with the phone's own keyboard instead of the launcher's. Read on

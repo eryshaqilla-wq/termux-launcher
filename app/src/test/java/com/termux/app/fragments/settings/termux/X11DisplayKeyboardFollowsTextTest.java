@@ -55,15 +55,15 @@ public class X11DisplayKeyboardFollowsTextTest {
     }
 
     @Test
-    public void theRowIsOnByDefault() {
+    public void theRowIsOffByDefault() {
         Application app = RuntimeEnvironment.getApplication();
         TermuxAppSharedPreferences preferences = TermuxAppSharedPreferences.build(app, true);
-        assertTrue(preferences.isX11KeyboardFollowsTextEnabled());
+        assertFalse(preferences.isX11KeyboardFollowsTextEnabled());
 
         setTouchMode("2");
         Preference row = launch().getPreferenceScreen().findPreference(KEY);
         assertTrue(row instanceof SwitchPreferenceCompat);
-        assertTrue(((SwitchPreferenceCompat) row).isChecked());
+        assertFalse(((SwitchPreferenceCompat) row).isChecked());
     }
 
     @Test
