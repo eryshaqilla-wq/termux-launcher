@@ -800,6 +800,84 @@ exit 1
 EOF_P
 chmod 755 "$PREFIX/bin/pemantau"
 
+# Wrapper telegram CLI (Telegram Swarm & Bot Orchestrator)
+cat << 'EOF_TG' > "$PREFIX/bin/telegram"
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/telegram.cjs" ]; then
+    cd "$TARGET_DIR" && exec node telegram.cjs "$@"
+elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+    cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+    cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+fi
+echo "Telegram Swarm (.cjs/.py) tidak ditemukan di $TARGET_DIR"
+exit 1
+EOF_TG
+chmod 755 "$PREFIX/bin/telegram"
+
+# Wrapper telegram-ui (Telegram Web UI & Background Server)
+cat << 'EOF_TGUI' > "$PREFIX/bin/telegram-ui"
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+PORT=20130
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if curl -s "http://127.0.0.1:${PORT}/status" >/dev/null 2>&1; then
+    echo "✨ Sesi Telegram Swarm Server sudah aktif di port ${PORT}."
+    echo "✨ Membuka Telegram Webview di layar Android..."
+    if command -v termux-ipc >/dev/null 2>&1; then
+        termux-ipc toast "Membuka Telegram Swarm Web UI..."
+    fi
+    exec termux-ipc webview "http://127.0.0.1:${PORT}"
+fi
+
+OTHER_PIDS=$(ps -eo pid,args 2>/dev/null | grep -E "(telegram\.cjs|pemantau\.cjs|pemantautelegram\.py)" | grep -v -E "(grep|--ui|tmux)" | awk '{print $1}')
+if [ -n "$OTHER_PIDS" ]; then
+    echo "Terdeteksi sesi Telegram terminal (PID: $OTHER_PIDS) sedang berjalan."
+    echo "Mematikan sesi terminal lama agar tidak bentrok..."
+    for p in $OTHER_PIDS; do
+        kill -9 "$p" 2>/dev/null || true
+    done
+    sleep 1.2
+fi
+
+if [ -f "$TARGET_DIR/telegram.cjs" ]; then
+    cd "$TARGET_DIR"
+    nohup node telegram.cjs --kill --ui >/tmp/telegram_ui.log 2>&1 &
+    sleep 1.2
+    if command -v termux-ipc >/dev/null 2>&1; then
+        termux-ipc toast "Membuka Telegram Swarm Web UI..."
+    fi
+    exec termux-ipc webview "http://127.0.0.1:${PORT}"
+fi
+
+echo "Telegram Swarm (.cjs) tidak ditemukan di $TARGET_DIR"
+exit 1
+EOF_TGUI
+chmod 755 "$PREFIX/bin/telegram-ui"
+
 # Wrapper 9router CLI (Multi-Account AI Router)
 cat << 'EOF_9R' > "$PREFIX/bin/9router"
 #!/data/data/com.termux/files/usr/bin/bash
@@ -1442,6 +1520,10 @@ alias 9router="9router"
 alias router="9router"
 alias pemantau="pemantau"
 alias pmt="pemantau"
+alias telegram="telegram"
+alias tg="telegram"
+alias telegram-ui="telegram-ui"
+alias tgui="telegram-ui"
 alias patchright="node ./wallet/patchright.js"
 alias x="x"
 alias xradar="node ~/wallet/x_webview.js"

@@ -10,6 +10,12 @@ os.makedirs(os.path.join(BUNDLE_DIR, "bin"), exist_ok=True)
 os.makedirs(os.path.join(BUNDLE_DIR, "wallet"), exist_ok=True)
 os.makedirs(os.path.join(BUNDLE_DIR, "configs"), exist_ok=True)
 
+def copy_tree_clean(src, dst):
+    if os.path.exists(src):
+        if os.path.exists(dst):
+            shutil.rmtree(dst)
+        shutil.copytree(src, dst, ignore=shutil.ignore_patterns('.git', '.github', 'spec', 'tests', 'docs', 'images', '*.zwc'))
+
 print("--- 1. Menyiapkan Binary & Tools ke bundle/bin ---")
 # Cari termux-ipc
 ipc_source = None
@@ -130,6 +136,8 @@ fi
 if [ "$ENGINE_MODE" = "cjs" ]; then
     if [ -f "$TARGET_DIR/pemantau.cjs" ]; then
         cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    elif [ -f "$TARGET_DIR/telegram.cjs" ]; then
+        cd "$TARGET_DIR" && exec node telegram.cjs "$@"
     elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
         cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
     fi
@@ -138,9 +146,90 @@ else
         cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
     elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
         cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+    elif [ -f "$TARGET_DIR/telegram.cjs" ]; then
+        cd "$TARGET_DIR" && exec node telegram.cjs "$@"
     fi
 fi
 echo "Pemantau (.cjs/.py) tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+
+# Wrapper telegram CLI (Telegram Swarm & Bot Orchestrator)
+with open(os.path.join(BUNDLE_DIR, "bin/telegram"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/telegram.cjs" ]; then
+    cd "$TARGET_DIR" && exec node telegram.cjs "$@"
+elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+    cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+    cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+fi
+echo "Telegram Swarm (.cjs/.py) tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+
+# Wrapper telegram-ui (Telegram Web UI & Background Server)
+with open(os.path.join(BUNDLE_DIR, "bin/telegram-ui"), "w") as f:
+    f.write(r"""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+PORT=20130
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+# 1. Cek apakah server sudah aktif di port 20130
+if curl -s "http://127.0.0.1:${PORT}/status" >/dev/null 2>&1; then
+    echo "✨ Sesi Telegram Swarm Server sudah aktif di port ${PORT}."
+    echo "✨ Membuka Telegram Webview di layar Android..."
+    if command -v termux-ipc >/dev/null 2>&1; then
+        termux-ipc toast "Membuka Telegram Swarm Web UI..."
+    fi
+    exec termux-ipc webview "http://127.0.0.1:${PORT}"
+fi
+
+# 2. Matikan sesi terminal lama jika ada
+OTHER_PIDS=$(ps -eo pid,args 2>/dev/null | grep -E "(telegram\.cjs|pemantau\.cjs|pemantautelegram\.py)" | grep -v -E "(grep|--ui|tmux)" | awk '{print $1}')
+if [ -n "$OTHER_PIDS" ]; then
+    echo "Terdeteksi sesi Telegram terminal (PID: $OTHER_PIDS) sedang berjalan."
+    echo "Mematikan sesi terminal lama agar tidak bentrok..."
+    for p in $OTHER_PIDS; do
+        kill -9 "$p" 2>/dev/null || true
+    done
+    sleep 1.2
+fi
+
+# 3. Jalankan server Swarm di latar belakang
+if [ -f "$TARGET_DIR/telegram.cjs" ]; then
+    cd "$TARGET_DIR"
+    nohup node telegram.cjs --kill --ui >/tmp/telegram_ui.log 2>&1 &
+    sleep 1.2
+    if command -v termux-ipc >/dev/null 2>&1; then
+        termux-ipc toast "Membuka Telegram Swarm Web UI..."
+    fi
+    exec termux-ipc webview "http://127.0.0.1:${PORT}"
+fi
+
+echo "Telegram Swarm (.cjs) tidak ditemukan di $TARGET_DIR"
 exit 1
 """)
 
@@ -186,17 +275,31 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS Suite (dari /project/node2cjs/ atau /root/wallet/)
 for f_cjs in [
-    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "9router.cjs", "tele_session_string.txt",
+    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "tele_session_string.txt",
     "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
     "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
-    "ai_config.json", "ai_selectors.json"
+    "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg"
 ]:
     for src_dir in ["/project/node2cjs", "/root/wallet"]:
         src_path = os.path.join(src_dir, f_cjs)
         if os.path.exists(src_path):
             shutil.copy2(src_path, os.path.join(BUNDLE_DIR, "wallet", f_cjs))
             break
-print("✓ Added CJS suite (wallet.cjs, x_webview.cjs, pemantau.cjs, 9router.cjs) to bundle")
+print("✓ Added CJS suite (wallet.cjs, x_webview.cjs, pemantau.cjs, telegram.cjs, 9router.cjs) to bundle")
+
+# Copy web/ directory (Telegram Web UI)
+for src_web in ["/project/node2cjs/web", "/root/wallet/web"]:
+    if os.path.exists(src_web):
+        copy_tree_clean(src_web, os.path.join(BUNDLE_DIR, "wallet/web"))
+        print("✓ Added Telegram Web UI (web/index.html) to bundle")
+        break
+
+# Copy tele_data/ directory jika ada (database & avatars)
+for src_teledata in ["/root/wallet/tele_data", "/project/node2cjs/tele_data"]:
+    if os.path.exists(src_teledata):
+        copy_tree_clean(src_teledata, os.path.join(BUNDLE_DIR, "wallet/tele_data"))
+        print("✓ Added tele_data directory to bundle")
+        break
 
 # 2. Salin Regular JS/Python Suite (dari /root/wallet/ atau /project/node2cjs/)
 for f_js in ["wallet.js", "x_webview.js", "pemantautelegram.py", "package.json", "chains_db.json"]:
@@ -336,6 +439,7 @@ for target in [
     os.path.join(ASSETS_DIR, "x_webview.js"),
     os.path.join(ASSETS_DIR, "x_webview.cjs"),
     os.path.join(ASSETS_DIR, "pemantau.cjs"),
+    os.path.join(ASSETS_DIR, "telegram.cjs"),
     os.path.join(ASSETS_DIR, "9router.cjs"),
     os.path.join(ASSETS_DIR, "pemantautelegram.py"),
     os.path.join(ASSETS_DIR, "wallets_db.json"),
@@ -362,6 +466,12 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet")):
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/pemantau")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(ASSETS_DIR, "pemantau"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(FUSION_SETUP_DIR, "pemantau"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/telegram")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/telegram"), os.path.join(ASSETS_DIR, "telegram"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/telegram"), os.path.join(FUSION_SETUP_DIR, "telegram"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/telegram-ui")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/telegram-ui"), os.path.join(ASSETS_DIR, "telegram-ui"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/telegram-ui"), os.path.join(FUSION_SETUP_DIR, "telegram-ui"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/9router")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(ASSETS_DIR, "9router"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(FUSION_SETUP_DIR, "9router"))

@@ -1,0 +1,48 @@
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+PORT=20130
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+# 1. Cek apakah server sudah aktif di port 20130
+if curl -s "http://127.0.0.1:${PORT}/status" >/dev/null 2>&1; then
+    echo "✨ Sesi Telegram Swarm Server sudah aktif di port ${PORT}."
+    echo "✨ Membuka Telegram Webview di layar Android..."
+    if command -v termux-ipc >/dev/null 2>&1; then
+        termux-ipc toast "Membuka Telegram Swarm Web UI..."
+    fi
+    exec termux-ipc webview "http://127.0.0.1:${PORT}"
+fi
+
+# 2. Matikan sesi terminal lama jika ada
+OTHER_PIDS=$(ps -eo pid,args 2>/dev/null | grep -E "(telegram\.cjs|pemantau\.cjs|pemantautelegram\.py)" | grep -v -E "(grep|--ui|tmux)" | awk '{print $1}')
+if [ -n "$OTHER_PIDS" ]; then
+    echo "Terdeteksi sesi Telegram terminal (PID: $OTHER_PIDS) sedang berjalan."
+    echo "Mematikan sesi terminal lama agar tidak bentrok..."
+    for p in $OTHER_PIDS; do
+        kill -9 "$p" 2>/dev/null || true
+    done
+    sleep 1.2
+fi
+
+# 3. Jalankan server Swarm di latar belakang
+if [ -f "$TARGET_DIR/telegram.cjs" ]; then
+    cd "$TARGET_DIR"
+    nohup node telegram.cjs --kill --ui >/tmp/telegram_ui.log 2>&1 &
+    sleep 1.2
+    if command -v termux-ipc >/dev/null 2>&1; then
+        termux-ipc toast "Membuka Telegram Swarm Web UI..."
+    fi
+    exec termux-ipc webview "http://127.0.0.1:${PORT}"
+fi
+
+echo "Telegram Swarm (.cjs) tidak ditemukan di $TARGET_DIR"
+exit 1

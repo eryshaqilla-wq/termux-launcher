@@ -1,0 +1,23 @@
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/telegram.cjs" ]; then
+    cd "$TARGET_DIR" && exec node telegram.cjs "$@"
+elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
+    cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
+elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
+    cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
+fi
+echo "Telegram Swarm (.cjs/.py) tidak ditemukan di $TARGET_DIR"
+exit 1
