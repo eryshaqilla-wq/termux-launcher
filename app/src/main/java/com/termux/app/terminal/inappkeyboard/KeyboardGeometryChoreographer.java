@@ -425,6 +425,10 @@ public final class KeyboardGeometryChoreographer {
         return mPendingCloseGeometry;
     }
 
+    public boolean isPendingCloseGeometry() {
+        return mPendingCloseGeometry;
+    }
+
     /**
      * The keyboard's visibility was requested. Drives the whole ordered transition: crop
      * invalidation, the INVISIBLE-then-reveal open path with its pre-draw gate, or the GONE close

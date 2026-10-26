@@ -15207,7 +15207,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             combinedHeight, accessoryBottomMarginPx, keyboardOverlapPx);
         boolean contentReservationChanged = contentReservationPx != mAppliedContentReservationPx;
         mAppliedContentReservationPx = contentReservationPx;
-        boolean pendingClose = mKeyboardGeometry.isPendingCloseGeometry();
+        boolean pendingClose = mKeyboardGeometry.isCloseGeometryPending();
         boolean keyboardShownChanged = mKeyboardGeometry.applyKeyboardShown(state.keyboardShown);
         // While the slide holds the content, the room it gives back is laid out under a grid the
         // travel has paused (preRollTravelContent); the settle sends the PTY its one size.
