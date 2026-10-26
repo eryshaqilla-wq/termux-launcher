@@ -414,6 +414,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 return false;
             }
             view.requestFocus();
+            view.requestFocusFromTouch();
+            FusionWebViewManager mgr = FusionWebViewManager.sInstance;
+            if (mgr != null && mgr.mActivity != null) {
+                KeyboardUtils.clearDisableSoftKeyboardFlags(mgr.mActivity);
+            }
             return false;
         }
     }
@@ -1915,6 +1920,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     webView3.setVisibility(0);
                     webView3.setElevation(0.0f);
                     webView3.bringToFront();
+                    webView3.requestFocus();
+                    webView3.requestFocusFromTouch();
+                    TermuxActivity act = this.mActivity;
+                    if (act != null) {
+                        KeyboardUtils.clearDisableSoftKeyboardFlags(act);
+                    }
                 }
                 LinearLayout linearLayout3 = this.mControlPill;
                 if (linearLayout3 != null) {

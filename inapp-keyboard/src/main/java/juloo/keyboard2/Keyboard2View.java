@@ -7,6 +7,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.media.AudioManager;
 import android.view.KeyEvent;
+import android.view.inputmethod.EditorInfo;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
@@ -38,6 +39,9 @@ public class Keyboard2View extends View
   private KeyboardData.Key _compose_key;
   /** The host is listening for voice input: the voice key draws as pressed. */
   private boolean _voiceTypingActive;
+  /** Current IME editor action (e.g. IME_ACTION_SEARCH, IME_ACTION_GO) for adapting enter key. */
+  private int _editorAction = EditorInfo.IME_ACTION_UNSPECIFIED;
+  private String _editorActionLabel = null;
   /**
    * Paste will put in a picture (one on the clipboard, or a fresh screenshot the launcher offers):
    * the paste keys draw {@link #PASTE_PICTURE_GLYPH}.
@@ -1481,6 +1485,46 @@ public class Keyboard2View extends View
   }
 
   /**
+   * Adapts the Enter/Action key to reflect the current input field's IME action (e.g. Search, Go, Send).
+   */
+  public void setEditorAction(int action, String label)
+  {
+    requireMainThread();
+    if (_editorAction == action && Objects.equals(_editorActionLabel, label))
+      return;
+    _editorAction = action;
+    _editorActionLabel = label;
+    invalidate();
+  }
+
+  private static boolean isEnterKeyValue(KeyValue kv)
+  {
+    return kv != null && kv.getKind() == KeyValue.Kind.Keyevent
+        && kv.getKeyevent() == KeyEvent.KEYCODE_ENTER;
+  }
+
+  private String getActionKeyString()
+  {
+    if (_editorActionLabel != null && !_editorActionLabel.isEmpty())
+      return _editorActionLabel;
+    switch (_editorAction)
+    {
+      case EditorInfo.IME_ACTION_SEARCH:
+        return "\uF002"; // nf-fa-search (Search magnifying glass)
+      case EditorInfo.IME_ACTION_GO:
+        return "\uF061"; // nf-fa-arrow_right (Go arrow)
+      case EditorInfo.IME_ACTION_SEND:
+        return "\uF1D8"; // nf-fa-paper_plane (Send paper plane)
+      case EditorInfo.IME_ACTION_NEXT:
+        return "\uF061"; // nf-fa-arrow_right (Next arrow)
+      case EditorInfo.IME_ACTION_DONE:
+        return "\uF00C"; // nf-fa-check (Done checkmark)
+      default:
+        return null;
+    }
+  }
+
+  /**
    * Whether [kv], already modified, is a paste the photo glyph stands in for. A modifier turns
    * paste into pasteAsPlainText, which swaps too: a clipboard picture pastes all the same, while
    * the launcher has plain paste put in the clipboard rather than an offered screenshot.
@@ -1496,13 +1540,25 @@ public class Keyboard2View extends View
   /** The text a cap, corner or popup draws for [kv], already modified. */
   private String drawnString(KeyValue kv)
   {
-    return showsPictureGlyph(kv) ? PASTE_PICTURE_GLYPH : kv.getString();
+    if (showsPictureGlyph(kv))
+      return PASTE_PICTURE_GLYPH;
+    if (isEnterKeyValue(kv))
+    {
+      String action = getActionKeyString();
+      if (action != null)
+        return action;
+    }
+    return kv.getString();
   }
 
   /** Whether [kv], already modified, is drawn in the bundled key font. */
   private boolean drawnInKeyFont(KeyValue kv)
   {
-    return kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT) && !showsPictureGlyph(kv);
+    if (showsPictureGlyph(kv))
+      return false;
+    if (isEnterKeyValue(kv) && getActionKeyString() != null)
+      return false;
+    return kv.hasFlagsAny(KeyValue.FLAG_KEY_FONT);
   }
 
   /** The label [drawLabel] and [drawSubLabel] draw for the layout value [kv]; for tests. */
@@ -1533,9 +1589,15 @@ public class Keyboard2View extends View
   {
     for (KeyValue kv : k.keys)
     {
-      if (kv != null && kv.getKind() == KeyValue.Kind.Event
+      if (kv == null)
+        continue;
+      if (kv.getKind() == KeyValue.Kind.Event
           && (kv.getEvent() == KeyValue.Event.SWITCH_VOICE_TYPING
             || kv.getEvent() == KeyValue.Event.SWITCH_VOICE_TYPING_CHOOSER))
+        return true;
+      if (kv.getKind() == KeyValue.Kind.Launcher_tool
+          && kv.getLauncherTool() != null
+          && "voice.dictate".equalsIgnoreCase(kv.getLauncherTool().toolId))
         return true;
     }
     return false;
@@ -2445,6 +2507,8 @@ public class Keyboard2View extends View
     float smaller_font = k.hasFlagsAny(KeyValue.FLAG_SMALLER_FONT) ? 0.75f : 1.f;
     float label_size = main_label ? _mainLabelSize : _subLabelSize;
     float picture = showsPictureGlyph(k) ? PASTE_PICTURE_SCALE : 1.f;
+    if (isEnterKeyValue(k) && _editorActionLabel != null && _editorActionLabel.length() > 2)
+      smaller_font = 0.65f;
     return label_size * smaller_font * picture;
   }
 

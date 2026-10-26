@@ -87,6 +87,22 @@ public class Keyboard2ViewPasteGlyphTest
     assertEquals(LabelFace.KEY, view.labelFaceForDrawing(PASTE));
   }
 
+  @Test
+  public void editorActionSwapsEnterKeyToSearchGlyph()
+  {
+    KeyValue enter = KeyValue.getKeyByName("enter");
+    assertEquals(enter.getString(), view.labelForDrawing(enter));
+    assertEquals(LabelFace.KEY, view.labelFaceForDrawing(enter));
+
+    view.setEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH, null);
+    assertEquals("\uF002", view.labelForDrawing(enter));
+    assertEquals(LabelFace.SYMBOL, view.labelFaceForDrawing(enter));
+
+    view.setEditorAction(android.view.inputmethod.EditorInfo.IME_ACTION_UNSPECIFIED, null);
+    assertEquals(enter.getString(), view.labelForDrawing(enter));
+    assertEquals(LabelFace.KEY, view.labelFaceForDrawing(enter));
+  }
+
   private static final class NoopHandler implements Config.IKeyEventHandler
   {
     @Override public void key_down(KeyValue value, boolean isSwipe) {}

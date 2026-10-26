@@ -44,6 +44,22 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
     public void key_up(KeyValue value, Pointers.Modifiers modifiers) {
         if (value == null) return;
         mModifiers = modifiers;
+
+        // If voice typing is actively listening and user interacts with another key or toggles voice
+        if (mService.isListeningVoice()) {
+            mService.stopVoiceTyping();
+            if (value.getKind() == KeyValue.Kind.Launcher_tool
+                && value.getLauncherTool() != null
+                && "voice.dictate".equalsIgnoreCase(value.getLauncherTool().toolId)) {
+                return;
+            }
+            if (value.getKind() == KeyValue.Kind.Event
+                && (value.getEvent() == KeyValue.Event.SWITCH_VOICE_TYPING
+                    || value.getEvent() == KeyValue.Event.SWITCH_VOICE_TYPING_CHOOSER)) {
+                return;
+            }
+        }
+
         InputConnection ic = mService.getCurrentInputConnection();
         if (ic == null) return;
 
@@ -65,6 +81,9 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                 break;
             case Slider:
                 handleSlider(value.getSlider(), value.getSliderRepeat());
+                break;
+            case Launcher_tool:
+                handleLauncherTool(value.getLauncherTool(), ic);
                 break;
             default:
                 break;
@@ -121,18 +140,45 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             return;
         }
         if (keyCode == KeyEvent.KEYCODE_ENTER) {
-            EditorInfo info = mService.getCurrentInputEditorInfo();
-            boolean multiLine = false;
-            int actionId = 0;
-            if (info != null) {
-                multiLine = (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
-                actionId = info.imeOptions & (EditorInfo.IME_MASK_ACTION | EditorInfo.IME_FLAG_NO_ENTER_ACTION);
-            }
-            if (!multiLine && (actionId != 0 && (actionId & EditorInfo.IME_FLAG_NO_ENTER_ACTION) == 0)) {
-                mService.sendDefaultEditorAction(true);
-            } else {
+            boolean shift = modifiers != null && modifiers.has(KeyValue.Modifier.SHIFT);
+            if (shift) {
                 ic.commitText("\n", 1);
+                return;
             }
+
+            EditorInfo info = mService.getCurrentInputEditorInfo();
+            if (info == null) {
+                ic.commitText("\n", 1);
+                return;
+            }
+
+            boolean multiLine = (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+            int imeAction = info.imeOptions & EditorInfo.IME_MASK_ACTION;
+            int effectiveAction = imeAction;
+            if (effectiveAction == EditorInfo.IME_ACTION_UNSPECIFIED || effectiveAction == EditorInfo.IME_ACTION_NONE) {
+                if (info.actionId > 0) {
+                    effectiveAction = info.actionId;
+                }
+            }
+
+            if (!multiLine) {
+                if (effectiveAction != EditorInfo.IME_ACTION_UNSPECIFIED && effectiveAction != EditorInfo.IME_ACTION_NONE) {
+                    ic.performEditorAction(effectiveAction);
+                    return;
+                }
+                long now = SystemClock.uptimeMillis();
+                ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER, 0, 0));
+                ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER, 0, 0));
+                return;
+            }
+
+            boolean noEnterAction = (info.imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0;
+            if (!noEnterAction && (imeAction == EditorInfo.IME_ACTION_SEND || imeAction == EditorInfo.IME_ACTION_SEARCH)) {
+                ic.performEditorAction(imeAction);
+                return;
+            }
+
+            ic.commitText("\n", 1);
             return;
         }
         if (keyCode == KeyEvent.KEYCODE_TAB) {
@@ -303,8 +349,21 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 mService.startActivity(intent);
                 break;
+            case SWITCH_VOICE_TYPING:
+            case SWITCH_VOICE_TYPING_CHOOSER:
+                mService.toggleVoiceTyping(event == KeyValue.Event.SWITCH_VOICE_TYPING_CHOOSER);
+                break;
             default:
                 break;
+        }
+    }
+
+    private void handleLauncherTool(KeyValue.LauncherTool tool, InputConnection ic) {
+        if (tool == null) return;
+        String id = tool.toolId;
+        if ("voice.dictate".equalsIgnoreCase(id)) {
+            mService.toggleVoiceTyping(false);
+            return;
         }
     }
 

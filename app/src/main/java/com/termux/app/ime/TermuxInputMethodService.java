@@ -1,12 +1,18 @@
 package com.termux.app.ime;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.inputmethodservice.InputMethodService;
 import android.os.Build;
+import android.os.Bundle;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
+import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -15,10 +21,13 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 
 import com.termux.R;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardColorScheme;
@@ -33,6 +42,7 @@ import com.termux.shared.termux.font.NerdFontSpans;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 import java.io.File;
+import java.util.ArrayList;
 
 import juloo.keyboard2.Config;
 import juloo.keyboard2.Keyboard2View;
@@ -53,6 +63,12 @@ public class TermuxInputMethodService extends InputMethodService {
     private KeyPopupController mKeyPopup;
     private ImeKeyEventHandler mKeyEventHandler;
     private String mAppliedSettingsSignature = "";
+    private SpeechRecognizer mSpeechRecognizer;
+    private boolean mIsListeningVoice;
+
+    public boolean isListeningVoice() {
+        return mIsListeningVoice;
+    }
 
     @Override
     public void onCreate() {
@@ -249,6 +265,7 @@ public class TermuxInputMethodService extends InputMethodService {
         // Synchronize window navigation bar and background
         applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
         updateBackDisposition();
+        updateEditorAction(getCurrentInputEditorInfo());
     }
 
     private void updateBackDisposition() {
@@ -326,6 +343,7 @@ public class TermuxInputMethodService extends InputMethodService {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        stopVoiceTyping();
         if (mKeyPopup != null) {
             mKeyPopup.destroy();
             mKeyPopup = null;
@@ -353,6 +371,14 @@ public class TermuxInputMethodService extends InputMethodService {
     }
 
     @Override
+    public void onStartInput(EditorInfo attribute, boolean restarting) {
+        super.onStartInput(attribute, restarting);
+        if (mKeyboardView != null) {
+            updateEditorAction(attribute);
+        }
+    }
+
+    @Override
     public void onStartInputView(EditorInfo info, boolean restarting) {
         super.onStartInputView(info, restarting);
         if (mKeyEventHandler != null) {
@@ -370,13 +396,186 @@ public class TermuxInputMethodService extends InputMethodService {
         } else {
             applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
         }
+        updateEditorAction(info);
     }
 
     @Override
     public void onFinishInputView(boolean finishingInput) {
         super.onFinishInputView(finishingInput);
+        stopVoiceTyping();
         if (mKeyEventHandler != null) {
             mKeyEventHandler.reset();
+        }
+        if (mKeyboardView != null) {
+            mKeyboardView.setEditorAction(EditorInfo.IME_ACTION_UNSPECIFIED, null);
+        }
+    }
+
+    private void updateEditorAction(@Nullable EditorInfo info) {
+        if (mKeyboardView == null) return;
+        if (info == null) {
+            mKeyboardView.setEditorAction(EditorInfo.IME_ACTION_UNSPECIFIED, null);
+            return;
+        }
+
+        boolean multiLine = (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+        if (multiLine) {
+            mKeyboardView.setEditorAction(EditorInfo.IME_ACTION_UNSPECIFIED, null);
+            return;
+        }
+
+        int action = info.imeOptions & EditorInfo.IME_MASK_ACTION;
+        int effectiveAction = action;
+        if (effectiveAction == EditorInfo.IME_ACTION_UNSPECIFIED || effectiveAction == EditorInfo.IME_ACTION_NONE) {
+            if (info.actionId > 0) {
+                effectiveAction = info.actionId;
+            }
+        }
+        String label = (info.actionLabel != null && info.actionLabel.length() > 0)
+            ? info.actionLabel.toString() : null;
+        mKeyboardView.setEditorAction(effectiveAction, label);
+    }
+
+    public void toggleVoiceTyping(boolean chooser) {
+        if (mIsListeningVoice) {
+            stopVoiceTyping();
+            return;
+        }
+        startVoiceTyping(chooser);
+    }
+
+    private void startVoiceTyping(boolean chooser) {
+        if (ContextCompat.checkSelfPermission(this,
+                android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this,
+                R.string.voice_input_permission_denied, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Toast.makeText(this,
+                R.string.voice_typing_unavailable, Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        try {
+            destroySpeechRecognizer();
+
+            mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
+                @Override
+                public void onReadyForSpeech(Bundle params) {
+                    mIsListeningVoice = true;
+                    if (mKeyboardView != null) {
+                        mKeyboardView.setVoiceTypingActive(true);
+                    }
+                }
+
+                @Override
+                public void onBeginningOfSpeech() {}
+
+                @Override
+                public void onRmsChanged(float rmsdB) {}
+
+                @Override
+                public void onBufferReceived(byte[] buffer) {}
+
+                @Override
+                public void onEndOfSpeech() {
+                    mIsListeningVoice = false;
+                    if (mKeyboardView != null) {
+                        mKeyboardView.setVoiceTypingActive(false);
+                    }
+                }
+
+                @Override
+                public void onError(int error) {
+                    mIsListeningVoice = false;
+                    if (mKeyboardView != null) {
+                        mKeyboardView.setVoiceTypingActive(false);
+                    }
+                    destroySpeechRecognizer();
+                }
+
+                @Override
+                public void onResults(Bundle results) {
+                    mIsListeningVoice = false;
+                    if (mKeyboardView != null) {
+                        mKeyboardView.setVoiceTypingActive(false);
+                    }
+                    if (results != null) {
+                        ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                        if (matches != null && !matches.isEmpty()) {
+                            String text = matches.get(0);
+                            InputConnection ic = getCurrentInputConnection();
+                            if (ic != null && text != null && !text.isEmpty()) {
+                                CharSequence before = ic.getTextBeforeCursor(1, 0);
+                                if (before != null && before.length() > 0) {
+                                    char last = before.charAt(before.length() - 1);
+                                    if (!Character.isWhitespace(last) && last != '(' && last != '[' && last != '{') {
+                                        text = " " + text;
+                                    }
+                                }
+                                ic.commitText(text, 1);
+                            }
+                        }
+                    }
+                    destroySpeechRecognizer();
+                }
+
+                @Override
+                public void onPartialResults(Bundle partialResults) {}
+
+                @Override
+                public void onEvent(int eventType, Bundle params) {}
+            });
+
+            Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+            intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+
+            String lang = mPreferences != null ? mPreferences.getInAppKeyboardVoiceLanguage() : null;
+            if (lang != null && !lang.isEmpty() && !"auto".equalsIgnoreCase(lang) && !"fallback".equalsIgnoreCase(lang)) {
+                intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang);
+            }
+
+            mSpeechRecognizer.startListening(intent);
+            mIsListeningVoice = true;
+            if (mKeyboardView != null) {
+                mKeyboardView.setVoiceTypingActive(true);
+            }
+        } catch (Exception e) {
+            mIsListeningVoice = false;
+            if (mKeyboardView != null) {
+                mKeyboardView.setVoiceTypingActive(false);
+            }
+            destroySpeechRecognizer();
+            Toast.makeText(this,
+                R.string.voice_typing_unavailable, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void stopVoiceTyping() {
+        mIsListeningVoice = false;
+        if (mKeyboardView != null) {
+            mKeyboardView.setVoiceTypingActive(false);
+        }
+        if (mSpeechRecognizer != null) {
+            try {
+                mSpeechRecognizer.stopListening();
+            } catch (Exception ignored) {}
+            destroySpeechRecognizer();
+        }
+    }
+
+    private void destroySpeechRecognizer() {
+        if (mSpeechRecognizer != null) {
+            try {
+                mSpeechRecognizer.cancel();
+                mSpeechRecognizer.destroy();
+            } catch (Exception ignored) {}
+            mSpeechRecognizer = null;
         }
     }
 
