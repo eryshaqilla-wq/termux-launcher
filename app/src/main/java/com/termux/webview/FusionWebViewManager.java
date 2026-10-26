@@ -418,6 +418,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionWebViewManager mgr = FusionWebViewManager.sInstance;
             if (mgr != null && mgr.mActivity != null) {
                 KeyboardUtils.clearDisableSoftKeyboardFlags(mgr.mActivity);
+                KeyboardUtils.setSoftInputModeAdjustResize(mgr.mActivity);
             }
             return false;
         }
@@ -1788,6 +1789,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     if (textView2 != null) {
                         textView2.setText(" MIN ");
                     }
+                    TermuxActivity termuxActivity = this.mActivity;
+                    if (termuxActivity != null) {
+                        KeyboardUtils.setSoftInputModeAdjustResize(termuxActivity);
+                    }
                 }
                 this.mActiveWebView = webView;
                 this.mCurrentProfile = fusionTab.mProfile;
@@ -1925,6 +1930,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     TermuxActivity act = this.mActivity;
                     if (act != null) {
                         KeyboardUtils.clearDisableSoftKeyboardFlags(act);
+                        KeyboardUtils.setSoftInputModeAdjustResize(act);
                     }
                 }
                 LinearLayout linearLayout3 = this.mControlPill;
