@@ -3058,12 +3058,16 @@ public final class TerminalView extends View {
         updateSize(false, "direct");
     }
 
+    public void updateSize(boolean keepCursorAtBottom) {
+        updateSize(keepCursorAtBottom, "direct");
+    }
+
     /**
      * @param cause what asked for this size, for the {@link #GEOMETRY_LOG_TAG} line written when
      *              the session is actually resized: {@code layout}, {@code attach}, {@code direct}
      *              (a caller's own re-measure), or the cause a paused span was resumed with
      */
-    private void updateSize(boolean keepCursorAtBottom, @NonNull String cause) {
+    public void updateSize(boolean keepCursorAtBottom, @NonNull String cause) {
         if (mTerminalSizeUpdatesPaused) {
             mTerminalSizeUpdatePending = true;
             invalidate();

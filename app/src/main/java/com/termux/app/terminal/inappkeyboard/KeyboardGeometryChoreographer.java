@@ -166,11 +166,15 @@ public final class KeyboardGeometryChoreographer {
 
     // ---- reveal / close protocol state
 
+    private static final int MAX_CLOSE_BLOCKED_FRAMES = 3;
+    private static final long CLOSE_BACKSTOP_MS = 150L;
+
     /** Keeps a unified glass keyboard hidden until the expanded dock+keyboard crop is installed. */
     private boolean mPendingOpenReveal;
     /** Keeps the under-pill glass covering stale close geometry until dock-only layout settles. */
     private boolean mPendingCloseGeometry;
     private int mOpenRevealBlockedFrames;
+    private int mCloseBlockedFrames;
     @Nullable private ViewTreeObserver.OnPreDrawListener mOpenPreDrawListener;
     @Nullable private View mOpenPreDrawView;
     @Nullable private ViewTreeObserver.OnPreDrawListener mClosePreDrawListener;
@@ -203,6 +207,7 @@ public final class KeyboardGeometryChoreographer {
     private boolean mLastImeVisible;
 
     private final Runnable mOpenRevealBackstopRunnable = this::revealIfStillPending;
+    private final Runnable mCloseBackstopRunnable = this::removeClosePreDrawCorrection;
     private final Runnable mPreviewGeometrySyncRunnable;
 
     public KeyboardGeometryChoreographer(@NonNull Surface surface) {
@@ -587,21 +592,30 @@ public final class KeyboardGeometryChoreographer {
         if (gateView == null)
             return;
         mClosePreDrawView = gateView;
+        mCloseBlockedFrames = 0;
         mClosePreDrawListener = () -> {
             ChromeSpec state = mSurface.buildChromeSpec();
             if (!state.keyboardShown) {
                 mSurface.invalidateAccessoryCrop();
                 mSurface.applyChromeSpec(state);
             }
-            if (!mSurface.dockBackdropSafeForDestination(state))
+            if (!mSurface.dockBackdropSafeForDestination(state)) {
+                if (++mCloseBlockedFrames >= MAX_CLOSE_BLOCKED_FRAMES) {
+                    removeClosePreDrawCorrection();
+                    return true;
+                }
                 return false;
+            }
             removeClosePreDrawCorrection();
             return true;
         };
         gateView.getViewTreeObserver().addOnPreDrawListener(mClosePreDrawListener);
+        mSurface.removeCallbacks(mCloseBackstopRunnable);
+        mSurface.postDelayed(mCloseBackstopRunnable, CLOSE_BACKSTOP_MS);
     }
 
     private void removeClosePreDrawCorrection() {
+        mSurface.removeCallbacks(mCloseBackstopRunnable);
         View gateView = mClosePreDrawView;
         ViewTreeObserver.OnPreDrawListener listener = mClosePreDrawListener;
         mClosePreDrawView = null;

@@ -6423,6 +6423,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mInAppKeyboard != null) {
                 mInAppKeyboard.hide(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.USER_EVENT);
             }
+            requestTerminalLayoutResizeGuarantee();
         });
         actionsContainer.addView(hideButton, new LinearLayout.LayoutParams(
             buttonWidth, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -6642,6 +6643,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (mInAppKeyboard != null) {
                     mInAppKeyboard.hide(com.termux.app.terminal.inappkeyboard.TermuxInAppKeyboard.HideReason.USER_EVENT);
                 }
+                requestTerminalLayoutResizeGuarantee();
             });
         }
     }
@@ -13438,6 +13440,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (applyDisplayFrameKeyboard(false)) return;
             if (mInAppKeyboard != null)
                 mInAppKeyboard.hide(TermuxInAppKeyboard.HideReason.USER_EVENT);
+            requestTerminalLayoutResizeGuarantee();
         }
 
         @Override
@@ -15204,11 +15207,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             combinedHeight, accessoryBottomMarginPx, keyboardOverlapPx);
         boolean contentReservationChanged = contentReservationPx != mAppliedContentReservationPx;
         mAppliedContentReservationPx = contentReservationPx;
+        boolean pendingClose = mKeyboardGeometry.isPendingCloseGeometry();
         boolean keyboardShownChanged = mKeyboardGeometry.applyKeyboardShown(state.keyboardShown);
         // While the slide holds the content, the room it gives back is laid out under a grid the
         // travel has paused (preRollTravelContent); the settle sends the PTY its one size.
         if (!mTravelHoldsContent && shouldRequestTerminalResize(requestTerminalResize,
-            accessoryHeightChanged, accessoryMarginChanged, keyboardShownChanged, keyboardOverlays,
+            accessoryHeightChanged, accessoryMarginChanged, keyboardShownChanged || pendingClose, keyboardOverlays,
             contentReservationChanged) && mTerminalView != null) {
             // Bottom-anchored, like the window-bar collapse: the keyboard or dock changing height
             // must not strand a prompt that a shell placed against the bottom edge — growing the
@@ -15216,7 +15220,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // the transcript cannot fill them (fish's clear wipes it via ESC[3J).
             // The posted update finds the grid held and is kept as pending; the scheduler resumes
             // it once, behind this pass's layout — or at the settle of a transition still open.
-            mTerminalView.post(mTerminalView::updateSize);
+            for (TerminalView pane : getTerminalPaneViews()) {
+                if (pane != null) {
+                    pane.post(() -> pane.updateSize(true, "geometry_pass"));
+                }
+            }
             mGeometry.resizeGridAfterLayout();
         }
         // The post-layout render pass re-cuts the crops for geometry this pass moved. Nothing
@@ -15229,6 +15237,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Whoever ran it, the layout this pass books comes back as an echo of these facts.
         mGeometry.notePassInputs();
         return moved;
+    }
+
+    void requestTerminalLayoutResizeGuarantee() {
+        mGeometry.requestNow(GeometryScheduler.Reason.KEYBOARD, GeometryScheduler.ResizePolicy.NOW);
+        for (TerminalView pane : getTerminalPaneViews()) {
+            if (pane != null) {
+                pane.post(() -> pane.updateSize(true, "keyboard_hide_guarantee"));
+                pane.postDelayed(() -> pane.updateSize(true, "keyboard_hide_backstop"), 100L);
+            }
+        }
     }
 
     /**
