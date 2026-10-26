@@ -1789,7 +1789,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     if (textView2 != null) {
                         textView2.setText(" MIN ");
                     }
-                    TermuxActivity termuxActivity = this.mActivity;
                     if (termuxActivity != null) {
                         KeyboardUtils.setSoftInputModeAdjustResize(termuxActivity);
                     }
