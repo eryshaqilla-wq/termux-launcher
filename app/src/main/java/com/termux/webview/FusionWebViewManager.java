@@ -417,8 +417,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             view.requestFocusFromTouch();
             FusionWebViewManager mgr = FusionWebViewManager.sInstance;
             if (mgr != null && mgr.mActivity != null) {
-                KeyboardUtils.clearDisableSoftKeyboardFlags(mgr.mActivity);
-                KeyboardUtils.setSoftInputModeAdjustResize(mgr.mActivity);
+                mgr.mActivity.beginWebViewExternalTextInput();
             }
             return false;
         }
@@ -592,12 +591,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         TermuxActivity r0 = this.mActivity;
         if (r0 != null) {
-            KeyboardUtils.clearDisableSoftKeyboardFlags((Activity) r0);
-            TerminalView terminalView = r0.getTerminalView();
-            if (terminalView != null) {
-                terminalView.requestFocus();
-                terminalView.requestFocusFromTouch();
-            }
+            r0.endWebViewExternalTextInput();
         }
     }
 
@@ -1881,12 +1875,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     }
                     TermuxActivity r5 = this.mActivity;
                     if (r5 != null) {
-                        KeyboardUtils.clearDisableSoftKeyboardFlags((Activity) r5);
-                        TerminalView terminalView = r5.getTerminalView();
-                        if (terminalView != null) {
-                            terminalView.requestFocus();
-                            terminalView.requestFocusFromTouch();
-                        }
+                        r5.endWebViewExternalTextInput();
                     }
                     LinearLayout linearLayout2 = this.mControlPill;
                     if (linearLayout2 != null) {
@@ -1928,8 +1917,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     webView3.requestFocusFromTouch();
                     TermuxActivity act = this.mActivity;
                     if (act != null) {
-                        KeyboardUtils.clearDisableSoftKeyboardFlags(act);
-                        KeyboardUtils.setSoftInputModeAdjustResize(act);
+                        act.beginWebViewExternalTextInput();
                     }
                 }
                 LinearLayout linearLayout3 = this.mControlPill;
@@ -1976,6 +1964,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         View view4 = this.mTerminalPaneHost;
         if (view4 != null) {
             view4.setVisibility(0);
+        }
+        TermuxActivity r0 = this.mActivity;
+        if (r0 != null) {
+            r0.endWebViewExternalTextInput();
         }
     }
 

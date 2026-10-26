@@ -194,7 +194,6 @@ public class FusionTabStateHelper {
     /* JADX WARN: Type inference failed for: r2v13, types: [android.app.Activity, android.content.Context, com.termux.app.TermuxActivity] */
     public static void toggleMinimize(FusionWebViewManager fusionWebViewManager) {
         WebView webView;
-        TerminalView terminalView;
         FusionTab activeTab = getActiveTab(fusionWebViewManager);
         if (activeTab == null || (webView = activeTab.mWebView) == null) {
             return;
@@ -222,12 +221,8 @@ public class FusionTabStateHelper {
                 view2.setVisibility(0);
             }
             TermuxActivity r2 = fusionWebViewManager.mActivity;
-            if (r2 != null && (terminalView = r2.getTerminalView()) != null) {
-                terminalView.requestFocus();
-                terminalView.requestFocusFromTouch();
-            }
             if (r2 != null) {
-                KeyboardUtils.clearDisableSoftKeyboardFlags((Activity) r2);
+                r2.endWebViewExternalTextInput();
                 Toast.makeText((Context) r2, "WebView diminimalkan", 0).show();
                 return;
             }
@@ -252,6 +247,10 @@ public class FusionTabStateHelper {
             TextView textView2 = fusionWebViewManager.mMinPillBtn;
             if (textView2 != null) {
                 textView2.setText(" MIN ");
+            }
+            TermuxActivity r2 = fusionWebViewManager.mActivity;
+            if (r2 != null) {
+                r2.beginWebViewExternalTextInput();
             }
         }
         FusionRecPillHelper.showRecPill(fusionWebViewManager);

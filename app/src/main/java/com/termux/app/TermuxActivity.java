@@ -1988,7 +1988,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * Gives the terminal focus back after a text field had it. Quietly: the terminal's own focus
      * listener would re-show the system keyboard 500ms later for a terminal nobody is typing into.
      */
-    private void returnFocusToTerminalQuietly() {
+    public void returnFocusToTerminalQuietly() {
         // Over the display window the focus is the display's: a terminal that is hidden behind
         // it must not be handed the keys the launcher keyboard types.
         if (returnFocusToDisplayWindow()) return;
@@ -13131,6 +13131,32 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void endTerminalToolbarExternalTextInput() {
         if (mInAppKeyboard != null)
             mInAppKeyboard.endExternalTextInput();
+    }
+
+    /** Temporarily yields embedded keyboard and allows system IME for WebView. */
+    public void beginWebViewExternalTextInput() {
+        if (mInAppKeyboard != null && mInAppKeyboard.isEnabled()) {
+            mInAppKeyboard.beginExternalTextInput();
+        }
+        onSystemImeRequested();
+        KeyboardUtils.clearDisableSoftKeyboardFlags(this);
+        KeyboardUtils.setSoftInputModeAdjustResize(this);
+    }
+
+    /** Restores the embedded keyboard's visibility and system-IME suppression after WebView. */
+    public void endWebViewExternalTextInput() {
+        if (getWindow() != null) {
+            WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView())
+                .hide(Type.ime());
+        }
+        if (mInAppKeyboard != null && mInAppKeyboard.isEnabled()) {
+            mInAppKeyboard.endExternalTextInput();
+        } else if (mTermuxTerminalViewClient != null) {
+            mTermuxTerminalViewClient.setSoftKeyboardState(false, false);
+        } else {
+            KeyboardUtils.clearDisableSoftKeyboardFlags(this);
+        }
+        returnFocusToTerminalQuietly();
     }
 
     /**
