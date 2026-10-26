@@ -275,10 +275,10 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS Suite (dari /project/node2cjs/ atau /root/wallet/)
 for f_cjs in [
-    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "tele_session_string.txt",
-    "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
-    "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
-    "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg"
+    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs",
+    "query_db.json", "module_db.json",
+    "tele_filter_config.json", "webview_profiles.json",
+    "ai_selectors.json", "pembantu_avatar.jpg"
 ]:
     for src_dir in ["/project/node2cjs", "/root/wallet"]:
         src_path = os.path.join(src_dir, f_cjs)
@@ -294,12 +294,9 @@ for src_web in ["/project/node2cjs/web", "/root/wallet/web"]:
         print("✓ Added Telegram Web UI (web/index.html) to bundle")
         break
 
-# Copy tele_data/ directory jika ada (database & avatars)
-for src_teledata in ["/root/wallet/tele_data", "/project/node2cjs/tele_data"]:
-    if os.path.exists(src_teledata):
-        copy_tree_clean(src_teledata, os.path.join(BUNDLE_DIR, "wallet/tele_data"))
-        print("✓ Added tele_data directory to bundle")
-        break
+# Siapkan direktori tele_data/avatars bersih TANPA database atau riwayat akun Telegram
+os.makedirs(os.path.join(BUNDLE_DIR, "wallet/tele_data/avatars"), exist_ok=True)
+print("✓ Created clean tele_data/avatars directory (zero telegram.db)")
 
 # 2. Salin Regular JS/Python Suite (dari /root/wallet/ atau /project/node2cjs/)
 for f_js in ["wallet.js", "x_webview.js", "pemantautelegram.py", "package.json", "chains_db.json"]:
@@ -314,15 +311,48 @@ for rpc in glob.glob("/root/wallet/config_rpc*.json") + glob.glob("/project/node
 for g_conf in glob.glob("/project/node2cjs/gate*.json") + glob.glob("/root/wallet/gate*.json") + glob.glob("/project/node2cjs/www.gate*.json"):
     shutil.copy2(g_conf, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(g_conf)))
 
-# Dummy template wallets_db.json dan recipes_db.json jika belum ada
-dummy_wallet = {"master_index": None, "wallets": []}
-if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json")):
-    with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
-        json.dump(dummy_wallet, f, indent=2)
+# Template bersih & sanitize untuk konfigurasi akun pribadi (MENCEGAH KEBOCORAN AKUN)
+clean_tele_config = {
+    "api_id": 0,
+    "api_hash": "",
+    "bot_token": "",
+    "target_chat_id": [],
+    "whitelist": [],
+    "account_name": "",
+    "phone": "",
+    "bot_name": "Pembantu Tuan Eso"
+}
+with open(os.path.join(BUNDLE_DIR, "wallet/config_telegram.json"), "w") as f:
+    json.dump(clean_tele_config, f, indent=2)
 
-if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
-    with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
-        f.write("{}\n")
+with open(os.path.join(BUNDLE_DIR, "wallet/pantau.json"), "w") as f:
+    json.dump([], f, indent=2)
+
+clean_ai_config = {
+    "baseUrl": "https://api.deepseek.com",
+    "apiKey": "",
+    "model": "deepseek-flash",
+    "browser_mode": "720p",
+    "headless_mode": "auto"
+}
+with open(os.path.join(BUNDLE_DIR, "wallet/ai_config.json"), "w") as f:
+    json.dump(clean_ai_config, f, indent=2)
+
+# Dummy template wallets_db.json dan recipes_db.json steril
+dummy_wallet = {"master_index": None, "wallets": []}
+with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
+    json.dump(dummy_wallet, f, indent=2)
+
+with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
+    f.write("{}\n")
+
+# Guard pembersihan ketat: hapus file-file database dan sesi akun pribadi dari bundle
+for root, dirs, files in os.walk(os.path.join(BUNDLE_DIR, "wallet")):
+    for file in files:
+        if file.endswith(('.db', '.db-wal', '.db-shm', '.session', '.session-journal')) or file in ('tele_session_string.txt', '.env'):
+            file_path = os.path.join(root, file)
+            os.remove(file_path)
+            print(f"⚠ Stripped sensitive file from bundle: {file}")
 
 # Copy login.template, termux.properties, dan setup.sh
 login_tmpl = "/project/termux-launcher/fusion-setup/login.template"
