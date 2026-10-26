@@ -400,6 +400,13 @@ public class TermuxInputMethodService extends InputMethodService {
     }
 
     @Override
+    public void onUpdateSelection(int oldSelStart, int oldSelEnd, int newSelStart, int newSelEnd,
+            int candidatesStart, int candidatesEnd) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd);
+        updateEditorAction(getCurrentInputEditorInfo());
+    }
+
+    @Override
     public void onFinishInputView(boolean finishingInput) {
         super.onFinishInputView(finishingInput);
         stopVoiceTyping();
@@ -418,12 +425,6 @@ public class TermuxInputMethodService extends InputMethodService {
             return;
         }
 
-        boolean multiLine = (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
-        if (multiLine) {
-            mKeyboardView.setEditorAction(EditorInfo.IME_ACTION_UNSPECIFIED, null);
-            return;
-        }
-
         int action = info.imeOptions & EditorInfo.IME_MASK_ACTION;
         int effectiveAction = action;
         if (effectiveAction == EditorInfo.IME_ACTION_UNSPECIFIED || effectiveAction == EditorInfo.IME_ACTION_NONE) {
@@ -431,6 +432,17 @@ public class TermuxInputMethodService extends InputMethodService {
                 effectiveAction = info.actionId;
             }
         }
+
+        boolean multiLine = (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+        boolean noEnterAction = (info.imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0;
+
+        // In a multiline field, suppress action only when explicit noEnterAction is set
+        // or there is no specific action requested.
+        if (multiLine && (noEnterAction || effectiveAction == EditorInfo.IME_ACTION_UNSPECIFIED || effectiveAction == EditorInfo.IME_ACTION_NONE)) {
+            mKeyboardView.setEditorAction(EditorInfo.IME_ACTION_UNSPECIFIED, null);
+            return;
+        }
+
         String label = (info.actionLabel != null && info.actionLabel.length() > 0)
             ? info.actionLabel.toString() : null;
         mKeyboardView.setEditorAction(effectiveAction, label);
@@ -461,7 +473,11 @@ public class TermuxInputMethodService extends InputMethodService {
         try {
             destroySpeechRecognizer();
 
-            mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                mSpeechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
+            } else {
+                mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+            }
             mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
                 @Override
                 public void onReadyForSpeech(Bundle params) {
@@ -469,6 +485,8 @@ public class TermuxInputMethodService extends InputMethodService {
                     if (mKeyboardView != null) {
                         mKeyboardView.setVoiceTypingActive(true);
                     }
+                    Toast.makeText(TermuxInputMethodService.this,
+                        R.string.voice_input_listening, Toast.LENGTH_SHORT).show();
                 }
 
                 @Override
@@ -495,6 +513,10 @@ public class TermuxInputMethodService extends InputMethodService {
                         mKeyboardView.setVoiceTypingActive(false);
                     }
                     destroySpeechRecognizer();
+                    if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                        Toast.makeText(TermuxInputMethodService.this,
+                            R.string.voice_typing_unavailable, Toast.LENGTH_SHORT).show();
+                    }
                 }
 
                 @Override
@@ -509,7 +531,10 @@ public class TermuxInputMethodService extends InputMethodService {
                             String text = matches.get(0);
                             InputConnection ic = getCurrentInputConnection();
                             if (ic != null && text != null && !text.isEmpty()) {
-                                CharSequence before = ic.getTextBeforeCursor(1, 0);
+                                CharSequence before = null;
+                                try {
+                                    before = ic.getTextBeforeCursor(1, 0);
+                                } catch (Exception ignored) {}
                                 if (before != null && before.length() > 0) {
                                     char last = before.charAt(before.length() - 1);
                                     if (!Character.isWhitespace(last) && last != '(' && last != '[' && last != '{') {
@@ -534,6 +559,7 @@ public class TermuxInputMethodService extends InputMethodService {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+            intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
 
             String lang = mPreferences != null ? mPreferences.getInAppKeyboardVoiceLanguage() : null;
             if (lang != null && !lang.isEmpty() && !"auto".equalsIgnoreCase(lang) && !"fallback".equalsIgnoreCase(lang)) {

@@ -94,6 +94,9 @@
         <intent>
             <action android:name="com.gau.go.launcherex.theme" />
         </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
         <!--
             The Style row in the terminal long-press menu is shown only when the companion is
             actually installed, which means asking. The shared user id already exempts the plugins

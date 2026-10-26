@@ -6,8 +6,6 @@ import android.os.SystemClock;
 import android.text.InputType;
 import android.view.KeyEvent;
 import android.view.inputmethod.EditorInfo;
-import android.view.inputmethod.ExtractedText;
-import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 import android.view.inputmethod.InputMethodManager;
 
@@ -153,6 +151,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             }
 
             boolean multiLine = (info.inputType & InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0;
+            boolean noEnterAction = (info.imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0;
             int imeAction = info.imeOptions & EditorInfo.IME_MASK_ACTION;
             int effectiveAction = imeAction;
             if (effectiveAction == EditorInfo.IME_ACTION_UNSPECIFIED || effectiveAction == EditorInfo.IME_ACTION_NONE) {
@@ -161,20 +160,17 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                 }
             }
 
-            if (!multiLine) {
-                if (effectiveAction != EditorInfo.IME_ACTION_UNSPECIFIED && effectiveAction != EditorInfo.IME_ACTION_NONE) {
+            if (effectiveAction != EditorInfo.IME_ACTION_UNSPECIFIED && effectiveAction != EditorInfo.IME_ACTION_NONE) {
+                if (!multiLine || !noEnterAction) {
                     ic.performEditorAction(effectiveAction);
                     return;
                 }
+            }
+
+            if (!multiLine) {
                 long now = SystemClock.uptimeMillis();
                 ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER, 0, 0));
                 ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER, 0, 0));
-                return;
-            }
-
-            boolean noEnterAction = (info.imeOptions & EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0;
-            if (!noEnterAction && (imeAction == EditorInfo.IME_ACTION_SEND || imeAction == EditorInfo.IME_ACTION_SEARCH)) {
-                ic.performEditorAction(imeAction);
                 return;
             }
 
@@ -237,19 +233,13 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
     }
 
     private boolean hasActiveSelection(InputConnection ic) {
-        CharSequence selected = ic.getSelectedText(0);
-        if (selected != null && selected.length() > 0) {
-            return true;
-        }
+        if (ic == null) return false;
         try {
-            ExtractedText et = ic.getExtractedText(new ExtractedTextRequest(), 0);
-            if (et != null && et.selectionStart >= 0 && et.selectionEnd >= 0
-                    && et.selectionStart != et.selectionEnd) {
-                return true;
-            }
+            CharSequence selected = ic.getSelectedText(0);
+            return selected != null && selected.length() > 0;
         } catch (Exception ignored) {
+            return false;
         }
-        return false;
     }
 
     private void handleBackspace(InputConnection ic) {
@@ -281,7 +271,11 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             ic.commitText("", 1);
             return;
         }
-        CharSequence before = ic.getTextBeforeCursor(50, 0);
+        CharSequence before = null;
+        try {
+            before = ic.getTextBeforeCursor(50, 0);
+        } catch (Exception ignored) {
+        }
         if (before == null || before.length() == 0) {
             handleBackspace(ic);
             return;
@@ -307,7 +301,11 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             ic.commitText("", 1);
             return;
         }
-        CharSequence after = ic.getTextAfterCursor(50, 0);
+        CharSequence after = null;
+        try {
+            after = ic.getTextAfterCursor(50, 0);
+        } catch (Exception ignored) {
+        }
         if (after == null || after.length() == 0) {
             handleForwardDelete(ic);
             return;
