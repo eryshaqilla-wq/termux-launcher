@@ -170,25 +170,71 @@ public class FusionTabStateHelper {
     }
 
     public static void toggleDesktop(FusionWebViewManager fusionWebViewManager) {
-        WebView webView;
-        FusionTab activeTab = getActiveTab(fusionWebViewManager);
-        if (activeTab == null || (webView = activeTab.mWebView) == null) {
+        if (fusionWebViewManager == null) {
             return;
         }
-        boolean z = !activeTab.mIsDesktop;
-        activeTab.mIsDesktop = z;
+        FusionTab activeTab = getActiveTab(fusionWebViewManager);
+        WebView webView = activeTab != null ? activeTab.mWebView : fusionWebViewManager.mActiveWebView;
+        if (webView == null) {
+            return;
+        }
+        boolean z = activeTab != null ? !activeTab.mIsDesktop : !fusionWebViewManager.mIsDesktopMode;
+        if (activeTab != null) {
+            activeTab.mIsDesktop = z;
+        }
+        fusionWebViewManager.mIsDesktopMode = z;
+
         WebSettings settings = webView.getSettings();
         if (z) {
-            settings.setUserAgentString("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            // Windows 10 Chrome Desktop UA - Universal compatibility
+            settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
+            settings.setSupportZoom(true);
+            settings.setBuiltInZoomControls(true);
+            settings.setDisplayZoomControls(false);
+            settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+
+            // Injeksi viewport 1280px seketika
+            String desktopViewportJs =
+                "(function() {" +
+                "  try {" +
+                "    var meta = document.querySelector('meta[name=\"viewport\"]');" +
+                "    if (!meta) {" +
+                "      meta = document.createElement('meta');" +
+                "      meta.name = 'viewport';" +
+                "      document.head.appendChild(meta);" +
+                "    }" +
+                "    meta.setAttribute('content', 'width=1280, initial-scale=0.35, minimum-scale=0.1, maximum-scale=3.0, user-scalable=yes');" +
+                "  } catch(e) {}" +
+                "})();";
+            webView.evaluateJavascript(desktopViewportJs, null);
         } else {
-            settings.setUserAgentString("");
+            // Reset ke default Mobile UA
+            settings.setUserAgentString(null);
             settings.setUseWideViewPort(false);
             settings.setLoadWithOverviewMode(false);
+            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+            // Reset viewport mobile seketika
+            String mobileViewportJs =
+                "(function() {" +
+                "  try {" +
+                "    var meta = document.querySelector('meta[name=\"viewport\"]');" +
+                "    if (meta) {" +
+                "      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');" +
+                "    }" +
+                "  } catch(e) {}" +
+                "})();";
+            webView.evaluateJavascript(mobileViewportJs, null);
         }
         webView.reload();
         updateDesktopMenuText(fusionWebViewManager, activeTab);
+
+        TermuxActivity act = fusionWebViewManager.mActivity;
+        if (act != null) {
+            Toast.makeText(act, z ? "Mode Desktop AKTIF (1280px)" : "Mode Mobile AKTIF", Toast.LENGTH_SHORT).show();
+        }
     }
 
     /* JADX WARN: Type inference failed for: r2v13, types: [android.app.Activity, android.content.Context, com.termux.app.TermuxActivity] */
@@ -258,13 +304,18 @@ public class FusionTabStateHelper {
 
     public static void updateDesktopMenuText(FusionWebViewManager fusionWebViewManager, FusionTab fusionTab) {
         TextView textView;
-        if (fusionWebViewManager == null || fusionTab == null || (textView = fusionWebViewManager.mDesktopBtn) == null) {
+        if (fusionWebViewManager == null || (textView = fusionWebViewManager.mDesktopBtn) == null) {
             return;
         }
-        if (fusionTab.mIsDesktop) {
+        boolean isDesktop = (fusionTab != null && fusionTab.mIsDesktop) || fusionWebViewManager.mIsDesktopMode;
+        if (isDesktop) {
             textView.setText("Mobile");
+            textView.setBackgroundColor(0xFF2E7D32); // Dark Green saat Desktop Mode aktif
+            textView.setTextColor(0xFFFFFFFF);
         } else {
             textView.setText("Desktop");
+            textView.setBackgroundColor(-4482645);
+            textView.setTextColor(0xFFFFFFFF);
         }
     }
 

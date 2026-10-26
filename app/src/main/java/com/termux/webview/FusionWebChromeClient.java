@@ -1,15 +1,91 @@
 package com.termux.webview;
 
+import android.os.Message;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionWebChromeClient extends WebChromeClient {
+    @Override // android.webkit.WebChromeClient
+    public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+        if (resultMsg == null) {
+            return false;
+        }
+
+        FusionWebViewManager manager = FusionWebViewManager.getInstance();
+
+        // 1. Cek apakah ada target URL langsung dari link anchor yang diklik
+        if (view != null) {
+            WebView.HitTestResult result = view.getHitTestResult();
+            if (result != null && result.getType() == WebView.HitTestResult.SRC_ANCHOR_TYPE) {
+                String extra = result.getExtra();
+                if (extra != null && (extra.startsWith("http://") || extra.startsWith("https://"))) {
+                    if (manager != null) {
+                        manager.addNewTab(extra);
+                    } else {
+                        view.loadUrl(extra);
+                    }
+                    return false;
+                }
+            }
+        }
+
+        // 2. Untuk window.open() atau popup dynamic javascript, tangkap URL via temp WebView
+        if (view == null || view.getContext() == null) {
+            return false;
+        }
+
+        WebView tempWebView = new WebView(view.getContext());
+        tempWebView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView wv, WebResourceRequest request) {
+                if (request != null && request.getUrl() != null) {
+                    openTarget(request.getUrl().toString());
+                }
+                return true;
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView wv, String url) {
+                if (url != null) {
+                    openTarget(url);
+                }
+                return true;
+            }
+
+            private void openTarget(String targetUrl) {
+                FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                if (mgr != null) {
+                    mgr.addNewTab(targetUrl);
+                } else if (view != null) {
+                    view.loadUrl(targetUrl);
+                }
+                try {
+                    tempWebView.destroy();
+                } catch (Throwable ignored) {
+                }
+            }
+        });
+
+        try {
+            WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+            if (transport != null) {
+                transport.setWebView(tempWebView);
+                resultMsg.sendToTarget();
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     @Override // android.webkit.WebChromeClient
     public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
         return true;

@@ -624,9 +624,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         if (z2) {
-            settings.setUserAgentString("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
+            settings.setSupportZoom(true);
+            settings.setBuiltInZoomControls(true);
+            settings.setDisplayZoomControls(false);
         }
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
@@ -2161,50 +2164,35 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView4.setText(sb.toString());
         }
         TextView textView5 = this.mAutoSignBtn;
-        if (textView5 == null) {
-            textView = this.mDesktopBtn;
-            if (textView != null) {
-                return;
-            }
-            if (this.mIsDesktopMode) {
-                textView.setText("Mobile");
+        if (textView5 != null) {
+            if (this.mIsAutoMode) {
+                textView5.setText("Auto-Sign: AKTIF");
+                textView5.setBackgroundColor(-13730510);
             } else {
-                textView.setText("Desktop");
-                textView2 = this.mRecBtn;
-                if (textView2 != null) {
-                    if (this.mIsRecording) {
-                        textView2.setText("Stop Macro");
-                        textView2.setBackgroundColor(-12255232);
-                    } else {
-                        textView2.setText("Record Macro");
-                        textView2.setBackgroundColor(-7820595);
-                    }
-                }
+                textView5.setText("Auto-Sign: MATI");
+                textView5.setBackgroundColor(-5592406);
             }
-        } else if (this.mIsAutoMode) {
-            textView5.setText("Auto-Sign: AKTIF");
-            textView5.setBackgroundColor(-13730510);
-        } else {
-            textView5.setText("Auto-Sign: MATI");
-            textView5.setBackgroundColor(-5592406);
-            textView = this.mDesktopBtn;
-            if (textView != null) {
-                return;
-            }
+        }
+        TextView desktopBtn = this.mDesktopBtn;
+        if (desktopBtn != null) {
             if (this.mIsDesktopMode) {
-                textView.setText("Mobile");
+                desktopBtn.setText("Mobile");
+                desktopBtn.setBackgroundColor(0xFF2E7D32);
+                desktopBtn.setTextColor(0xFFFFFFFF);
             } else {
-                textView.setText("Desktop");
-                textView2 = this.mRecBtn;
-                if (textView2 != null) {
-                    if (this.mIsRecording) {
-                        textView2.setText("Stop Macro");
-                        textView2.setBackgroundColor(-12255232);
-                    } else {
-                        textView2.setText("Record Macro");
-                        textView2.setBackgroundColor(-7820595);
-                    }
-                }
+                desktopBtn.setText("Desktop");
+                desktopBtn.setBackgroundColor(-4482645);
+                desktopBtn.setTextColor(0xFFFFFFFF);
+            }
+        }
+        TextView recBtn = this.mRecBtn;
+        if (recBtn != null) {
+            if (this.mIsRecording) {
+                recBtn.setText("Stop Macro");
+                recBtn.setBackgroundColor(-12255232);
+            } else {
+                recBtn.setText("Record Macro");
+                recBtn.setBackgroundColor(-7820595);
             }
         }
         boolean zCheckRpcDaemon = checkRpcDaemon();
