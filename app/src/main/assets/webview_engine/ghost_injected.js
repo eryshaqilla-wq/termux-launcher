@@ -1283,8 +1283,8 @@
 
             var btnStyle = "background:#2b2d33; color:#e2e2e6; border:1px solid #3d414a; border-radius:3px; padding:4px 7px; font-size:11px; font-weight:700; letter-spacing:0.5px; cursor:pointer; touch-action:manipulation; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; font-family:monospace, system-ui, sans-serif; text-transform:uppercase; outline:none;";
 
-            bar.innerHTML = "<button id='__agy_rec_wallet_btn__' style='" + btnStyle + "'>WALLET</button>" +
-                            "<button id='__agy_rec_email_btn__' style='" + btnStyle + "'>EMAIL</button>" +
+            bar.innerHTML = "<button id='__agy_rec_wallet_btn__' style='" + btnStyle + "'>WALLET &gt;</button>" +
+                            "<button id='__agy_rec_email_btn__' style='" + btnStyle + "'>EMAIL &gt;</button>" +
                             "<button id='__agy_rec_ref_btn__' style='" + btnStyle + "'>REF</button>" +
                             "<button id='__agy_rec_reload_btn__' style='" + btnStyle + "'>RELOAD</button>" +
                             "<button id='__agy_rec_wipe_btn__' style='" + btnStyle + "'>WIPE</button>" +
@@ -1460,6 +1460,27 @@
         AgyRecorder.updateUi();
         var res = origFusionStop ? origFusionStop() : JSON.stringify(AgyRecorder.sessionEvents);
         return res;
+    };
+
+    window.__FUSION_RECORD_ACTION__ = function(actionObj) {
+        if (!actionObj) return;
+        AgyRecorder.recordEvent(actionObj);
+    };
+
+    window.__FUSION_PLAY_MACRO__ = function(eventsJson) {
+        var events = null;
+        if (eventsJson && typeof eventsJson === 'string' && eventsJson !== "null" && eventsJson.length > 2) {
+            try { events = JSON.parse(eventsJson); } catch(_) {}
+        }
+        if (!events || events.length === 0) {
+            events = AgyRecorder.getEvents();
+        }
+        if (!events || events.length === 0) {
+            updateAgyHUD("Resep Kosong", "Tidak ada langkah untuk dijalankan", "warning");
+            return "No events";
+        }
+        AgyBatchRunner.run(events, AgyRecorder.sessionName || "Resep", "1", false, null);
+        return "PLAYING";
     };
 
     // --- AUTO-RESTORE ACTIVE RECORDER ON PAGE NAVIGATION / RELOAD ---

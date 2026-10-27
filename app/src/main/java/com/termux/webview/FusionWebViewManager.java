@@ -1314,10 +1314,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(this.mCurrentProfile);
         webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + this.mCurrentProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
         injectAssetScript(webView, "fingerprint_faker.js");
-        injectAssetScript(webView, "macro_recorder.js");
-        if (this.mIsGhostMode) {
-            injectAssetScript(webView, "ghost_injected.js");
-        }
+        injectAssetScript(webView, "ghost_injected.js");
     }
 
     public void killActiveTab() {
