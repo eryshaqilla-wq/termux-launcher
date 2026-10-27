@@ -161,6 +161,14 @@ public class FusionProfileManager {
         if (profileChanged || targetProfile.startsWith("fresh_")) {
             Log.i(TAG, "Switching profile from " + sCurrentActiveProfile + " -> " + targetProfile + " (Device: " + device.name + ")");
             
+            if (webView != null) {
+                // Segera kosongkan layar ke about:blank agar UI akun lama tidak muncul sekilas
+                webView.loadUrl("about:blank");
+                webView.clearCache(true);
+                webView.clearHistory();
+                webView.evaluateJavascript("try { localStorage.clear(); sessionStorage.clear(); } catch(e){}", null);
+            }
+
             // Bersihkan cookies & storage lama agar 100% FRESH
             clearAllCookiesAndStorage();
 

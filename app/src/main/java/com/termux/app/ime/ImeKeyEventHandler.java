@@ -251,10 +251,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
     }
 
     private void deletePreviousWord(InputConnection ic) {
-        if (hasActiveSelection(ic)) {
-            ic.commitText("", 1);
-            return;
-        }
+        if (ic == null) return;
         CharSequence before = null;
         try {
             before = ic.getTextBeforeCursor(50, 0);
@@ -281,10 +278,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
     }
 
     private void deleteNextWord(InputConnection ic) {
-        if (hasActiveSelection(ic)) {
-            ic.commitText("", 1);
-            return;
-        }
+        if (ic == null) return;
         CharSequence after = null;
         try {
             after = ic.getTextAfterCursor(50, 0);
