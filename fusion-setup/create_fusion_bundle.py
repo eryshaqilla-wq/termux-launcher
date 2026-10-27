@@ -36,9 +36,22 @@ if os.path.exists(bashnh_src):
     os.chmod(os.path.join(BUNDLE_DIR, "bin/bashnh"), 0o755)
     print("✓ Added universal bashnh to bundle/bin")
 
-# Wrapper browser
+# Wrapper browser & web (Universal Autonomous Web Controller)
+agent_web_src = "/project/termux-launcher/fusion-setup/agent-web"
+if not os.path.exists(agent_web_src):
+    agent_web_src = "/usr/local/bin/agent-web"
+if os.path.exists(agent_web_src):
+    shutil.copy2(agent_web_src, os.path.join(BUNDLE_DIR, "bin/agent-web"))
+    os.chmod(os.path.join(BUNDLE_DIR, "bin/agent-web"), 0o755)
+    print("✓ Added agent-web to bundle/bin")
+
+with open(os.path.join(BUNDLE_DIR, "bin/web"), "w") as f:
+    f.write("#!/usr/bin/env bash\nexec agent-web \"$@\"\n")
+os.chmod(os.path.join(BUNDLE_DIR, "bin/web"), 0o755)
+
 with open(os.path.join(BUNDLE_DIR, "bin/browser"), "w") as f:
-    f.write("#!/data/data/com.termux/files/usr/bin/bash\nexec termux-ipc webview \"$@\"\n")
+    f.write("#!/usr/bin/env bash\nexec web \"$@\"\n")
+os.chmod(os.path.join(BUNDLE_DIR, "bin/browser"), 0o755)
 
 # Wrapper x (otomasi X Radar)
 with open(os.path.join(BUNDLE_DIR, "bin/x"), "w") as f:
@@ -295,13 +308,13 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS Suite (dari /root/wallet/ atau /project/node2cjs/)
 for f_cjs in [
-    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "tele_session_string.txt",
+    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs", "tele_session_string.txt",
     "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
     "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
     "modules.json", "queries.json", "watchlist.json", "tg_config.json", "x_accounts.json",
     "x_session.json", "scankomen_trigger.json", "loop_state.json", "filter_config.json",
-    "tg_cache.json"
+    "tg_cache.json", "button_query_db.json"
 ]:
     for src_dir in ["/root/wallet", "/project/node2cjs"]:
         src_path = os.path.join(src_dir, f_cjs)
@@ -482,6 +495,12 @@ shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc"), os.path.join(ASSETS_DIR
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/termux-ipc-bridge"), os.path.join(ASSETS_DIR, "termux-ipc-bridge"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/browser"), os.path.join(ASSETS_DIR, "browser"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/web")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/web"), os.path.join(ASSETS_DIR, "web"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/web"), os.path.join(FUSION_SETUP_DIR, "web"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agent-web")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agent-web"), os.path.join(ASSETS_DIR, "agent-web"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agent-web"), os.path.join(FUSION_SETUP_DIR, "agent-web"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/x"), os.path.join(ASSETS_DIR, "x"))
 shutil.copy2(os.path.join(BUNDLE_DIR, "bin/x"), os.path.join(FUSION_SETUP_DIR, "x"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/bashnh")):

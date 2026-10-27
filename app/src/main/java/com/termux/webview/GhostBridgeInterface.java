@@ -133,6 +133,16 @@ public class GhostBridgeInterface implements Runnable {
     }
 
     @JavascriptInterface
+    public String getActiveAiEngine() {
+        return FusionAiHelper.getActiveEngine();
+    }
+
+    @JavascriptInterface
+    public void setActiveAiEngine(String str) {
+        FusionAiHelper.setActiveEngine(str);
+    }
+
+    @JavascriptInterface
     public String forwardToAgy(String str) {
         if (str == null) {
             return "{\"error\":\"Empty payload\"}";

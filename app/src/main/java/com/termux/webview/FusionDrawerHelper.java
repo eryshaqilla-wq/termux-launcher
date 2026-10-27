@@ -11,6 +11,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 
@@ -232,8 +233,9 @@ public class FusionDrawerHelper {
         textView3.setText("Perintah cerdas & alur kerja otomatis");
         textView3.setTextColor(-6577749);
         textView3.setTextSize(2, 11.0f);
-        textView3.setPadding(0, 2, 0, 10);
+        textView3.setPadding(0, 2, 0, 8);
         linearLayout2.addView(textView3);
+        buildAiEngineSelectorRow(appCompatActivity, linearLayout2, fusionWebViewManager);
         LinearLayout linearLayout4 = new LinearLayout(appCompatActivity);
         linearLayout4.setOrientation(0);
         linearLayout4.setPadding(0, 4, 0, 10);
@@ -313,6 +315,126 @@ public class FusionDrawerHelper {
         layoutParams6.setMargins(0, 12, 0, 0);
         linearLayout2.addView(textView8, layoutParams6);
         prepareDrawer(fusionWebViewManager, linearLayout2);
+    }
+
+    private static void buildAiEngineSelectorRow(final AppCompatActivity activity, LinearLayout parentLayout, final FusionWebViewManager manager) {
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(1);
+        row.setPadding(0, 0, 0, 10);
+
+        TextView lbl = new TextView(activity);
+        lbl.setText("MESIN AI:");
+        lbl.setTextColor(-7829368);
+        lbl.setTextSize(2, 10.0f);
+        lbl.setTypeface(null, 1);
+        lbl.setPadding(0, 0, 0, 4);
+        row.addView(lbl);
+
+        LinearLayout chipsRow = new LinearLayout(activity);
+        chipsRow.setOrientation(0);
+
+        final TextView btnCustom = new TextView(activity);
+        btnCustom.setText("DeepSeek");
+        btnCustom.setTextSize(2, 11.0f);
+        btnCustom.setGravity(17);
+        btnCustom.setPadding(6, 6, 6, 6);
+        btnCustom.setClickable(true);
+
+        final TextView btn9Router = new TextView(activity);
+        btn9Router.setText("9Router");
+        btn9Router.setTextSize(2, 11.0f);
+        btn9Router.setGravity(17);
+        btn9Router.setPadding(6, 6, 6, 6);
+        btn9Router.setClickable(true);
+
+        final TextView btnAgy = new TextView(activity);
+        btnAgy.setText("AGY Copilot");
+        btnAgy.setTextSize(2, 11.0f);
+        btnAgy.setGravity(17);
+        btnAgy.setPadding(6, 6, 6, 6);
+        btnAgy.setClickable(true);
+
+        final Runnable updateStyles = new Runnable() {
+            @Override
+            public void run() {
+                String cur = FusionAiHelper.getActiveEngine();
+                if ("custom".equalsIgnoreCase(cur)) {
+                    btnCustom.setBackground(FusionUiHelper.createRounded(-13408615, -7686920, 4.0f));
+                    btnCustom.setTextColor(-1);
+                } else {
+                    btnCustom.setBackground(FusionUiHelper.createRounded(-14802907, -12762806, 4.0f));
+                    btnCustom.setTextColor(-6577749);
+                }
+
+                if ("9router".equalsIgnoreCase(cur)) {
+                    btn9Router.setBackground(FusionUiHelper.createRounded(-13408615, -7686920, 4.0f));
+                    btn9Router.setTextColor(-1);
+                } else {
+                    btn9Router.setBackground(FusionUiHelper.createRounded(-14802907, -12762806, 4.0f));
+                    btn9Router.setTextColor(-6577749);
+                }
+
+                if ("agy".equalsIgnoreCase(cur)) {
+                    btnAgy.setBackground(FusionUiHelper.createRounded(-13408615, -7686920, 4.0f));
+                    btnAgy.setTextColor(-1);
+                } else {
+                    btnAgy.setBackground(FusionUiHelper.createRounded(-14802907, -12762806, 4.0f));
+                    btnAgy.setTextColor(-6577749);
+                }
+            }
+        };
+
+        updateStyles.run();
+
+        btnCustom.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FusionAiHelper.setActiveEngine("custom");
+                updateStyles.run();
+                if (manager != null) {
+                    manager.evalOnActiveTab("window.AgyBridge && window.AgyBridge.setActiveAiEngine && window.AgyBridge.setActiveAiEngine('custom');");
+                }
+                Toast.makeText(activity, "Mesin AI Aktif: DeepSeek (Custom)", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btn9Router.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FusionAiHelper.setActiveEngine("9router");
+                updateStyles.run();
+                if (manager != null) {
+                    manager.evalOnActiveTab("window.AgyBridge && window.AgyBridge.setActiveAiEngine && window.AgyBridge.setActiveAiEngine('9router');");
+                }
+                Toast.makeText(activity, "Mesin AI Aktif: 9Router (Port 20128)", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btnAgy.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FusionAiHelper.setActiveEngine("agy");
+                updateStyles.run();
+                if (manager != null) {
+                    manager.evalOnActiveTab("window.AgyBridge && window.AgyBridge.setActiveAiEngine && window.AgyBridge.setActiveAiEngine('agy');");
+                }
+                Toast.makeText(activity, "Mesin AI Aktif: AGY Copilot", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        lp1.rightMargin = 4;
+        chipsRow.addView(btnCustom, lp1);
+
+        LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        lp2.rightMargin = 4;
+        chipsRow.addView(btn9Router, lp2);
+
+        LinearLayout.LayoutParams lp3 = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        chipsRow.addView(btnAgy, lp3);
+
+        row.addView(chipsRow);
+        parentLayout.addView(row);
     }
 
     public static void showChainDrawer(FusionWebViewManager fusionWebViewManager) {

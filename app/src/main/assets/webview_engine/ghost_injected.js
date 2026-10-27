@@ -5136,15 +5136,36 @@
     // --- 18. BOT NATURAL COMMAND PARSER & DOM ACTION RUNNER ---
     function findAndClickElement(targetText) {
         if (!targetText) return false;
-        var q = targetText.toLowerCase().trim();
+        var rawText = targetText.trim();
+        var q = rawText.toLowerCase();
 
-        var candidates = Array.from(document.querySelectorAll("button, a, input[type=button], input[type=submit], [role=button], div, span, li, p, h1, h2, h3, h4, h5, h6"))
-            .filter(function(el) {
-                if (!el || (el.id && el.id.startsWith("__agy_"))) return false;
-                if (el.closest && el.closest("[id^='__agy_']")) return false;
-                var r = el.getBoundingClientRect();
-                return r.width > 0 && r.height > 0 && r.bottom >= 0 && r.top <= window.innerHeight;
-            });
+        // 1. Bersihkan kata awalan (contoh: "klik tombol connect" -> "connect")
+        var cleanQ = q.replace(/^(?:klik|click|pencet|tekan|tap|press|buka|open)\s+/i, "")
+                      .replace(/^(?:tombol|button|link|tautan|icon|ikon|menu|opsi|tulisan|teks|tab)\s+/i, "")
+                      .trim();
+        if (!cleanQ) cleanQ = q;
+
+        // 2. Pemetaan sinonim Web3 & tombol umum
+        var searchTerms = [cleanQ];
+        if (cleanQ.includes("login") || cleanQ.includes("masuk") || cleanQ.includes("sign in")) {
+            searchTerms.push("connect", "connect wallet", "sign in", "login");
+        } else if (cleanQ.includes("connect")) {
+            searchTerms.push("connect wallet", "connect", "hubungkan");
+        } else if (cleanQ.includes("swap") || cleanQ.includes("tukar")) {
+            searchTerms.push("swap", "trade", "exchange", "tukar");
+        } else if (cleanQ.includes("claim") || cleanQ.includes("klaim")) {
+            searchTerms.push("claim", "redeem", "faucet", "klaim", "reward");
+        }
+
+        // 3. Kumpulkan elemen kandidat dari seluruh dokumen (tidak dibatasi hanya dalam viewport)
+        var candidates = Array.from(document.querySelectorAll(
+            "button, a, input[type=button], input[type=submit], [role=button], [role=tab], [role=menuitem], [tabindex], select, summary, div, span, li, p, h1, h2, h3, h4, h5, h6, label"
+        )).filter(function(el) {
+            if (!el || (el.id && el.id.startsWith("__agy_"))) return false;
+            if (el.closest && el.closest("[id^='__agy_']")) return false;
+            var r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+        });
 
         var bestEl = null;
         var bestScore = -1;
@@ -5157,29 +5178,43 @@
             var id = (el.id || "").trim();
             var name = (el.name || "").trim();
             var title = (el.title || "").trim();
+            var role = (el.getAttribute("role") || "").trim();
 
             var haystack = (text + " " + aria + " " + testid + " " + id + " " + name + " " + title).toLowerCase();
-            if (!haystack.includes(q)) return;
 
-            var score = 0;
-            var tag = el.tagName.toLowerCase();
-            if (tag === "button" || tag === "a" || (el.getAttribute("role") === "button")) score += 50;
-            if (tag === "input" && (el.type === "button" || el.type === "submit")) score += 50;
-            if (text.toLowerCase() === q || aria.toLowerCase() === q) score += 100;
-            else if (text.toLowerCase().startsWith(q) || aria.toLowerCase().startsWith(q)) score += 30;
+            searchTerms.forEach(function(term) {
+                var isMatch = haystack.includes(term);
+                if (!isMatch) {
+                    var words = term.split(/\s+/).filter(function(w) { return w.length >= 3; });
+                    var matchCount = 0;
+                    words.forEach(function(w) { if (haystack.includes(w)) matchCount++; });
+                    if (words.length > 0 && matchCount === words.length) isMatch = true;
+                }
+                if (!isMatch) return;
 
-            score -= (el.children.length * 5);
+                var score = 0;
+                var tag = el.tagName.toLowerCase();
+                if (tag === "button" || tag === "a" || role === "button" || role === "tab") score += 80;
+                if (tag === "input" && (el.type === "button" || el.type === "submit")) score += 80;
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestEl = el;
-                bestLabel = text || aria || testid || id || name || targetText;
-            }
+                if (text.toLowerCase() === term || aria.toLowerCase() === term) score += 150;
+                else if (text.toLowerCase().startsWith(term) || aria.toLowerCase().startsWith(term)) score += 60;
+                else if (haystack.includes(term)) score += 40;
+
+                score -= Math.min(el.children.length * 4, 30);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestEl = el;
+                    bestLabel = text || aria || testid || id || name || rawText;
+                }
+            });
         });
 
         if (bestEl) {
+            var clickable = bestEl.closest("button, a, [role=button], input[type=button], input[type=submit], [tabindex]") || bestEl;
             var isRec = AgyRecorder.isRecording || window.__FUSION_RECORDING__;
-            executeClickAction(bestEl, bestLabel, "BOT: " + targetText, isRec);
+            executeClickAction(clickable, bestLabel, "BOT: " + rawText, isRec);
             updateAgyHUD("BOT: Berhasil", "Menekan: " + bestLabel.substring(0, 30), "success");
             return true;
         }
@@ -5370,26 +5405,81 @@
             }
         }
 
-        // 3. Klik Tombol / Elemen
+        // 3. Captcha / Cloudflare Turnstile Solver
+        if (sp.includes("captcha") || sp.includes("turnstile") || sp.includes("cf")) {
+            updateAgyHUD("AGY Agent: Captcha", "Menyelesaikan Captcha / Cloudflare Turnstile...", "loading");
+            executeTurnstileSolver();
+            setTimeout(function() { if (typeof callback === "function") callback(true); }, 1200);
+            return;
+        }
+
+        // 4. Quest / Smart Claim / Reward / Airdrop Task
+        if (sp.includes("quest") || sp.includes("claim") || sp.includes("klaim") || sp.includes("reward") || sp.includes("airdrop") || sp.includes("daily") || sp.includes("tugas")) {
+            updateAgyHUD("AGY Agent: Quest", "Mencari & menyelesaikan Quest / Reward...", "loading");
+            executeSmartClaimAction();
+            setTimeout(function() { if (typeof callback === "function") callback(true); }, 1000);
+            return;
+        }
+
+        // 5. Auto-Fill Form
+        if (sp.includes("auto fill") || sp.includes("autofill") || sp.includes("isi form") || sp.includes("isi data") || sp.includes("isi akun")) {
+            updateAgyHUD("AGY Agent: AutoFill", "Mengisi form otomatis...", "loading");
+            executeFormAutoFill();
+            setTimeout(function() { if (typeof callback === "function") callback(true); }, 800);
+            return;
+        }
+
+        // 6. Telegram Group/Channel Autonomous Join Task
+        if (sp.includes("join telegram") || sp.includes("join grup") || sp.includes("join channel") || sp.includes("gabung telegram") || sp.includes("gabung grup") || sp.includes("t.me/")) {
+            var tgUrlMatch = s.match(/(?:https?:\/\/)?(?:www\.)?t\.me\/[^\s]+|@[a-zA-Z0-9_]+/i);
+            var tgTarget = tgUrlMatch ? tgUrlMatch[0] : "";
+            if (tgTarget) {
+                updateAgyHUD("Telegram Join", "Memerintahkan tuyul Telegram bergabung ke " + tgTarget + "...", "loading");
+                try {
+                    if (window.GhostBridge && window.GhostBridge.forwardToDaemon) {
+                        window.GhostBridge.forwardToDaemon(JSON.stringify({
+                            method: "telegram_join",
+                            params: [tgTarget]
+                        }));
+                    }
+                } catch(e) {}
+                setTimeout(function() {
+                    updateAgyHUD("Telegram Join", "Tugas join Telegram dikirim ke tuyul!", "success");
+                    if (typeof callback === "function") callback(true);
+                }, 1500);
+                return;
+            }
+        }
+
+        // 7. Klik Tombol / Elemen
         var clickMatch = s.match(/^(?:klik|click|pencet|tekan|tap|press)\s+(.+)$/i);
         if (clickMatch) {
             var target = clickMatch[1].trim();
-            findAndClickElement(target);
-            setTimeout(function() { if (typeof callback === "function") callback(true); }, 400);
+            var ok = findAndClickElement(target);
+            if (!ok) {
+                updateAgyHUD("BOT: Elemen Tidak Ditemukan", "\"" + target + "\" tidak ada di halaman", "warning");
+            }
+            setTimeout(function() { if (typeof callback === "function") callback(ok); }, 500);
             return;
         }
 
-        // 4. Isi Form
+        // 8. Isi Form
         var fillMatch = s.match(/^(?:isi|fill|ketik|type|input)\s+([^\s]+)\s+(.+)$/i);
         if (fillMatch) {
-            findAndFillElement(fillMatch[1].trim(), fillMatch[2].trim());
-            setTimeout(function() { if (typeof callback === "function") callback(true); }, 400);
+            var okFill = findAndFillElement(fillMatch[1].trim(), fillMatch[2].trim());
+            if (!okFill) {
+                updateAgyHUD("BOT: Kolom Tidak Ditemukan", "\"" + fillMatch[1] + "\" tidak ada di halaman", "warning");
+            }
+            setTimeout(function() { if (typeof callback === "function") callback(okFill); }, 500);
             return;
         }
 
-        // 5. Fallback ke pencarian elemen atau sub-prompt
-        findAndClickElement(s);
-        setTimeout(function() { if (typeof callback === "function") callback(true); }, 400);
+        // 9. Fallback ke pencarian elemen atau sub-prompt
+        var okFallback = findAndClickElement(s);
+        if (!okFallback) {
+            updateAgyHUD("BOT: Elemen Tidak Ditemukan", "\"" + s + "\" tidak ada di halaman", "warning");
+        }
+        setTimeout(function() { if (typeof callback === "function") callback(okFallback); }, 500);
     }
 
     function executeMultiStepPlan(steps, index) {
@@ -5404,10 +5494,10 @@
 
         updateAgyHUD("AGY Agent [" + stepNum + "/" + total + "]", currentStep, "running");
 
-        executeSingleStep(currentStep, function() {
+        executeSingleStep(currentStep, function(stepSuccess) {
             setTimeout(function() {
                 executeMultiStepPlan(steps, index + 1);
-            }, 1200);
+            }, 1000);
         });
     }
 
@@ -5418,6 +5508,17 @@
         }
         var raw = promptStr.trim();
         var p = raw.toLowerCase();
+
+        // 0. Multi-Step Chain Splitter (Cth: "klik A lalu klik B lalu selesaikan quest lalu swap dan solve captcha")
+        if (/\s+(?:lalu|kemudian|then|->)\s+|\s+dan\s+(?=klik|swap|solve|selesaikan|klaim|claim|isi|fill)/i.test(raw)) {
+            var rawChain = raw.replace(/\s+dan\s+(?=klik|swap|solve|selesaikan|klaim|claim|isi|fill)/gi, " lalu ");
+            var chainSteps = rawChain.split(/\s+(?:lalu|kemudian|then|->)\s+/i).map(function(st) { return st.trim(); }).filter(Boolean);
+            if (chainSteps.length > 1) {
+                updateAgyHUD("AGY Multi-Step Flow", "Menjalankan " + chainSteps.length + " langkah berurutan...", "running");
+                executeMultiStepPlan(chainSteps, 0);
+                return;
+            }
+        }
 
         // 1. Panduan / Help
         if (p === "help" || p === "bantuan" || p === "?") {
@@ -5476,54 +5577,12 @@
             return;
         }
 
-        // 4. 100% AGY CO-PILOT AUTONOMOUS AGENT DI LINUX TERMUX (AUTO-WAKE & AUTO-KILL)
-        try {
-            if (window.GhostBridge && window.GhostBridge.forwardToAgy) {
-                var isAlive = false;
-                try {
-                    isAlive = window.GhostBridge.isAgyAlive ? window.GhostBridge.isAgyAlive() : false;
-                } catch(e) {}
-
-                if (!isAlive) {
-                    updateAgyHUD("🤖 AGY Co-Pilot", "Menyalakan Antigravity di background...", "running");
-                    if (window.GhostBridge.wakeUpAgy) {
-                        window.GhostBridge.wakeUpAgy();
-                    }
-                } else {
-                    updateAgyHUD("🤖 AGY Co-Pilot", "Mengirim instruksi ke Antigravity...", "running");
-                }
-
-                setTimeout(function() {
-                    updateAgyHUD("🤖 AGY Co-Pilot", "Antigravity sedang memproses instruksi...", "running");
-                    var payload = JSON.stringify({
-                        prompt: raw,
-                        url: window.location.href,
-                        title: document.title,
-                        timestamp: Date.now()
-                    });
-                    var respStr = window.GhostBridge.forwardToAgy(payload);
-                    try {
-                        var parsed = JSON.parse(respStr);
-                        if (parsed && (parsed.status === "received" || parsed.status === "ok")) {
-                            updateAgyHUD("🤖 AGY Co-Pilot", "Antigravity sedang mengeksekusi di browser...", "running");
-                        } else {
-                            updateAgyHUD("🤖 AGY Co-Pilot", "Instruksi terkirim!", "success");
-                        }
-                    } catch(_) {
-                        updateAgyHUD("🤖 AGY Co-Pilot", "Instruksi terkirim!", "success");
-                    }
-                }, isAlive ? 50 : 900);
-                return;
-            }
-        } catch(_) {}
-
+        // 4. Otomasi Cepat DOM (Diprioritaskan sebelum fallback AI agar Webview langsung gerak)
         if (p.includes("dom") || p.includes("inspeksi") || p.includes("inspect") || p.includes("scan")) {
             showDomInspectorModal();
             updateAgyHUD("BOT", "Membuka Inspeksi DOM", "success");
             return;
         }
-
-        // 4. Otomasi Form & Klaim
         if (p.includes("auto fill") || p.includes("autofill") || p === "isi form" || p === "isi akun") {
             executeFormAutoFill();
             return;
@@ -5587,10 +5646,89 @@
             if (findAndFillElement(fieldName, fieldVal)) return;
         }
 
-        // 9. Fallback: Cari tombol/link/elemen yang cocok dengan teks apapun yang diketik
+        // 9. Klik Langsung Teks Tombol (Cth: "Connect Wallet", "Swap", "Approve", dll)
         if (findAndClickElement(raw)) {
             return;
         }
+
+        // 10. AI REASONING ROUTER: JIKA DOM LOKAL BELUM MENEMUKAN ELEMEN, GUNAKAN MESIN AI AKTIF
+        var activeEngine = window.__ACTIVE_AI_ENGINE__ || "custom";
+        try {
+            if (window.GhostBridge && window.GhostBridge.getActiveAiEngine) {
+                activeEngine = window.GhostBridge.getActiveAiEngine();
+            }
+        } catch(_) {}
+
+        if (activeEngine === "agy") {
+            try {
+                if (window.GhostBridge && window.GhostBridge.forwardToAgy) {
+                    var isAlive = false;
+                    try {
+                        isAlive = window.GhostBridge.isAgyAlive ? window.GhostBridge.isAgyAlive() : false;
+                    } catch(_) {}
+
+                    if (!isAlive) {
+                        updateAgyHUD("🤖 AGY Copilot", "Menyalakan Antigravity di background...", "running");
+                        if (window.GhostBridge.wakeUpAgy) window.GhostBridge.wakeUpAgy();
+                    } else {
+                        updateAgyHUD("🤖 AGY Copilot", "Mengirim instruksi ke Antigravity...", "running");
+                    }
+
+                    setTimeout(function() {
+                        updateAgyHUD("🤖 AGY Copilot", "Antigravity sedang memproses instruksi...", "running");
+                        var payload = JSON.stringify({
+                            prompt: raw,
+                            url: window.location.href,
+                            title: document.title,
+                            timestamp: Date.now()
+                        });
+                        var respStr = window.GhostBridge.forwardToAgy(payload);
+                        try {
+                            var parsed = JSON.parse(respStr);
+                            if (parsed && (parsed.status === "received" || parsed.status === "ok")) {
+                                updateAgyHUD("🤖 AGY Copilot", "Antigravity sedang mengeksekusi di browser...", "running");
+                            } else {
+                                updateAgyHUD("🤖 AGY Copilot", "Tugas terkirim ke AGY Copilot", "success");
+                            }
+                        } catch(_) {
+                            updateAgyHUD("🤖 AGY Copilot", "Tugas terkirim ke AGY Copilot", "success");
+                        }
+                    }, isAlive ? 50 : 900);
+                    return;
+                }
+            } catch(_) {}
+        } else if (activeEngine === "9router") {
+            updateAgyHUD("9Router AI", "Menganalisis elemen via 9Router (Port 20128)...", "running");
+            try {
+                if (window.GhostBridge && window.GhostBridge.postRpc) {
+                    window.GhostBridge.postRpc(JSON.stringify({
+                        method: "ai_completion",
+                        params: ["9router", raw, window.location.href]
+                    }));
+                }
+            } catch(_) {}
+            setTimeout(function() {
+                updateAgyHUD("9Router AI", "Instruksi diproses oleh 9Router", "success");
+            }, 1000);
+            return;
+        } else {
+            // Default: Custom AI (DeepSeek)
+            updateAgyHUD("DeepSeek AI", "Menganalisis halaman via DeepSeek API...", "running");
+            try {
+                if (window.GhostBridge && window.GhostBridge.postRpc) {
+                    window.GhostBridge.postRpc(JSON.stringify({
+                        method: "ai_completion",
+                        params: ["custom", raw, window.location.href]
+                    }));
+                }
+            } catch(_) {}
+            setTimeout(function() {
+                updateAgyHUD("DeepSeek AI", "Instruksi diproses oleh DeepSeek", "success");
+            }, 1000);
+            return;
+        }
+
+        updateAgyHUD("BOT: Elemen Tidak Ditemukan", "\"" + raw + "\" tidak cocok dengan tombol apapun di halaman", "warning");
     }
 
     // Auto-resume active recipe on page reload / navigation

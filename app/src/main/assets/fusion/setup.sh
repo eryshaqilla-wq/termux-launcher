@@ -954,11 +954,12 @@ if [ "$LINUX_OPT" = "1" ]; then
                 (echo '#!/usr/bin/env bash'; tail -n +2 "$PREFIX/bin/termux-ipc") > "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
                 chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
             fi
-            cat << 'EOF_B' > "$CONTAINER_ROOTFS/usr/local/bin/browser"
+            cat << 'EOF_B' > "$CONTAINER_ROOTFS/usr/local/bin/web"
 #!/usr/bin/env bash
-exec termux-ipc webview "$@"
+exec agent-web "$@"
 EOF_B
-            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/browser"
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/web"
+            ln -sf "/usr/local/bin/web" "$CONTAINER_ROOTFS/usr/local/bin/browser" 2>/dev/null || true
 
             cat << 'EOF_CW' > "$CONTAINER_ROOTFS/usr/local/bin/wallet"
 #!/usr/bin/env bash
@@ -1126,7 +1127,9 @@ EOF_PALSA
                     fi
                 done
                 (echo '#!/usr/bin/env bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
-                echo -e '#!/usr/bin/env bash\nexec termux-ipc webview \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/browser'
+                echo -e '#!/usr/bin/env bash\nexec agent-web \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/web'
+                chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/web'
+                ln -sf '/usr/local/bin/web' '$CONTAINER_ROOTFS/usr/local/bin/browser' 2>/dev/null || true
                 cat << 'EOF_RW' > '$CONTAINER_ROOTFS/usr/local/bin/wallet'
 #!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env

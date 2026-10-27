@@ -73,6 +73,7 @@ handle_webview() {
             echo "  bridge | dom          Ekstrak snapshot DOM halaman ke file JSON"
             echo ""
             echo "Sub-command AGY Co-Pilot & Automation:"
+            echo "  prompt <perintah>     Kirim instruksi prompt cerdas / BOT ke WebView aktif"
             echo "  autofill              Isi form otomatis dengan profil aktif (Wallet, Email, Nama)"
             echo "  claim                 Smart Claim reward/faucet/airdrop (Bezier OS Touch)"
             echo "  cf-bypass             Bypass Cloudflare Turnstile challenge otomatis"
@@ -160,6 +161,18 @@ handle_webview() {
                 return 1
             fi
             send_cmd "WEBVIEW_EVAL $CODE"
+            return 0
+            ;;
+        prompt|--prompt)
+            shift
+            local PROMPT_TEXT="$*"
+            if [ -z "$PROMPT_TEXT" ]; then
+                echo "Usage: termux-ipc webview prompt <instruksi BOT>"
+                return 1
+            fi
+            local ESCAPED=$(printf '%s' "$PROMPT_TEXT" | sed "s/\\\\/\\\\\\\\/g; s/'/\\\\'/g")
+            send_cmd "WEBVIEW_EVAL window.AgyBridge && window.AgyBridge.executeNaturalPrompt && window.AgyBridge.executeNaturalPrompt('$ESCAPED');"
+            echo "[termux-ipc] Prompt dikirim ke WebView: $PROMPT_TEXT"
             return 0
             ;;
         sync|sync-db|--sync|--sync-db)
@@ -257,6 +270,27 @@ handle_webview() {
         agy-stop|stop-agy|stop|--stop)
             send_cmd "WEBVIEW_EVAL window.AgyBridge && window.AgyBridge.stop && window.AgyBridge.stop();"
             echo "[termux-ipc] Perintah STOP darurat AGY telah dikirim!"
+            return 0
+            ;;
+        tg-join|telegram-join|join-tg|--tg-join)
+            shift
+            local TG_TARGET="$1"
+            shift
+            local TG_PROF=""
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --profile)
+                        TG_PROF="$2"
+                        shift 2
+                        ;;
+                    *)
+                        shift
+                        ;;
+                esac
+            done
+            local PROF_PARAM=""
+            [ -n "$TG_PROF" ] && PROF_PARAM="--profile $TG_PROF"
+            node /root/wallet/telegram.cjs --join "$TG_TARGET" $PROF_PARAM
             return 0
             ;;
     esac
@@ -360,6 +394,20 @@ handle_webview() {
 
     if [[ "$URL" != http://* && "$URL" != https://* && "$URL" != file://* ]]; then
         URL="https://$URL"
+    fi
+
+    # Auto-Resolve Wallet: 1 Wallet = 1 Telegram Account + 1 WebView Profile
+    if [ -z "$WALLET" ] && [ -n "$PROFILE" ] && [ "$PROFILE" != "default" ]; then
+        local BIND_SCRIPT=""
+        for cand in "${FUSION_WALLET_DIR:-}/wallet_binding.cjs" "$HOME/wallet/wallet_binding.cjs" "/wallet/wallet_binding.cjs" "/root/wallet/wallet_binding.cjs" "/data/data/com.termux/files/home/wallet/wallet_binding.cjs" "/project/node2cjs/wallet_binding.cjs"; do
+            if [ -n "$cand" ] && [ -f "$cand" ]; then
+                BIND_SCRIPT="$cand"
+                break
+            fi
+        done
+        if [ -n "$BIND_SCRIPT" ] && command -v node >/dev/null 2>&1; then
+            WALLET="$(node "$BIND_SCRIPT" resolve-webview "$PROFILE" 2>/dev/null)"
+        fi
     fi
 
     # Format JSON payload WEBVIEW_CONFIG
@@ -561,6 +609,9 @@ sys.exit(res.returncode)
     webview-eval)
         echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview eval'." >&2
         handle_webview "eval" "$@"
+        ;;
+    webview-prompt|prompt)
+        handle_webview "prompt" "$@"
         ;;
     webview-back)
         echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview back'." >&2
