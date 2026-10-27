@@ -161,6 +161,14 @@ public class FusionDrawerHelper {
         layoutParams.setMargins(0, 0, 0, 0);
         linearLayout.setBackground(FusionUiHelper.createRounded(-15329252, -12762806, 4.0f));
         linearLayout.setElevation(170.0f);
+        linearLayout.setClickable(true);
+        linearLayout.setFocusable(true);
+        linearLayout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Tangkap klik di dalam area drawer agar tidak bocor / bleed ke backdrop di belakangnya
+            }
+        });
         frameLayout.addView(linearLayout, layoutParams);
         LinearLayout linearLayout2 = fusionWebViewManager.mMenuCard;
         if (linearLayout2 != null && linearLayout2 != linearLayout) {
