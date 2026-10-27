@@ -314,7 +314,8 @@ for f_cjs in [
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
     "modules.json", "queries.json", "watchlist.json", "tg_config.json", "x_accounts.json",
     "x_session.json", "scankomen_trigger.json", "loop_state.json", "filter_config.json",
-    "tg_cache.json", "button_query_db.json"
+    "tg_cache.json", "button_query_db.json", "email.txt", "ref.txt", "claim_gift.cjs",
+    "ptah_poa_cards.json", "leadloop_cards.json", "ka_agents_cards.json"
 ]:
     for src_dir in ["/root/wallet", "/project/node2cjs"]:
         src_path = os.path.join(src_dir, f_cjs)
@@ -483,6 +484,8 @@ for target in [
     os.path.join(ASSETS_DIR, "chains_db.json"),
     os.path.join(ASSETS_DIR, "package.json"),
     os.path.join(ASSETS_DIR, "recipes_db.json"),
+    os.path.join(ASSETS_DIR, "email.txt"),
+    os.path.join(ASSETS_DIR, "ref.txt"),
 ]:
     if os.path.exists(target):
         os.remove(target)

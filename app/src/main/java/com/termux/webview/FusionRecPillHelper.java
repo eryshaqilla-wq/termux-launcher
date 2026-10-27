@@ -246,70 +246,70 @@ public class FusionRecPillHelper {
         fpLp.setMargins(1, 0, 1, 0);
         stepPill.addView(fpBtn, fpLp);
 
-        // 3. Baris Bawah: sRecPill (Ketua / Baris Utama)
+        // 3. Baris Bawah: sRecPill (Ketua / Baris Utama) - Ukuran Senada 100% dengan sStepPill
         LinearLayout linearLayout2 = new LinearLayout(appCompatActivity);
         sRecPill = linearLayout2;
         linearLayout2.setOrientation(0);
         FusionUiHelper.setSolidBox(linearLayout2);
-        linearLayout2.setPadding(4, 4, 4, 4);
+        linearLayout2.setPadding(3, 3, 3, 3);
 
         TextView textView = new TextView(appCompatActivity);
         sCollapseBtn = textView;
         textView.setText(sIsCollapsed ? " > " : " < ");
         FusionUiHelper.setSolidBtn(textView);
-        textView.setTextSize(2, 11.0f);
-        textView.setPadding(8, 4, 8, 4);
+        textView.setTextSize(2, 10.0f);
+        textView.setPadding(6, 3, 6, 3);
         textView.setClickable(true);
         textView.setOnClickListener(new FusionRecCollapseClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams3 = new LinearLayout.LayoutParams(-2, -2);
-        layoutParams3.setMargins(2, 0, 2, 0);
+        layoutParams3.setMargins(1, 0, 1, 0);
         linearLayout2.addView(textView, layoutParams3);
 
         TextView textView2 = new TextView(appCompatActivity);
         sRecBtn = textView2;
         FusionUiHelper.setSolidBtn(textView2);
-        textView2.setTextSize(2, 11.0f);
-        textView2.setPadding(8, 4, 8, 4);
+        textView2.setTextSize(2, 10.0f);
+        textView2.setPadding(6, 3, 6, 3);
         textView2.setClickable(true);
         textView2.setOnClickListener(new FusionFloatingRecClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams4 = new LinearLayout.LayoutParams(-2, -2);
-        layoutParams4.setMargins(2, 0, 2, 0);
+        layoutParams4.setMargins(1, 0, 1, 0);
         linearLayout2.addView(textView2, layoutParams4);
 
         TextView textView3 = new TextView(appCompatActivity);
         sDomBtn = textView3;
         textView3.setText(" DOM ");
         FusionUiHelper.setSolidAccentBtn(textView3, -8596290, -13947597);
-        textView3.setTextSize(2, 11.0f);
-        textView3.setPadding(8, 4, 8, 4);
+        textView3.setTextSize(2, 10.0f);
+        textView3.setPadding(6, 3, 6, 3);
         textView3.setClickable(true);
         textView3.setOnClickListener(new FusionRecDomClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams5 = new LinearLayout.LayoutParams(-2, -2);
-        layoutParams5.setMargins(2, 0, 2, 0);
+        layoutParams5.setMargins(1, 0, 1, 0);
         linearLayout2.addView(textView3, layoutParams5);
 
         TextView textView4 = new TextView(appCompatActivity);
         sSaveBtn = textView4;
         textView4.setText(" Simpan ");
         FusionUiHelper.setSolidAccentBtn(textView4, -7686920, -13947597);
-        textView4.setTextSize(2, 11.0f);
-        textView4.setPadding(8, 4, 8, 4);
+        textView4.setTextSize(2, 10.0f);
+        textView4.setPadding(6, 3, 6, 3);
         textView4.setClickable(true);
         textView4.setOnClickListener(new FusionRecSaveClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams6 = new LinearLayout.LayoutParams(-2, -2);
-        layoutParams6.setMargins(2, 0, 2, 0);
+        layoutParams6.setMargins(1, 0, 1, 0);
         linearLayout2.addView(textView4, layoutParams6);
 
         TextView textView5 = new TextView(appCompatActivity);
         sCancelBtn = textView5;
         textView5.setText(" Batal ");
         FusionUiHelper.setSolidAccentBtn(textView5, -881790, -13947597);
-        textView5.setTextSize(2, 11.0f);
-        textView5.setPadding(8, 4, 8, 4);
+        textView5.setTextSize(2, 10.0f);
+        textView5.setPadding(6, 3, 6, 3);
         textView5.setClickable(true);
         textView5.setOnClickListener(new FusionRecCancelClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams7 = new LinearLayout.LayoutParams(-2, -2);
-        layoutParams7.setMargins(2, 0, 2, 0);
+        layoutParams7.setMargins(1, 0, 1, 0);
         linearLayout2.addView(textView5, layoutParams7);
 
         recContainer.addView(linearLayout2, new LinearLayout.LayoutParams(-2, -2));

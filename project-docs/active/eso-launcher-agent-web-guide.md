@@ -183,3 +183,32 @@ Bundle payload telah dikompilasi dan dienkripsi menggunakan PIN sistem Tuan Eso:
 - Mirror Aset APK: `/project/termux-launcher/app/src/main/assets/fusion/fusion_payload.tar.gz.enc`
 - Ukuran: ~13.6 MB
 - Isi Payload: `bin/` (`agent-web`, `web`, `browser`, `termux-ipc`), suite `wallet.cjs`, `x_webview.cjs`, `pemantau.cjs`, serta aset injeksi WebView.
+
+---
+
+## 8. Panduan Penggunaan Floating Recorder & Native Step Toolbar
+
+### 8.1 Arsitektur Native View Standby
+Untuk menjamin stabilitas tinggi dan zero-flicker, toolbar recorder kini diimplementasikan sebagai native Android View (`com.termux.webview.FusionRecPillHelper`):
+- Terkunci permanen pada layer native `mPaneHost` (`Gravity.BOTTOM | Gravity.START`, margin 10px).
+- Tidak ikut tergeser atau bergoyang saat halaman web di-scroll.
+- Ukuran kedua baris seragam secara simetris (Text 10sp, Padding Tombol 6x3, Padding Box 3x3, Margin 1px).
+
+### 8.2 Daftar Tombol & Fungsi Operasional
+
+#### A. Baris Bawah (Ketua REC)
+- `[ < ] / [ > ]`: Toggle minimize seluruh floating recorder menjadi satu tombol kecil di sudut kiri bawah.
+- `[ • REC ( n ) ]`: Mulai / Berhenti merekam alur kerja (menampilkan jumlah step `n`).
+- `[ DOM ]`: Membuka modal visual DOM Picker untuk memilih elemen web secara presisi.
+- `[ Simpan ]`: Menyimpan resep ke `recipes_db.json`.
+- `[ Batal ]`: Membatalkan rekaman aktif dan mereset hitungan langkah.
+
+#### B. Baris Atas (Smart Step Actions - Muncul Saat Rekam Berjalan)
+- `[ < ] / [ > ]`: Toggle minimize baris smart steps.
+- `[ WALLET > ]`: Berganti ke akun wallet berikutnya (`switchToNextWallet()`), memicu event Web3 `accountsChanged`, dan mencatat aksi `next_wallet`.
+- `[ EMAIL > ]`: Mengambil email tuyul berikutnya dari `/root/wallet/email.txt` (`AgyDB.nextEmail()`).
+- `[ REF ]`: Mengambil kode referral dari `/root/wallet/ref.txt` (`AgyDB.nextRef()`). Jika isi file hanya 1 kode, kode dapat diinjeksi berulang kali secara dinamis.
+- `[ RELOAD ]`: Me-reload halaman dengan mempertahankan status perekaman via `sessionStorage`.
+- `[ WIPE ]`: Menghapus cache, cookies, form data, dan web storage secara tuntas (`wipe_cache`).
+- `[ FP ]`: Mengacak dan menyuntikkan model fingerprint perangkat baru (`GhostBridge.nextFingerprint()`).
+
