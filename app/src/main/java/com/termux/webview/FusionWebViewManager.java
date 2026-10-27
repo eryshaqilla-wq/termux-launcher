@@ -527,6 +527,70 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
+    public String switchToNextWallet() {
+        String[] names = FusionWalletHelper.getNames();
+        if (names == null || names.length == 0) return "";
+        int curIdx = FusionWalletHelper.findIndexByName(this.mCurrentWalletName);
+        int nextIdx = (curIdx + 1) % names.length;
+        String nextName = names[nextIdx];
+        String nextAddr = FusionWalletHelper.getAddress(nextIdx);
+
+        this.mCurrentWalletName = nextName;
+        this.mCurrentWalletAddress = nextAddr;
+        GhostBridgeInterface.setWallet(nextName, nextAddr);
+
+        AppCompatActivity appCompatActivity = this.mActivity;
+        if (appCompatActivity != null) {
+            appCompatActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    updateContextUi();
+                    Toast.makeText(appCompatActivity, "Dompet Diubah ke: " + nextName, Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+        return nextName;
+    }
+
+    public void reloadActiveTab() {
+        AppCompatActivity appCompatActivity = this.mActivity;
+        if (appCompatActivity != null) {
+            appCompatActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (mActiveWebView != null) {
+                        mActiveWebView.reload();
+                    }
+                }
+            });
+        }
+    }
+
+    public String rotateDeviceFingerprint() {
+        if (mActiveWebView != null) {
+            String randProf = "fp_" + (System.currentTimeMillis() % 100000);
+            FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(randProf);
+            AppCompatActivity appCompatActivity = this.mActivity;
+            if (appCompatActivity != null) {
+                appCompatActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (mActiveWebView != null) {
+                            mActiveWebView.getSettings().setUserAgentString(dev.userAgent);
+                            mActiveWebView.evaluateJavascript(
+                                "window.__FUSION_DEVICE__ = " + dev.toJsonString() + ";" +
+                                "if(window.__applyFingerprintFaker) window.__applyFingerprintFaker();", null
+                            );
+                            Toast.makeText(appCompatActivity, "Fingerprint: " + dev.name, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+            }
+            return dev.name;
+        }
+        return "";
+    }
+
     public void closeAllDrawers() {
         FusionDrawerHelper.closeAllDrawers(this);
     }

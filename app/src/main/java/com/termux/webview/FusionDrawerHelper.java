@@ -624,6 +624,28 @@ public class FusionDrawerHelper {
         linearLayout6.setClickable(true);
         linearLayout6.setOnClickListener(new FusionRecModeSelectClick(fusionWebViewManager, "hybrid"));
         linearLayout2.addView(linearLayout6, layoutParams3);
+
+        LinearLayout linearLayout7 = new LinearLayout(appCompatActivity);
+        linearLayout7.setOrientation(1);
+        FusionUiHelper.setSolidBox(linearLayout7);
+        linearLayout7.setPadding(10, 10, 10, 10);
+        LinearLayout.LayoutParams layoutParamsStep = new LinearLayout.LayoutParams(-1, -2);
+        layoutParamsStep.setMargins(0, 4, 0, 4);
+        TextView textViewStepTitle = new TextView(appCompatActivity);
+        textViewStepTitle.setText("👣  Mode Step by Step");
+        textViewStepTitle.setTextColor(-8596290);
+        textViewStepTitle.setTextSize(2, 13.0f);
+        textViewStepTitle.setTypeface(null, 1);
+        linearLayout7.addView(textViewStepTitle);
+        TextView textViewStepDesc = new TextView(appCompatActivity);
+        textViewStepDesc.setText("Ambil elemen DOM bertahap + Smart Action (Wallet, Email, Ref, Reload, Wipe, FP)");
+        textViewStepDesc.setTextColor(-6577749);
+        textViewStepDesc.setTextSize(2, 11.0f);
+        linearLayout7.addView(textViewStepDesc);
+        linearLayout7.setClickable(true);
+        linearLayout7.setOnClickListener(new FusionRecModeSelectClick(fusionWebViewManager, "step_by_step"));
+        linearLayout2.addView(linearLayout7, layoutParamsStep);
+
         TextView textView10 = new TextView(appCompatActivity);
         textView10.setText("BATAL");
         FusionUiHelper.setSolidBtn(textView10);

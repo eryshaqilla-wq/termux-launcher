@@ -462,6 +462,22 @@
             return Array.from(new Set(queries));
         },
 
+        activeEmailIndex: 0,
+        nextEmail: function() {
+            var emails = this.getEmails();
+            if (emails.length === 0) return "user1@gmail.com";
+            this.activeEmailIndex = (this.activeEmailIndex + 1) % emails.length;
+            return emails[this.activeEmailIndex];
+        },
+
+        activeRefIndex: 0,
+        nextRef: function() {
+            var queries = this.getQueries();
+            if (queries.length === 0) return "ref_code";
+            this.activeRefIndex = (this.activeRefIndex + 1) % queries.length;
+            return queries[this.activeRefIndex];
+        },
+
         getActiveWallet: function() {
             var addr = (window.GhostBridge && window.GhostBridge.getWalletAddress) ? window.GhostBridge.getWalletAddress() : "";
             var name = (window.GhostBridge && window.GhostBridge.getWalletName) ? window.GhostBridge.getWalletName() : "Master";
@@ -680,6 +696,73 @@
                         var dur = ev.duration || stepDelay;
                         updateAgyHUD(runTitle, "⏳ Jeda langkah " + stepNum + "/" + eventsList.length + " (" + (dur / 1000).toFixed(1) + "s)", "running");
                         self.activeTimer = setTimeout(runNextStep, dur);
+                        return;
+                    }
+
+                    if (ev.type === "next_wallet") {
+                        updateAgyHUD(runTitle, "👛 Langkah " + stepNum + "/" + eventsList.length + ": Ganti Wallet", "running");
+                        try {
+                            if (window.GhostBridge && window.GhostBridge.nextWallet) {
+                                window.GhostBridge.nextWallet();
+                            }
+                        } catch(_) {}
+                        self.activeTimer = setTimeout(runNextStep, 800);
+                        return;
+                    }
+
+                    if (ev.type === "reload") {
+                        updateAgyHUD(runTitle, "🔄 Langkah " + stepNum + "/" + eventsList.length + ": Reload Halaman...", "running");
+                        try {
+                            sessionStorage.setItem("__agy_active_recipe_run__", JSON.stringify({
+                                runTitle: runTitle,
+                                eventsList: eventsList,
+                                idx: idx,
+                                curWallet: curWallet,
+                                curEmail: curEmail,
+                                timestamp: Date.now()
+                            }));
+                        } catch(_) {}
+                        setTimeout(function() {
+                            location.reload();
+                        }, 500);
+                        return;
+                    }
+
+                    if (ev.type === "wipe_cache") {
+                        updateAgyHUD(runTitle, "🧹 Langkah " + stepNum + "/" + eventsList.length + ": Wipe Cache", "running");
+                        try {
+                            if (window.GhostBridge && window.GhostBridge.wipeCache) {
+                                window.GhostBridge.wipeCache();
+                            }
+                        } catch(_) {}
+                        try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+                        self.activeTimer = setTimeout(runNextStep, 600);
+                        return;
+                    }
+
+                    if (ev.type === "next_email") {
+                        var ne = ev.value || ((typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "tuyul@gmail.com");
+                        curEmail = ne;
+                        updateAgyHUD(runTitle, "📧 Langkah " + stepNum + "/" + eventsList.length + ": Ganti Email -> " + ne, "running");
+                        self.activeTimer = setTimeout(runNextStep, 600);
+                        return;
+                    }
+
+                    if (ev.type === "ref") {
+                        var nr = ev.value || ((typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123");
+                        updateAgyHUD(runTitle, "🔗 Langkah " + stepNum + "/" + eventsList.length + ": Ref Code -> " + nr, "running");
+                        self.activeTimer = setTimeout(runNextStep, 600);
+                        return;
+                    }
+
+                    if (ev.type === "fingerprint") {
+                        updateAgyHUD(runTitle, "🎭 Langkah " + stepNum + "/" + eventsList.length + ": Ganti Fingerprint...", "running");
+                        try {
+                            if (window.GhostBridge && window.GhostBridge.nextFingerprint) {
+                                window.GhostBridge.nextFingerprint();
+                            }
+                        } catch(_) {}
+                        self.activeTimer = setTimeout(runNextStep, 800);
                         return;
                     }
 
@@ -1172,29 +1255,27 @@
         showRecordingHUD: function() {
             var existing = document.getElementById("__agy_rec_bar__");
             if (existing) existing.remove();
-            this.updateCounter();
-            return;
 
             var currentCount = this.getEvents().length;
 
             var bar = document.createElement("div");
             bar.id = "__agy_rec_bar__";
             bar.style.position = "fixed";
-            bar.style.bottom = "26px";
-            bar.style.left = "50%";
-            bar.style.transform = "translateX(-50%)";
-            bar.style.background = "rgba(18, 20, 28, 0.96)";
-            bar.style.backdropFilter = "blur(10px)";
-            bar.style.border = "1.5px solid #FF3B30";
-            bar.style.borderRadius = "24px";
-            bar.style.padding = "7px 14px";
+            bar.style.bottom = "54px";
+            bar.style.left = "10px";
+            bar.style.background = "rgba(15, 18, 26, 0.96)";
+            bar.style.backdropFilter = "blur(14px)";
+            bar.style.border = "1.5px solid #7C4DFF";
+            bar.style.borderRadius = "14px";
+            bar.style.padding = "5px 7px";
             bar.style.display = "flex";
-            bar.style.alignItems = "center";
-            bar.style.gap = "8px";
+            bar.style.flexDirection = "column";
+            bar.style.gap = "4px";
+            bar.style.maxWidth = "calc(100vw - 20px)";
             bar.style.zIndex = "2147483647";
-            bar.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.85), 0 0 15px rgba(255, 59, 48, 0.4)";
+            bar.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.9), 0 0 15px rgba(124, 77, 255, 0.35)";
             bar.style.fontFamily = "system-ui, -apple-system, sans-serif";
-            bar.style.fontSize = "12px";
+            bar.style.fontSize = "11px";
             bar.style.color = "#FFFFFF";
             bar.style.touchAction = "manipulation";
             bar.style.pointerEvents = "auto";
@@ -1202,14 +1283,25 @@
             bar.style.webkitUserSelect = "none";
             bar.style.webkitTapHighlightColor = "transparent";
 
-            var btnStyle = "border:none; border-radius:14px; padding:6px 11px; font-size:11.5px; font-weight:bold; cursor:pointer; touch-action:manipulation; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;";
+            var btnStyle = "border:none; border-radius:10px; padding:4px 7px; font-size:10.5px; font-weight:bold; cursor:pointer; touch-action:manipulation; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;";
 
-            bar.innerHTML = "<span style='display:inline-block; width:9px; height:9px; background:#FF3B30; border-radius:50%; animation:agyPulse 1.2s infinite; flex-shrink:0;'></span>" +
-                            "<span id='__agy_rec_count__' style='font-weight:700; font-size:12px; margin-right:2px; flex-shrink:0;'>REC (" + currentCount + ")</span>" +
-                            "<button id='__agy_rec_dom_btn__' style='background:#1E88E5; color:#FFF; " + btnStyle + "'>🎯 DOM</button>" +
+            bar.innerHTML = "<div style='display:flex; align-items:center; gap:4px;'>" +
+                            "<span style='display:inline-flex; align-items:center; gap:3px; font-weight:700; font-size:10.5px; color:#FF5252; margin-right:2px; flex-shrink:0;'>" +
+                            "<span style='display:inline-block; width:7px; height:7px; background:#FF5252; border-radius:50%; animation:agyPulse 1.2s infinite;'></span>" +
+                            "<span id='__agy_rec_count__'>REC (" + currentCount + ")</span></span>" +
+                            "<button id='__agy_rec_dom_btn__' style='background:#00E5FF; color:#000; " + btnStyle + "'>🎯 DOM</button>" +
+                            "<button id='__agy_rec_wallet_btn__' style='background:#7C4DFF; color:#FFF; " + btnStyle + "'>👛 Wallet</button>" +
+                            "<button id='__agy_rec_email_btn__' style='background:#FFA000; color:#000; " + btnStyle + "'>📧 Email</button>" +
+                            "<button id='__agy_rec_ref_btn__' style='background:#00E676; color:#000; " + btnStyle + "'>🔗 Ref</button>" +
+                            "</div>" +
+                            "<div style='display:flex; align-items:center; gap:4px;'>" +
+                            "<button id='__agy_rec_reload_btn__' style='background:#00B0FF; color:#000; " + btnStyle + "'>🔄 Reload</button>" +
+                            "<button id='__agy_rec_wipe_btn__' style='background:#FF5722; color:#FFF; " + btnStyle + "'>🧹 Wipe</button>" +
+                            "<button id='__agy_rec_fp_btn__' style='background:#E040FB; color:#FFF; " + btnStyle + "'>🎭 FP</button>" +
                             "<button id='__agy_rec_edit_btn__' style='background:#F57C00; color:#FFF; " + btnStyle + "'>✏️ Edit</button>" +
                             "<button id='__agy_rec_save_btn__' style='background:#2E7D32; color:#FFF; " + btnStyle + "'>💾 Simpan</button>" +
-                            "<button id='__agy_rec_cancel_btn__' style='background:#424242; color:#FFF; padding:6px 9px; font-size:11.5px; " + btnStyle + "'>✕</button>";
+                            "<button id='__agy_rec_cancel_btn__' style='background:#424242; color:#FFF; padding:4px 6px; font-size:10px; " + btnStyle + "'>✕</button>" +
+                            "</div>";
 
             var style = document.getElementById("__agy_rec_style__");
             if (!style) {
@@ -1265,6 +1357,99 @@
                         self.updateUi();
                     }
                 });
+            });
+
+            bindHudBtn("__agy_rec_wallet_btn__", function() {
+                var nw = "";
+                try {
+                    if (window.GhostBridge && window.GhostBridge.nextWallet) {
+                        nw = window.GhostBridge.nextWallet();
+                    }
+                } catch(_) {}
+                try {
+                    var newAddr = (window.GhostBridge && window.GhostBridge.getWalletAddress) ? window.GhostBridge.getWalletAddress() : "";
+                    if (newAddr) window.dispatchEvent(new CustomEvent("accountsChanged", { detail: [newAddr] }));
+                } catch(_) {}
+                self.recordEvent({
+                    type: "next_wallet",
+                    timestamp: Date.now(),
+                    text: "Ganti Wallet -> " + (nw || "Next")
+                });
+            });
+
+            bindHudBtn("__agy_rec_email_btn__", function() {
+                var ne = (typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "tuyul@gmail.com";
+                self.recordEvent({
+                    type: "next_email",
+                    timestamp: Date.now(),
+                    text: "Ganti Email -> " + ne,
+                    value: ne
+                });
+                updateAgyHUD("Smart Email", "Aktif: " + ne, "success");
+            });
+
+            bindHudBtn("__agy_rec_ref_btn__", function() {
+                var nr = (typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123";
+                self.recordEvent({
+                    type: "ref",
+                    timestamp: Date.now(),
+                    text: "Ref Code -> " + nr,
+                    value: nr
+                });
+                updateAgyHUD("Referral Code", "Aktif: " + nr, "success");
+            });
+
+            bindHudBtn("__agy_rec_reload_btn__", function() {
+                self.recordEvent({
+                    type: "reload",
+                    timestamp: Date.now(),
+                    text: "Reload Halaman"
+                });
+                try {
+                    sessionStorage.setItem("__agy_rec_active__", "true");
+                    sessionStorage.setItem("__fusion_rec_active__", "true");
+                    sessionStorage.setItem("__agy_rec_mode__", self.recordMode || "step_by_step");
+                    sessionStorage.setItem("__agy_rec_name__", self.sessionName || "Resep");
+                } catch(_) {}
+                setTimeout(function() {
+                    location.reload();
+                }, 350);
+            });
+
+            bindHudBtn("__agy_rec_wipe_btn__", function() {
+                try {
+                    if (window.GhostBridge && window.GhostBridge.wipeCache) {
+                        window.GhostBridge.wipeCache();
+                    }
+                } catch(_) {}
+                try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+                try {
+                    sessionStorage.setItem("__agy_rec_active__", "true");
+                    sessionStorage.setItem("__fusion_rec_active__", "true");
+                    sessionStorage.setItem("__agy_rec_mode__", self.recordMode || "step_by_step");
+                    sessionStorage.setItem("__agy_rec_name__", self.sessionName || "Resep");
+                } catch(_) {}
+                self.recordEvent({
+                    type: "wipe_cache",
+                    timestamp: Date.now(),
+                    text: "Wipe Cache & Storage"
+                });
+            });
+
+            bindHudBtn("__agy_rec_fp_btn__", function() {
+                var fp = "";
+                try {
+                    if (window.GhostBridge && window.GhostBridge.nextFingerprint) {
+                        fp = window.GhostBridge.nextFingerprint();
+                    }
+                } catch(_) {}
+                self.recordEvent({
+                    type: "fingerprint",
+                    timestamp: Date.now(),
+                    text: "Fingerprint -> " + (fp || "Acak"),
+                    value: fp
+                });
+                updateAgyHUD("Fingerprint Faker", "Model HP: " + (fp || "Acak"), "success");
             });
 
             bindHudBtn("__agy_rec_edit_btn__", function() {
@@ -2971,10 +3156,12 @@
             return { box: optBox, radio: radio };
         }
 
-        var optDom = createModeOption("dom", "1. Hanya Rekam DOM (Form & Web3)", "Mencatat klik tombol & input form presisi. Auto-token wallet & email. Bebas noise.", true, "#00E5FF");
-        var optTouch = createModeOption("touch", "2. Rekam Touch (Gestur & Usapan)", "Murni merekam usapan jempol (Swipe, Drag, Geser). Cocok untuk slider puzzle & game canvas.", false, "#FFB300");
-        var optHybrid = createModeOption("hybrid", "3. Rekam Touch + DOM (Hybrid Cerdas)", "Gabungan cerdas: tombol dicatat sebagai elemen DOM, usapan layar dicatat sebagai Swipe/Scroll.", false, "#4CAF50");
+        var optStep = createModeOption("step_by_step", "👣 Mode Step by Step (DOM + Smart)", "Ambil elemen DOM bertahap + Smart Action (Wallet, Email, Ref, Reload, Wipe, Fingerprint)", true, "#7C4DFF");
+        var optDom = createModeOption("dom", "🎯 Hanya Rekam DOM (Form & Web3)", "Mencatat klik tombol & input form presisi. Auto-token wallet & email.", false, "#00E5FF");
+        var optTouch = createModeOption("touch", "👆 Rekam Touch (Gestur Layar)", "Murni merekam sentuhan & usapan jempol (Swipe, Drag, Geser).", false, "#FFB300");
+        var optHybrid = createModeOption("hybrid", "⚡ Rekam Touch + DOM (Hybrid)", "Gabungan cerdas: tombol dicatat sebagai elemen DOM, sentuhan sebagai Touch.", false, "#4CAF50");
 
+        card.appendChild(optStep.box);
         card.appendChild(optDom.box);
         card.appendChild(optTouch.box);
         card.appendChild(optHybrid.box);
@@ -3013,9 +3200,10 @@
         startBtn.style.fontWeight = "bold";
         startBtn.style.cursor = "pointer";
         startBtn.onclick = function() {
-            var selectedMode = "dom";
-            if (optTouch.radio.checked) selectedMode = "touch";
-            if (optHybrid.radio.checked) selectedMode = "hybrid";
+            var selectedMode = "step_by_step";
+            if (optDom && optDom.radio && optDom.radio.checked) selectedMode = "dom";
+            if (optTouch && optTouch.radio && optTouch.radio.checked) selectedMode = "touch";
+            if (optHybrid && optHybrid.radio && optHybrid.radio.checked) selectedMode = "hybrid";
             var rName = nameInp.value.trim() || ("Resep_" + new Date().getHours() + "h" + new Date().getMinutes() + "m");
             modal.remove();
             AgyRecorder.start(rName, selectedMode);
@@ -4369,7 +4557,37 @@
         optWait.innerText = "⏳ Smart Jeda / Wait (Delay)";
         typeSelect.appendChild(optWait);
 
-        typeSelect.value = currentStep.type === "wait" ? "wait" : (currentStep.type === "fill" || currentStep.type === "input" ? "fill" : "click");
+        var optWallet = document.createElement("option");
+        optWallet.value = "next_wallet";
+        optWallet.innerText = "👛 Ganti Wallet (Next Wallet)";
+        typeSelect.appendChild(optWallet);
+
+        var optReload = document.createElement("option");
+        optReload.value = "reload";
+        optReload.innerText = "🔄 Muat Ulang Halaman (Reload)";
+        typeSelect.appendChild(optReload);
+
+        var optWipe = document.createElement("option");
+        optWipe.value = "wipe_cache";
+        optWipe.innerText = "🧹 Bersihkan Cache (Wipe Cache)";
+        typeSelect.appendChild(optWipe);
+
+        var optEmail = document.createElement("option");
+        optEmail.value = "next_email";
+        optEmail.innerText = "📧 Ganti Email (Next Email)";
+        typeSelect.appendChild(optEmail);
+
+        var optRef = document.createElement("option");
+        optRef.value = "ref";
+        optRef.innerText = "🔗 Ref / Referral Code";
+        typeSelect.appendChild(optRef);
+
+        var optFp = document.createElement("option");
+        optFp.value = "fingerprint";
+        optFp.innerText = "🎭 Ganti Fingerprint Profil";
+        typeSelect.appendChild(optFp);
+
+        typeSelect.value = (currentStep.type === "wait" || currentStep.type === "next_wallet" || currentStep.type === "reload" || currentStep.type === "wipe_cache" || currentStep.type === "next_email" || currentStep.type === "ref" || currentStep.type === "fingerprint") ? currentStep.type : (currentStep.type === "fill" || currentStep.type === "input" ? "fill" : "click");
         card.appendChild(typeSelect);
 
         var fieldsContainer = document.createElement("div");
@@ -4379,7 +4597,129 @@
             fieldsContainer.innerHTML = "";
             var selectedType = typeSelect.value;
 
-            if (selectedType === "wait") {
+            if (selectedType === "next_wallet") {
+                var info = document.createElement("div");
+                info.style.background = "#1D202B";
+                info.style.border = "1px solid #7C4DFF";
+                info.style.padding = "10px";
+                info.style.borderRadius = "8px";
+                info.style.fontSize = "12px";
+                info.style.color = "#d1c4e9";
+                info.style.marginBottom = "14px";
+                info.style.lineHeight = "1.5";
+                info.innerHTML = "👛 <b>Ganti Wallet Otomatis:</b><br/>Langkah ini beralih ke dompet berikutnya di daftar <code>wallets_db.json</code> dan memperbarui Ghost provider.";
+                fieldsContainer.appendChild(info);
+
+                fieldsContainer.__getStep = function() {
+                    return {
+                        type: "next_wallet",
+                        text: "Ganti Wallet -> Next",
+                        timestamp: Date.now()
+                    };
+                };
+            } else if (selectedType === "next_email") {
+                var info = document.createElement("div");
+                info.style.background = "#1D202B";
+                info.style.border = "1px solid #FFA000";
+                info.style.padding = "10px";
+                info.style.borderRadius = "8px";
+                info.style.fontSize = "12px";
+                info.style.color = "#ffe082";
+                info.style.marginBottom = "14px";
+                info.style.lineHeight = "1.5";
+                info.innerHTML = "📧 <b>Ganti Email:</b><br/>Langkah ini beralih ke akun email berikutnya dari <code>email.txt</code>.";
+                fieldsContainer.appendChild(info);
+
+                fieldsContainer.__getStep = function() {
+                    return {
+                        type: "next_email",
+                        text: "Ganti Email",
+                        value: currentStep.value || "",
+                        timestamp: Date.now()
+                    };
+                };
+            } else if (selectedType === "ref") {
+                var info = document.createElement("div");
+                info.style.background = "#1D202B";
+                info.style.border = "1px solid #00E676";
+                info.style.padding = "10px";
+                info.style.borderRadius = "8px";
+                info.style.fontSize = "12px";
+                info.style.color = "#b9f6ca";
+                info.style.marginBottom = "14px";
+                info.style.lineHeight = "1.5";
+                info.innerHTML = "🔗 <b>Referral Code:</b><br/>Langkah ini menyisipkan kode / link referral dari <code>query_db.json</code>.";
+                fieldsContainer.appendChild(info);
+
+                fieldsContainer.__getStep = function() {
+                    return {
+                        type: "ref",
+                        text: "Ref Code",
+                        value: currentStep.value || "",
+                        timestamp: Date.now()
+                    };
+                };
+            } else if (selectedType === "fingerprint") {
+                var info = document.createElement("div");
+                info.style.background = "#1D202B";
+                info.style.border = "1px solid #E040FB";
+                info.style.padding = "10px";
+                info.style.borderRadius = "8px";
+                info.style.fontSize = "12px";
+                info.style.color = "#ea80fc";
+                info.style.marginBottom = "14px";
+                info.style.lineHeight = "1.5";
+                info.innerHTML = "🎭 <b>Ganti Fingerprint:</b><br/>Langkah ini mengacak model HP Android, WebGL vendor, dan platform browser profil.";
+                fieldsContainer.appendChild(info);
+
+                fieldsContainer.__getStep = function() {
+                    return {
+                        type: "fingerprint",
+                        text: "Ganti Fingerprint",
+                        timestamp: Date.now()
+                    };
+                };
+            } else if (selectedType === "reload") {
+                var info = document.createElement("div");
+                info.style.background = "#1D202B";
+                info.style.border = "1px solid #00B0FF";
+                info.style.padding = "10px";
+                info.style.borderRadius = "8px";
+                info.style.fontSize = "12px";
+                info.style.color = "#b3e5fc";
+                info.style.marginBottom = "14px";
+                info.style.lineHeight = "1.5";
+                info.innerHTML = "🔄 <b>Reload Halaman (Auto-Survive):</b><br/>Memuat ulang halaman web. Alur resep atau makro otomatis bertahan dan melanjutkan langkah berikutnya setelah halaman selesai dimuat.";
+                fieldsContainer.appendChild(info);
+
+                fieldsContainer.__getStep = function() {
+                    return {
+                        type: "reload",
+                        text: "Reload Halaman",
+                        timestamp: Date.now()
+                    };
+                };
+            } else if (selectedType === "wipe_cache") {
+                var info = document.createElement("div");
+                info.style.background = "#1D202B";
+                info.style.border = "1px solid #FF9100";
+                info.style.padding = "10px";
+                info.style.borderRadius = "8px";
+                info.style.fontSize = "12px";
+                info.style.color = "#ffe0b2";
+                info.style.marginBottom = "14px";
+                info.style.lineHeight = "1.5";
+                info.innerHTML = "🧹 <b>Wipe Cache & Storage:</b><br/>Membersihkan cookies, sessionStorage, dan localStorage agar sesi bersih tanpa menghentikan alur bot.";
+                fieldsContainer.appendChild(info);
+
+                fieldsContainer.__getStep = function() {
+                    return {
+                        type: "wipe_cache",
+                        text: "Wipe Cache & Storage",
+                        timestamp: Date.now()
+                    };
+                };
+            } else if (selectedType === "wait") {
                 var waitLbl = document.createElement("div");
                 waitLbl.innerText = "Durasi Jeda (Milidetik):";
                 waitLbl.style.fontSize = "11px";
@@ -4826,6 +5166,109 @@
             });
         };
         addBar.appendChild(addClickBtn);
+
+        var addWalletBtn = document.createElement("button");
+        addWalletBtn.innerText = "👛 + Wallet";
+        addWalletBtn.style.flex = "1";
+        addWalletBtn.style.background = "#7C4DFF";
+        addWalletBtn.style.color = "#FFF";
+        addWalletBtn.style.border = "none";
+        addWalletBtn.style.borderRadius = "5px";
+        addWalletBtn.style.padding = "6px 4px";
+        addWalletBtn.style.fontSize = "11px";
+        addWalletBtn.style.cursor = "pointer";
+        addWalletBtn.onclick = function() {
+            workingEvents.push({ type: "next_wallet", text: "Ganti Wallet", timestamp: Date.now() });
+            renderStepList();
+        };
+        addBar.appendChild(addWalletBtn);
+
+        var addReloadBtn = document.createElement("button");
+        addReloadBtn.innerText = "🔄 + Reload";
+        addReloadBtn.style.flex = "1";
+        addReloadBtn.style.background = "#00B0FF";
+        addReloadBtn.style.color = "#000";
+        addReloadBtn.style.border = "none";
+        addReloadBtn.style.borderRadius = "5px";
+        addReloadBtn.style.padding = "6px 4px";
+        addReloadBtn.style.fontSize = "11px";
+        addReloadBtn.style.fontWeight = "bold";
+        addReloadBtn.style.cursor = "pointer";
+        addReloadBtn.onclick = function() {
+            workingEvents.push({ type: "reload", text: "Reload Halaman", timestamp: Date.now() });
+            renderStepList();
+        };
+        addBar.appendChild(addReloadBtn);
+
+        var addWipeBtn = document.createElement("button");
+        addWipeBtn.innerText = "🧹 + Wipe";
+        addWipeBtn.style.flex = "1";
+        addWipeBtn.style.background = "#FF9100";
+        addWipeBtn.style.color = "#000";
+        addWipeBtn.style.border = "none";
+        addWipeBtn.style.borderRadius = "5px";
+        addWipeBtn.style.padding = "6px 4px";
+        addWipeBtn.style.fontSize = "11px";
+        addWipeBtn.style.fontWeight = "bold";
+        addWipeBtn.style.cursor = "pointer";
+        addWipeBtn.onclick = function() {
+            workingEvents.push({ type: "wipe_cache", text: "Wipe Cache", timestamp: Date.now() });
+            renderStepList();
+        };
+        addBar.appendChild(addWipeBtn);
+
+        var addEmailBtn = document.createElement("button");
+        addEmailBtn.innerText = "📧 + Email";
+        addEmailBtn.style.flex = "1";
+        addEmailBtn.style.background = "#FFA000";
+        addEmailBtn.style.color = "#000";
+        addEmailBtn.style.border = "none";
+        addEmailBtn.style.borderRadius = "5px";
+        addEmailBtn.style.padding = "6px 4px";
+        addEmailBtn.style.fontSize = "11px";
+        addEmailBtn.style.fontWeight = "bold";
+        addEmailBtn.style.cursor = "pointer";
+        addEmailBtn.onclick = function() {
+            var ne = (typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "email@gmail.com";
+            workingEvents.push({ type: "next_email", text: "Ganti Email -> " + ne, value: ne, timestamp: Date.now() });
+            renderStepList();
+        };
+        addBar.appendChild(addEmailBtn);
+
+        var addRefBtn = document.createElement("button");
+        addRefBtn.innerText = "🔗 + Ref";
+        addRefBtn.style.flex = "1";
+        addRefBtn.style.background = "#00E676";
+        addRefBtn.style.color = "#000";
+        addRefBtn.style.border = "none";
+        addRefBtn.style.borderRadius = "5px";
+        addRefBtn.style.padding = "6px 4px";
+        addRefBtn.style.fontSize = "11px";
+        addRefBtn.style.fontWeight = "bold";
+        addRefBtn.style.cursor = "pointer";
+        addRefBtn.onclick = function() {
+            var nr = (typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123";
+            workingEvents.push({ type: "ref", text: "Ref Code -> " + nr, value: nr, timestamp: Date.now() });
+            renderStepList();
+        };
+        addBar.appendChild(addRefBtn);
+
+        var addFpBtn = document.createElement("button");
+        addFpBtn.innerText = "🎭 + FP";
+        addFpBtn.style.flex = "1";
+        addFpBtn.style.background = "#E040FB";
+        addFpBtn.style.color = "#FFF";
+        addFpBtn.style.border = "none";
+        addFpBtn.style.borderRadius = "5px";
+        addFpBtn.style.padding = "6px 4px";
+        addFpBtn.style.fontSize = "11px";
+        addFpBtn.style.fontWeight = "bold";
+        addFpBtn.style.cursor = "pointer";
+        addFpBtn.onclick = function() {
+            workingEvents.push({ type: "fingerprint", text: "Ganti Fingerprint", timestamp: Date.now() });
+            renderStepList();
+        };
+        addBar.appendChild(addFpBtn);
         card.appendChild(addBar);
 
         var stepListContainer = document.createElement("div");
@@ -4872,6 +5315,24 @@
                 if (ev.type === "wait") {
                     typeBadge = "<span style='font-size:10px; background:#7B1FA2; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>⏳ JEDA</span>";
                     desc = ((ev.duration || 2500) / 1000) + " detik";
+                } else if (ev.type === "next_wallet") {
+                    typeBadge = "<span style='font-size:10px; background:#7C4DFF; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>👛 WALLET</span>";
+                    desc = ev.text || "Ganti ke wallet berikutnya";
+                } else if (ev.type === "reload") {
+                    typeBadge = "<span style='font-size:10px; background:#00B0FF; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🔄 RELOAD</span>";
+                    desc = ev.text || "Muat ulang halaman & lanjut";
+                } else if (ev.type === "wipe_cache") {
+                    typeBadge = "<span style='font-size:10px; background:#FF9100; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🧹 WIPE</span>";
+                    desc = ev.text || "Wipe Cache & Storage";
+                } else if (ev.type === "next_email") {
+                    typeBadge = "<span style='font-size:10px; background:#FFA000; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>📧 EMAIL</span>";
+                    desc = ev.text || "Ganti ke email berikutnya";
+                } else if (ev.type === "ref") {
+                    typeBadge = "<span style='font-size:10px; background:#00E676; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🔗 REF</span>";
+                    desc = ev.text || "Ref Code";
+                } else if (ev.type === "fingerprint") {
+                    typeBadge = "<span style='font-size:10px; background:#E040FB; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🎭 FP</span>";
+                    desc = ev.text || "Ganti Fingerprint";
                 } else if (ev.type === "swipe") {
                     typeBadge = "<span style='font-size:10px; background:#9C27B0; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>👆 SWIPE</span>";
                     desc = (ev.direction || "DOWN").toUpperCase() + " (" + Math.round(Math.max(Math.abs(ev.deltaX || 0), Math.abs(ev.deltaY || 0))) + "px)";
@@ -5364,6 +5825,114 @@
         var s = stepText.trim();
         var sp = s.toLowerCase();
 
+        // 0a. Ganti Wallet / Next Wallet
+        if (sp === "next wallet" || sp === "ganti wallet" || sp === "next dompet" || sp === "dompet berikutnya" || sp === "switch wallet") {
+            updateAgyHUD("AGY Agent: Wallet", "Beralih ke wallet berikutnya...", "loading");
+            var nw = "";
+            try {
+                if (window.GhostBridge && window.GhostBridge.nextWallet) {
+                    nw = window.GhostBridge.nextWallet();
+                }
+            } catch(_) {}
+            try {
+                var newAddr = (window.GhostBridge && window.GhostBridge.getWalletAddress) ? window.GhostBridge.getWalletAddress() : "";
+                if (newAddr) window.dispatchEvent(new CustomEvent("accountsChanged", { detail: [newAddr] }));
+            } catch(_) {}
+            setTimeout(function() {
+                updateAgyHUD("AGY Agent: Wallet", "Aktif: " + (nw || "Wallet Berikutnya"), "success");
+                if (typeof callback === "function") callback(true);
+            }, 800);
+            return;
+        }
+
+        // 0b. Reload / Refresh Halaman
+        if (sp === "reload" || sp === "refresh" || sp === "muat ulang") {
+            updateAgyHUD("AGY Agent: Reload", "Memuat ulang halaman...", "loading");
+            setTimeout(function() {
+                location.reload();
+            }, 400);
+            return;
+        }
+
+        // 0c. Wipe Cache / Bersihkan Cache
+        if (sp === "wipe cache" || sp === "wipe" || sp === "bersihkan cache" || sp === "hapus cache" || sp === "clear cookies") {
+            updateAgyHUD("AGY Agent: Wipe Cache", "Membersihkan cache & cookies...", "loading");
+            var savedPromptQueue = sessionStorage.getItem("__agy_pending_prompt_queue__");
+            try {
+                if (window.GhostBridge && window.GhostBridge.wipeCache) {
+                    window.GhostBridge.wipeCache();
+                }
+            } catch(_) {}
+            try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+            if (savedPromptQueue) {
+                try { sessionStorage.setItem("__agy_pending_prompt_queue__", savedPromptQueue); } catch(_) {}
+            }
+            setTimeout(function() {
+                updateAgyHUD("AGY Agent: Wipe Cache", "Cache berhasil dibersihkan", "success");
+                if (typeof callback === "function") callback(true);
+            }, 600);
+            return;
+        }
+
+        // 0d. Connect / Konek Wallet
+        if (sp.includes("konek wallet") || sp.includes("connect wallet") || sp.includes("hubungkan wallet") || sp.includes("koneksikan wallet")) {
+            updateAgyHUD("AGY Agent: Wallet", "Mencari tombol Connect Wallet...", "loading");
+            var cOk = findAndClickElement("connect wallet") ||
+                      findAndClickElement("connect") ||
+                      findAndClickElement("koneksikan") ||
+                      findAndClickElement("hubungkan dompet");
+            if (!cOk) {
+                var cBtn = document.querySelector("button[data-testid*='connect'], [aria-label*='connect' i], [class*='connect-wallet' i]");
+                if (cBtn) {
+                    cBtn.click();
+                    cOk = true;
+                }
+            }
+            setTimeout(function() {
+                findAndClickElement("metamask") || findAndClickElement("injected") || findAndClickElement("browser wallet") || findAndClickElement("ghost");
+                if (typeof callback === "function") callback(true);
+            }, 800);
+            return;
+        }
+
+        // 0e. Next Email / Ganti Email
+        if (sp === "next email" || sp === "ganti email" || sp === "email berikutnya") {
+            var ne = (typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "email@gmail.com";
+            updateAgyHUD("AGY Agent: Email", "Email: " + ne, "loading");
+            setTimeout(function() {
+                updateAgyHUD("AGY Agent: Email", "Aktif: " + ne, "success");
+                if (typeof callback === "function") callback(true);
+            }, 600);
+            return;
+        }
+
+        // 0f. Ref Code / Next Ref
+        if (sp === "next ref" || sp === "ganti ref" || sp === "ref" || sp.startsWith("ref ")) {
+            var nr = (typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123";
+            updateAgyHUD("AGY Agent: Ref", "Ref: " + nr, "loading");
+            setTimeout(function() {
+                updateAgyHUD("AGY Agent: Ref", "Aktif: " + nr, "success");
+                if (typeof callback === "function") callback(true);
+            }, 600);
+            return;
+        }
+
+        // 0g. Fingerprint Faker / Ganti HP
+        if (sp.includes("fingerprint") || sp.includes("ganti fp") || sp.includes("acak hp") || sp.includes("next fp")) {
+            updateAgyHUD("AGY Agent: Fingerprint", "Mengacak fingerprint...", "loading");
+            var fp = "";
+            try {
+                if (window.GhostBridge && window.GhostBridge.nextFingerprint) {
+                    fp = window.GhostBridge.nextFingerprint();
+                }
+            } catch(_) {}
+            setTimeout(function() {
+                updateAgyHUD("AGY Agent: Fingerprint", "Model HP: " + (fp || "Acak"), "success");
+                if (typeof callback === "function") callback(true);
+            }, 800);
+            return;
+        }
+
         // 1. Pilih Wallet / Dompet N (Cth: "pilih wallet 3", "wallet 3", "pilih akun 2")
         var wMatch = sp.match(/(?:pilih|select|gunakan)?\s*(?:wallet|dompet|akun)\s*(\d+)/i);
         if (wMatch) {
@@ -5485,6 +6054,7 @@
     function executeMultiStepPlan(steps, index) {
         if (!steps || index >= steps.length) {
             updateAgyHUD("AGY Agent Selesai", steps.length + " langkah alur berhasil diselesaikan", "success");
+            try { sessionStorage.removeItem("__agy_pending_prompt_queue__"); } catch(_) {}
             return;
         }
 
@@ -5493,6 +6063,23 @@
         var total = steps.length;
 
         updateAgyHUD("AGY Agent [" + stepNum + "/" + total + "]", currentStep, "running");
+
+        // Handle reload step within multi-step flow so it survives page reload
+        var isReloadStep = /^(?:reload|refresh|muat\s*ulang)$/i.test(currentStep.trim());
+        if (isReloadStep) {
+            updateAgyHUD("AGY Agent [" + stepNum + "/" + total + "]", "Menyimpan antrean alur & memuat ulang halaman...", "running");
+            try {
+                sessionStorage.setItem("__agy_pending_prompt_queue__", JSON.stringify({
+                    steps: steps,
+                    index: index + 1,
+                    timestamp: Date.now()
+                }));
+            } catch(_) {}
+            setTimeout(function() {
+                location.reload();
+            }, 500);
+            return;
+        }
 
         executeSingleStep(currentStep, function(stepSuccess) {
             setTimeout(function() {
@@ -5754,6 +6341,27 @@
                 sessionStorage.removeItem("__agy_active_recipe_run__");
             }
         } catch(e) {}
+    })();
+
+    // Auto-resume pending multi-step prompt flow across page reload
+    (function checkAndResumePendingPromptQueue() {
+        try {
+            var raw = sessionStorage.getItem("__agy_pending_prompt_queue__");
+            if (!raw) return;
+            sessionStorage.removeItem("__agy_pending_prompt_queue__");
+            var q = JSON.parse(raw);
+            if (!q || !Array.isArray(q.steps) || typeof q.index !== "number") return;
+            if (Date.now() - (q.timestamp || 0) > 120000) return;
+
+            if (q.index < q.steps.length) {
+                console.log("[AGY Co-Pilot] Melanjutkan antrean langkah setelah reload ke langkah " + (q.index + 1) + "/" + q.steps.length);
+                setTimeout(function() {
+                    executeMultiStepPlan(q.steps, q.index);
+                }, 1400);
+            }
+        } catch(e) {
+            console.warn("[AGY Co-Pilot] Gagal resume pending prompt queue:", e);
+        }
     })();
 
     window.AgyRecorder = AgyRecorder;

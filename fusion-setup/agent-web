@@ -80,6 +80,27 @@ async function clearCdpCookies() {
     }
 }
 
+async function saveSessionCookies(profile) {
+    if (!profile || profile === 'default' || profile.startsWith('fresh_')) return false;
+    const dir = getSessionsDir();
+    const sessionFile = path.join(dir, `${profile}.json`);
+    try {
+        await ensurePortForward();
+        const { chromium } = require('playwright-core');
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+        const contexts = browser.contexts();
+        if (contexts.length > 0) {
+            // Simpan seluruh cookies dan storageState dari SELURUH domain website
+            await contexts[0].storageState({ path: sessionFile });
+            console.log(` ${GREEN}💾 [SESSION SAVED] Seluruh sesi & cookies web untuk profil [${profile}] berhasil disimpan!${RESET}`);
+        }
+        await browser.close();
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 async function injectSessionCookies(profile) {
     const dir = getSessionsDir();
     const sessionFile = path.join(dir, `${profile}.json`);
@@ -224,6 +245,7 @@ async function main() {
         console.log(`Usage:`);
         console.log(`  ${GREEN}web open <url> [--profile <nama>] [--wallet <name>]${RESET}`);
         console.log(`  ${GREEN}web <url> [--profile <nama>]${RESET}  (Shortcut instan membuka URL)`);
+        console.log(`  ${GREEN}web save-session [nama_profile]${RESET} (Simpan sesi semua situs web ke profil)`);
         console.log(`  ${GREEN}web x-post "teks tweet" [--profile <nama>]${RESET}`);
         console.log(`  ${GREEN}web prompt "instruksi cerdas / multi-step"${RESET}`);
         console.log(`  ${GREEN}web click "Nama Tombol"${RESET}`);
@@ -240,6 +262,18 @@ async function main() {
         await clearCdpCookies();
         runIpc('clear-cache');
         console.log(`${GREEN}✔ Selesai! Browser aktif kini 100% FRESH.${RESET}`);
+        process.exit(0);
+    }
+
+    if (cmd === 'save' || cmd === 'save-session' || cmd === 'save-profile') {
+        const prof = args[1] || 'eryziggy';
+        console.log(`${CYAN}💾 Menyimpan seluruh cookies & sesi website untuk profil [${prof}]...${RESET}`);
+        const ok = await saveSessionCookies(prof);
+        if (ok) {
+            console.log(`${GREEN}✔ Berhasil menyimpan sesi semua situs web ke brankas [${prof}].${RESET}`);
+        } else {
+            console.log(`${RED}Gagal menyimpan sesi. Pastikan browser WebView sedang aktif terbuka.${RESET}`);
+        }
         process.exit(0);
     }
 

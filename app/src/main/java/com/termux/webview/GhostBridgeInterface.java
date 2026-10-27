@@ -407,6 +407,40 @@ public class GhostBridgeInterface implements Runnable {
     }
 
     @JavascriptInterface
+    public String nextWallet() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            return mgr.switchToNextWallet();
+        }
+        return "";
+    }
+
+    @JavascriptInterface
+    public void wipeCache() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.clearWebviewCache();
+        }
+    }
+
+    @JavascriptInterface
+    public void reloadPage() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.reloadActiveTab();
+        }
+    }
+
+    @JavascriptInterface
+    public String nextFingerprint() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            return mgr.rotateDeviceFingerprint();
+        }
+        return "";
+    }
+
+    @JavascriptInterface
     public void switchChainByHex(String str) {
         TermuxActivity termuxActivity;
         if (str == null) {
