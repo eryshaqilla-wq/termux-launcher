@@ -470,12 +470,33 @@
             return emails[this.activeEmailIndex];
         },
 
+        getRefs: function() {
+            var refs = [];
+            try {
+                if (window.GhostBridge && typeof window.GhostBridge.readWalletFile === "function") {
+                    var rawRef = window.GhostBridge.readWalletFile("ref.txt");
+                    if (rawRef && rawRef.trim().length > 0) {
+                        refs = rawRef.split(/[\r\n]+/).map(function(s) { return s.trim(); }).filter(function(s) { return s.length > 0; });
+                    }
+                }
+            } catch(_) {}
+            if (refs.length === 0) {
+                var q = this.getQueries();
+                if (q && q.length > 0) refs = q;
+            }
+            if (refs.length === 0) {
+                refs = ["REF123"];
+            }
+            return refs;
+        },
+
         activeRefIndex: 0,
         nextRef: function() {
-            var queries = this.getQueries();
-            if (queries.length === 0) return "ref_code";
-            this.activeRefIndex = (this.activeRefIndex + 1) % queries.length;
-            return queries[this.activeRefIndex];
+            var list = this.getRefs();
+            if (list.length === 0) return "REF123";
+            var code = list[this.activeRefIndex % list.length];
+            this.activeRefIndex = (this.activeRefIndex + 1) % list.length;
+            return code;
         },
 
         getActiveWallet: function() {
@@ -1258,189 +1279,12 @@
         showRecordingHUD: function() {
             var existing = document.getElementById("__agy_rec_bar__");
             if (existing) existing.remove();
-
-            var isCollapsed = this.isBarCollapsed || (sessionStorage.getItem("__agy_rec_bar_collapsed__") === "true");
-
-            var bar = document.createElement("div");
-            bar.id = "__agy_rec_bar__";
-            bar.className = "fusion-rec-supplementary-bar";
-            bar.style.position = "fixed";
-            bar.style.bottom = "42px";
-            bar.style.left = "4px";
-            bar.style.background = "#1e2025";
-            bar.style.border = "1px solid #3d414a";
-            bar.style.borderRadius = "1px";
-            bar.style.padding = "2px";
-            bar.style.display = "flex";
-            bar.style.flexDirection = "row";
-            bar.style.alignItems = "center";
-            bar.style.gap = "2px";
-            bar.style.zIndex = "2147483640";
-            bar.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.75)";
-            bar.style.fontFamily = "monospace, system-ui, sans-serif";
-            bar.style.fontSize = "10px";
-            bar.style.color = "#e2e2e6";
-            bar.style.touchAction = "manipulation";
-            bar.style.pointerEvents = "auto";
-            bar.style.userSelect = "none";
-            bar.style.webkitUserSelect = "none";
-            bar.style.webkitTapHighlightColor = "transparent";
-
-            var btnStyle = "background:#2b2d33; color:#e2e2e6; border:1px solid #3d414a; border-radius:1px; padding:2px 4px; font-size:10px; font-weight:700; letter-spacing:0.3px; line-height:13px; cursor:pointer; touch-action:manipulation; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; font-family:monospace, system-ui, sans-serif; text-transform:uppercase; outline:none;";
-            var toggleBtnStyle = "background:#2b2d33; color:#e2e2e6; border:1px solid #3d414a; border-radius:1px; padding:2px 5px; font-size:10px; font-weight:700; line-height:13px; cursor:pointer; touch-action:manipulation; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; font-family:monospace, system-ui, sans-serif; outline:none;";
-
-            if (isCollapsed) {
-                bar.innerHTML = "<button id='__agy_rec_collapse_btn__' title='Buka Floating Menu' style='" + toggleBtnStyle + "'>&gt;</button>";
-            } else {
-                bar.innerHTML = "<button id='__agy_rec_collapse_btn__' title='Tutup Floating Menu' style='" + toggleBtnStyle + "'>&lt;</button>" +
-                                "<button id='__agy_rec_wallet_btn__' style='" + btnStyle + "'>WALLET &gt;</button>" +
-                                "<button id='__agy_rec_email_btn__' style='" + btnStyle + "'>EMAIL &gt;</button>" +
-                                "<button id='__agy_rec_ref_btn__' style='" + btnStyle + "'>REF</button>" +
-                                "<button id='__agy_rec_reload_btn__' style='" + btnStyle + "'>RELOAD</button>" +
-                                "<button id='__agy_rec_wipe_btn__' style='" + btnStyle + "'>WIPE</button>" +
-                                "<button id='__agy_rec_fp_btn__' style='" + btnStyle + "'>FP</button>";
-            }
-
-            // Stop touch and click bubbling at bar level so touches NEVER bleed to webpage elements underneath
-            var stopBarBleed = function(e) {
-                if (e && e.stopPropagation) e.stopPropagation();
-            };
-            bar.addEventListener("touchstart", stopBarBleed, { passive: true });
-            bar.addEventListener("touchmove", stopBarBleed, { passive: true });
-            bar.addEventListener("touchend", stopBarBleed, { passive: true });
-            bar.addEventListener("pointerdown", stopBarBleed);
-            bar.addEventListener("pointerup", stopBarBleed);
-            bar.addEventListener("mousedown", stopBarBleed);
-            bar.addEventListener("mouseup", stopBarBleed);
-            bar.addEventListener("click", stopBarBleed);
-
-            (document.body || document.documentElement).appendChild(bar);
+            try {
+                if (window.GhostBridge && window.GhostBridge.notifyRecordingState) {
+                    window.GhostBridge.notifyRecordingState(true);
+                }
+            } catch(_) {}
             this.updateCounter();
-
-            var self = this;
-            function bindHudBtn(btnId, actionFn) {
-                var btn = document.getElementById(btnId);
-                if (!btn) return;
-                var firedLock = false;
-                var exec = function(e) {
-                    if (e) {
-                        if (e.stopPropagation) e.stopPropagation();
-                        if (e.cancelable) e.preventDefault();
-                    }
-                    if (firedLock) return;
-                    firedLock = true;
-                    setTimeout(function() { firedLock = false; }, 300);
-                    try {
-                        actionFn();
-                    } catch(err) {
-                        console.error("[Fusion Supplementary HUD] Error executing button action:", err);
-                    }
-                };
-                btn.onclick = exec;
-            }
-
-            bindHudBtn("__agy_rec_collapse_btn__", function() {
-                self.isBarCollapsed = !isCollapsed;
-                try {
-                    sessionStorage.setItem("__agy_rec_bar_collapsed__", self.isBarCollapsed ? "true" : "false");
-                } catch(_) {}
-                self.showRecordingHUD();
-            });
-
-            if (!isCollapsed) {
-                bindHudBtn("__agy_rec_wallet_btn__", function() {
-                    var nw = "";
-                    try {
-                        if (window.GhostBridge && window.GhostBridge.nextWallet) {
-                            nw = window.GhostBridge.nextWallet();
-                        }
-                    } catch(_) {}
-                    try {
-                        var newAddr = (window.GhostBridge && window.GhostBridge.getWalletAddress) ? window.GhostBridge.getWalletAddress() : "";
-                        if (newAddr) window.dispatchEvent(new CustomEvent("accountsChanged", { detail: [newAddr] }));
-                    } catch(_) {}
-                    self.recordEvent({
-                        type: "next_wallet",
-                        timestamp: Date.now(),
-                        text: "Ganti Wallet -> " + (nw || "Next")
-                    });
-                });
-
-                bindHudBtn("__agy_rec_email_btn__", function() {
-                    var ne = (typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "tuyul@gmail.com";
-                    self.recordEvent({
-                        type: "next_email",
-                        timestamp: Date.now(),
-                        text: "Ganti Email -> " + ne,
-                        value: ne
-                    });
-                    updateAgyHUD("Smart Email", "Aktif: " + ne, "success");
-                });
-
-                bindHudBtn("__agy_rec_ref_btn__", function() {
-                    var nr = (typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123";
-                    self.recordEvent({
-                        type: "ref",
-                        timestamp: Date.now(),
-                        text: "Ref Code -> " + nr,
-                        value: nr
-                    });
-                    updateAgyHUD("Referral Code", "Aktif: " + nr, "success");
-                });
-
-                bindHudBtn("__agy_rec_reload_btn__", function() {
-                    self.recordEvent({
-                        type: "reload",
-                        timestamp: Date.now(),
-                        text: "Reload Halaman"
-                    });
-                    try {
-                        sessionStorage.setItem("__agy_rec_active__", "true");
-                        sessionStorage.setItem("__fusion_rec_active__", "true");
-                        sessionStorage.setItem("__agy_rec_mode__", self.recordMode || "step_by_step");
-                        sessionStorage.setItem("__agy_rec_name__", self.sessionName || "Resep");
-                    } catch(_) {}
-                    setTimeout(function() {
-                        location.reload();
-                    }, 300);
-                });
-
-                bindHudBtn("__agy_rec_wipe_btn__", function() {
-                    try {
-                        if (window.GhostBridge && window.GhostBridge.wipeCache) {
-                            window.GhostBridge.wipeCache();
-                        }
-                    } catch(_) {}
-                    try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
-                    try {
-                        sessionStorage.setItem("__agy_rec_active__", "true");
-                        sessionStorage.setItem("__fusion_rec_active__", "true");
-                        sessionStorage.setItem("__agy_rec_mode__", self.recordMode || "step_by_step");
-                        sessionStorage.setItem("__agy_rec_name__", self.sessionName || "Resep");
-                    } catch(_) {}
-                    self.recordEvent({
-                        type: "wipe_cache",
-                        timestamp: Date.now(),
-                        text: "Wipe Cache & Storage"
-                    });
-                });
-
-                bindHudBtn("__agy_rec_fp_btn__", function() {
-                    var fp = "";
-                    try {
-                        if (window.GhostBridge && window.GhostBridge.nextFingerprint) {
-                            fp = window.GhostBridge.nextFingerprint();
-                        }
-                    } catch(_) {}
-                    self.recordEvent({
-                        type: "fingerprint",
-                        timestamp: Date.now(),
-                        text: "Fingerprint -> " + (fp || "Acak"),
-                        value: fp
-                    });
-                    updateAgyHUD("Fingerprint Faker", "Model HP: " + (fp || "Acak"), "success");
-                });
-            }
         },
 
         updateCounter: function() {
@@ -1457,6 +1301,11 @@
             if (bar) bar.remove();
             var st = document.getElementById("__agy_rec_style__");
             if (st) st.remove();
+            try {
+                if (window.GhostBridge && window.GhostBridge.notifyRecordingState) {
+                    window.GhostBridge.notifyRecordingState(false);
+                }
+            } catch(_) {}
         }
     };
 

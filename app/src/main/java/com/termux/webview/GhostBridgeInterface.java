@@ -294,6 +294,17 @@ public class GhostBridgeInterface implements Runnable {
     }
 
     @JavascriptInterface
+    public void notifyRecordingState(boolean z) {
+        TermuxActivity termuxActivity;
+        FusionWebViewManager fusionWebViewManager = FusionWebViewManager.getInstance();
+        if (fusionWebViewManager == null || (termuxActivity = fusionWebViewManager.mActivity) == null) {
+            return;
+        }
+        fusionWebViewManager.mIsRecording = z;
+        termuxActivity.runOnUiThread(new FusionRecUpdateRunnable(fusionWebViewManager));
+    }
+
+    @JavascriptInterface
     public void notifyRecordingStep(String str) {
         if (str == null) {
             return;
