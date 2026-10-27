@@ -232,21 +232,8 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
         }
     }
 
-    private boolean hasActiveSelection(InputConnection ic) {
-        if (ic == null) return false;
-        try {
-            CharSequence selected = ic.getSelectedText(0);
-            return selected != null && selected.length() > 0;
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
     private void handleBackspace(InputConnection ic) {
-        if (hasActiveSelection(ic)) {
-            ic.commitText("", 1);
-            return;
-        }
+        if (ic == null) return;
         if (!ic.deleteSurroundingText(1, 0)) {
             long now = SystemClock.uptimeMillis();
             ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL, 0, 0));
@@ -255,10 +242,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
     }
 
     private void handleForwardDelete(InputConnection ic) {
-        if (hasActiveSelection(ic)) {
-            ic.commitText("", 1);
-            return;
-        }
+        if (ic == null) return;
         if (!ic.deleteSurroundingText(0, 1)) {
             long now = SystemClock.uptimeMillis();
             ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_FORWARD_DEL, 0, 0));

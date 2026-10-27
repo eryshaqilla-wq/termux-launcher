@@ -630,6 +630,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             settings.setSupportZoom(true);
             settings.setBuiltInZoomControls(true);
             settings.setDisplayZoomControls(false);
+        } else {
+            FusionProfileManager.applyProfile(str2, webView, false);
         }
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
@@ -1245,7 +1247,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (webView == null) {
             return;
         }
-        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + this.mCurrentProfile + "'; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
+        FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(this.mCurrentProfile);
+        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + this.mCurrentProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "macro_recorder.js");
         if (this.mIsGhostMode) {
@@ -1563,10 +1566,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             fusionTab2.mUrl = str;
             fusionTab2.mProfile = str2;
             switchTab(i);
+            FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
             fusionTab2.mWebView.loadUrl(str);
         } else {
             FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5);
             switchTab(this.mTabList.size() - 1);
+            FusionProfileManager.applyProfile(str2, fusionTabCreateTabInternal.mWebView, z2);
             fusionTabCreateTabInternal.mWebView.loadUrl(str);
         }
         syncVisibility();

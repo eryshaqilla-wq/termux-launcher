@@ -176,6 +176,9 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.evalOnActiveTab("window.AgyBridge && window.AgyBridge.solveTurnstile && window.AgyBridge.solveTurnstile();");
         } else if (str.startsWith("WEBVIEW_CLEAR_CACHE")) {
             fusionWebViewManager.clearWebviewCache();
+        } else if (str.startsWith("WEBVIEW_CLEAR_COOKIES")) {
+            FusionProfileManager.clearAllCookiesAndStorage();
+            fusionWebViewManager.clearWebviewCache();
         } else if (str.startsWith("WEBVIEW_COLLAPSE_PILL")) {
             fusionWebViewManager.toggleCollapsePill();
         }

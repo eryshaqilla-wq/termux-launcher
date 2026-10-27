@@ -1,123 +1,170 @@
 #!/usr/bin/env node
+
 /**
- * agent-web - Universal Autonomous Web Controller for AI Agents
- * Allows Antigravity, Subagents, or CLI scripts to control WebView freely:
- * navigate, post to X/Twitter, click elements, fill forms, and snapshot DOM.
+ * AGENT-WEB CONTROLLER (Universal Web Automation Engine)
+ * Pengendali WebView otonom untuk AI Agents (Antigravity) & CLI.
+ * Mendukung navigasi, multi-step NLP, DOM snapshot, multi-profile cookie vault, dan X automation.
  */
 
-const { execSync, spawn } = require('child_process');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const CYAN = '\x1b[96m';
-const GREEN = '\x1b[92m';
-const YELLOW = '\x1b[93m';
-const RED = '\x1b[91m';
+const GREEN = '\x1b[32m';
+const CYAN = '\x1b[36m';
+const YELLOW = '\x1b[33m';
+const RED = '\x1b[31m';
 const BOLD = '\x1b[1m';
 const RESET = '\x1b[0m';
 
-function runIpc(cmd) {
+function getSessionsDir() {
+    const candidates = [
+        process.env.FUSION_WALLET_DIR ? path.join(process.env.FUSION_WALLET_DIR, 'sessions') : null,
+        process.env.HOME ? path.join(process.env.HOME, 'wallet', 'sessions') : null,
+        '/wallet/sessions',
+        '/root/wallet/sessions',
+        '/data/data/com.termux/files/home/wallet/sessions'
+    ].filter(Boolean);
+
+    for (const dir of candidates) {
+        if (fs.existsSync(dir)) return dir;
+    }
+    const def = '/root/wallet/sessions';
+    try { fs.mkdirSync(def, { recursive: true }); } catch(_) {}
+    return def;
+}
+
+function sleep(ms) {
+    return new Promise(r => setTimeout(r, ms));
+}
+
+function runIpc(ipcArgs) {
+    const ipcBin = fs.existsSync('/usr/local/bin/termux-ipc') 
+        ? '/usr/local/bin/termux-ipc' 
+        : (fs.existsSync('/usr/local/termux-shims/termux-ipc') ? '/usr/local/termux-shims/termux-ipc' : 'termux-ipc');
     try {
-        return execSync(`termux-ipc webview ${cmd}`, { encoding: 'utf8', timeout: 25000 });
+        return execSync(`${ipcBin} webview ${ipcArgs}`, { encoding: 'utf8' }).trim();
     } catch (e) {
-        return e.stdout ? e.stdout.toString() : e.message;
+        return e.stdout ? e.stdout.trim() : `Error: ${e.message}`;
     }
 }
 
 function evalJs(code) {
     const escaped = code.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const res = runIpc(`eval "${escaped}"`);
-    return res ? res.trim() : '';
+    return runIpc(`eval "${escaped}"`);
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+async function ensurePortForward() {
+    try {
+        const unixOut = execSync("adb -s 127.0.0.1:5555 shell 'cat /proc/net/unix | grep devtools' 2>/dev/null").toString();
+        const match = unixOut.match(/@(webview_devtools_remote_\d+)/);
+        if (match) {
+            execSync(`adb -s 127.0.0.1:5555 forward tcp:9222 localabstract:${match[1]}`);
+        }
+    } catch (_) {}
+}
+
+async function clearCdpCookies() {
+    try {
+        await ensurePortForward();
+        const { chromium } = require('playwright-core');
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+        const contexts = browser.contexts();
+        if (contexts.length > 0) {
+            await contexts[0].clearCookies();
+        }
+        await browser.close();
+        return true;
+    } catch(e) {
+        return false;
+    }
+}
+
+async function injectSessionCookies(profile) {
+    const dir = getSessionsDir();
+    const sessionFile = path.join(dir, `${profile}.json`);
+    if (!fs.existsSync(sessionFile)) return false;
+
+    try {
+        const raw = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+        if (!raw.cookies || raw.cookies.length === 0) return false;
+
+        await ensurePortForward();
+        const { chromium } = require('playwright-core');
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+        const contexts = browser.contexts();
+        if (contexts.length > 0) {
+            await contexts[0].clearCookies();
+            await contexts[0].addCookies(raw.cookies);
+            console.log(` ${GREEN}🔑 [COOKIE VAULT] Sesi login [${profile}] berhasil diinjeksi ke browser!${RESET}`);
+        }
+        await browser.close();
+        return true;
+    } catch (e) {
+        return false;
+    }
 }
 
 async function handleXPost(text, profile) {
     const targetProfile = profile || 'shaqilla';
-    console.log(`\n${CYAN}🤖 [AGENT-WEB] Membuka X Compose dengan profil: ${BOLD}${targetProfile}${RESET}`);
+    console.log(`${CYAN}🐦 [X-POST] Memulai posting ke X menggunakan profil: ${BOLD}${targetProfile}${RESET}`);
     
-    // 1. Luncurkan URL compose X dengan profil yang diminta
+    // Pastikan cookies profil diinjeksi jika ada
+    await injectSessionCookies(targetProfile);
+
+    // 1. Buka komposer tweet X dengan profil yang diminta
     runIpc(`--profile ${targetProfile} https://x.com/compose/post`);
-    
     console.log(`⏳ Menunggu halaman editor X siap...`);
-    let isReady = false;
-    for (let i = 0; i < 20; i++) {
-        await sleep(800);
-        const check = evalJs(`(function() {
-            var el = document.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
-            return el ? 'READY' : 'WAIT';
-        })()`);
-        if (check.includes('READY')) {
-            isReady = true;
-            break;
-        }
-    }
+    await sleep(3500);
 
-    if (!isReady) {
-        console.log(`${YELLOW}⚠️ Halaman belum memuat textarea secara penuh, mencoba injeksi langsung...${RESET}`);
-    }
-
-    // 2. Ketik teks postingan ke contenteditable editor & klik tombol Post
-    const payload = JSON.stringify(text);
-    const injectJs = `(function() {
-        var editor = document.querySelector('div[data-testid="tweetTextarea_0"], div[role="textbox"][contenteditable="true"]');
-        if (!editor) return JSON.stringify({ success: false, error: "Textarea tidak ditemukan" });
-        editor.focus();
-        document.execCommand('selectAll', false, null);
-        document.execCommand('insertText', false, ${payload});
-        editor.dispatchEvent(new Event('input', { bubbles: true }));
-        
-        setTimeout(function() {
-            var postBtn = document.querySelector('button[data-testid="tweetButton"], button[data-testid="tweetButtonInline"]');
-            if (postBtn && !postBtn.disabled) {
-                postBtn.click();
-                if (window.AgyBridge && window.AgyBridge.updateHUD) {
-                    window.AgyBridge.updateHUD("Post X Terkirim", "Berhasil posting dengan akun " + ${JSON.stringify(targetProfile)}, "success");
-                }
+    // 2. Skrip injeksi teks ke contenteditable Twitter / X
+    const postScript = `
+    (async function() {
+        try {
+            var editor = document.querySelector('[data-testid="tweetTextarea_0"]') || 
+                         document.querySelector('div[contenteditable="true"]');
+            if (!editor) return JSON.stringify({ error: "Editor tweet tidak ditemukan di halaman" });
+            
+            editor.focus();
+            document.execCommand('selectAll', false, null);
+            document.execCommand('delete', false, null);
+            document.execCommand('insertText', false, "${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}");
+            
+            // Trigger input events
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+            editor.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            await new Promise(r => setTimeout(r, 1000));
+            
+            var btn = document.querySelector('[data-testid="tweetButton"]') || 
+                      document.querySelector('[data-testid="tweetButtonInline"]') ||
+                      Array.from(document.querySelectorAll('button')).find(b => b.innerText && (b.innerText.includes('Post') || b.innerText.includes('Tweet')));
+            
+            if (!btn) return JSON.stringify({ error: "Tombol Post tidak ditemukan" });
+            if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') {
+                return JSON.stringify({ error: "Tombol Post disabled" });
             }
-        }, 500);
-        return JSON.stringify({ success: true });
-    })()`;
+            
+            btn.click();
+            return JSON.stringify({ success: true, text: "${text.substring(0, 30)}..." });
+        } catch(e) {
+            return JSON.stringify({ error: e.message });
+        }
+    })();
+    `;
 
-    const res = evalJs(injectJs);
-    await sleep(1500);
-
-    console.log(`\n${GREEN}✔ Postingan berhasil dikirim ke X via profil: ${BOLD}${targetProfile}${RESET}`);
-    console.log(`📝 Isi Post: "${text}"\n`);
+    const res = evalJs(postScript);
+    console.log(`${GREEN}✔ Perintah kirim tweet telah dieksekusi.${RESET}`);
     return { success: true, profile: targetProfile, text };
 }
 
 async function handleSnapshot() {
-    const dumpFile = '/root/wallet/.webview_snapshot.json';
+    console.log(`${CYAN}📸 [DOM SNAPSHOT] Mengambil ringkasan elemen aktif di WebView...${RESET}`);
+    const dumpFile = '/root/wallet/dom_dump.json';
     try { if (fs.existsSync(dumpFile)) fs.unlinkSync(dumpFile); } catch(_) {}
-
-    const js = `(function() {
-        var buttons = Array.from(document.querySelectorAll('button, a[role=button], [role=button], input[type=button], input[type=submit], [tabindex]'))
-            .filter(function(b) { var r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
-            .slice(0, 30)
-            .map(function(b) { return (b.innerText || b.value || b.getAttribute('aria-label') || b.getAttribute('data-testid') || '').trim(); })
-            .filter(Boolean);
-        var inputs = Array.from(document.querySelectorAll('input:not([type=hidden]), textarea, [contenteditable="true"]'))
-            .filter(function(i) { var r = i.getBoundingClientRect(); return r.width > 0 && r.height > 0; })
-            .slice(0, 15)
-            .map(function(i) { return { placeholder: i.placeholder || i.getAttribute('aria-label') || '', name: i.name || '', type: i.type || 'text', testid: i.getAttribute('data-testid') || '' }; });
-        var snapshotData = {
-            url: window.location.href,
-            title: document.title,
-            buttons: buttons,
-            inputs: inputs,
-            timestamp: Date.now()
-        };
-        if (window.GhostBridge && window.GhostBridge.writeWalletFile) {
-            window.GhostBridge.writeWalletFile('.webview_snapshot.json', JSON.stringify(snapshotData, null, 2));
-        }
-    })()`;
     
-    evalJs(js);
+    runIpc('bridge');
     
-    // Tunggu file tersimpan
     for (let i = 0; i < 10; i++) {
         await sleep(200);
         if (fs.existsSync(dumpFile)) {
@@ -131,6 +178,42 @@ async function handleSnapshot() {
     console.log(JSON.stringify({ status: "snapshot_requested", url: "active_page" }, null, 2));
 }
 
+async function handleOpenUrl(url, extraFlags = []) {
+    let targetProfile = 'default';
+    let flagsWithoutProfile = [];
+
+    for (let i = 0; i < extraFlags.length; i++) {
+        if (extraFlags[i] === '--profile' && extraFlags[i + 1]) {
+            targetProfile = extraFlags[i + 1];
+            i++;
+        } else {
+            flagsWithoutProfile.push(extraFlags[i]);
+        }
+    }
+
+    const dir = getSessionsDir();
+    const sessionFile = path.join(dir, `${targetProfile}.json`);
+    const hasSession = fs.existsSync(sessionFile);
+
+    console.log(`${CYAN}🌐 [AGENT-WEB] Membuka: ${BOLD}${url}${RESET} ${CYAN}(Profil: ${BOLD}${targetProfile}${RESET}${CYAN})${RESET}`);
+
+    if (hasSession) {
+        console.log(` ${GREEN}🔑 Sesi profil [${targetProfile}] ditemukan. Memulihkan cookies akun...${RESET}`);
+        await injectSessionCookies(targetProfile);
+    } else if (targetProfile !== 'default') {
+        console.log(` ${YELLOW}⚡ Profil baru [${targetProfile}] belum ada sesi. Membersihkan cookies agar 100% FRESH...${RESET}`);
+        await clearCdpCookies();
+    }
+
+    let fullFlags = `--profile ${targetProfile}`;
+    if (flagsWithoutProfile.length > 0) {
+        fullFlags += ` ${flagsWithoutProfile.join(' ')}`;
+    }
+
+    const res = runIpc(`${fullFlags} ${url}`);
+    if (res) console.log(res);
+}
+
 async function main() {
     const args = process.argv.slice(2);
     const cmd = args[0] ? args[0].toLowerCase() : '';
@@ -139,22 +222,24 @@ async function main() {
         console.log(`\n${CYAN}${BOLD}🤖 AGENT-WEB CONTROLLER (Universal Web Automation for AI Agents)${RESET}`);
         console.log(`Pengendali browser otonom untuk Antigravity, Subagents, dan CLI.\n`);
         console.log(`Usage:`);
-        console.log(`  ${GREEN}agent-web x-post "teks tweet" [--profile <nama>]${RESET}`);
-        console.log(`      Posting otomatis ke X/Twitter menggunakan profil yang ditentukan (default: shaqilla)\n`);
-        console.log(`  ${GREEN}agent-web open <url> [--profile <nama>] [--wallet <name>]${RESET}`);
-        console.log(`      Buka halaman web dengan konfigurasi profil/dompet tertentu\n`);
-        console.log(`  ${GREEN}agent-web prompt "instruksi cerdas / multi-step"${RESET}`);
-        console.log(`      Kirim perintah alur (contoh: "klik connect lalu pilih base lalu klaim")\n`);
-        console.log(`  ${GREEN}agent-web click "Nama Tombol"${RESET}`);
-        console.log(`      Klik tombol/elemen tertentu secara cerdas\n`);
-        console.log(`  ${GREEN}agent-web type "Kolom" "Nilai yang diisi"${RESET}`);
-        console.log(`      Isi input/form otomatis\n`);
-        console.log(`  ${GREEN}agent-web snapshot${RESET}`);
-        console.log(`      Ekstrak ringkasan DOM (tombol & input aktif) agar Agent bisa "melihat" halaman\n`);
-        console.log(`  ${GREEN}agent-web eval "kode JavaScript"${RESET}`);
-        console.log(`      Jalankan kode JavaScript bebas di halaman aktif\n`);
-        console.log(`  ${GREEN}agent-web close${RESET}`);
-        console.log(`      Tutup jendela WebView\n`);
+        console.log(`  ${GREEN}web open <url> [--profile <nama>] [--wallet <name>]${RESET}`);
+        console.log(`  ${GREEN}web <url> [--profile <nama>]${RESET}  (Shortcut instan membuka URL)`);
+        console.log(`  ${GREEN}web x-post "teks tweet" [--profile <nama>]${RESET}`);
+        console.log(`  ${GREEN}web prompt "instruksi cerdas / multi-step"${RESET}`);
+        console.log(`  ${GREEN}web click "Nama Tombol"${RESET}`);
+        console.log(`  ${GREEN}web type "Kolom" "Nilai yang diisi"${RESET}`);
+        console.log(`  ${GREEN}web snapshot${RESET} (Ekstrak DOM aktif)`);
+        console.log(`  ${GREEN}web clear-cookies${RESET} (Bersihkan cookies aktif agar 100% fresh)`);
+        console.log(`  ${GREEN}web eval "kode JavaScript"${RESET}`);
+        console.log(`  ${GREEN}web close${RESET}\n`);
+        process.exit(0);
+    }
+
+    if (cmd === 'clear-cookies' || cmd === 'clearcookies' || cmd === 'clean') {
+        console.log(`${CYAN}🧹 Membersihkan seluruh cookies & storage aktif...${RESET}`);
+        await clearCdpCookies();
+        runIpc('clear-cache');
+        console.log(`${GREEN}✔ Selesai! Browser aktif kini 100% FRESH.${RESET}`);
         process.exit(0);
     }
 
@@ -172,7 +257,7 @@ async function main() {
         const tweetText = textArgs.join(' ').trim();
         if (!tweetText) {
             console.log(`${RED}Error: Masukkan teks yang ingin diposting!${RESET}`);
-            console.log(`Contoh: agent-web x-post "Halo dunia Web3!" --profile shaqilla`);
+            console.log(`Contoh: web x-post "Halo dunia Web3!" --profile shaqilla`);
             process.exit(1);
         }
         await handleXPost(tweetText, profile);
@@ -185,9 +270,16 @@ async function main() {
             console.log(`${RED}Error: Masukkan URL yang ingin dibuka!${RESET}`);
             process.exit(1);
         }
-        const restArgs = args.slice(2).join(' ');
-        runIpc(`${restArgs} ${url}`);
-        console.log(`${GREEN}✔ Membuka URL: ${url}${RESET}`);
+        const extraFlags = args.slice(2);
+        await handleOpenUrl(url, extraFlags);
+        process.exit(0);
+    }
+
+    // Shortcut: jika perintah berupa URL (contoh: web x.com --profile eryziggy)
+    if (cmd.startsWith('http://') || cmd.startsWith('https://') || cmd.includes('.')) {
+        const url = args[0];
+        const extraFlags = args.slice(1);
+        await handleOpenUrl(url, extraFlags);
         process.exit(0);
     }
 

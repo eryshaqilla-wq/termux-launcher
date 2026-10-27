@@ -212,6 +212,11 @@ handle_webview() {
             echo "[termux-ipc] Cache tab aktif telah dibersihkan"
             return 0
             ;;
+        clear-cookies|clearcookies|--clear-cookies)
+            send_cmd "WEBVIEW_CLEAR_COOKIES"
+            echo "[termux-ipc] Seluruh cookies & storage WebView telah dibersihkan (100% Fresh)"
+            return 0
+            ;;
         developer|inspect|dev|cdp|--developer|--inspect|--dev|--cdp)
             send_cmd "WEBVIEW_DEVELOPER"
             echo "[termux-ipc] Mode Developer & Eruda DevTools diaktifkan."
