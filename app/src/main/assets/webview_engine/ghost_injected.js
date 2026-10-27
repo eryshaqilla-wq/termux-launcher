@@ -1009,7 +1009,7 @@
     // --- 4. ACCURATE CSS SELECTOR HELPER ---
     function getCssSelector(el) {
         if (!el || el.nodeType !== 1) return "";
-        if (el.id) return "#" + el.id;
+        if (el.id && !el.id.startsWith("__agy_") && !el.id.startsWith("__fusion_") && !el.id.startsWith("sRecPill")) return "#" + el.id;
         if (el.getAttribute("data-testid")) return "[data-testid='" + el.getAttribute("data-testid") + "']";
         if (el.getAttribute("name")) return el.tagName.toLowerCase() + "[name='" + el.getAttribute("name") + "']";
         if (el.getAttribute("aria-label")) return el.tagName.toLowerCase() + "[aria-label='" + el.getAttribute("aria-label") + "']";
@@ -1018,7 +1018,7 @@
         var cur = el;
         while (cur && cur.nodeType === 1) {
             var tag = cur.nodeName.toLowerCase();
-            if (cur.id) {
+            if (cur.id && !cur.id.startsWith("__agy_") && !cur.id.startsWith("__fusion_") && !cur.id.startsWith("sRecPill")) {
                 path.unshift("#" + cur.id);
                 break;
             } else {
@@ -1142,7 +1142,7 @@
             }
             if (status) {
                 if (this.isRecording) {
-                    var modeLabel = (this.recordMode === "touch") ? "Touch" : ((this.recordMode === "hybrid") ? "Hybrid" : "DOM");
+                    var modeLabel = (this.recordMode === "touch") ? "Touch" : ((this.recordMode === "hybrid") ? "Hybrid" : ((this.recordMode === "step_by_step") ? "Step by Step" : "DOM"));
                     status.style.color = "#FF3B30";
                     status.innerText = "🔴 Mode Rekam (" + modeLabel + "): " + count + " aksi";
                 } else {
@@ -1210,12 +1210,12 @@
             var now = Date.now();
 
             var list = this.getEvents();
-            // Strict Debounce: Ignore duplicate actions on same element within 300ms
+            // Strict Debounce: Ignore duplicate actions on same element within 400ms
             var last = list[list.length - 1];
             if (last) {
                 var diff = now - (last.timestamp || 0);
-                if (diff < 300) {
-                    if (last.selector === ev.selector || (last.type === ev.type && last.text === ev.text)) {
+                if (diff < 400) {
+                    if (last.selector === ev.selector || (last.type === ev.type && last.text === ev.text) || (last.type === "click" && ev.type === "click" && diff < 350)) {
                         console.log("[AgyRecorder] Debounced duplicate event:", ev.selector);
                         return;
                     }
@@ -1256,60 +1256,39 @@
             var existing = document.getElementById("__agy_rec_bar__");
             if (existing) existing.remove();
 
-            var currentCount = this.getEvents().length;
-
             var bar = document.createElement("div");
             bar.id = "__agy_rec_bar__";
+            bar.className = "fusion-rec-supplementary-bar";
             bar.style.position = "fixed";
-            bar.style.bottom = "54px";
+            bar.style.bottom = "50px";
             bar.style.left = "10px";
-            bar.style.background = "rgba(15, 18, 26, 0.96)";
-            bar.style.backdropFilter = "blur(14px)";
-            bar.style.border = "1.5px solid #7C4DFF";
-            bar.style.borderRadius = "14px";
-            bar.style.padding = "5px 7px";
+            bar.style.background = "#1e2025";
+            bar.style.border = "1px solid #3d414a";
+            bar.style.borderRadius = "4px";
+            bar.style.padding = "3px 4px";
             bar.style.display = "flex";
-            bar.style.flexDirection = "column";
-            bar.style.gap = "4px";
-            bar.style.maxWidth = "calc(100vw - 20px)";
-            bar.style.zIndex = "2147483647";
-            bar.style.boxShadow = "0 8px 32px rgba(0, 0, 0, 0.9), 0 0 15px rgba(124, 77, 255, 0.35)";
-            bar.style.fontFamily = "system-ui, -apple-system, sans-serif";
+            bar.style.flexDirection = "row";
+            bar.style.alignItems = "center";
+            bar.style.gap = "3px";
+            bar.style.zIndex = "2147483640";
+            bar.style.boxShadow = "0 4px 14px rgba(0, 0, 0, 0.7)";
+            bar.style.fontFamily = "monospace, system-ui, sans-serif";
             bar.style.fontSize = "11px";
-            bar.style.color = "#FFFFFF";
+            bar.style.color = "#e2e2e6";
             bar.style.touchAction = "manipulation";
             bar.style.pointerEvents = "auto";
             bar.style.userSelect = "none";
             bar.style.webkitUserSelect = "none";
             bar.style.webkitTapHighlightColor = "transparent";
 
-            var btnStyle = "border:none; border-radius:10px; padding:4px 7px; font-size:10.5px; font-weight:bold; cursor:pointer; touch-action:manipulation; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent;";
+            var btnStyle = "background:#2b2d33; color:#e2e2e6; border:1px solid #3d414a; border-radius:3px; padding:4px 7px; font-size:11px; font-weight:700; letter-spacing:0.5px; cursor:pointer; touch-action:manipulation; pointer-events:auto; user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; font-family:monospace, system-ui, sans-serif; text-transform:uppercase; outline:none;";
 
-            bar.innerHTML = "<div style='display:flex; align-items:center; gap:4px;'>" +
-                            "<span style='display:inline-flex; align-items:center; gap:3px; font-weight:700; font-size:10.5px; color:#FF5252; margin-right:2px; flex-shrink:0;'>" +
-                            "<span style='display:inline-block; width:7px; height:7px; background:#FF5252; border-radius:50%; animation:agyPulse 1.2s infinite;'></span>" +
-                            "<span id='__agy_rec_count__'>REC (" + currentCount + ")</span></span>" +
-                            "<button id='__agy_rec_dom_btn__' style='background:#00E5FF; color:#000; " + btnStyle + "'>🎯 DOM</button>" +
-                            "<button id='__agy_rec_wallet_btn__' style='background:#7C4DFF; color:#FFF; " + btnStyle + "'>👛 Wallet</button>" +
-                            "<button id='__agy_rec_email_btn__' style='background:#FFA000; color:#000; " + btnStyle + "'>📧 Email</button>" +
-                            "<button id='__agy_rec_ref_btn__' style='background:#00E676; color:#000; " + btnStyle + "'>🔗 Ref</button>" +
-                            "</div>" +
-                            "<div style='display:flex; align-items:center; gap:4px;'>" +
-                            "<button id='__agy_rec_reload_btn__' style='background:#00B0FF; color:#000; " + btnStyle + "'>🔄 Reload</button>" +
-                            "<button id='__agy_rec_wipe_btn__' style='background:#FF5722; color:#FFF; " + btnStyle + "'>🧹 Wipe</button>" +
-                            "<button id='__agy_rec_fp_btn__' style='background:#E040FB; color:#FFF; " + btnStyle + "'>🎭 FP</button>" +
-                            "<button id='__agy_rec_edit_btn__' style='background:#F57C00; color:#FFF; " + btnStyle + "'>✏️ Edit</button>" +
-                            "<button id='__agy_rec_save_btn__' style='background:#2E7D32; color:#FFF; " + btnStyle + "'>💾 Simpan</button>" +
-                            "<button id='__agy_rec_cancel_btn__' style='background:#424242; color:#FFF; padding:4px 6px; font-size:10px; " + btnStyle + "'>✕</button>" +
-                            "</div>";
-
-            var style = document.getElementById("__agy_rec_style__");
-            if (!style) {
-                style = document.createElement("style");
-                style.id = "__agy_rec_style__";
-                style.innerHTML = "@keyframes agyPulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.3; transform: scale(0.8); } 100% { opacity: 1; transform: scale(1); } }";
-                document.head.appendChild(style);
-            }
+            bar.innerHTML = "<button id='__agy_rec_wallet_btn__' style='" + btnStyle + "'>WALLET</button>" +
+                            "<button id='__agy_rec_email_btn__' style='" + btnStyle + "'>EMAIL</button>" +
+                            "<button id='__agy_rec_ref_btn__' style='" + btnStyle + "'>REF</button>" +
+                            "<button id='__agy_rec_reload_btn__' style='" + btnStyle + "'>RELOAD</button>" +
+                            "<button id='__agy_rec_wipe_btn__' style='" + btnStyle + "'>WIPE</button>" +
+                            "<button id='__agy_rec_fp_btn__' style='" + btnStyle + "'>FP</button>";
 
             // Stop touch and click bubbling at bar level so touches NEVER bleed to webpage elements underneath
             var stopBarBleed = function(e) {
@@ -1317,8 +1296,11 @@
             };
             bar.addEventListener("touchstart", stopBarBleed, { passive: true });
             bar.addEventListener("touchmove", stopBarBleed, { passive: true });
+            bar.addEventListener("touchend", stopBarBleed, { passive: true });
             bar.addEventListener("pointerdown", stopBarBleed);
+            bar.addEventListener("pointerup", stopBarBleed);
             bar.addEventListener("mousedown", stopBarBleed);
+            bar.addEventListener("mouseup", stopBarBleed);
             bar.addEventListener("click", stopBarBleed);
 
             (document.body || document.documentElement).appendChild(bar);
@@ -1331,33 +1313,20 @@
                 var firedLock = false;
                 var exec = function(e) {
                     if (e) {
-                        e.stopPropagation();
+                        if (e.stopPropagation) e.stopPropagation();
                         if (e.cancelable) e.preventDefault();
                     }
                     if (firedLock) return;
                     firedLock = true;
-                    setTimeout(function() { firedLock = false; }, 350);
+                    setTimeout(function() { firedLock = false; }, 400);
                     try {
                         actionFn();
                     } catch(err) {
-                        console.error("[AGY Floating HUD] Error executing button action:", err);
+                        console.error("[Fusion Supplementary HUD] Error executing button action:", err);
                     }
                 };
-                btn.addEventListener("touchend", exec, { passive: false });
-                btn.addEventListener("pointerup", exec);
                 btn.onclick = exec;
             }
-
-            bindHudBtn("__agy_rec_dom_btn__", function() {
-                self.hideRecordingHUD();
-                showDomInspectorModal(function() {
-                    if (self.isRecording) {
-                        self.showRecordingHUD();
-                        self.updateCounter();
-                        self.updateUi();
-                    }
-                });
-            });
 
             bindHudBtn("__agy_rec_wallet_btn__", function() {
                 var nw = "";
@@ -1413,7 +1382,7 @@
                 } catch(_) {}
                 setTimeout(function() {
                     location.reload();
-                }, 350);
+                }, 300);
             });
 
             bindHudBtn("__agy_rec_wipe_btn__", function() {
@@ -1451,39 +1420,10 @@
                 });
                 updateAgyHUD("Fingerprint Faker", "Model HP: " + (fp || "Acak"), "success");
             });
-
-            bindHudBtn("__agy_rec_edit_btn__", function() {
-                self.hideRecordingHUD();
-                var curEvents = self.getEvents();
-                showRecipeEditorModal(self.sessionName, curEvents, function(updatedEvents) {
-                    if (updatedEvents) {
-                        self.sessionEvents = updatedEvents;
-                        window.__FUSION_MACRO_EVENTS__ = updatedEvents;
-                        try {
-                            localStorage.setItem("__fusion_macro_events__", JSON.stringify(updatedEvents));
-                        } catch(_) {}
-                    }
-                    if (self.isRecording) {
-                        self.showRecordingHUD();
-                        self.updateCounter();
-                        self.updateUi();
-                    }
-                });
-            });
-
-            bindHudBtn("__agy_rec_save_btn__", function() {
-                self.stopAndPromptSave();
-            });
-
-            bindHudBtn("__agy_rec_cancel_btn__", function() {
-                self.cancel();
-            });
         },
 
         updateCounter: function() {
-            var el = document.getElementById("__agy_rec_count__");
             var count = this.getEvents().length;
-            if (el) el.innerText = "REC (" + count + ")";
             try {
                 if (window.GhostBridge && window.GhostBridge.notifyRecordingStep) {
                     window.GhostBridge.notifyRecordingStep(count);
@@ -1635,62 +1575,86 @@
         }
     }, { passive: true });
 
-    // Helper fungsi untuk memvalidasi elemen interaktif DOM sejati
-    function getValidInteractiveDomTarget(el) {
+    // Helper fungsi untuk mendeteksi elemen internal UI AGY, Fusion, atau Native Pill
+    function isInternalUI(el) {
+        if (!el || el.nodeType !== 1) return false;
+        var id = el.id || "";
+        if (id.startsWith("__agy_") || id.startsWith("__fusion_") || id.startsWith("sRecPill")) return true;
+        if (el.closest) {
+            if (el.closest("[id^='__agy_'], [id^='__fusion_'], #sRecPill, .fusion-rec-supplementary-bar, [class*='fusion-ui'], [class*='agy-ui']")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Helper fungsi pencari target interaktif DOM sejati (Support Button, Link, Div SPA, SVG Icon, dApp)
+    function findBestClickTarget(el) {
         if (!el || el.nodeType !== 1) return null;
+        if (isInternalUI(el)) return null;
+
         var tag = el.tagName.toLowerCase();
         if (tag === "html" || tag === "body") return null;
 
-        // Abaikan UI internal AGY/Fusion
-        if (el.closest && el.closest("#__agy_slash_picker__, #__agy_slash_backdrop__, #__agy_rec_bar__, #__agy_dom_inspector_modal__, #__agy_save_modal__, #__agy_copilot_hud__, #__agy_recipe_modal__, #__agy_rec_mode_modal__, #__agy_run_config_modal__, #__agy_hub_modal__, #__agy_custom_db_modal__")) {
-            return null;
-        }
-        if (el.id && el.id.startsWith("__agy_")) return null;
-
-        // 1. Elemen kontrol standar atau elemen di dalamnya
+        // 1. Elemen kontrol standar atau link/tombol terdekat
         var standard = el.closest('button, a, input, select, textarea, label, summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"]');
-        if (standard) {
+        if (standard && !isInternalUI(standard)) {
             var stag = standard.tagName.toLowerCase();
-            if (stag === "html" || stag === "body") return null;
-            return standard;
+            if (stag !== "html" && stag !== "body") return standard;
         }
 
-        // 2. Elemen dengan explicit handler onclick atau data-action
-        var actionParent = el.closest('[onclick], [data-action]');
-        if (actionParent) {
+        // 2. Elemen dengan explicit handler onclick, data-action, atau tabindex interaktif
+        var actionParent = el.closest('[onclick], [data-action], [data-click], [tabindex]');
+        if (actionParent && !isInternalUI(actionParent)) {
             var atag = actionParent.tagName.toLowerCase();
-            if (atag === "html" || atag === "body") return null;
-            return actionParent;
+            if (atag !== "html" && atag !== "body") return actionParent;
         }
 
-        // 3. Tabindex interaktif (>= 0, bukan -1)
-        var tabIndexParent = el.closest('[tabindex]');
-        if (tabIndexParent) {
-            var ti = parseInt(tabIndexParent.getAttribute("tabindex"), 10);
-            if (!isNaN(ti) && ti >= 0) {
-                var ttag = tabIndexParent.tagName.toLowerCase();
-                if (ttag !== "html" && ttag !== "body") {
-                    return tabIndexParent;
+        // 3. Elemen tombol kustom / dApp SPA (kelas penanda tombol seperti btn, button, claim, mint, submit, cursor-pointer)
+        var cur = el;
+        var depth = 0;
+        while (cur && cur.nodeType === 1 && depth < 6) {
+            if (isInternalUI(cur)) return null;
+            var ctag = cur.tagName.toLowerCase();
+            if (ctag === "html" || ctag === "body") break;
+
+            var cls = (typeof cur.className === "string") ? cur.className.toLowerCase() : "";
+            if (cls.includes("btn") || cls.includes("button") || cls.includes("clickable") || cls.includes("action") || cls.includes("cursor-pointer") || cls.includes("claim") || cls.includes("mint") || cls.includes("connect")) {
+                return cur;
+            }
+
+            try {
+                var cs = window.getComputedStyle(cur);
+                if (cs && cs.cursor === "pointer") {
+                    return cur;
                 }
+            } catch(_) {}
+
+            cur = cur.parentElement;
+            depth++;
+        }
+
+        // 4. Jika el berupa child icon/grafis (path, svg, img, i), naik ke container pembungkusnya
+        if (tag === "path" || tag === "svg" || tag === "img" || tag === "i") {
+            var container = el.closest("button, a, div, span");
+            if (container && !isInternalUI(container)) {
+                var ctag2 = container.tagName.toLowerCase();
+                if (ctag2 !== "html" && ctag2 !== "body") return container;
             }
         }
 
-        // 4. Cursor pointer (tombol custom / div clickable di SPA dApp)
-        try {
-            var cs = window.getComputedStyle(el);
-            if (cs && cs.cursor === "pointer") {
-                var rect = el.getBoundingClientRect();
-                var vw = window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : 0) || 360;
-                var vh = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 0) || 640;
-                // Hanya anggap tombol jika ukurannya bukan container layout raksasa
-                if (rect.width > 4 && rect.height > 4 && rect.width < (vw * 0.85) && rect.height < (vh * 0.65)) {
-                    return el;
-                }
-            }
-        } catch(_) {}
+        // 5. Fallback elemen yang disentuh user (pastikan bukan layout raksasa / background penuh)
+        var rect = el.getBoundingClientRect();
+        var vw = window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : 360);
+        var vh = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 640);
+        if (rect.width > 2 && rect.height > 2 && (rect.width < (vw * 0.92) || rect.height < (vh * 0.92))) {
+            return el;
+        }
 
         return null;
     }
+
+    var __lastAgyRecordedClickTime = 0;
 
     // --- 6. GLOBAL LIVE RECORDER LISTENER (CLICK & FORM INPUT) ---
     document.addEventListener("click", function(e) {
@@ -1706,21 +1670,14 @@
             return;
         }
 
-        // While any AGY modal is open, NEVER record clicks!
-        if (document.getElementById("__agy_dom_inspector_modal__") ||
-            document.getElementById("__agy_rec_mode_modal__") ||
-            document.getElementById("__agy_recipe_modal__") ||
-            document.getElementById("__agy_save_modal__") ||
-            document.getElementById("__agy_run_config_modal__") ||
-            document.getElementById("__agy_hub_modal__") ||
-            document.getElementById("__agy_custom_db_modal__")) {
+        // Strict Debounce: Cegah event ganda atau 4x lipat dalam rentang 400ms!
+        var now = Date.now();
+        if (now - __lastAgyRecordedClickTime < 400) {
             return;
         }
 
-        // NEVER record clicks inside ANY AGY UI!
-        if (e.target.closest && e.target.closest("#__agy_slash_picker__, #__agy_slash_backdrop__, #__agy_rec_bar__, #__agy_dom_inspector_modal__, #__agy_save_modal__, #__agy_copilot_hud__, #__agy_recipe_modal__, #__agy_rec_mode_modal__, #__agy_run_config_modal__, #__agy_hub_modal__, #__agy_custom_db_modal__")) {
-            return;
-        }
+        // Jangan pernah rekam klik di elemen internal UI AGY / Fusion / sRecPill!
+        if (isInternalUI(e.target)) return;
 
         // Anti-Bleed Bounding Box Check: Jika klik mendarat di area floating recorder bar, JANGAN PERNAH REKAM!
         var recBarEl = document.getElementById("__agy_rec_bar__");
@@ -1732,52 +1689,41 @@
             }
         }
 
-        // Ignore any elements starting with __agy_
-        if (e.target.id && e.target.id.startsWith("__agy_")) return;
-        if (e.target.closest && e.target.closest("[id^='__agy_']")) return;
+        // While any AGY modal is open, NEVER record clicks!
+        if (document.getElementById("__agy_dom_inspector_modal__") ||
+            document.getElementById("__agy_rec_mode_modal__") ||
+            document.getElementById("__agy_recipe_modal__") ||
+            document.getElementById("__agy_save_modal__") ||
+            document.getElementById("__agy_run_config_modal__") ||
+            document.getElementById("__agy_hub_modal__") ||
+            document.getElementById("__agy_custom_db_modal__")) {
+            return;
+        }
 
         // If node is detached from document (e.g. re-rendered items), NEVER record!
         if (!document.documentElement.contains(e.target)) {
             return;
         }
 
-        // Also protect against clicks landing within active Slash Picker bounds
-        var pEl = document.getElementById("__agy_slash_picker__");
-        if (pEl) {
-            var r = pEl.getBoundingClientRect();
-            if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-                return;
-            }
-        }
+        // Target resolution: cari elemen interaktif terbaik atau target klik itu sendiri
+        var target = findBestClickTarget(e.target);
+        if (!target) return;
+        if (isInternalUI(target)) return;
 
-        var validDomTarget = getValidInteractiveDomTarget(e.target);
-
-        // Filter Ketat Mode DOM: HANYA rekam jika klik mendarat di elemen interaktif DOM/HTML yang valid!
-        if (AgyRecorder.recordMode === "dom") {
-            if (!validDomTarget) {
-                // Sentuhan di luar elemen DOM interaktif (background, teks biasa, layout kosong) DIABAIKAN TOTAL!
-                return;
-            }
-        }
-
-        var t = validDomTarget || e.target;
-
-        if (!t || (t.closest && t.closest("#__agy_rec_bar__, #__agy_slash_picker__, #__agy_slash_backdrop__, #__agy_dom_inspector_modal__, #__agy_save_modal__, #__agy_copilot_hud__, #__agy_rec_mode_modal__, #__agy_run_config_modal__, #__agy_hub_modal__, #__agy_custom_db_modal__")) || (t.id && t.id.startsWith("__agy_"))) {
-            return;
-        }
+        __lastAgyRecordedClickTime = now;
 
         var ev = {
             type: "click",
-            timestamp: Date.now(),
+            timestamp: now,
             x: e.clientX,
             y: e.clientY,
-            selector: getCssSelector(t),
-            tag: t.tagName.toLowerCase(),
-            id: t.id || "",
-            name: t.name || "",
-            testid: t.getAttribute("data-testid") || "",
-            ariaLabel: t.getAttribute("aria-label") || "",
-            text: (t.innerText || t.value || "").substring(0, 30).trim()
+            selector: getCssSelector(target),
+            tag: target.tagName.toLowerCase(),
+            id: target.id || "",
+            name: target.name || "",
+            testid: target.getAttribute("data-testid") || "",
+            ariaLabel: target.getAttribute("aria-label") || "",
+            text: (target.innerText || target.value || "").substring(0, 30).trim()
         };
         AgyRecorder.recordEvent(ev);
     }, true);

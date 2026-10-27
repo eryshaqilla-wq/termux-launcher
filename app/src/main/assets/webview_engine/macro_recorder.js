@@ -5,6 +5,10 @@
     window.__FUSION_RECORDING__ = false;
     window.__FUSION_MACRO_EVENTS__ = [];
 
+    function isGhostActive() {
+        return !!(window.__FUSION_GHOST_INJECTED__ || window.AgyRecorder);
+    }
+
     function saveEvents(evts) {
         window.__FUSION_MACRO_EVENTS__ = evts;
         try {
@@ -31,6 +35,7 @@
 
     // --- FLOATING RECORDER ACTION BAR ---
     function showRecorderBar() {
+        if (isGhostActive()) return; // Ghost engine handles its own clean supplementary HUD!
         var existing = document.getElementById("__fusion_rec_bar__");
         if (existing) existing.remove();
 
@@ -185,7 +190,9 @@
         try {
             sessionStorage.setItem("__fusion_rec_active__", "true");
         } catch(_) {}
-        showRecorderBar();
+        if (!isGhostActive()) {
+            showRecorderBar();
+        }
         console.log("[FusionRecorder] Recording started");
         return "STARTED";
     };
@@ -204,7 +211,14 @@
     window.__FUSION_RECORD_ACTION__ = function(actionObj) {
         if (!window.__FUSION_RECORDING__) return;
         var evts = getEvents();
-        actionObj.timestamp = Date.now();
+        var now = Date.now();
+        var last = evts[evts.length - 1];
+        if (last && (now - (last.timestamp || 0) < 400)) {
+            if (last.selector === actionObj.selector || (last.type === actionObj.type && last.text === actionObj.text)) {
+                return;
+            }
+        }
+        actionObj.timestamp = now;
         evts.push(actionObj);
         saveEvents(evts);
         updateCounter();
@@ -215,47 +229,59 @@
     try {
         if (sessionStorage.getItem("__fusion_rec_active__") === "true") {
             window.__FUSION_RECORDING__ = true;
-            setTimeout(showRecorderBar, 500);
+            if (!isGhostActive()) {
+                setTimeout(showRecorderBar, 500);
+            }
         }
     } catch(_) {}
 
     var getInteractiveTarget = function(el) {
         if (!el || el.nodeType !== 1) return null;
-        if (el.id && el.id.startsWith("__fusion_rec_")) return null;
-        if (el.closest && el.closest("[id^='__fusion_rec_']")) return null;
+        if (el.id && (el.id.startsWith("__fusion_rec_") || el.id.startsWith("__agy_") || el.id.startsWith("sRecPill"))) return null;
+        if (el.closest && el.closest("[id^='__fusion_rec_'], [id^='__agy_'], #sRecPill, [class*='fusion-ui'], [class*='agy-ui']")) return null;
         var interactive = el.closest('button, a, input, textarea, select, [role="button"], [tabindex], [onclick]');
         return interactive || el;
     };
 
     var getCssSelector = function(el) {
         if (!el || el.nodeType !== 1) return "";
-        if (el.id) return "#" + el.id;
+        if (el.id && !el.id.startsWith("__fusion_") && !el.id.startsWith("__agy_")) return "#" + el.id;
         if (el.getAttribute("data-testid")) return "[data-testid='" + el.getAttribute("data-testid") + "']";
         var path = [];
-        while (el && el.nodeType === 1) {
-            var tag = el.nodeName.toLowerCase();
-            if (el.id) {
-                path.unshift("#" + el.id);
+        var cur = el;
+        while (cur && cur.nodeType === 1) {
+            var tag = cur.nodeName.toLowerCase();
+            if (cur.id && !cur.id.startsWith("__fusion_") && !cur.id.startsWith("__agy_")) {
+                path.unshift("#" + cur.id);
                 break;
             } else {
-                var sib = el, nth = 1;
+                var sib = cur, nth = 1;
                 while ((sib = sib.previousElementSibling)) {
                     if (sib.nodeName.toLowerCase() === tag) nth++;
                 }
                 path.unshift(tag + ":nth-of-type(" + nth + ")");
             }
-            el = el.parentNode;
+            cur = cur.parentNode;
         }
         return path.join(" > ");
     };
 
+    var lastMacroClickTime = 0;
     document.addEventListener("click", function(e) {
+        if (isGhostActive()) return; // Ghost engine handles all recording!
         if (!window.__FUSION_RECORDING__) return;
+        if (window.__AGY_SIMULATED_CLICK__) return;
+
+        var now = Date.now();
+        if (now - lastMacroClickTime < 400) return;
+
         var target = getInteractiveTarget(e.target);
         if (!target) return;
+
+        lastMacroClickTime = now;
         var ev = {
             type: "click",
-            timestamp: Date.now(),
+            timestamp: now,
             x: e.clientX,
             y: e.clientY,
             selector: getCssSelector(target),
@@ -266,9 +292,10 @@
     }, true);
 
     document.addEventListener("input", function(e) {
+        if (isGhostActive()) return; // Ghost engine handles all recording!
         if (!window.__FUSION_RECORDING__) return;
         var target = e.target;
-        if (!target || (target.id && target.id.startsWith("__fusion_rec_"))) return;
+        if (!target || (target.id && (target.id.startsWith("__fusion_rec_") || target.id.startsWith("__agy_")))) return;
         var ev = {
             type: "input",
             timestamp: Date.now(),
