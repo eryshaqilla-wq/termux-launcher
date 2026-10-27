@@ -70,6 +70,9 @@ public class FusionRecPillHelper {
                 }
             }
             container.setVisibility(0);
+            if (sRecPill != null) {
+                sRecPill.setVisibility(0);
+            }
             container.setElevation(160.0f);
             container.bringToFront();
             updateRecUi(fusionWebViewManager);
@@ -343,6 +346,9 @@ public class FusionRecPillHelper {
             return;
         }
         container.setVisibility(0);
+        if (sRecPill != null) {
+            sRecPill.setVisibility(0);
+        }
         container.bringToFront();
         updateRecUi(fusionWebViewManager);
     }
@@ -358,9 +364,14 @@ public class FusionRecPillHelper {
         }
         boolean isRec = fusionWebViewManager.mIsRecording;
 
-        // Kontrol Step Pill (Baris Atas)
+        // 1. Pastikan Ketua (sRecPill) SELALU VISIBLE saat container aktif!
+        if (sRecPill != null) {
+            sRecPill.setVisibility(0);
+        }
+
+        // 2. Kontrol Step Pill (Baris Atas)
         if (sStepPill != null) {
-            if (!isRec) {
+            if (!isRec || sIsCollapsed) {
                 sStepPill.setVisibility(8);
             } else {
                 sStepPill.setVisibility(0);
