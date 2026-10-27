@@ -1458,7 +1458,7 @@ fi
 # Fallback ekstraksi aset wallet dari APK jika belum lengkap
 BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
 if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ] && command -v unzip >/dev/null 2>&1; then
-    for w_asset in 9router.cjs wallet.cjs x_webview.cjs pemantau.cjs wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
+    for w_asset in 9router.cjs wallet.cjs x_webview.cjs pemantau.cjs telegram.cjs pembantu_avatar.jpg wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
         unzip -j -o "$BASE_APK" "assets/fusion/$w_asset" -d "$HOME/wallet/" 2>/dev/null || true
     done
 fi
