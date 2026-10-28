@@ -294,9 +294,10 @@ public class TermuxIpcServer {
                                         cmdList.add(cmdStr.trim());
                                     }
                                 } else {
-                                    // "auto" (Default): Jalankan bashnh agar otomatis masuk ke distro/chroot aktif
-                                    cmdList.add("bashnh");
+                                    // "auto" (Default): Jika ada perintah spesifik, jalankan lewat bashnh;
+                                    // jika tanpa perintah, biarkan cmdList kosong agar openNamedWindow menggunakan createShellForCwd
                                     if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                        cmdList.add("bashnh");
                                         cmdList.add(cmdStr.trim());
                                     }
                                 }

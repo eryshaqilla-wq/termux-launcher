@@ -1,0 +1,13 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# tab - Instant Shortcut for 'termux-ipc tab'
+PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
+if [ -x "$PREFIX/bin/termux-ipc" ]; then
+    exec "$PREFIX/bin/termux-ipc" tab "$@"
+elif command -v termux-ipc >/dev/null 2>&1; then
+    exec termux-ipc tab "$@"
+elif [ -x "/usr/local/bin/termux-ipc" ]; then
+    exec "/usr/local/bin/termux-ipc" tab "$@"
+else
+    echo "Error: termux-ipc binary not found" >&2
+    exit 1
+fi

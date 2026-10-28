@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/data/data/com.termux/files/usr/bin/bash
 # ==============================================================================
 # ⚡ ESO:LAUNCHER - UNIVERSAL LINUX LAUNCHER (BASHNH)
 # ==============================================================================
@@ -82,7 +82,7 @@ launch_nethunter() {
 
     local SHELL_CMD="/bin/zsh -l"
     if [ -n "$*" ]; then
-        SHELL_CMD="/bin/zsh -l -c \"$*\""
+        SHELL_CMD="/bin/zsh -l -c \"$*; exec /bin/zsh -l\""
     fi
 
     exec su -mm -c "chroot $nh_path /usr/bin/env -i \

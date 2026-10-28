@@ -25997,7 +25997,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             TerminalSession cur = getCurrentSession();
             cwd = cur != null ? cur.getCwd() : getProperties().getDefaultWorkingDirectory();
         }
-        TerminalSession shell = createCommandShell(command, cwd, name, stayBehind);
+        TerminalSession shell;
+        if (command.isEmpty()) {
+            shell = createShellForCwd(cwd, name);
+        } else {
+            shell = createCommandShell(command, cwd, name, stayBehind);
+        }
         if (shell == null) return null;
         boolean seeded = seedWindowSize(shell);
         if (!seeded && !isVisible()) {

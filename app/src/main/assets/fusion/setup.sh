@@ -538,25 +538,40 @@ if [ -n "$THEME_SRC" ]; then
     if [ -d "$THEME_SRC/Pictures/wallpapers" ]; then
         cp -rf "$THEME_SRC/Pictures/wallpapers/"* "$HOME/Pictures/wallpapers/" 2>/dev/null || true
     fi
-    if [ -f "$HOME/Pictures/wallpapers/potrait.jpeg" ]; then
-        ln -sf "../../Pictures/wallpapers/potrait.jpeg" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
-    elif [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
+    if [ -f "$HOME/Pictures/wallpapers/evening-sky.png" ]; then
         ln -sf "../../Pictures/wallpapers/evening-sky.png" "$HOME/.config/bspwm/wallpaper" 2>/dev/null || true
     fi
-    if command -v termux-fix-shebang >/dev/null 2>&1; then
-        termux-fix-shebang "$HOME/.config/bspwm/"* "$HOME/.config/polybar/"* 2>/dev/null || true
+    # Pasang Smart Touch Rofi Wrapper & Hook di Native Termux
+    if [ -f "$PREFIX/bin/rofi" ] && [ ! -f "$PREFIX/bin/rofi.real" ]; then
+        mv "$PREFIX/bin/rofi" "$PREFIX/bin/rofi.real" 2>/dev/null || true
     fi
-    chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/bspwm/"*.py "$HOME/.config/polybar/"*.sh 2>/dev/null || true
-    # Bersihkan librofitouch hook dan kembalikan binary rofi murni
-    rm -f "$PREFIX/lib/librofitouch.so" 2>/dev/null || true
-    if [ -f "$PREFIX/bin/rofi.real" ]; then
-        mv -f "$PREFIX/bin/rofi.real" "$PREFIX/bin/rofi" 2>/dev/null || true
+    if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+        if command -v gcc >/dev/null 2>&1; then
+            gcc -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+        elif command -v clang >/dev/null 2>&1; then
+            clang -O2 -shared -fPIC -o "$PREFIX/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+        fi
     fi
+    cat << 'EOF_ROFI_NATIVE' > "$PREFIX/bin/rofi"
+#!/usr/bin/env bash
+if [ -f "$PREFIX/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="$PREFIX/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+if [ -x "$PREFIX/bin/rofi.real" ]; then
+    "$PREFIX/bin/rofi.real" "$@"
+else
+    command -p rofi "$@"
+fi
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI_NATIVE
+    chmod +x "$PREFIX/bin/rofi" 2>/dev/null || true
 
-    chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/polybar/"*.sh "$HOME/.config/bspwm/"*.py 2>/dev/null || true
+    chmod +x "$HOME/.config/bspwm/"*.sh "$HOME/.config/polybar/"*.sh 2>/dev/null || true
     chmod +x "$HOME/.config/bspwm/bspwmrc" "$HOME/.config/polybar/launch.sh" 2>/dev/null || true
-    ln -sf "$HOME/.config/bspwm/rofi-az.sh" "$PREFIX/bin/rofi-az" 2>/dev/null || true
-    ln -sf "$HOME/.config/bspwm/dyn-apps.py" "$PREFIX/bin/dyn-apps" 2>/dev/null || true
     echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) terpasang di Termux ($HOME/.config)${RESET}"
 fi
 
@@ -630,68 +645,19 @@ exec termux-ipc webview "$@"
 EOF
 chmod 755 "$PREFIX/bin/browser"
 
-# Wrapper Native bspwm & Desktop
-cat << 'EOF_BSPWM' > "$PREFIX/bin/termux-desktop-wm"
+# Wrapper Native bspwm
+cat << 'EOF_BSPWM' > "$PREFIX/bin/termux-bspwm"
 #!/data/data/com.termux/files/usr/bin/bash
 # Native BSPWM Desktop for Termux Launcher
-export PREFIX="/data/data/com.termux/files/usr"
-export HOME="${HOME:-/data/data/com.termux/files/home}"
-export PATH="$PREFIX/bin:$PATH"
 export DISPLAY="${DISPLAY:-:0}"
-export PULSE_SERVER="tcp:127.0.0.1:4713"
-export GALLIUM_DRIVER=virpipe
-export MESA_GL_VERSION_OVERRIDE=4.3COMPAT
-export MESA_GLES_VERSION_OVERRIDE=3.2
-export MESA_NO_ERROR=1
-export LIBGL_DRI3_DISABLE=1
-export VTEST_SOCKET_NAME="$PREFIX/tmp/.virgl/.virgl_test"
-
-if [ -d "$PREFIX/tmp" ]; then
-    export TMPDIR="$PREFIX/tmp"
-    export BSPWM_SOCKET="${BSPWM_SOCKET:-$PREFIX/tmp/bspwm_0_0-socket}"
-fi
-
-for _w in $(seq 1 50); do [ -S "$PREFIX/tmp/.X11-unix/X0" ] || [ -S "/tmp/.X11-unix/X0" ] && break; sleep 0.1; done
+for _w in $(seq 1 50); do [ -S /data/data/com.termux/files/usr/tmp/.X11-unix/X0 ] && break; sleep 0.1; done
 pulseaudio --start --load="module-native-protocol-tcp auth-ip-acl=127.0.0.1;172.28.0.0/16 auth-anonymous=1" --exit-idle-time=-1 >/dev/null 2>&1 || true
+export PULSE_SERVER=tcp:127.0.0.1:4713
 pkill -x sxhkd 2>/dev/null || true
 sxhkd &
 exec bspwm
 EOF_BSPWM
-chmod 755 "$PREFIX/bin/termux-desktop-wm"
-cp -f "$PREFIX/bin/termux-desktop-wm" "$PREFIX/bin/termux-bspwm"
 chmod 755 "$PREFIX/bin/termux-bspwm"
-
-# Wrapper Native Standalone Kiosk WM
-cat << 'EOF_KIOSK' > "$PREFIX/bin/termux-kiosk-wm"
-#!/data/data/com.termux/files/usr/bin/bash
-# Native Host Kiosk Window Manager (Standalone App) for Termux Launcher
-export PREFIX="/data/data/com.termux/files/usr"
-export HOME="${HOME:-/data/data/com.termux/files/home}"
-export PATH="$PREFIX/bin:$PATH"
-export DISPLAY="${DISPLAY:-:0}"
-export PULSE_SERVER="tcp:127.0.0.1:4713"
-export GALLIUM_DRIVER=virpipe
-export MESA_GL_VERSION_OVERRIDE=4.3COMPAT
-export MESA_GLES_VERSION_OVERRIDE=3.2
-export MESA_NO_ERROR=1
-export LIBGL_DRI3_DISABLE=1
-export VTEST_SOCKET_NAME="$PREFIX/tmp/.virgl/.virgl_test"
-
-for _w in $(seq 1 50); do [ -S "$PREFIX/tmp/.X11-unix/X0" ] || [ -S "/tmp/.X11-unix/X0" ] && break; sleep 0.1; done
-
-if [ -x "$PREFIX/bin/bspwm" ]; then
-    exec "$PREFIX/bin/bspwm" -c "$HOME/.config/bspwm/kiosk.bspwmrc"
-elif command -v openbox >/dev/null 2>&1; then
-    exec openbox
-elif command -v xfwm4 >/dev/null 2>&1; then
-    exec xfwm4
-elif command -v i3 >/dev/null 2>&1; then
-    exec i3
-else
-    while true; do sleep 3600; done
-fi
-EOF_KIOSK
-chmod 755 "$PREFIX/bin/termux-kiosk-wm"
 
 # Wrapper x (otomasi radar webview)
 cat << 'EOF_X' > "$PREFIX/bin/x"
@@ -800,84 +766,6 @@ exit 1
 EOF_P
 chmod 755 "$PREFIX/bin/pemantau"
 
-# Wrapper telegram CLI (Telegram Swarm & Bot Orchestrator)
-cat << 'EOF_TG' > "$PREFIX/bin/telegram"
-#!/data/data/com.termux/files/usr/bin/bash
-[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
-TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
-ENGINE_MODE="${FUSION_ENGINE_MODE:-cjs}"
-
-if [ ! -d "$TARGET_DIR" ]; then
-    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
-        if [ -d "$cand" ]; then
-            TARGET_DIR="$cand"
-            break
-        fi
-    done
-fi
-
-if [ -f "$TARGET_DIR/telegram.cjs" ]; then
-    cd "$TARGET_DIR" && exec node telegram.cjs "$@"
-elif [ -f "$TARGET_DIR/pemantau.cjs" ]; then
-    cd "$TARGET_DIR" && exec node pemantau.cjs "$@"
-elif [ -f "$TARGET_DIR/pemantautelegram.py" ]; then
-    cd "$TARGET_DIR" && exec python3 pemantautelegram.py "$@"
-fi
-echo "Telegram Swarm (.cjs/.py) tidak ditemukan di $TARGET_DIR"
-exit 1
-EOF_TG
-chmod 755 "$PREFIX/bin/telegram"
-
-# Wrapper telegram-ui (Telegram Web UI & Background Server)
-cat << 'EOF_TGUI' > "$PREFIX/bin/telegram-ui"
-#!/data/data/com.termux/files/usr/bin/bash
-[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
-TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
-PORT=20130
-
-if [ ! -d "$TARGET_DIR" ]; then
-    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
-        if [ -d "$cand" ]; then
-            TARGET_DIR="$cand"
-            break
-        fi
-    done
-fi
-
-if curl -s "http://127.0.0.1:${PORT}/status" >/dev/null 2>&1; then
-    echo "✨ Sesi Telegram Swarm Server sudah aktif di port ${PORT}."
-    echo "✨ Membuka Telegram Webview di layar Android..."
-    if command -v termux-ipc >/dev/null 2>&1; then
-        termux-ipc toast "Membuka Telegram Swarm Web UI..."
-    fi
-    exec termux-ipc webview "http://127.0.0.1:${PORT}"
-fi
-
-OTHER_PIDS=$(ps -eo pid,args 2>/dev/null | grep -E "(telegram\.cjs|pemantau\.cjs|pemantautelegram\.py)" | grep -v -E "(grep|--ui|tmux)" | awk '{print $1}')
-if [ -n "$OTHER_PIDS" ]; then
-    echo "Terdeteksi sesi Telegram terminal (PID: $OTHER_PIDS) sedang berjalan."
-    echo "Mematikan sesi terminal lama agar tidak bentrok..."
-    for p in $OTHER_PIDS; do
-        kill -9 "$p" 2>/dev/null || true
-    done
-    sleep 1.2
-fi
-
-if [ -f "$TARGET_DIR/telegram.cjs" ]; then
-    cd "$TARGET_DIR"
-    nohup node telegram.cjs --kill --ui >/tmp/telegram_ui.log 2>&1 &
-    sleep 1.2
-    if command -v termux-ipc >/dev/null 2>&1; then
-        termux-ipc toast "Membuka Telegram Swarm Web UI..."
-    fi
-    exec termux-ipc webview "http://127.0.0.1:${PORT}"
-fi
-
-echo "Telegram Swarm (.cjs) tidak ditemukan di $TARGET_DIR"
-exit 1
-EOF_TGUI
-chmod 755 "$PREFIX/bin/telegram-ui"
-
 # Wrapper 9router CLI (Multi-Account AI Router)
 cat << 'EOF_9R' > "$PREFIX/bin/9router"
 #!/data/data/com.termux/files/usr/bin/bash
@@ -954,12 +842,11 @@ if [ "$LINUX_OPT" = "1" ]; then
                 (echo '#!/usr/bin/env bash'; tail -n +2 "$PREFIX/bin/termux-ipc") > "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
                 chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/termux-ipc"
             fi
-            cat << 'EOF_B' > "$CONTAINER_ROOTFS/usr/local/bin/web"
+            cat << 'EOF_B' > "$CONTAINER_ROOTFS/usr/local/bin/browser"
 #!/usr/bin/env bash
-exec agent-web "$@"
+exec termux-ipc webview "$@"
 EOF_B
-            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/web"
-            ln -sf "/usr/local/bin/web" "$CONTAINER_ROOTFS/usr/local/bin/browser" 2>/dev/null || true
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/browser"
 
             cat << 'EOF_CW' > "$CONTAINER_ROOTFS/usr/local/bin/wallet"
 #!/usr/bin/env bash
@@ -1054,14 +941,29 @@ exit 1
 EOF_C9
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/9router"
 
-            # Bersihkan librofitouch hook dan kembalikan binary rofi murni di PRoot
-            rm -f "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$CONTAINER_ROOTFS/usr/local/src/librofitouch.c" 2>/dev/null || true
-            if [ -f "$CONTAINER_ROOTFS/usr/bin/rofi.real" ]; then
-                mv -f "$CONTAINER_ROOTFS/usr/bin/rofi.real" "$CONTAINER_ROOTFS/usr/bin/rofi" 2>/dev/null || true
+            # Pasang Smart Touch Rofi Wrapper & Hook di PRoot
+            mkdir -p "$CONTAINER_ROOTFS/usr/local/lib" "$CONTAINER_ROOTFS/usr/local/src"
+            if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+                cp -f "$SCRIPT_DIR/librofitouch.c" "$CONTAINER_ROOTFS/usr/local/src/librofitouch.c" 2>/dev/null || true
+                if command -v gcc >/dev/null 2>&1; then
+                    gcc -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+                elif command -v clang >/dev/null 2>&1; then
+                    clang -O2 -shared -fPIC -o "$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so" "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+                fi
             fi
-            rm -f "$CONTAINER_ROOTFS/usr/local/bin/rofi" 2>/dev/null || true
-            ln -sf /root/.config/bspwm/rofi-az.sh "$CONTAINER_ROOTFS/usr/local/bin/rofi-az" 2>/dev/null || true
-            ln -sf /root/.config/bspwm/dyn-apps.py "$CONTAINER_ROOTFS/usr/local/bin/dyn-apps" 2>/dev/null || true
+            cat << 'EOF_ROFI_PROOT' > "$CONTAINER_ROOTFS/usr/local/bin/rofi"
+#!/usr/bin/env bash
+if [ -f "/usr/local/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+/usr/bin/rofi "$@"
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI_PROOT
+            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/rofi"
 
             # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
             if [ -d "$CONTAINER_ROOTFS/etc/pulse" ]; then
@@ -1093,7 +995,7 @@ EOF_PALSA
                 mkdir -p "$CONTAINER_ROOTFS/root/.config" "$CONTAINER_ROOTFS/root/Pictures/wallpapers"
                 [ -d "$THEME_SRC/.config" ] && cp -rf "$THEME_SRC/.config/"* "$CONTAINER_ROOTFS/root/.config/" 2>/dev/null || true
                 [ -d "$THEME_SRC/Pictures/wallpapers" ] && cp -rf "$THEME_SRC/Pictures/wallpapers/"* "$CONTAINER_ROOTFS/root/Pictures/wallpapers/" 2>/dev/null || true
-                [ -f "$THEME_SRC/Pictures/wallpapers/potrait.jpeg" ] && ln -sf "../../Pictures/wallpapers/potrait.jpeg" "$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper" 2>/dev/null || ln -sf "../../Pictures/wallpapers/evening-sky.png" "$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper" 2>/dev/null || true
+                ln -sf "../../Pictures/wallpapers/evening-sky.png" "$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper" 2>/dev/null || true
                 chmod +x "$CONTAINER_ROOTFS/root/.config/bspwm/"*.sh "$CONTAINER_ROOTFS/root/.config/polybar/"*.sh 2>/dev/null || true
                 chmod +x "$CONTAINER_ROOTFS/root/.config/bspwm/bspwmrc" "$CONTAINER_ROOTFS/root/.config/polybar/launch.sh" 2>/dev/null || true
                 echo -e "  ${GREEN}✔ Tema Eso & wallpaper disinkronkan ke PRoot $DISPLAY_NAME (/root/.config/)${RESET}"
@@ -1127,9 +1029,7 @@ EOF_PALSA
                     fi
                 done
                 (echo '#!/usr/bin/env bash'; tail -n +2 '$PREFIX/bin/termux-ipc') > '$CONTAINER_ROOTFS/usr/local/bin/termux-ipc'
-                echo -e '#!/usr/bin/env bash\nexec agent-web \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/web'
-                chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/web'
-                ln -sf '/usr/local/bin/web' '$CONTAINER_ROOTFS/usr/local/bin/browser' 2>/dev/null || true
+                echo -e '#!/usr/bin/env bash\nexec termux-ipc webview \"\$@\"' > '$CONTAINER_ROOTFS/usr/local/bin/browser'
                 cat << 'EOF_RW' > '$CONTAINER_ROOTFS/usr/local/bin/wallet'
 #!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
@@ -1200,12 +1100,29 @@ if command -v 9router >/dev/null 2>&1 && [ \"\$(command -v 9router)\" != \"\$0\"
   exec 9router \"\$@\"
 fi
 EOF_R9
-                # Bersihkan librofitouch hook dan kembalikan binary rofi murni
-                rm -f '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
-                if [ -f '$CONTAINER_ROOTFS/usr/bin/rofi.real' ]; then
-                    mv -f '$CONTAINER_ROOTFS/usr/bin/rofi.real' '$CONTAINER_ROOTFS/usr/bin/rofi' 2>/dev/null || true
+                mkdir -p '$CONTAINER_ROOTFS/usr/local/lib' '$CONTAINER_ROOTFS/usr/local/src'
+                if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
+                    cp -f "$SCRIPT_DIR/librofitouch.c" '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
+                    if command -v gcc >/dev/null 2>&1; then
+                        gcc -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" -ldl 2>/dev/null || true
+                    elif command -v clang >/dev/null 2>&1; then
+                        clang -O2 -shared -fPIC -o '$CONTAINER_ROOTFS/usr/local/lib/librofitouch.so' "$SCRIPT_DIR/librofitouch.c" 2>/dev/null || true
+                    fi
                 fi
-                rm -f '$CONTAINER_ROOTFS/usr/local/bin/rofi' 2>/dev/null || true
+                cat << 'EOF_ROFI' > '$CONTAINER_ROOTFS/usr/local/bin/rofi'
+#!/usr/bin/env bash
+if [ -f "/usr/local/lib/librofitouch.so" ]; then
+    export LD_PRELOAD="/usr/local/lib/librofitouch.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+/usr/bin/rofi "$@"
+ROFI_RC=$?
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc hide >/dev/null 2>&1 || true
+elif [ -x "/usr/local/termux-shims/termux-ipc" ]; then
+    /usr/local/termux-shims/termux-ipc hide >/dev/null 2>&1 || true
+fi
+exit $ROFI_RC
+EOF_ROFI
                 mkdir -p '$CONTAINER_ROOTFS/etc/profile.d'
                 cat << 'EOF_FCITX' > '$CONTAINER_ROOTFS/etc/profile.d/fcitx5.sh'
 export GTK_IM_MODULE=fcitx
@@ -1218,8 +1135,6 @@ elif [ -S "/tmp/termux-x11-im-bus-0" ]; then
 fi
 EOF_FCITX
                 chmod 755 '$CONTAINER_ROOTFS/usr/local/bin/'*
-                ln -sf /root/.config/bspwm/rofi-az.sh '$CONTAINER_ROOTFS/usr/local/bin/rofi-az' 2>/dev/null || true
-                ln -sf /root/.config/bspwm/dyn-apps.py '$CONTAINER_ROOTFS/usr/local/bin/dyn-apps' 2>/dev/null || true
                 # Konfigurasi Audio Bridge (PulseAudio & ALSA) ke host port 4713
                 if [ -d '$CONTAINER_ROOTFS/etc/pulse' ]; then
                     sed -i 's/^; default-server =.*/default-server = 127.0.0.1:4713/' '$CONTAINER_ROOTFS/etc/pulse/client.conf' 2>/dev/null || true
@@ -1237,7 +1152,7 @@ EOF_FCITX
                     mkdir -p '$CONTAINER_ROOTFS/root/.config' '$CONTAINER_ROOTFS/root/Pictures/wallpapers'
                     [ -d '$THEME_SRC/.config' ] && cp -rf '$THEME_SRC/.config/'* '$CONTAINER_ROOTFS/root/.config/' 2>/dev/null || true
                     [ -d '$THEME_SRC/Pictures/wallpapers' ] && cp -rf '$THEME_SRC/Pictures/wallpapers/'* '$CONTAINER_ROOTFS/root/Pictures/wallpapers/' 2>/dev/null || true
-                    [ -f '$THEME_SRC/Pictures/wallpapers/potrait.jpeg' ] && ln -sf '../../Pictures/wallpapers/potrait.jpeg' '$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper' 2>/dev/null || ln -sf '../../Pictures/wallpapers/evening-sky.png' '$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper' 2>/dev/null || true
+                    ln -sf '../../Pictures/wallpapers/evening-sky.png' '$CONTAINER_ROOTFS/root/.config/bspwm/wallpaper' 2>/dev/null || true
                     chmod +x '$CONTAINER_ROOTFS/root/.config/bspwm/'*.sh '$CONTAINER_ROOTFS/root/.config/polybar/'*.sh 2>/dev/null || true
                     chmod +x '$CONTAINER_ROOTFS/root/.config/bspwm/bspwmrc' '$CONTAINER_ROOTFS/root/.config/polybar/launch.sh' 2>/dev/null || true
                 "
@@ -1461,7 +1376,7 @@ fi
 # Fallback ekstraksi aset wallet dari APK jika belum lengkap
 BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
 if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ] && command -v unzip >/dev/null 2>&1; then
-    for w_asset in 9router.cjs wallet.cjs x_webview.cjs pemantau.cjs telegram.cjs pembantu_avatar.jpg wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
+    for w_asset in 9router.cjs wallet.cjs x_webview.cjs pemantau.cjs wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
         unzip -j -o "$BASE_APK" "assets/fusion/$w_asset" -d "$HOME/wallet/" 2>/dev/null || true
     done
 fi
@@ -1523,15 +1438,12 @@ alias 9router="9router"
 alias router="9router"
 alias pemantau="pemantau"
 alias pmt="pemantau"
-alias telegram="telegram"
-alias tg="telegram"
-alias telegram-ui="telegram-ui"
-alias tgui="telegram-ui"
 alias patchright="node ./wallet/patchright.js"
 alias x="x"
 alias xradar="node ~/wallet/x_webview.js"
 alias browser="termux-ipc webview"
 alias ipc="termux-ipc"
+alias tab="termux-ipc tab"
 alias copilot="agy-copilot"
 alias bashnh="bashnh"
 alias login="login"
