@@ -593,7 +593,7 @@
             updateAgyHUD("Otomatisasi Dihentikan", "Eksekusi dibatalkan oleh pengguna", "warning");
         },
 
-        run: function(recipeEvents, recipeName, targetExpr, isBatch, onComplete) {
+        run: function(recipeEvents, recipeName, targetExpr, isBatch, onComplete, runMode, loopCount) {
             var self = this;
             if (!recipeEvents || recipeEvents.length === 0) {
                 updateAgyHUD("Resep Kosong", "Tidak ada langkah untuk dieksekusi", "warning");
@@ -607,31 +607,70 @@
             var emails = AgyDB.getEmails();
             var cfg = AgyConfig.get();
 
-            var queue = parseTargetExpression(targetExpr, wallets.length);
+            var mode = runMode || "multi";
+            var loops = parseInt(loopCount, 10);
+            if (isNaN(loops) || loops <= 0) loops = 1;
+            var isInfinite = (loopCount === -1 || loopCount === "inf" || loopCount === "infinity" || loops >= 999999);
+
+            var queue = [];
+            if (mode === "single") {
+                var singleTarget = parseInt(targetExpr, 10);
+                if (isNaN(singleTarget) || singleTarget < 1) singleTarget = 1;
+                var totalL = isInfinite ? 999999 : loops;
+                for (var l = 0; l < totalL; l++) {
+                    queue.push(singleTarget);
+                }
+            } else if (mode === "standalone") {
+                var totalL = isInfinite ? 999999 : loops;
+                for (var l = 0; l < totalL; l++) {
+                    queue.push(0); // 0 = Standalone Web Macro (Tanpa Wallet)
+                }
+            } else {
+                queue = parseTargetExpression(targetExpr, wallets.length);
+            }
+
             var successCount = 0;
             var failCount = 0;
             var currentIdxInQueue = 0;
 
             function runAccount() {
                 if (self.isAborted) return;
-                if (currentIdxInQueue >= queue.length) {
+                if (!isInfinite && currentIdxInQueue >= queue.length) {
                     self.isRunning = false;
                     updateAgyHUD("Batch Selesai!", "Total: " + queue.length + " (Sukses: " + successCount + ", Gagal: " + failCount + ")", "success");
                     if (onComplete) onComplete({ success: successCount, failed: failCount });
                     return;
                 }
 
-                var accNumber = queue[currentIdxInQueue];
-                var walletIdx = (accNumber - 1) % wallets.length;
-                var emailIdx = (accNumber - 1) % (emails.length || 1);
+                var accNumber = queue[currentIdxInQueue % queue.length];
+                var curWallet = null;
+                var curEmail = "";
+                var title = "";
+                var sub = "";
 
-                var curWallet = wallets[walletIdx] || { name: "Acc #" + accNumber, address: "0x..." };
-                var curEmail = emails[emailIdx] || (curWallet.name.toLowerCase().replace(/[^a-z0-9]/g, "") + "@termux.local");
+                if (mode === "standalone") {
+                    curWallet = { name: "Web Macro", address: "" };
+                    curEmail = "macro@termux.local";
+                    title = isInfinite ? (recipeName + " [Loop #" + (currentIdxInQueue + 1) + "]") : ((queue.length > 1) ? (recipeName + " [" + (currentIdxInQueue + 1) + "/" + queue.length + "]") : recipeName);
+                    sub = "Mode: Web Macro Murni (Tanpa Wallet)";
+                } else if (mode === "single") {
+                    var walletIdx = (accNumber - 1) % (wallets.length || 1);
+                    var emailIdx = (accNumber - 1) % (emails.length || 1);
+                    curWallet = wallets[walletIdx] || { name: "Acc #" + accNumber, address: "0x..." };
+                    curEmail = emails[emailIdx] || (curWallet.name.toLowerCase().replace(/[^a-z0-9]/g, "") + "@termux.local");
+                    AgyDB.setActiveWallet(curWallet.name, curWallet.address);
+                    title = isInfinite ? (recipeName + " [Loop #" + (currentIdxInQueue + 1) + "]") : (recipeName + " [" + (currentIdxInQueue + 1) + "/" + queue.length + "]");
+                    sub = "Fokus: " + curWallet.name + " (" + curWallet.address.substring(0, 8) + "...)";
+                } else {
+                    var walletIdx = (accNumber - 1) % (wallets.length || 1);
+                    var emailIdx = (accNumber - 1) % (emails.length || 1);
+                    curWallet = wallets[walletIdx] || { name: "Acc #" + accNumber, address: "0x..." };
+                    curEmail = emails[emailIdx] || (curWallet.name.toLowerCase().replace(/[^a-z0-9]/g, "") + "@termux.local");
+                    AgyDB.setActiveWallet(curWallet.name, curWallet.address);
+                    title = (queue.length > 1) ? ("Batch [" + (currentIdxInQueue + 1) + "/" + queue.length + "]") : recipeName;
+                    sub = "Akun #" + accNumber + " (" + curWallet.name + " | " + curWallet.address.substring(0, 8) + "...)";
+                }
 
-                AgyDB.setActiveWallet(curWallet.name, curWallet.address);
-
-                var title = (queue.length > 1) ? ("Batch [" + (currentIdxInQueue + 1) + "/" + queue.length + "]") : recipeName;
-                var sub = "Akun #" + accNumber + " (" + curWallet.name + " | " + curWallet.address.substring(0, 8) + "...)";
                 updateAgyHUD(title, sub, "running");
 
                 self.executeStepList(recipeEvents, curWallet, curEmail, title, function(isSuccess) {
@@ -641,19 +680,23 @@
 
                     currentIdxInQueue++;
 
-                    if (currentIdxInQueue < queue.length && isBatch) {
+                    var hasMore = isInfinite || (currentIdxInQueue < queue.length);
+                    var shouldDelay = (mode === "multi" ? isBatch : true) && hasMore;
+
+                    if (shouldDelay) {
                         var waitSec = (cfg.batchDelay / 1000).toFixed(1);
-                        updateAgyHUD("Jeda Antar Akun", "Menuju Akun berikutnya (" + waitSec + " detik)...", "running");
+                        var nextLabel = (mode === "single" || mode === "standalone") ? ("Jeda Putaran (" + waitSec + "s)...") : ("Menuju Akun berikutnya (" + waitSec + "s)...");
+                        updateAgyHUD("Jeda Antar Alur", nextLabel, "running");
 
                         self.activeTimer = setTimeout(function() {
                             if (self.isAborted) return;
                             runAccount();
                         }, cfg.batchDelay);
-                    } else if (currentIdxInQueue < queue.length) {
+                    } else if (hasMore) {
                         runAccount();
                     } else {
                         self.isRunning = false;
-                        updateAgyHUD("Batch Selesai!", "Sukses: " + successCount + " | Gagal: " + failCount, "success");
+                        updateAgyHUD("Selesai!", "Sukses: " + successCount + " | Gagal: " + failCount, "success");
                         if (onComplete) onComplete({ success: successCount, failed: failCount });
                     }
                 });
@@ -960,15 +1003,25 @@
             this._cache = all;
             return all;
         },
-        save: function(name, events) {
+        save: function(name, events, targetUrl) {
             if (!name || name.trim().length === 0) {
                 name = "Recipe_" + new Date().getHours() + "h" + new Date().getMinutes() + "m";
             }
             name = name.trim();
             var all = this.getAll();
+            var finalTargetUrl = targetUrl;
+            if (!finalTargetUrl && typeof window !== "undefined" && window.location) {
+                try {
+                    var curHref = window.location.href;
+                    if (curHref && curHref.indexOf("about:") !== 0) {
+                        finalTargetUrl = curHref.split("#")[0];
+                    }
+                } catch(_) {}
+            }
             all[name] = {
                 name: name,
-                createdAt: Date.now(),
+                createdAt: (all[name] && all[name].createdAt) || Date.now(),
+                targetUrl: finalTargetUrl || (all[name] && all[name].targetUrl) || "",
                 events: events || []
             };
 
@@ -1026,6 +1079,457 @@
             return (window.__FUSION_MACRO_EVENTS__ && window.__FUSION_MACRO_EVENTS__.length > 0) ? window.__FUSION_MACRO_EVENTS__ : [];
         }
     };
+
+    // --- 3B. SMART RECIPE CODE SHARING & REPLICATION ENGINE ---
+    function sanitizeEventsForExport(events) {
+        if (!Array.isArray(events)) return [];
+        return events.map(function(ev) {
+            var item = { type: ev.type || "click" };
+            if (ev.selector) item.selector = ev.selector;
+            if (ev.xpath) item.xpath = ev.xpath;
+            if (ev.text) item.text = ev.text;
+            if (ev.value !== undefined) item.value = ev.value;
+            if (ev.name) item.name = ev.name;
+            if (ev.delay) item.delay = ev.delay;
+            if (typeof ev.x === "number") item.x = Math.round(ev.x);
+            if (typeof ev.y === "number") item.y = Math.round(ev.y);
+            return item;
+        });
+    }
+
+    function encodeRecipeCode(recipeObj) {
+        var minEvents = sanitizeEventsForExport(recipeObj.events || []);
+        var rawUrl = recipeObj.targetUrl || "";
+        if (!rawUrl && typeof window !== "undefined" && window.location) {
+            try {
+                if (window.location.href.indexOf("about:") !== 0) rawUrl = window.location.href.split("#")[0];
+            } catch(_) {}
+        }
+        var payload = {
+            name: recipeObj.name || "Resep",
+            targetUrl: rawUrl,
+            events: minEvents,
+            v: 1,
+            t: Date.now()
+        };
+        var jsonStr = JSON.stringify(payload);
+        var b64 = "";
+        try {
+            b64 = btoa(unescape(encodeURIComponent(jsonStr)));
+        } catch(_) {
+            try { b64 = btoa(jsonStr); } catch(__) { b64 = ""; }
+        }
+        var code = "AGY-RECIPE:v1:" + b64;
+        var baseWeb = rawUrl || (window.location.href.indexOf("about:") !== 0 ? window.location.href.split("#")[0] : "https://termux.fusion");
+        var shareUrl = baseWeb + "#agy_code=" + encodeURIComponent(b64);
+        return {
+            code: code,
+            url: shareUrl,
+            b64: b64,
+            payload: payload
+        };
+    }
+
+    function decodeRecipeCode(rawStr) {
+        if (!rawStr) return null;
+        var s = rawStr.trim();
+        var matchUrl = s.match(/[#\?&]agy_(?:code|recipe)=([^&\s]+)/i);
+        if (matchUrl && matchUrl[1]) {
+            s = decodeURIComponent(matchUrl[1]);
+        } else if (s.indexOf("AGY-RECIPE:") === 0) {
+            var parts = s.split(":");
+            s = parts[parts.length - 1].trim();
+        }
+        try {
+            var jsonStr = "";
+            try {
+                jsonStr = decodeURIComponent(escape(atob(s)));
+            } catch(_) {
+                jsonStr = atob(s);
+            }
+            var parsed = JSON.parse(jsonStr);
+            if (parsed && (parsed.name || parsed.events)) {
+                return {
+                    name: parsed.name || "Resep_Impor",
+                    targetUrl: parsed.targetUrl || parsed.url || "",
+                    events: Array.isArray(parsed.events) ? parsed.events : []
+                };
+            }
+        } catch(_) {}
+        try {
+            var pJson = JSON.parse(rawStr);
+            if (pJson && (pJson.name || pJson.events)) {
+                return {
+                    name: pJson.name || "Resep_Impor",
+                    targetUrl: pJson.targetUrl || pJson.url || "",
+                    events: Array.isArray(pJson.events) ? pJson.events : []
+                };
+            }
+        } catch(_) {}
+        return null;
+    }
+
+    function showShareRecipeModal(recipeName, events, targetUrl) {
+        var existing = document.getElementById("__agy_share_modal__");
+        if (existing) existing.remove();
+
+        var shareObj = encodeRecipeCode({ name: recipeName, events: events, targetUrl: targetUrl });
+        var domain = "";
+        try { domain = new URL(shareObj.payload.targetUrl).hostname; } catch(_) { domain = shareObj.payload.targetUrl; }
+
+        var modal = document.createElement("div");
+        modal.id = "__agy_share_modal__";
+        modal.style.position = "fixed";
+        modal.style.top = "0";
+        modal.style.left = "0";
+        modal.style.width = "100%";
+        modal.style.height = "100%";
+        modal.style.backgroundColor = "rgba(17, 17, 27, 0.85)";
+        modal.style.backdropFilter = "blur(8px)";
+        modal.style.webkitBackdropFilter = "blur(8px)";
+        modal.style.zIndex = "2147483647";
+        modal.style.display = "flex";
+        modal.style.alignItems = "center";
+        modal.style.justifyContent = "center";
+        modal.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        modal.style.padding = "16px";
+        modal.style.boxSizing = "border-box";
+
+        var card = document.createElement("div");
+        card.style.background = "#181825";
+        card.style.border = "1px solid rgba(203, 166, 247, 0.4)";
+        card.style.borderRadius = "20px";
+        card.style.width = "100%";
+        card.style.maxWidth = "400px";
+        card.style.padding = "22px 20px 20px 20px";
+        card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.85), 0 0 25px rgba(203, 166, 247, 0.15)";
+        card.style.color = "#cdd6f4";
+        card.style.boxSizing = "border-box";
+        card.style.display = "flex";
+        card.style.flexDirection = "column";
+
+        var titleRow = document.createElement("div");
+        titleRow.style.display = "flex";
+        titleRow.style.justifyContent = "space-between";
+        titleRow.style.alignItems = "center";
+        titleRow.style.marginBottom = "14px";
+
+        var titleBlock = document.createElement("div");
+        titleBlock.style.display = "flex";
+        titleBlock.style.alignItems = "center";
+        titleBlock.style.gap = "8px";
+
+        var icon = document.createElement("span");
+        icon.innerText = "📤";
+        icon.style.fontSize = "18px";
+        titleBlock.appendChild(icon);
+
+        var title = document.createElement("div");
+        title.innerText = "Bagikan Rekaman";
+        title.style.fontSize = "15px";
+        title.style.fontWeight = "700";
+        title.style.color = "#cdd6f4";
+        titleBlock.appendChild(title);
+
+        var badge = document.createElement("span");
+        badge.innerText = recipeName;
+        badge.style.fontSize = "12px";
+        badge.style.fontWeight = "600";
+        badge.style.color = "#cba6f7";
+        badge.style.background = "#313244";
+        badge.style.padding = "3px 8px";
+        badge.style.borderRadius = "8px";
+        titleBlock.appendChild(badge);
+        titleRow.appendChild(titleBlock);
+
+        var closeX = document.createElement("div");
+        closeX.innerText = "✕";
+        closeX.style.cursor = "pointer";
+        closeX.style.color = "#a6adc8";
+        closeX.style.fontSize = "15px";
+        closeX.style.width = "28px";
+        closeX.style.height = "28px";
+        closeX.style.borderRadius = "8px";
+        closeX.style.display = "flex";
+        closeX.style.alignItems = "center";
+        closeX.style.justifyContent = "center";
+        closeX.style.background = "#1e1e2e";
+        closeX.onclick = function() { modal.remove(); };
+        titleRow.appendChild(closeX);
+        card.appendChild(titleRow);
+
+        // Info pill
+        var infoRow = document.createElement("div");
+        infoRow.style.background = "#11111b";
+        infoRow.style.border = "1px solid #313244";
+        infoRow.style.borderRadius = "10px";
+        infoRow.style.padding = "9px 12px";
+        infoRow.style.marginBottom = "16px";
+        infoRow.style.fontSize = "11px";
+        infoRow.style.display = "flex";
+        infoRow.style.justifyContent = "space-between";
+        infoRow.innerHTML = "<span>⚡ <b style='color:#89dceb;'>" + (events ? events.length : 0) + " Langkah</b></span>" +
+                            "<span style='color:#a6adc8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%;'>🌐 " + (domain || "Web Target") + "</span>";
+        card.appendChild(infoRow);
+
+        var descText = document.createElement("div");
+        descText.innerText = "Penerima di WhatsApp/Telegram tinggal buka link ini, rekaman otomatis tercipta sama persis di webview mereka!";
+        descText.style.fontSize = "11px";
+        descText.style.color = "#a6adc8";
+        descText.style.lineHeight = "1.4";
+        descText.style.marginBottom = "16px";
+        card.appendChild(descText);
+
+        var btnCol = document.createElement("div");
+        btnCol.style.display = "flex";
+        btnCol.style.flexDirection = "column";
+        btnCol.style.gap = "10px";
+
+        // Mode 1: WhatsApp
+        var waBtn = document.createElement("button");
+        waBtn.innerHTML = "<span style='font-size:16px;'>💬</span> <b>Kirim via WhatsApp</b>";
+        waBtn.style.display = "flex";
+        waBtn.style.alignItems = "center";
+        waBtn.style.justifyContent = "center";
+        waBtn.style.gap = "10px";
+        waBtn.style.background = "linear-gradient(135deg, #25D366 0%, #128C7E 100%)";
+        waBtn.style.color = "#ffffff";
+        waBtn.style.border = "none";
+        waBtn.style.borderRadius = "12px";
+        waBtn.style.padding = "12px 14px";
+        waBtn.style.fontSize = "12px";
+        waBtn.style.fontWeight = "700";
+        waBtn.style.cursor = "pointer";
+        waBtn.style.boxShadow = "0 4px 14px rgba(37, 211, 102, 0.3)";
+        waBtn.onclick = function() {
+            var msg = "🤖 *[Resep AGY] " + recipeName + "* (" + (events ? events.length : 0) + " Langkah)\n" +
+                      (shareObj.payload.targetUrl ? ("🌐 Target: " + shareObj.payload.targetUrl + "\n\n") : "\n") +
+                      "⚡ *Buka link ini di Eso Browser untuk auto-generate:*\n" + shareObj.url + "\n\n" +
+                      "Atau jalankan di CLI:\nweb \"" + shareObj.code + "\"";
+            window.open("https://api.whatsapp.com/send?text=" + encodeURIComponent(msg), "_blank");
+        };
+        btnCol.appendChild(waBtn);
+
+        // Mode 2: Telegram
+        var tgBtn = document.createElement("button");
+        tgBtn.innerHTML = "<span style='font-size:16px;'>✈️</span> <b>Kirim via Telegram</b>";
+        tgBtn.style.display = "flex";
+        tgBtn.style.alignItems = "center";
+        tgBtn.style.justifyContent = "center";
+        tgBtn.style.gap = "10px";
+        tgBtn.style.background = "linear-gradient(135deg, #229ED9 0%, #0088cc 100%)";
+        tgBtn.style.color = "#ffffff";
+        tgBtn.style.border = "none";
+        tgBtn.style.borderRadius = "12px";
+        tgBtn.style.padding = "12px 14px";
+        tgBtn.style.fontSize = "12px";
+        tgBtn.style.fontWeight = "700";
+        tgBtn.style.cursor = "pointer";
+        tgBtn.style.boxShadow = "0 4px 14px rgba(34, 158, 217, 0.3)";
+        tgBtn.onclick = function() {
+            var msg = "🤖 [Resep AGY] " + recipeName + " (" + (events ? events.length : 0) + " Langkah)\nCode Rekaman:\n" + shareObj.code;
+            window.open("https://t.me/share/url?url=" + encodeURIComponent(shareObj.url) + "&text=" + encodeURIComponent(msg), "_blank");
+        };
+        btnCol.appendChild(tgBtn);
+
+        // Mode 3: Copy Code Rekaman
+        var copyBtn = document.createElement("button");
+        copyBtn.innerHTML = "<span style='font-size:16px;'>📋</span> <b>Salin Code Rekaman (Copy Code)</b>";
+        copyBtn.style.display = "flex";
+        copyBtn.style.alignItems = "center";
+        copyBtn.style.justifyContent = "center";
+        copyBtn.style.gap = "10px";
+        copyBtn.style.background = "#313244";
+        copyBtn.style.color = "#cba6f7";
+        copyBtn.style.border = "1px solid rgba(203, 166, 247, 0.35)";
+        copyBtn.style.borderRadius = "12px";
+        copyBtn.style.padding = "12px 14px";
+        copyBtn.style.fontSize = "12px";
+        copyBtn.style.fontWeight = "700";
+        copyBtn.style.cursor = "pointer";
+        copyBtn.onclick = function() {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(shareObj.code);
+            }
+            updateAgyHUD("Code Rekaman Disalin!", "Tempel di chat atau jalankan `web <code_rekaman>` di CLI", "success");
+            copyBtn.innerHTML = "<span style='font-size:16px;'>✔</span> <b>Code Berhasil Disalin!</b>";
+            setTimeout(function() {
+                copyBtn.innerHTML = "<span style='font-size:16px;'>📋</span> <b>Salin Code Rekaman (Copy Code)</b>";
+            }, 2500);
+        };
+        btnCol.appendChild(copyBtn);
+
+        card.appendChild(btnCol);
+        modal.appendChild(card);
+        (document.body || document.documentElement).appendChild(modal);
+    }
+
+    function showImportCodeModal(onImported) {
+        var existing = document.getElementById("__agy_import_code_modal__");
+        if (existing) existing.remove();
+
+        var modal = document.createElement("div");
+        modal.id = "__agy_import_code_modal__";
+        modal.style.position = "fixed";
+        modal.style.top = "0";
+        modal.style.left = "0";
+        modal.style.width = "100%";
+        modal.style.height = "100%";
+        modal.style.backgroundColor = "rgba(17, 17, 27, 0.85)";
+        modal.style.backdropFilter = "blur(8px)";
+        modal.style.webkitBackdropFilter = "blur(8px)";
+        modal.style.zIndex = "2147483647";
+        modal.style.display = "flex";
+        modal.style.alignItems = "center";
+        modal.style.justifyContent = "center";
+        modal.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        modal.style.padding = "16px";
+        modal.style.boxSizing = "border-box";
+
+        var card = document.createElement("div");
+        card.style.background = "#181825";
+        card.style.border = "1px solid rgba(137, 220, 235, 0.35)";
+        card.style.borderRadius = "20px";
+        card.style.width = "100%";
+        card.style.maxWidth = "400px";
+        card.style.padding = "22px 20px 20px 20px";
+        card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.85)";
+        card.style.color = "#cdd6f4";
+        card.style.boxSizing = "border-box";
+        card.style.display = "flex";
+        card.style.flexDirection = "column";
+
+        var titleRow = document.createElement("div");
+        titleRow.style.display = "flex";
+        titleRow.style.justifyContent = "space-between";
+        titleRow.style.alignItems = "center";
+        titleRow.style.marginBottom = "12px";
+
+        var title = document.createElement("div");
+        title.innerHTML = "<span style='color:#89dceb;'>📥</span> <b>Masukkan Code Rekaman</b>";
+        title.style.fontSize = "15px";
+        title.style.color = "#cdd6f4";
+        titleRow.appendChild(title);
+
+        var closeX = document.createElement("div");
+        closeX.innerText = "✕";
+        closeX.style.cursor = "pointer";
+        closeX.style.color = "#a6adc8";
+        closeX.style.fontSize = "15px";
+        closeX.style.width = "28px";
+        closeX.style.height = "28px";
+        closeX.style.borderRadius = "8px";
+        closeX.style.display = "flex";
+        closeX.style.alignItems = "center";
+        closeX.style.justifyContent = "center";
+        closeX.style.background = "#1e1e2e";
+        closeX.onclick = function() { modal.remove(); };
+        titleRow.appendChild(closeX);
+        card.appendChild(titleRow);
+
+        var subDesc = document.createElement("div");
+        subDesc.innerText = "Tempel Code Rekaman (AGY-RECIPE:...) atau tautan dari pengirim di bawah ini:";
+        subDesc.style.fontSize = "11px";
+        subDesc.style.color = "#a6adc8";
+        subDesc.style.marginBottom = "10px";
+        card.appendChild(subDesc);
+
+        var textInp = document.createElement("textarea");
+        textInp.rows = 4;
+        textInp.placeholder = "Tempel Code Rekaman (AGY-RECIPE:...) atau URL tautan di sini...";
+        textInp.style.width = "100%";
+        textInp.style.boxSizing = "border-box";
+        textInp.style.background = "#11111b";
+        textInp.style.border = "1px solid #45475a";
+        textInp.style.borderRadius = "12px";
+        textInp.style.padding = "10px";
+        textInp.style.color = "#cdd6f4";
+        textInp.style.fontSize = "11px";
+        textInp.style.marginBottom = "10px";
+        textInp.style.outline = "none";
+        card.appendChild(textInp);
+
+        // Tombol Paste Cepat
+        var pasteBtn = document.createElement("button");
+        pasteBtn.innerText = "📋 Tempel dari Clipboard";
+        pasteBtn.style.background = "#1e1e2e";
+        pasteBtn.style.color = "#89dceb";
+        pasteBtn.style.border = "1px solid #313244";
+        pasteBtn.style.borderRadius = "8px";
+        pasteBtn.style.padding = "6px 10px";
+        pasteBtn.style.fontSize = "11px";
+        pasteBtn.style.fontWeight = "600";
+        pasteBtn.style.cursor = "pointer";
+        pasteBtn.style.marginBottom = "14px";
+        pasteBtn.onclick = function() {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                navigator.clipboard.readText().then(function(t) {
+                    if (t) textInp.value = t.trim();
+                }).catch(function(){});
+            }
+        };
+        card.appendChild(pasteBtn);
+
+        var actionBtn = document.createElement("button");
+        actionBtn.innerText = "⚡ BUAT REKAMAN SAMA";
+        actionBtn.style.background = "linear-gradient(135deg, #a6e3a1 0%, #89dceb 100%)";
+        actionBtn.style.color = "#11111b";
+        actionBtn.style.border = "none";
+        actionBtn.style.borderRadius = "12px";
+        actionBtn.style.padding = "12px 0";
+        actionBtn.style.fontSize = "12px";
+        actionBtn.style.fontWeight = "800";
+        actionBtn.style.cursor = "pointer";
+        actionBtn.style.boxShadow = "0 4px 16px rgba(166, 227, 161, 0.35)";
+        actionBtn.onclick = function() {
+            var raw = textInp.value.trim();
+            if (!raw) return;
+            var decoded = decodeRecipeCode(raw);
+            if (!decoded || !decoded.name || !Array.isArray(decoded.events) || decoded.events.length === 0) {
+                alert("❌ Format Code Rekaman tidak valid!");
+                return;
+            }
+            RecipeStore.save(decoded.name, decoded.events, decoded.targetUrl);
+            modal.remove();
+            updateAgyHUD("✨ Rekaman Berhasil Dibuat!", "Resep '" + decoded.name + "' (" + decoded.events.length + " langkah) siap diputar!", "success");
+            if (typeof onImported === "function") {
+                onImported(decoded);
+            } else {
+                showRunConfigModal(decoded.name, decoded.events);
+            }
+        };
+        card.appendChild(actionBtn);
+
+        modal.appendChild(card);
+        (document.body || document.documentElement).appendChild(modal);
+        textInp.focus();
+    }
+
+    function checkAndAutoImportRecipeFromUrl() {
+        try {
+            var hash = window.location.hash || "";
+            var search = window.location.search || "";
+            var match = hash.match(/[#\?&]agy_(?:code|recipe)=([^&\s]+)/i) || search.match(/[\?&]agy_(?:code|recipe)=([^&\s]+)/i);
+            if (match && match[1]) {
+                var rawCode = match[1];
+                var data = decodeRecipeCode(rawCode);
+                if (data && data.name && Array.isArray(data.events) && data.events.length > 0) {
+                    RecipeStore.save(data.name, data.events, data.targetUrl || window.location.href.split("#")[0]);
+                    try {
+                        var cleanUrl = window.location.pathname + (window.location.search.replace(/[\?&]agy_(?:code|recipe)=[^&]+/, "") || "");
+                        window.history.replaceState({}, document.title, cleanUrl || window.location.href.split("#")[0]);
+                    } catch(_) {}
+
+                    setTimeout(function() {
+                        updateAgyHUD("✨ Rekaman Dibuat Otomatis!", "Resep '" + data.name + "' (" + data.events.length + " langkah) dikloning dari pengirim!", "success");
+                        showRunConfigModal(data.name, data.events);
+                    }, 1000);
+                }
+            }
+        } catch(e) {
+            console.warn("[AgyAutoImport] Error:", e);
+        }
+    }
 
     // --- 4. ACCURATE CSS SELECTOR HELPER ---
     function getCssSelector(el) {
@@ -2234,7 +2738,8 @@
         saveBtn.style.cursor = "pointer";
         saveBtn.onclick = function() {
             var rName = inp.value.trim() || defaultName;
-            RecipeStore.save(rName, events);
+            var curUrl = (window.location && window.location.href) ? window.location.href.split("#")[0] : "";
+            RecipeStore.save(rName, events, curUrl);
             updateAgyHUD("Resep Tersimpan", rName + " (" + events.length + " langkah)", "success");
             modal.remove();
         };
@@ -3060,6 +3565,9 @@
 
         var cfg = (typeof AgyConfig !== "undefined" && AgyConfig.get) ? AgyConfig.get() : { stepDelay: 1200, batchDelay: 3000 };
         var wallets = (typeof AgyDB !== "undefined" && AgyDB.getWallets) ? AgyDB.getWallets() : [];
+        var allRecs = (typeof RecipeStore !== "undefined" && RecipeStore.getAll) ? RecipeStore.getAll() : {};
+        var recObj = allRecs[recipeName] || {};
+        var targetUrl = recObj.targetUrl || "";
 
         var modal = document.createElement("div");
         modal.id = "__agy_run_config_modal__";
@@ -3128,6 +3636,30 @@
         titleBlock.appendChild(recipeBadge);
         titleRow.appendChild(titleBlock);
 
+        // Header Action Group (Share & Close)
+        var rightHeadGroup = document.createElement("div");
+        rightHeadGroup.style.display = "flex";
+        rightHeadGroup.style.alignItems = "center";
+        rightHeadGroup.style.gap = "6px";
+
+        var shareIconBtn = document.createElement("div");
+        shareIconBtn.innerText = "📤";
+        shareIconBtn.title = "Bagikan Rekaman Ini";
+        shareIconBtn.style.cursor = "pointer";
+        shareIconBtn.style.color = "#cba6f7";
+        shareIconBtn.style.fontSize = "13px";
+        shareIconBtn.style.width = "28px";
+        shareIconBtn.style.height = "28px";
+        shareIconBtn.style.borderRadius = "8px";
+        shareIconBtn.style.display = "flex";
+        shareIconBtn.style.alignItems = "center";
+        shareIconBtn.style.justifyContent = "center";
+        shareIconBtn.style.background = "#1e1e2e";
+        shareIconBtn.onclick = function() {
+            showShareRecipeModal(recipeName, events, targetUrl);
+        };
+        rightHeadGroup.appendChild(shareIconBtn);
+
         var closeX = document.createElement("div");
         closeX.innerText = "✕";
         closeX.style.cursor = "pointer";
@@ -3141,14 +3673,15 @@
         closeX.style.justifyContent = "center";
         closeX.style.background = "#1e1e2e";
         closeX.onclick = function() { modal.remove(); };
-        titleRow.appendChild(closeX);
+        rightHeadGroup.appendChild(closeX);
+        titleRow.appendChild(rightHeadGroup);
         card.appendChild(titleRow);
 
         // Stats row (Steps & Wallets)
         var statsRow = document.createElement("div");
         statsRow.style.display = "flex";
         statsRow.style.gap = "8px";
-        statsRow.style.marginBottom = "14px";
+        statsRow.style.marginBottom = "10px";
 
         var sSteps = document.createElement("div");
         sSteps.innerHTML = "<span style='color:#89dceb; font-weight:700;'>⚡ " + (events ? events.length : 0) + "</span> Langkah";
@@ -3173,10 +3706,128 @@
         sWallets.style.color = "#bac2de";
         sWallets.style.textAlign = "center";
         statsRow.appendChild(sWallets);
-
         card.appendChild(statsRow);
 
+        // Web Rekamannya Info Row
+        if (targetUrl) {
+            var domain = "";
+            try { domain = new URL(targetUrl).hostname; } catch(_) { domain = targetUrl; }
+            var urlRow = document.createElement("div");
+            urlRow.style.display = "flex";
+            urlRow.style.alignItems = "center";
+            urlRow.style.justifyContent = "space-between";
+            urlRow.style.background = "#11111b";
+            urlRow.style.border = "1px solid #313244";
+            urlRow.style.borderRadius = "10px";
+            urlRow.style.padding = "7px 12px";
+            urlRow.style.marginBottom = "12px";
+            urlRow.style.fontSize = "11px";
+
+            var urlLeft = document.createElement("div");
+            urlLeft.style.display = "flex";
+            urlLeft.style.alignItems = "center";
+            urlLeft.style.gap = "6px";
+            urlLeft.style.overflow = "hidden";
+            urlLeft.innerHTML = "<span style='color:#a6adc8;'>🌐 Web:</span> <span style='color:#89dceb; font-weight:600; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;'>" + (domain || targetUrl) + "</span>";
+            urlRow.appendChild(urlLeft);
+
+            var curDomain = "";
+            try { curDomain = window.location.hostname; } catch(_) {}
+            if (curDomain && domain && curDomain !== domain) {
+                var goBtn = document.createElement("button");
+                goBtn.innerText = "🌐 Buka Web Asli";
+                goBtn.style.background = "#313244";
+                goBtn.style.color = "#a6e3a1";
+                goBtn.style.border = "1px solid rgba(166, 227, 161, 0.3)";
+                goBtn.style.borderRadius = "6px";
+                goBtn.style.padding = "4px 8px";
+                goBtn.style.fontSize = "10px";
+                goBtn.style.fontWeight = "700";
+                goBtn.style.cursor = "pointer";
+                goBtn.onclick = function() {
+                    window.location.href = targetUrl;
+                };
+                urlRow.appendChild(goBtn);
+            }
+            card.appendChild(urlRow);
+        }
+
+        // Tri-Mode Segmented Control
+        var currentRunMode = "multi"; // "multi" | "single" | "standalone"
+
+        var modeSegment = document.createElement("div");
+        modeSegment.style.display = "flex";
+        modeSegment.style.background = "#11111b";
+        modeSegment.style.border = "1px solid #313244";
+        modeSegment.style.borderRadius = "12px";
+        modeSegment.style.padding = "3px";
+        modeSegment.style.marginBottom = "14px";
+        modeSegment.style.gap = "4px";
+
+        var btnMulti = document.createElement("button");
+        var btnSingle = document.createElement("button");
+        var btnStandalone = document.createElement("button");
+
+        var updateModeTabs = function() {
+            var tabs = [
+                { btn: btnMulti, id: "multi", label: "🔄 Rotasi Tuyul" },
+                { btn: btnSingle, id: "single", label: "🎯 Fokus 1 Wallet" },
+                { btn: btnStandalone, id: "standalone", label: "🌐 Tanpa Wallet" }
+            ];
+            tabs.forEach(function(t) {
+                var active = (currentRunMode === t.id);
+                t.btn.innerText = t.label;
+                t.btn.style.flex = "1";
+                t.btn.style.border = "none";
+                t.btn.style.borderRadius = "9px";
+                t.btn.style.padding = "7px 3px";
+                t.btn.style.fontSize = "10px";
+                t.btn.style.fontWeight = active ? "700" : "500";
+                t.btn.style.cursor = "pointer";
+                t.btn.style.background = active ? "linear-gradient(135deg, rgba(203, 166, 247, 0.3) 0%, rgba(137, 220, 235, 0.25) 100%)" : "transparent";
+                t.btn.style.color = active ? "#cdd6f4" : "#a6adc8";
+                t.btn.style.boxShadow = active ? "0 2px 8px rgba(0,0,0,0.4)" : "none";
+            });
+
+            if (currentRunMode === "multi") {
+                targetSection.style.display = "block";
+                targetLabel.innerText = "TARGET AKUN DOMPET:";
+                targetInp.placeholder = "1  atau  1-5  atau  1,3,4  atau  *";
+                quickRowMulti.style.display = "flex";
+                quickRowSingle.style.display = "none";
+                loopSection.style.display = "none";
+                batchCard.style.display = "flex";
+                sWallets.innerHTML = "<span style='color:#a6e3a1; font-weight:700;'>👛 " + wallets.length + "</span> Akun Dompet";
+            } else if (currentRunMode === "single") {
+                targetSection.style.display = "block";
+                targetLabel.innerText = "TARGET DOMPET (FOKUS 1 AKUN):";
+                targetInp.placeholder = "Nomor Akun (contoh: 1)";
+                quickRowMulti.style.display = "none";
+                quickRowSingle.style.display = "flex";
+                loopSection.style.display = "block";
+                batchCard.style.display = "none";
+                sWallets.innerHTML = "<span style='color:#cba6f7; font-weight:700;'>🎯 Fokus</span> 1 Dompet";
+            } else {
+                targetSection.style.display = "none";
+                quickRowMulti.style.display = "none";
+                quickRowSingle.style.display = "none";
+                loopSection.style.display = "block";
+                batchCard.style.display = "none";
+                sWallets.innerHTML = "<span style='color:#89dceb; font-weight:700;'>🌐 Standalone</span> (Tanpa Wallet)";
+            }
+        };
+
+        btnMulti.onclick = function() { currentRunMode = "multi"; updateModeTabs(); };
+        btnSingle.onclick = function() { currentRunMode = "single"; updateModeTabs(); };
+        btnStandalone.onclick = function() { currentRunMode = "standalone"; updateModeTabs(); };
+
+        modeSegment.appendChild(btnMulti);
+        modeSegment.appendChild(btnSingle);
+        modeSegment.appendChild(btnStandalone);
+        card.appendChild(modeSegment);
+
         // Target Input Section
+        var targetSection = document.createElement("div");
         var targetLabel = document.createElement("div");
         targetLabel.innerText = "TARGET AKUN DOMPET:";
         targetLabel.style.fontSize = "10px";
@@ -3184,7 +3835,7 @@
         targetLabel.style.color = "#a6adc8";
         targetLabel.style.letterSpacing = "0.6px";
         targetLabel.style.marginBottom = "6px";
-        card.appendChild(targetLabel);
+        targetSection.appendChild(targetLabel);
 
         var targetInp = document.createElement("input");
         targetInp.type = "text";
@@ -3195,7 +3846,7 @@
         targetInp.style.background = "#11111b";
         targetInp.style.border = "1px solid #45475a";
         targetInp.style.borderRadius = "12px";
-        targetInp.style.padding = "11px 14px";
+        targetInp.style.padding = "10px 14px";
         targetInp.style.color = "#cdd6f4";
         targetInp.style.fontSize = "13px";
         targetInp.style.fontWeight = "500";
@@ -3203,13 +3854,13 @@
         targetInp.style.outline = "none";
         targetInp.onfocus = function() { targetInp.style.borderColor = "#89dceb"; };
         targetInp.onblur = function() { targetInp.style.borderColor = "#45475a"; };
-        card.appendChild(targetInp);
+        targetSection.appendChild(targetInp);
 
-        // Quick Preset Chips
-        var quickRow = document.createElement("div");
-        quickRow.style.display = "flex";
-        quickRow.style.gap = "6px";
-        quickRow.style.marginBottom = "14px";
+        // Quick Preset Chips (Multi)
+        var quickRowMulti = document.createElement("div");
+        quickRowMulti.style.display = "flex";
+        quickRowMulti.style.gap = "6px";
+        quickRowMulti.style.marginBottom = "12px";
 
         var makeChip = function(lbl, val) {
             var chip = document.createElement("button");
@@ -3227,10 +3878,82 @@
             return chip;
         };
 
-        quickRow.appendChild(makeChip("Akun #1", "1"));
-        quickRow.appendChild(makeChip("1 - " + Math.max(1, Math.min(5, wallets.length)), "1-" + Math.max(1, Math.min(5, wallets.length))));
-        quickRow.appendChild(makeChip("Semua (*)", "*"));
-        card.appendChild(quickRow);
+        quickRowMulti.appendChild(makeChip("Akun #1", "1"));
+        quickRowMulti.appendChild(makeChip("1 - " + Math.max(1, Math.min(5, wallets.length)), "1-" + Math.max(1, Math.min(5, wallets.length))));
+        quickRowMulti.appendChild(makeChip("Semua (*)", "*"));
+        targetSection.appendChild(quickRowMulti);
+
+        // Quick Preset Chips (Single)
+        var quickRowSingle = document.createElement("div");
+        quickRowSingle.style.display = "none";
+        quickRowSingle.style.gap = "6px";
+        quickRowSingle.style.marginBottom = "12px";
+        quickRowSingle.appendChild(makeChip("Akun #1", "1"));
+        if (wallets.length >= 2) quickRowSingle.appendChild(makeChip("Akun #2", "2"));
+        if (wallets.length >= 3) quickRowSingle.appendChild(makeChip("Akun #3", "3"));
+        targetSection.appendChild(quickRowSingle);
+
+        card.appendChild(targetSection);
+
+        // Loop Count Section (For Single & Standalone Modes)
+        var loopSection = document.createElement("div");
+        loopSection.style.marginBottom = "14px";
+        loopSection.style.display = "none";
+
+        var loopLabel = document.createElement("div");
+        loopLabel.innerText = "JUMLAH PUTARAN (LOOP COUNT):";
+        loopLabel.style.fontSize = "10px";
+        loopLabel.style.fontWeight = "700";
+        loopLabel.style.color = "#a6adc8";
+        loopLabel.style.letterSpacing = "0.6px";
+        loopLabel.style.marginBottom = "6px";
+        loopSection.appendChild(loopLabel);
+
+        var loopInp = document.createElement("input");
+        loopInp.type = "number";
+        loopInp.value = "5";
+        loopInp.style.width = "100%";
+        loopInp.style.boxSizing = "border-box";
+        loopInp.style.background = "#11111b";
+        loopInp.style.border = "1px solid #45475a";
+        loopInp.style.borderRadius = "12px";
+        loopInp.style.padding = "10px 14px";
+        loopInp.style.color = "#cdd6f4";
+        loopInp.style.fontSize = "13px";
+        loopInp.style.fontWeight = "600";
+        loopInp.style.marginBottom = "8px";
+        loopInp.style.outline = "none";
+        loopInp.onfocus = function() { loopInp.style.borderColor = "#cba6f7"; };
+        loopInp.onblur = function() { loopInp.style.borderColor = "#45475a"; };
+        loopSection.appendChild(loopInp);
+
+        var loopChipsRow = document.createElement("div");
+        loopChipsRow.style.display = "flex";
+        loopChipsRow.style.gap = "6px";
+
+        var makeLoopChip = function(lbl, val) {
+            var chip = document.createElement("button");
+            chip.innerText = lbl;
+            chip.style.flex = "1";
+            chip.style.background = "#1e1e2e";
+            chip.style.border = "1px solid #313244";
+            chip.style.color = "#cdd6f4";
+            chip.style.borderRadius = "8px";
+            chip.style.padding = "6px 2px";
+            chip.style.fontSize = "10px";
+            chip.style.fontWeight = "600";
+            chip.style.cursor = "pointer";
+            chip.onclick = function() { loopInp.value = val; };
+            return chip;
+        };
+
+        loopChipsRow.appendChild(makeLoopChip("1x", "1"));
+        loopChipsRow.appendChild(makeLoopChip("5x", "5"));
+        loopChipsRow.appendChild(makeLoopChip("10x", "10"));
+        loopChipsRow.appendChild(makeLoopChip("25x", "25"));
+        loopChipsRow.appendChild(makeLoopChip("♾️ Non-stop", "999999"));
+        loopSection.appendChild(loopChipsRow);
+        card.appendChild(loopSection);
 
         // Auto-Rotate Loop Section
         var batchCard = document.createElement("label");
@@ -3267,8 +3990,9 @@
         batchCb.style.accentColor = "#a6e3a1";
         batchCb.style.cursor = "pointer";
         batchCard.appendChild(batchCb);
-
         card.appendChild(batchCard);
+
+        updateModeTabs(); // Initialize mode view
 
         // Timing Note Pill
         var timingNote = document.createElement("div");
@@ -3314,9 +4038,12 @@
         startBtn.onclick = function() {
             var targetExpr = targetInp.value.trim() || "1";
             var isBatch = batchCb.checked;
+            var lCount = parseInt(loopInp.value, 10);
+            if (isNaN(lCount) || lCount <= 0) lCount = 1;
+
             modal.remove();
             if (typeof AgyBatchRunner !== "undefined" && AgyBatchRunner.run) {
-                AgyBatchRunner.run(events, recipeName, targetExpr, isBatch);
+                AgyBatchRunner.run(events, recipeName, targetExpr, isBatch, null, currentRunMode, lCount);
             } else {
                 replayEventsSequentially(events, recipeName);
             }
@@ -3423,18 +4150,18 @@
         // Action Quick Bar
         var topBtnRow = document.createElement("div");
         topBtnRow.style.display = "flex";
-        topBtnRow.style.gap = "8px";
+        topBtnRow.style.gap = "6px";
         topBtnRow.style.marginTop = "14px";
         topBtnRow.style.marginBottom = "14px";
 
         var addRecipeBtn = document.createElement("button");
-        addRecipeBtn.innerText = "➕ Rekam Resep Baru";
-        addRecipeBtn.style.flex = "1.2";
+        addRecipeBtn.innerText = "➕ Rekam";
+        addRecipeBtn.style.flex = "1.1";
         addRecipeBtn.style.background = "linear-gradient(135deg, rgba(203, 166, 247, 0.2) 0%, rgba(137, 220, 235, 0.15) 100%)";
         addRecipeBtn.style.color = "#cba6f7";
         addRecipeBtn.style.border = "1px solid rgba(203, 166, 247, 0.4)";
         addRecipeBtn.style.borderRadius = "10px";
-        addRecipeBtn.style.padding = "9px 12px";
+        addRecipeBtn.style.padding = "9px 8px";
         addRecipeBtn.style.fontSize = "12px";
         addRecipeBtn.style.fontWeight = "700";
         addRecipeBtn.style.cursor = "pointer";
@@ -3445,6 +4172,26 @@
             showRecordModePickerModal("Resep_Baru");
         };
         topBtnRow.appendChild(addRecipeBtn);
+
+        var importBtn = document.createElement("button");
+        importBtn.innerText = "📥 Code";
+        importBtn.style.flex = "0.9";
+        importBtn.style.background = "#1e1e2e";
+        importBtn.style.color = "#89dceb";
+        importBtn.style.border = "1px solid #313244";
+        importBtn.style.borderRadius = "10px";
+        importBtn.style.padding = "9px 8px";
+        importBtn.style.fontSize = "12px";
+        importBtn.style.fontWeight = "700";
+        importBtn.style.cursor = "pointer";
+        importBtn.onclick = function(e) {
+            e.stopPropagation();
+            modal.remove();
+            showImportCodeModal(function() {
+                showRecipePickerModal();
+            });
+        };
+        topBtnRow.appendChild(importBtn);
 
         var hubBtn = document.createElement("button");
         hubBtn.innerText = "⚙️ Hub";
@@ -3540,7 +4287,12 @@
                 nameCol.appendChild(nameSpan);
 
                 var badgeSpan = document.createElement("span");
-                badgeSpan.innerText = "⚡ " + evts.length + " langkah";
+                var rDomain = "";
+                if (rec.targetUrl) {
+                    try { rDomain = new URL(rec.targetUrl).hostname; } catch(_) { rDomain = rec.targetUrl; }
+                }
+                var domainHtml = rDomain ? (" • <span style='color:#89dceb;'>🌐 " + rDomain + "</span>") : "";
+                badgeSpan.innerHTML = "⚡ " + evts.length + " langkah" + domainHtml;
                 badgeSpan.style.fontSize = "10px";
                 badgeSpan.style.fontWeight = "600";
                 badgeSpan.style.color = "#a6e3a1";
@@ -3562,12 +4314,12 @@
 
                 var runBtn = document.createElement("button");
                 runBtn.innerText = "▶ Putar";
-                runBtn.style.flex = "1.5";
+                runBtn.style.flex = "1.3";
                 runBtn.style.background = "linear-gradient(135deg, #a6e3a1 0%, #89dceb 100%)";
                 runBtn.style.color = "#11111b";
                 runBtn.style.border = "none";
                 runBtn.style.borderRadius = "8px";
-                runBtn.style.padding = "7px 10px";
+                runBtn.style.padding = "7px 8px";
                 runBtn.style.fontSize = "11px";
                 runBtn.style.fontWeight = "700";
                 runBtn.style.cursor = "pointer";
@@ -3579,14 +4331,55 @@
                 };
                 btnGroup.appendChild(runBtn);
 
+                var shareBtn = document.createElement("button");
+                shareBtn.innerText = "📤";
+                shareBtn.title = "Bagikan Rekaman Ini";
+                shareBtn.style.flex = "0.6";
+                shareBtn.style.background = "#313244";
+                shareBtn.style.color = "#cba6f7";
+                shareBtn.style.border = "1px solid rgba(203, 166, 247, 0.3)";
+                shareBtn.style.borderRadius = "8px";
+                shareBtn.style.padding = "7px 6px";
+                shareBtn.style.fontSize = "11px";
+                shareBtn.style.cursor = "pointer";
+                shareBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    showShareRecipeModal(k, evts, rec.targetUrl);
+                };
+                btnGroup.appendChild(shareBtn);
+
+                if (rec.targetUrl) {
+                    var curD = "";
+                    try { curD = window.location.hostname; } catch(_) {}
+                    if (rDomain && curD && curD !== rDomain) {
+                        var openWebBtn = document.createElement("button");
+                        openWebBtn.innerText = "🌐";
+                        openWebBtn.title = "Buka Web Rekaman: " + rec.targetUrl;
+                        openWebBtn.style.flex = "0.6";
+                        openWebBtn.style.background = "#313244";
+                        openWebBtn.style.color = "#89dceb";
+                        openWebBtn.style.border = "1px solid rgba(137, 220, 235, 0.3)";
+                        openWebBtn.style.borderRadius = "8px";
+                        openWebBtn.style.padding = "7px 6px";
+                        openWebBtn.style.fontSize = "11px";
+                        openWebBtn.style.cursor = "pointer";
+                        openWebBtn.onclick = function(e) {
+                            e.stopPropagation();
+                            window.location.href = rec.targetUrl;
+                        };
+                        btnGroup.appendChild(openWebBtn);
+                    }
+                }
+
                 var editBtn = document.createElement("button");
-                editBtn.innerText = "✏️ Edit";
-                editBtn.style.flex = "1";
+                editBtn.innerText = "✏️";
+                editBtn.title = "Edit Resep";
+                editBtn.style.flex = "0.6";
                 editBtn.style.background = "#313244";
                 editBtn.style.color = "#fab387";
                 editBtn.style.border = "1px solid rgba(250, 179, 135, 0.25)";
                 editBtn.style.borderRadius = "8px";
-                editBtn.style.padding = "7px 8px";
+                editBtn.style.padding = "7px 6px";
                 editBtn.style.fontSize = "11px";
                 editBtn.style.fontWeight = "600";
                 editBtn.style.cursor = "pointer";
@@ -3600,7 +4393,7 @@
 
                 var delBtn = document.createElement("button");
                 delBtn.innerText = "🗑️";
-                delBtn.style.flex = "0.6";
+                delBtn.style.flex = "0.5";
                 delBtn.style.background = "rgba(243, 139, 168, 0.15)";
                 delBtn.style.color = "#f38ba8";
                 delBtn.style.border = "1px solid rgba(243, 139, 168, 0.3)";
@@ -6200,6 +6993,12 @@
             console.warn("[AGY Co-Pilot] Gagal resume pending prompt queue:", e);
         }
     })();
+
+    // Auto-detect Code Rekaman dari Hash URL saat halaman dimuat atau hash berubah
+    try {
+        checkAndAutoImportRecipeFromUrl();
+        window.addEventListener("hashchange", checkAndAutoImportRecipeFromUrl);
+    } catch(_) {}
 
     window.AgyRecorder = AgyRecorder;
     console.log("[AGY Co-Pilot] Smart Shield, Step Editor, Batch Runner & Settings Hub v3.2 Initialized.");
