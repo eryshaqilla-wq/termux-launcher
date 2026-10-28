@@ -2,6 +2,172 @@
     if (window.__FUSION_GHOST_INJECTED__) return;
     window.__FUSION_GHOST_INJECTED__ = true;
 
+    // --- CONTINUOUS BACKGROUND EXECUTION & VISIBILITY SHIELD ---
+    try {
+        Object.defineProperty(document, "hidden", {
+            get: function() { return false; },
+            configurable: true
+        });
+        Object.defineProperty(document, "visibilityState", {
+            get: function() { return "visible"; },
+            configurable: true
+        });
+        Object.defineProperty(document, "webkitVisibilityState", {
+            get: function() { return "visible"; },
+            configurable: true
+        });
+        window.addEventListener("visibilitychange", function(e) {
+            e.stopImmediatePropagation();
+        }, true);
+    } catch(_) {}
+
+    // --- WEB NOTIFICATION SHIELD & X.COM PUSH ENGINE ---
+    (function setupWebNotifications() {
+        function MockNotification(title, options) {
+            options = options || {};
+            var body = options.body || "";
+            var icon = options.icon || options.image || "";
+            var targetUrl = (options.data && options.data.url) ? options.data.url : window.location.href;
+
+            try {
+                if (window.GhostBridge && window.GhostBridge.showWebNotification) {
+                    window.GhostBridge.showWebNotification(String(title), String(body), String(icon), String(targetUrl));
+                }
+            } catch(_) {}
+
+            this.title = title;
+            this.body = body;
+            this.icon = icon;
+            this.tag = options.tag || "";
+            this.data = options.data || {};
+            this.onclick = null;
+            this.onclose = null;
+            this.onerror = null;
+            this.onshow = null;
+            this.close = function() {};
+
+            var self = this;
+            setTimeout(function() {
+                if (typeof self.onshow === "function") {
+                    try { self.onshow(new Event("show")); } catch(_) {}
+                }
+            }, 50);
+        }
+
+        MockNotification.permission = "granted";
+        MockNotification.requestPermission = function(callback) {
+            if (typeof callback === "function") {
+                try { callback("granted"); } catch(_) {}
+            }
+            return Promise.resolve("granted");
+        };
+        MockNotification.maxActions = 2;
+
+        try {
+            window.Notification = MockNotification;
+        } catch(_) {}
+
+        // 1. Shims navigator.permissions.query for "notifications" & "push"
+        try {
+            if (navigator.permissions && navigator.permissions.query) {
+                var origQuery = navigator.permissions.query.bind(navigator.permissions);
+                navigator.permissions.query = function(param) {
+                    if (param && (param.name === "notifications" || param.name === "push")) {
+                        return Promise.resolve({
+                            state: "granted",
+                            name: param.name,
+                            onchange: null,
+                            addEventListener: function() {},
+                            removeEventListener: function() {},
+                            dispatchEvent: function() { return true; }
+                        });
+                    }
+                    return origQuery(param);
+                };
+            }
+        } catch(_) {}
+
+        // 2. Shims ServiceWorkerRegistration.prototype.showNotification
+        try {
+            if (typeof ServiceWorkerRegistration !== "undefined" && ServiceWorkerRegistration.prototype) {
+                ServiceWorkerRegistration.prototype.showNotification = function(title, options) {
+                    new MockNotification(title, options);
+                    return Promise.resolve();
+                };
+            }
+        } catch(_) {}
+
+        // 3. X.com / Twitter Smart Notification Watcher
+        // Even if X push is not toggled in settings, detect unread badges & title changes:
+        try {
+            var isX = location.hostname.includes("x.com") || location.hostname.includes("twitter.com");
+            if (isX) {
+                var lastXNotifCount = 0;
+                var lastXDmCount = 0;
+                var lastTitleCount = 0;
+
+                function parseBadgeCount(el) {
+                    if (!el) return 0;
+                    var label = el.getAttribute("aria-label") || "";
+                    var match = label.match(/(\d+)/);
+                    if (match) return parseInt(match[1], 10);
+                    var text = el.innerText || "";
+                    var num = parseInt(text.trim(), 10);
+                    return !isNaN(num) ? num : (label ? 1 : 0);
+                }
+
+                function checkXActivity() {
+                    // Check document title e.g. "(3) Home / X" or "(1) Messages / X"
+                    var titleMatch = document.title.match(/^\((\d+)\)\s*(.*)/);
+                    if (titleMatch) {
+                        var titleCount = parseInt(titleMatch[1], 10);
+                        if (titleCount > lastTitleCount && titleCount > 0) {
+                            lastTitleCount = titleCount;
+                            var contextText = titleMatch[2] || "Aktivitas Baru";
+                            new MockNotification("X • " + contextText, {
+                                body: "Tuan memiliki " + titleCount + " pembaruan baru di X",
+                                icon: "https://abs.twimg.com/favicons/twitter.3.ico",
+                                data: { url: "https://x.com/notifications" }
+                            });
+                        } else if (titleCount === 0) {
+                            lastTitleCount = 0;
+                        }
+                    }
+
+                    // Check Notification Bell Tab badge
+                    var notifBadge = document.querySelector('a[data-testid="AppTabBar_Notifications_Link"] [aria-label*="unread"], a[data-testid="AppTabBar_Notifications_Link"] [aria-label*="Unread"], a[data-testid="AppTabBar_Notifications_Link"] div[dir="ltr"]');
+                    var curNotifCount = parseBadgeCount(notifBadge);
+                    if (curNotifCount > lastXNotifCount && curNotifCount > 0) {
+                        lastXNotifCount = curNotifCount;
+                        new MockNotification("X • Notifikasi", {
+                            body: curNotifCount + " notifikasi / mention baru belum dibaca",
+                            icon: "https://abs.twimg.com/favicons/twitter.3.ico",
+                            data: { url: "https://x.com/notifications" }
+                        });
+                    } else if (curNotifCount === 0) {
+                        lastXNotifCount = 0;
+                    }
+
+                    // Check DM Messages Tab badge
+                    var dmBadge = document.querySelector('a[data-testid="AppTabBar_DirectMessage_Link"] [aria-label*="unread"], a[data-testid="AppTabBar_DirectMessage_Link"] [aria-label*="Unread"], a[data-testid="AppTabBar_DirectMessage_Link"] div[dir="ltr"]');
+                    var curDmCount = parseBadgeCount(dmBadge);
+                    if (curDmCount > lastXDmCount && curDmCount > 0) {
+                        lastXDmCount = curDmCount;
+                        new MockNotification("X • Pesan Langsung (DM)", {
+                            body: curDmCount + " pesan DM baru masuk",
+                            icon: "https://abs.twimg.com/favicons/twitter.3.ico",
+                            data: { url: "https://x.com/messages" }
+                        });
+                    } else if (curDmCount === 0) {
+                        lastXDmCount = 0;
+                    }
+                }
+
+                setInterval(checkXActivity, 4000);
+            }
+        } catch(_) {}
+    })();
+
     var isDaemon = function() {
         if (window.GhostBridge && window.GhostBridge.isDaemonAlive) {
             try { return window.GhostBridge.isDaemonAlive(); } catch(e) {}
@@ -242,63 +408,113 @@
     window.__AGY_SIMULATED_CLICK__ = false;
     window.__AGY_SIMULATED_FILL__ = false;
 
-    // --- 1. MINIMALIST BLACK-TRANSPARENT FLOATING HUD ---
+    // --- 1. MINIMALIST FLOATING BOTTOM CAPSULE HUD (OPTION A) ---
     function updateAgyHUD(titleText, subText, statusType) {
         try {
             var doc = document.body || document.documentElement;
             if (!doc) return;
+
+            // Universal emoji & symbol stripper to guarantee clean, compact text without overflow
+            var emojiRegex = /[\u{1F300}-\u{1FAD6}\u{1F900}-\u{1F9FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{2300}-\u{23FF}\u{2B50}\u{2B55}\u{2934}\u{2935}\u{25AA}\u{25AB}\u{25FE}\u{25FD}\u{200D}\u{FE0E}\u{FE0F}]/gu;
+            var cleanText = function(str) {
+                if (!str) return "";
+                return String(str).replace(emojiRegex, "").replace(/\s+/g, " ").trim();
+            };
+
+            var titleStr = cleanText(titleText);
+            var subStr = cleanText(subText);
+            if (!titleStr && !subStr) return;
 
             var hud = document.getElementById("__agy_copilot_hud__");
             if (!hud) {
                 hud = document.createElement("div");
                 hud.id = "__agy_copilot_hud__";
                 hud.style.position = "fixed";
-                hud.style.top = "10px";
-                hud.style.left = "10px";
-                hud.style.background = "#1F1F24";
-                hud.style.border = "1px solid #36373D";
-                hud.style.borderRadius = "4px";
-                hud.style.padding = "6px 10px";
-                hud.style.color = "#E2E2E8";
+                hud.style.bottom = "20px";
+                hud.style.left = "50%";
+                hud.style.transform = "translateX(-50%) translateY(20px)";
+                hud.style.opacity = "0";
                 hud.style.zIndex = "2147483647";
+                hud.style.display = "flex";
+                hud.style.alignItems = "center";
+                hud.style.justifyContent = "space-between";
+                hud.style.boxSizing = "border-box";
+                hud.style.maxWidth = "min(92vw, 420px)";
+                hud.style.width = "max-content";
+                hud.style.minHeight = "36px";
+                hud.style.padding = "6px 14px";
+                hud.style.borderRadius = "9999px";
+                hud.style.background = "rgba(24, 24, 37, 0.94)";
+                hud.style.backdropFilter = "blur(14px)";
+                hud.style.webkitBackdropFilter = "blur(14px)";
+                hud.style.boxShadow = "0 8px 24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08)";
                 hud.style.fontFamily = "system-ui, -apple-system, sans-serif";
-                hud.style.fontSize = "11.5px";
-                hud.style.lineHeight = "1.35";
-                hud.style.textAlign = "left";
-                hud.style.maxWidth = "280px";
-                hud.style.boxShadow = "0 4px 16px rgba(0, 0, 0, 0.7)";
-                hud.style.transition = "opacity 0.2s ease, transform 0.2s ease";
+                hud.style.pointerEvents = "none";
+                hud.style.transition = "opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease";
                 doc.appendChild(hud);
             }
 
+            // Status color and iconography themes
             var icon = "⚡";
-            var iconColor = "#8AB4F8";
-            if (statusType === "success") { icon = "✓"; iconColor = "#7CD4BE"; }
-            if (statusType === "error" || statusType === "warning") { icon = "✕"; iconColor = "#F28B82"; }
-            if (statusType === "recording") { icon = "●"; iconColor = "#F28B82"; }
-            if (statusType === "recording_step") { icon = "●"; iconColor = "#7CD4BE"; }
-            if (statusType === "running") { icon = "▶"; iconColor = "#D0BCFF"; }
-
-            var titleStr = (titleText || "").trim();
-            var subStr = (subText || "").trim();
-
-            var contentHtml = "<div style='display:flex; align-items:flex-start; gap:6px;'>" +
-                              "<span style='color:" + iconColor + "; font-weight:900; font-size:12px; line-height:1.2; flex-shrink:0; margin-top:1px;'>" + icon + "</span>" +
-                              "<div style='display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; font-size:11.5px; line-height:1.35; color:#E2E2E8;'>" +
-                              "<strong style='color:#FFFFFF; font-weight:700;'>" + titleStr + "</strong>" +
-                              (subStr.length > 0 ? "<span style='color:#9BA1AB; margin-left:4px;'>— " + subStr + "</span>" : "") +
-                              "</div></div>";
+            var iconColor = "#89b4fa";
+            var iconBg = "rgba(137, 180, 250, 0.15)";
+            var borderColor = "#313244";
+            var glowShadow = "0 8px 24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08)";
 
             if (statusType === "running") {
+                icon = "▶";
+                iconColor = "#cba6f7";
+                iconBg = "rgba(203, 166, 247, 0.18)";
+                borderColor = "#cba6f7";
+                glowShadow = "0 8px 24px rgba(0, 0, 0, 0.7), 0 0 10px rgba(203, 166, 247, 0.3)";
+            } else if (statusType === "success") {
+                icon = "✓";
+                iconColor = "#a6e3a1";
+                iconBg = "rgba(166, 227, 161, 0.15)";
+                borderColor = "#a6e3a1";
+                glowShadow = "0 8px 24px rgba(0, 0, 0, 0.65), 0 0 8px rgba(166, 227, 161, 0.25)";
+            } else if (statusType === "error") {
+                icon = "✕";
+                iconColor = "#f38ba8";
+                iconBg = "rgba(243, 139, 168, 0.18)";
+                borderColor = "#f38ba8";
+                glowShadow = "0 8px 24px rgba(0, 0, 0, 0.65), 0 0 8px rgba(243, 139, 168, 0.25)";
+            } else if (statusType === "warning") {
+                icon = "!";
+                iconColor = "#f9e2af";
+                iconBg = "rgba(249, 226, 175, 0.15)";
+                borderColor = "#f9e2af";
+                glowShadow = "0 8px 24px rgba(0, 0, 0, 0.65), 0 0 8px rgba(249, 226, 175, 0.25)";
+            } else if (statusType === "recording" || statusType === "recording_step") {
+                icon = "●";
+                iconColor = "#fab387";
+                iconBg = "rgba(250, 179, 135, 0.2)";
+                borderColor = "#fab387";
+                glowShadow = "0 8px 24px rgba(0, 0, 0, 0.65), 0 0 8px rgba(250, 179, 135, 0.3)";
+            }
+
+            hud.style.border = "1px solid " + borderColor;
+            hud.style.boxShadow = glowShadow;
+
+            // Internal horizontal capsule layout
+            var contentHtml = "<div style='display:flex; align-items:center; gap:8px; min-width:0; flex:1;'>" +
+                              "<div style='width:20px; height:20px; border-radius:50%; background:" + iconBg + "; color:" + iconColor + "; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:900; flex-shrink:0; line-height:1;'>" + icon + "</div>" +
+                              "<div style='display:flex; flex-direction:column; min-width:0; flex:1; overflow:hidden;'>" +
+                              "<span style='font-size:11.5px; font-weight:700; color:#cdd6f4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.25;'>" + titleStr + "</span>" +
+                              (subStr.length > 0 ? "<span style='font-size:10px; color:#a6adc8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2; margin-top:1px;'>" + subStr + "</span>" : "") +
+                              "</div>" +
+                              "</div>";
+
+            if (statusType === "running") {
+                contentHtml += "<button id='__agy_stop_btn__' style='background:rgba(243, 139, 168, 0.15); color:#f38ba8; border:1px solid #f38ba8; border-radius:9999px; padding:3px 9px; font-size:9.5px; font-weight:700; cursor:pointer; flex-shrink:0; margin-left:8px; outline:none; letter-spacing:0.4px;'>⏹ STOP</button>";
                 hud.style.pointerEvents = "auto";
-                contentHtml += "<div style='margin-top:5px;'><button id='__agy_stop_btn__' style='background:#2B1B1B; color:#F28B82; border:1px solid #BA1A1A; border-radius:4px; padding:3px 8px; font-size:10.5px; font-weight:bold; cursor:pointer;'>⏹ STOP</button></div>";
             } else {
                 hud.style.pointerEvents = "none";
             }
 
             hud.innerHTML = contentHtml;
             hud.style.opacity = "1";
-            hud.style.transform = "translateY(0)";
+            hud.style.transform = "translateX(-50%) translateY(0)";
 
             if (statusType === "running") {
                 var stopBtn = document.getElementById("__agy_stop_btn__");
@@ -310,28 +526,34 @@
                 }
             }
 
-            if (hud.__timer) clearTimeout(hud.__timer);
-            if (statusType === "recording_step") {
+            if (hud.__timer) {
+                clearTimeout(hud.__timer);
+                hud.__timer = null;
+            }
+
+            var hideHUD = function(delay) {
                 hud.__timer = setTimeout(function() {
                     hud.style.opacity = "0";
-                    hud.style.transform = "translateY(-4px)";
-                }, 1500);
+                    hud.style.transform = "translateX(-50%) translateY(16px)";
+                    hud.style.pointerEvents = "none";
+                }, delay);
+            };
+
+            // Persistence rules: running is 100% persistent until finished or stopped
+            if (statusType === "running") {
+                // Keep visible indefinitely while process is executing
+            } else if (statusType === "recording_step") {
+                hideHUD(1800);
             } else if (statusType === "recording") {
-                hud.__timer = setTimeout(function() {
-                    hud.style.opacity = "0";
-                    hud.style.transform = "translateY(-4px)";
-                }, 2000);
+                hideHUD(2400);
             } else if (statusType === "warning") {
-                hud.__timer = setTimeout(function() {
-                    hud.style.opacity = "0";
-                    hud.style.transform = "translateY(-4px)";
-                    setTimeout(function() { if (hud && hud.parentNode) hud.remove(); }, 300);
-                }, 800);
-            } else if (statusType === "success" || statusType === "error") {
-                hud.__timer = setTimeout(function() {
-                    hud.style.opacity = "0";
-                    hud.style.transform = "translateY(-4px)";
-                }, 2000);
+                hideHUD(2400);
+            } else if (statusType === "error") {
+                hideHUD(3000);
+            } else if (statusType === "success") {
+                hideHUD(2200);
+            } else {
+                hideHUD(2500);
             }
         } catch(e) {
             console.error("[AGY HUD Error]", e);
@@ -590,6 +812,11 @@
                 clearTimeout(this.activeTimer);
                 this.activeTimer = null;
             }
+            try {
+                if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
+                    window.GhostBridge.releaseWakeLock();
+                }
+            } catch(_) {}
             updateAgyHUD("Otomatisasi Dihentikan", "Eksekusi dibatalkan oleh pengguna", "warning");
         },
 
@@ -602,6 +829,12 @@
 
             self.isRunning = true;
             self.isAborted = false;
+
+            try {
+                if (window.GhostBridge && window.GhostBridge.acquireWakeLock) {
+                    window.GhostBridge.acquireWakeLock();
+                }
+            } catch(_) {}
 
             var wallets = AgyDB.getWallets();
             var emails = AgyDB.getEmails();
@@ -637,6 +870,11 @@
                 if (self.isAborted) return;
                 if (!isInfinite && currentIdxInQueue >= queue.length) {
                     self.isRunning = false;
+                    try {
+                        if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
+                            window.GhostBridge.releaseWakeLock();
+                        }
+                    } catch(_) {}
                     updateAgyHUD("Batch Selesai!", "Total: " + queue.length + " (Sukses: " + successCount + ", Gagal: " + failCount + ")", "success");
                     if (onComplete) onComplete({ success: successCount, failed: failCount });
                     return;
@@ -696,6 +934,11 @@
                         runAccount();
                     } else {
                         self.isRunning = false;
+                        try {
+                            if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
+                                window.GhostBridge.releaseWakeLock();
+                            }
+                        } catch(_) {}
                         updateAgyHUD("Selesai!", "Sukses: " + successCount + " | Gagal: " + failCount, "success");
                         if (onComplete) onComplete({ success: successCount, failed: failCount });
                     }
@@ -758,13 +1001,13 @@
 
                     if (ev.type === "wait") {
                         var dur = ev.duration || stepDelay;
-                        updateAgyHUD(runTitle, "⏳ Jeda langkah " + stepNum + "/" + eventsList.length + " (" + (dur / 1000).toFixed(1) + "s)", "running");
+                        updateAgyHUD(runTitle, "Jeda langkah " + stepNum + "/" + eventsList.length + " (" + (dur / 1000).toFixed(1) + "s)", "running");
                         self.activeTimer = setTimeout(runNextStep, dur);
                         return;
                     }
 
                     if (ev.type === "next_wallet") {
-                        updateAgyHUD(runTitle, "👛 Langkah " + stepNum + "/" + eventsList.length + ": Ganti Wallet", "running");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Ganti Wallet", "running");
                         try {
                             if (window.GhostBridge && window.GhostBridge.nextWallet) {
                                 window.GhostBridge.nextWallet();
@@ -775,7 +1018,7 @@
                     }
 
                     if (ev.type === "reload") {
-                        updateAgyHUD(runTitle, "🔄 Langkah " + stepNum + "/" + eventsList.length + ": Reload Halaman...", "running");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Reload Halaman...", "running");
                         try {
                             sessionStorage.setItem("__agy_active_recipe_run__", JSON.stringify({
                                 runTitle: runTitle,
@@ -793,7 +1036,7 @@
                     }
 
                     if (ev.type === "wipe_cache") {
-                        updateAgyHUD(runTitle, "🧹 Langkah " + stepNum + "/" + eventsList.length + ": Wipe Cache", "running");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Wipe Cache", "running");
                         try {
                             if (window.GhostBridge && window.GhostBridge.wipeCache) {
                                 window.GhostBridge.wipeCache();
@@ -807,20 +1050,20 @@
                     if (ev.type === "next_email") {
                         var ne = ev.value || ((typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "tuyul@gmail.com");
                         curEmail = ne;
-                        updateAgyHUD(runTitle, "📧 Langkah " + stepNum + "/" + eventsList.length + ": Ganti Email -> " + ne, "running");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Ganti Email -> " + ne, "running");
                         self.activeTimer = setTimeout(runNextStep, 600);
                         return;
                     }
 
                     if (ev.type === "ref") {
                         var nr = ev.value || ((typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123");
-                        updateAgyHUD(runTitle, "🔗 Langkah " + stepNum + "/" + eventsList.length + ": Ref Code -> " + nr, "running");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Ref Code -> " + nr, "running");
                         self.activeTimer = setTimeout(runNextStep, 600);
                         return;
                     }
 
                     if (ev.type === "fingerprint") {
-                        updateAgyHUD(runTitle, "🎭 Langkah " + stepNum + "/" + eventsList.length + ": Ganti Fingerprint...", "running");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Ganti Fingerprint...", "running");
                         try {
                             if (window.GhostBridge && window.GhostBridge.nextFingerprint) {
                                 window.GhostBridge.nextFingerprint();
@@ -837,7 +1080,7 @@
                         try {
                             window.scrollBy({ left: distX, top: distY, behavior: "smooth" });
                         } catch(_) {}
-                        updateAgyHUD(runTitle, "👆 Langkah " + stepNum + "/" + eventsList.length + ": Swipe " + dir.toUpperCase(), "running");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Swipe " + dir.toUpperCase(), "running");
                         self.activeTimer = setTimeout(function() {
                             waitDocReady(runNextStep);
                         }, stepDelay);
@@ -867,7 +1110,7 @@
 
                             targetEl.dispatchEvent(new Event("input", { bubbles: true }));
                             targetEl.dispatchEvent(new Event("change", { bubbles: true }));
-                            updateAgyHUD(runTitle, "✍️ Langkah " + stepNum + "/" + eventsList.length + ": Isi " + valToFill.substring(0, 16), "running");
+                            updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Isi " + valToFill.substring(0, 16), "running");
 
                             self.activeTimer = setTimeout(function() {
                                 waitDocReady(runNextStep);
@@ -888,7 +1131,7 @@
                             if (typeof targetEl.click === "function") {
                                 try { targetEl.click(); } catch(_) {}
                             }
-                            updateAgyHUD(runTitle, "🖱️ Langkah " + stepNum + "/" + eventsList.length + ": Klik " + (ev.text || targetEl.tagName), "running");
+                            updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Klik " + (ev.text || targetEl.tagName), "running");
 
                             self.activeTimer = setTimeout(function() {
                                 waitDocReady(runNextStep);
@@ -1205,6 +1448,7 @@
         card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.85), 0 0 25px rgba(203, 166, 247, 0.15)";
         card.style.color = "#cdd6f4";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
         card.style.display = "flex";
         card.style.flexDirection = "column";
 
@@ -1396,6 +1640,7 @@
         card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.85)";
         card.style.color = "#cdd6f4";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
         card.style.display = "flex";
         card.style.flexDirection = "column";
 
@@ -1491,7 +1736,7 @@
             }
             RecipeStore.save(decoded.name, decoded.events, decoded.targetUrl);
             modal.remove();
-            updateAgyHUD("✨ Rekaman Berhasil Dibuat!", "Resep '" + decoded.name + "' (" + decoded.events.length + " langkah) siap diputar!", "success");
+            updateAgyHUD("Rekaman Berhasil Dibuat", "Resep '" + decoded.name + "' (" + decoded.events.length + " langkah) siap diputar", "success");
             if (typeof onImported === "function") {
                 onImported(decoded);
             } else {
@@ -1521,7 +1766,7 @@
                     } catch(_) {}
 
                     setTimeout(function() {
-                        updateAgyHUD("✨ Rekaman Dibuat Otomatis!", "Resep '" + data.name + "' (" + data.events.length + " langkah) dikloning dari pengirim!", "success");
+                        updateAgyHUD("Rekaman Dibuat Otomatis", "Resep '" + data.name + "' (" + data.events.length + " langkah) dikloning dari pengirim", "success");
                         showRunConfigModal(data.name, data.events);
                     }, 1000);
                 }
@@ -2557,6 +2802,7 @@
         card.style.color = "#cdd6f4";
         card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.8), 0 0 25px rgba(203,166,247,0.12)";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
         card.style.display = "flex";
         card.style.flexDirection = "column";
 
@@ -2910,6 +3156,7 @@
         card.style.display = "flex";
         card.style.flexDirection = "column";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
 
         var handleCloseModal = function(e) {
             if (e && e.stopPropagation) e.stopPropagation();
@@ -3424,6 +3671,7 @@
         card.style.display = "flex";
         card.style.flexDirection = "column";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
 
         modal.addEventListener("click", function(e) {
             if (e.target === modal) {
@@ -3661,6 +3909,7 @@
         card.style.boxShadow = "0 20px 50px rgba(0,0,0,0.8), 0 0 25px rgba(137, 220, 235, 0.12)";
         card.style.color = "#cdd6f4";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
         card.style.display = "flex";
         card.style.flexDirection = "column";
 
@@ -4158,6 +4407,7 @@
         card.style.display = "flex";
         card.style.flexDirection = "column";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
 
         modal.addEventListener("click", function(e) {
             if (e.target === modal) {
@@ -4551,6 +4801,7 @@
         card.style.display = "flex";
         card.style.flexDirection = "column";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
 
         var headerRow = document.createElement("div");
         headerRow.style.display = "flex";
@@ -5259,7 +5510,7 @@
         titleRow.style.marginBottom = "12px";
 
         var title = document.createElement("h3");
-        title.innerText = "✏️ Detail Langkah";
+        title.innerText = "Detail Langkah";
         title.style.margin = "0";
         title.style.fontSize = "15px";
         title.style.color = "#00E5FF";
@@ -5297,47 +5548,47 @@
 
         var optClick = document.createElement("option");
         optClick.value = "click";
-        optClick.innerText = "🖱️ Klik Elemen (Click)";
+        optClick.innerText = "Klik Elemen (Click)";
         typeSelect.appendChild(optClick);
 
         var optFill = document.createElement("option");
         optFill.value = "fill";
-        optFill.innerText = "✍️ Isi Form / Teks (Fill)";
+        optFill.innerText = "Isi Form / Teks (Fill)";
         typeSelect.appendChild(optFill);
 
         var optWait = document.createElement("option");
         optWait.value = "wait";
-        optWait.innerText = "⏳ Smart Jeda / Wait (Delay)";
+        optWait.innerText = "Jeda Waktu / Delay";
         typeSelect.appendChild(optWait);
 
         var optWallet = document.createElement("option");
         optWallet.value = "next_wallet";
-        optWallet.innerText = "👛 Ganti Wallet (Next Wallet)";
+        optWallet.innerText = "Ganti Wallet (Next Wallet)";
         typeSelect.appendChild(optWallet);
 
         var optReload = document.createElement("option");
         optReload.value = "reload";
-        optReload.innerText = "🔄 Muat Ulang Halaman (Reload)";
+        optReload.innerText = "Muat Ulang Halaman (Reload)";
         typeSelect.appendChild(optReload);
 
         var optWipe = document.createElement("option");
         optWipe.value = "wipe_cache";
-        optWipe.innerText = "🧹 Bersihkan Cache (Wipe Cache)";
+        optWipe.innerText = "Bersihkan Cache (Wipe Cache)";
         typeSelect.appendChild(optWipe);
 
         var optEmail = document.createElement("option");
         optEmail.value = "next_email";
-        optEmail.innerText = "📧 Ganti Email (Next Email)";
+        optEmail.innerText = "Ganti Email (Next Email)";
         typeSelect.appendChild(optEmail);
 
         var optRef = document.createElement("option");
         optRef.value = "ref";
-        optRef.innerText = "🔗 Ref / Referral Code";
+        optRef.innerText = "Kode Referral (Ref Code)";
         typeSelect.appendChild(optRef);
 
         var optFp = document.createElement("option");
         optFp.value = "fingerprint";
-        optFp.innerText = "🎭 Ganti Fingerprint Profil";
+        optFp.innerText = "Ganti Fingerprint (Rotate Device)";
         typeSelect.appendChild(optFp);
 
         typeSelect.value = (currentStep.type === "wait" || currentStep.type === "next_wallet" || currentStep.type === "reload" || currentStep.type === "wipe_cache" || currentStep.type === "next_email" || currentStep.type === "ref" || currentStep.type === "fingerprint") ? currentStep.type : (currentStep.type === "fill" || currentStep.type === "input" ? "fill" : "click");
@@ -5796,6 +6047,7 @@
         card.style.boxShadow = "10px 0 36px rgba(0,0,0,0.85)";
         card.style.color = "#cdd6f4";
         card.style.boxSizing = "border-box";
+        card.style.overflowX = "hidden";
 
         var titleRow = document.createElement("div");
         titleRow.style.display = "flex";
@@ -5806,7 +6058,7 @@
 
         var titleBlock = document.createElement("div");
         var title = document.createElement("h3");
-        title.innerText = "🛠️ Editor Langkah Resep";
+        title.innerText = "Editor Langkah Resep";
         title.style.margin = "0";
         title.style.fontSize = "15px";
         title.style.fontWeight = "700";
@@ -5879,165 +6131,85 @@
         addBar.style.background = "#1B1F2D";
         addBar.style.border = "1px solid #2A3144";
         addBar.style.borderRadius = "8px";
-        addBar.style.padding = "6px 8px";
-        addBar.style.display = "flex";
-        addBar.style.gap = "6px";
+        addBar.style.padding = "6px";
+        addBar.style.display = "grid";
+        addBar.style.gridTemplateColumns = "repeat(3, 1fr)";
+        addBar.style.gap = "5px";
         addBar.style.marginBottom = "10px";
+        addBar.style.boxSizing = "border-box";
 
-        var addWaitBtn = document.createElement("button");
-        addWaitBtn.innerText = "⏳ + Jeda";
-        addWaitBtn.style.flex = "1";
-        addWaitBtn.style.background = "#4A148C";
-        addWaitBtn.style.color = "#FFF";
-        addWaitBtn.style.border = "none";
-        addWaitBtn.style.borderRadius = "5px";
-        addWaitBtn.style.padding = "6px 4px";
-        addWaitBtn.style.fontSize = "11px";
-        addWaitBtn.style.cursor = "pointer";
-        addWaitBtn.onclick = function() {
-            workingEvents.push({ type: "wait", duration: 2500, timestamp: Date.now() });
-            renderStepList();
-        };
-        addBar.appendChild(addWaitBtn);
+        function makeAddStepBtn(label, bg, color, onClick) {
+            var b = document.createElement("button");
+            b.innerText = label;
+            b.style.background = bg;
+            b.style.color = color || "#FFF";
+            b.style.border = "none";
+            b.style.borderRadius = "5px";
+            b.style.padding = "7px 3px";
+            b.style.fontSize = "11px";
+            b.style.fontWeight = "600";
+            b.style.cursor = "pointer";
+            b.style.textAlign = "center";
+            b.style.whiteSpace = "nowrap";
+            b.style.boxSizing = "border-box";
+            b.onclick = onClick;
+            return b;
+        }
 
-        var addFillBtn = document.createElement("button");
-        addFillBtn.innerText = "✍️ + Isi Form";
-        addFillBtn.style.flex = "1";
-        addFillBtn.style.background = "#E65100";
-        addFillBtn.style.color = "#FFF";
-        addFillBtn.style.border = "none";
-        addFillBtn.style.borderRadius = "5px";
-        addFillBtn.style.padding = "6px 4px";
-        addFillBtn.style.fontSize = "11px";
-        addFillBtn.style.cursor = "pointer";
-        addFillBtn.onclick = function() {
-            showEditSingleStepDialog({ type: "fill", value: "{{WALLET_ADDRESS}}" }, function(newStep) {
-                workingEvents.push(newStep);
-                renderStepList();
-            });
-        };
-        addBar.appendChild(addFillBtn);
-
-        var addClickBtn = document.createElement("button");
-        addClickBtn.innerText = "🖱️ + Klik";
-        addClickBtn.style.flex = "1";
-        addClickBtn.style.background = "#1565C0";
-        addClickBtn.style.color = "#FFF";
-        addClickBtn.style.border = "none";
-        addClickBtn.style.borderRadius = "5px";
-        addClickBtn.style.padding = "6px 4px";
-        addClickBtn.style.fontSize = "11px";
-        addClickBtn.style.cursor = "pointer";
-        addClickBtn.onclick = function() {
+        // Row 1: Core Web Actions
+        addBar.appendChild(makeAddStepBtn("+ Klik", "#1565C0", "#FFF", function() {
             showEditSingleStepDialog({ type: "click" }, function(newStep) {
                 workingEvents.push(newStep);
                 renderStepList();
             });
-        };
-        addBar.appendChild(addClickBtn);
+        }));
 
-        var addWalletBtn = document.createElement("button");
-        addWalletBtn.innerText = "👛 + Wallet";
-        addWalletBtn.style.flex = "1";
-        addWalletBtn.style.background = "#7C4DFF";
-        addWalletBtn.style.color = "#FFF";
-        addWalletBtn.style.border = "none";
-        addWalletBtn.style.borderRadius = "5px";
-        addWalletBtn.style.padding = "6px 4px";
-        addWalletBtn.style.fontSize = "11px";
-        addWalletBtn.style.cursor = "pointer";
-        addWalletBtn.onclick = function() {
+        addBar.appendChild(makeAddStepBtn("+ Form", "#E65100", "#FFF", function() {
+            showEditSingleStepDialog({ type: "fill", value: "{{WALLET_ADDRESS}}" }, function(newStep) {
+                workingEvents.push(newStep);
+                renderStepList();
+            });
+        }));
+
+        addBar.appendChild(makeAddStepBtn("+ Jeda", "#4A148C", "#FFF", function() {
+            workingEvents.push({ type: "wait", duration: 2500, timestamp: Date.now() });
+            renderStepList();
+        }));
+
+        // Row 2: Identity & Data
+        addBar.appendChild(makeAddStepBtn("+ Wallet", "#7C4DFF", "#FFF", function() {
             workingEvents.push({ type: "next_wallet", text: "Ganti Wallet", timestamp: Date.now() });
             renderStepList();
-        };
-        addBar.appendChild(addWalletBtn);
+        }));
 
-        var addReloadBtn = document.createElement("button");
-        addReloadBtn.innerText = "🔄 + Reload";
-        addReloadBtn.style.flex = "1";
-        addReloadBtn.style.background = "#00B0FF";
-        addReloadBtn.style.color = "#000";
-        addReloadBtn.style.border = "none";
-        addReloadBtn.style.borderRadius = "5px";
-        addReloadBtn.style.padding = "6px 4px";
-        addReloadBtn.style.fontSize = "11px";
-        addReloadBtn.style.fontWeight = "bold";
-        addReloadBtn.style.cursor = "pointer";
-        addReloadBtn.onclick = function() {
-            workingEvents.push({ type: "reload", text: "Reload Halaman", timestamp: Date.now() });
-            renderStepList();
-        };
-        addBar.appendChild(addReloadBtn);
-
-        var addWipeBtn = document.createElement("button");
-        addWipeBtn.innerText = "🧹 + Wipe";
-        addWipeBtn.style.flex = "1";
-        addWipeBtn.style.background = "#FF9100";
-        addWipeBtn.style.color = "#000";
-        addWipeBtn.style.border = "none";
-        addWipeBtn.style.borderRadius = "5px";
-        addWipeBtn.style.padding = "6px 4px";
-        addWipeBtn.style.fontSize = "11px";
-        addWipeBtn.style.fontWeight = "bold";
-        addWipeBtn.style.cursor = "pointer";
-        addWipeBtn.onclick = function() {
-            workingEvents.push({ type: "wipe_cache", text: "Wipe Cache", timestamp: Date.now() });
-            renderStepList();
-        };
-        addBar.appendChild(addWipeBtn);
-
-        var addEmailBtn = document.createElement("button");
-        addEmailBtn.innerText = "📧 + Email";
-        addEmailBtn.style.flex = "1";
-        addEmailBtn.style.background = "#FFA000";
-        addEmailBtn.style.color = "#000";
-        addEmailBtn.style.border = "none";
-        addEmailBtn.style.borderRadius = "5px";
-        addEmailBtn.style.padding = "6px 4px";
-        addEmailBtn.style.fontSize = "11px";
-        addEmailBtn.style.fontWeight = "bold";
-        addEmailBtn.style.cursor = "pointer";
-        addEmailBtn.onclick = function() {
+        addBar.appendChild(makeAddStepBtn("+ Email", "#FFA000", "#000", function() {
             var ne = (typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "email@gmail.com";
             workingEvents.push({ type: "next_email", text: "Ganti Email -> " + ne, value: ne, timestamp: Date.now() });
             renderStepList();
-        };
-        addBar.appendChild(addEmailBtn);
+        }));
 
-        var addRefBtn = document.createElement("button");
-        addRefBtn.innerText = "🔗 + Ref";
-        addRefBtn.style.flex = "1";
-        addRefBtn.style.background = "#00E676";
-        addRefBtn.style.color = "#000";
-        addRefBtn.style.border = "none";
-        addRefBtn.style.borderRadius = "5px";
-        addRefBtn.style.padding = "6px 4px";
-        addRefBtn.style.fontSize = "11px";
-        addRefBtn.style.fontWeight = "bold";
-        addRefBtn.style.cursor = "pointer";
-        addRefBtn.onclick = function() {
+        addBar.appendChild(makeAddStepBtn("+ Ref", "#00E676", "#000", function() {
             var nr = (typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123";
             workingEvents.push({ type: "ref", text: "Ref Code -> " + nr, value: nr, timestamp: Date.now() });
             renderStepList();
-        };
-        addBar.appendChild(addRefBtn);
+        }));
 
-        var addFpBtn = document.createElement("button");
-        addFpBtn.innerText = "🎭 + FP";
-        addFpBtn.style.flex = "1";
-        addFpBtn.style.background = "#E040FB";
-        addFpBtn.style.color = "#FFF";
-        addFpBtn.style.border = "none";
-        addFpBtn.style.borderRadius = "5px";
-        addFpBtn.style.padding = "6px 4px";
-        addFpBtn.style.fontSize = "11px";
-        addFpBtn.style.fontWeight = "bold";
-        addFpBtn.style.cursor = "pointer";
-        addFpBtn.onclick = function() {
+        // Row 3: Maintenance & Security
+        addBar.appendChild(makeAddStepBtn("+ Reload", "#00B0FF", "#000", function() {
+            workingEvents.push({ type: "reload", text: "Reload Halaman", timestamp: Date.now() });
+            renderStepList();
+        }));
+
+        addBar.appendChild(makeAddStepBtn("+ Wipe", "#FF9100", "#000", function() {
+            workingEvents.push({ type: "wipe_cache", text: "Wipe Cache", timestamp: Date.now() });
+            renderStepList();
+        }));
+
+        addBar.appendChild(makeAddStepBtn("+ FP", "#E040FB", "#FFF", function() {
             workingEvents.push({ type: "fingerprint", text: "Ganti Fingerprint", timestamp: Date.now() });
             renderStepList();
-        };
-        addBar.appendChild(addFpBtn);
+        }));
+
         card.appendChild(addBar);
 
         var stepListContainer = document.createElement("div");
@@ -6045,6 +6217,7 @@
         stepListContainer.style.overflowY = "auto";
         stepListContainer.style.maxHeight = "46vh";
         stepListContainer.style.marginBottom = "10px";
+        stepListContainer.style.boxSizing = "border-box";
         card.appendChild(stepListContainer);
 
         function renderStepList() {
@@ -6068,58 +6241,64 @@
                 row.style.background = "#1D202B";
                 row.style.border = "1px solid #2B3040";
                 row.style.borderRadius = "8px";
-                row.style.padding = "7px 9px";
+                row.style.padding = "6px 8px";
                 row.style.marginBottom = "6px";
+                row.style.boxSizing = "border-box";
 
                 var infoCol = document.createElement("div");
+                infoCol.style.display = "flex";
+                infoCol.style.alignItems = "center";
                 infoCol.style.overflow = "hidden";
                 infoCol.style.textOverflow = "ellipsis";
                 infoCol.style.whiteSpace = "nowrap";
-                infoCol.style.maxWidth = "60%";
+                infoCol.style.flex = "1";
+                infoCol.style.minWidth = "0";
+                infoCol.style.marginRight = "6px";
 
-                var numBadge = "<span style='font-size:10px; font-weight:bold; background:#2A3142; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>#" + (index + 1) + "</span>";
+                var numBadge = "<span style='font-size:10px; font-weight:bold; background:#2A3142; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>#" + (index + 1) + "</span>";
 
                 var typeBadge = "";
                 var desc = "";
                 if (ev.type === "wait") {
-                    typeBadge = "<span style='font-size:10px; background:#7B1FA2; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>⏳ JEDA</span>";
+                    typeBadge = "<span style='font-size:10px; background:#7B1FA2; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>JEDA</span>";
                     desc = ((ev.duration || 2500) / 1000) + " detik";
                 } else if (ev.type === "next_wallet") {
-                    typeBadge = "<span style='font-size:10px; background:#7C4DFF; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>👛 WALLET</span>";
+                    typeBadge = "<span style='font-size:10px; background:#7C4DFF; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>WALLET</span>";
                     desc = ev.text || "Ganti ke wallet berikutnya";
                 } else if (ev.type === "reload") {
-                    typeBadge = "<span style='font-size:10px; background:#00B0FF; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🔄 RELOAD</span>";
+                    typeBadge = "<span style='font-size:10px; background:#00B0FF; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>RELOAD</span>";
                     desc = ev.text || "Muat ulang halaman & lanjut";
                 } else if (ev.type === "wipe_cache") {
-                    typeBadge = "<span style='font-size:10px; background:#FF9100; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🧹 WIPE</span>";
+                    typeBadge = "<span style='font-size:10px; background:#FF9100; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>WIPE</span>";
                     desc = ev.text || "Wipe Cache & Storage";
                 } else if (ev.type === "next_email") {
-                    typeBadge = "<span style='font-size:10px; background:#FFA000; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>📧 EMAIL</span>";
+                    typeBadge = "<span style='font-size:10px; background:#FFA000; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>EMAIL</span>";
                     desc = ev.text || "Ganti ke email berikutnya";
                 } else if (ev.type === "ref") {
-                    typeBadge = "<span style='font-size:10px; background:#00E676; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🔗 REF</span>";
+                    typeBadge = "<span style='font-size:10px; background:#00E676; color:#000; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>REF</span>";
                     desc = ev.text || "Ref Code";
                 } else if (ev.type === "fingerprint") {
-                    typeBadge = "<span style='font-size:10px; background:#E040FB; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold;'>🎭 FP</span>";
+                    typeBadge = "<span style='font-size:10px; background:#E040FB; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>FP</span>";
                     desc = ev.text || "Ganti Fingerprint";
                 } else if (ev.type === "swipe") {
-                    typeBadge = "<span style='font-size:10px; background:#9C27B0; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>👆 SWIPE</span>";
+                    typeBadge = "<span style='font-size:10px; background:#9C27B0; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>SWIPE</span>";
                     desc = (ev.direction || "DOWN").toUpperCase() + " (" + Math.round(Math.max(Math.abs(ev.deltaX || 0), Math.abs(ev.deltaY || 0))) + "px)";
                 } else if (ev.type === "fill" || ev.type === "input") {
-                    typeBadge = "<span style='font-size:10px; background:#F57C00; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>✍️ ISI</span>";
+                    typeBadge = "<span style='font-size:10px; background:#F57C00; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>ISI</span>";
                     desc = (ev.value || "") + " ➔ " + (ev.placeholder || ev.name || ev.id || ev.selector || "input");
                 } else {
-                    typeBadge = "<span style='font-size:10px; background:#1E88E5; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px;'>🖱️ KLIK</span>";
+                    typeBadge = "<span style='font-size:10px; background:#1E88E5; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>KLIK</span>";
                     desc = ev.text || ev.ariaLabel || ev.name || ev.id || ev.selector || "elemen";
                 }
 
-                infoCol.innerHTML = numBadge + typeBadge + "<span style='font-size:11px; font-weight:500; color:#EEE;'>" + desc + "</span>";
+                infoCol.innerHTML = numBadge + typeBadge + "<span style='font-size:11px; font-weight:500; color:#EEE; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'>" + desc + "</span>";
                 row.appendChild(infoCol);
 
                 var btnCol = document.createElement("div");
                 btnCol.style.display = "flex";
                 btnCol.style.alignItems = "center";
                 btnCol.style.gap = "4px";
+                btnCol.style.flexShrink = "0";
 
                 if (index > 0) {
                     var upBtn = document.createElement("button");
@@ -6160,7 +6339,7 @@
                 }
 
                 var editStepBtn = document.createElement("button");
-                editStepBtn.innerText = "✏️";
+                editStepBtn.innerText = "✎";
                 editStepBtn.style.background = "#37474F";
                 editStepBtn.style.color = "#FFF";
                 editStepBtn.style.border = "none";
@@ -6203,13 +6382,13 @@
         footerRow.style.gap = "8px";
 
         var runBtn = document.createElement("button");
-        runBtn.innerText = "▶ Test Run";
+        runBtn.innerText = "Test Run";
         runBtn.style.flex = "1";
         runBtn.style.background = "#2E7D32";
         runBtn.style.color = "#FFF";
         runBtn.style.border = "none";
         runBtn.style.borderRadius = "8px";
-        runBtn.style.padding = "9px";
+        runBtn.style.padding = "10px";
         runBtn.style.fontSize = "12px";
         runBtn.style.fontWeight = "bold";
         runBtn.style.cursor = "pointer";
@@ -6225,13 +6404,13 @@
         footerRow.appendChild(runBtn);
 
         var saveAllBtn = document.createElement("button");
-        saveAllBtn.innerText = "💾 Simpan Perubahan";
+        saveAllBtn.innerText = "Simpan Resep";
         saveAllBtn.style.flex = "1.2";
         saveAllBtn.style.background = "#1E88E5";
         saveAllBtn.style.color = "#FFF";
         saveAllBtn.style.border = "none";
         saveAllBtn.style.borderRadius = "8px";
-        saveAllBtn.style.padding = "9px";
+        saveAllBtn.style.padding = "10px";
         saveAllBtn.style.fontSize = "12px";
         saveAllBtn.style.fontWeight = "bold";
         saveAllBtn.style.cursor = "pointer";
@@ -7024,14 +7203,14 @@
                     } catch(_) {}
 
                     if (!isAlive) {
-                        updateAgyHUD("🤖 AGY Copilot", "Menyalakan Antigravity di background...", "running");
+                        updateAgyHUD("AGY Copilot", "Menyalakan Antigravity di background...", "running");
                         if (window.GhostBridge.wakeUpAgy) window.GhostBridge.wakeUpAgy();
                     } else {
-                        updateAgyHUD("🤖 AGY Copilot", "Mengirim instruksi ke Antigravity...", "running");
+                        updateAgyHUD("AGY Copilot", "Mengirim instruksi ke Antigravity...", "running");
                     }
 
                     setTimeout(function() {
-                        updateAgyHUD("🤖 AGY Copilot", "Antigravity sedang memproses instruksi...", "running");
+                        updateAgyHUD("AGY Copilot", "Antigravity sedang memproses instruksi...", "running");
                         var payload = JSON.stringify({
                             prompt: raw,
                             url: window.location.href,
@@ -7042,12 +7221,12 @@
                         try {
                             var parsed = JSON.parse(respStr);
                             if (parsed && (parsed.status === "received" || parsed.status === "ok")) {
-                                updateAgyHUD("🤖 AGY Copilot", "Antigravity sedang mengeksekusi di browser...", "running");
+                                updateAgyHUD("AGY Copilot", "Antigravity sedang mengeksekusi di browser...", "running");
                             } else {
-                                updateAgyHUD("🤖 AGY Copilot", "Tugas terkirim ke AGY Copilot", "success");
+                                updateAgyHUD("AGY Copilot", "Tugas terkirim ke AGY Copilot", "success");
                             }
                         } catch(_) {
-                            updateAgyHUD("🤖 AGY Copilot", "Tugas terkirim ke AGY Copilot", "success");
+                            updateAgyHUD("AGY Copilot", "Tugas terkirim ke AGY Copilot", "success");
                         }
                     }, isAlive ? 50 : 900);
                     return;
@@ -7100,10 +7279,10 @@
             if (st.eventsList && st.idx < st.eventsList.length) {
                 console.log("[AGY Co-Pilot] Melanjutkan resep setelah reload halaman ke langkah " + (st.idx + 1));
                 setTimeout(function() {
-                    updateAgyHUD(st.runTitle, "🔄 Melanjutkan langkah " + (st.idx + 1) + "/" + st.eventsList.length + "...", "running");
+                    updateAgyHUD(st.runTitle, "Melanjutkan langkah " + (st.idx + 1) + "/" + st.eventsList.length + "...", "running");
                     AgyBatchRunner.executeStepList(st.eventsList, st.curWallet, st.curEmail, st.runTitle, function(ok) {
                         sessionStorage.removeItem("__agy_active_recipe_run__");
-                        updateAgyHUD(st.runTitle, ok ? "✅ Resep Selesai!" : "⚠️ Resep Berhenti", ok ? "success" : "warning");
+                        updateAgyHUD(st.runTitle, ok ? "Resep Selesai" : "Resep Berhenti", ok ? "success" : "warning");
                     }, st.idx);
                 }, 1000);
             } else {

@@ -501,4 +501,28 @@ public class GhostBridgeInterface implements Runnable {
         }
         return false;
     }
+
+    @JavascriptInterface
+    public void acquireWakeLock() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.acquireWakeLock();
+        }
+    }
+
+    @JavascriptInterface
+    public void releaseWakeLock() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.releaseWakeLock();
+        }
+    }
+
+    @JavascriptInterface
+    public void showWebNotification(String title, String body, String iconUrl, String targetUrl) {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.showWebNotification(title, body, iconUrl, targetUrl);
+        }
+    }
 }

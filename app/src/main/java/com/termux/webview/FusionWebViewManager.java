@@ -9,6 +9,17 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.os.Process;
 import android.os.StrictMode;
+import android.os.PowerManager;
+import android.os.Build;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import androidx.core.app.NotificationCompat;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -88,6 +99,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public ArrayList mTabList = new ArrayList();
     public int mNextTabId = 1;
     public boolean mIsDevMode = true;
+    public PowerManager.WakeLock mMacroWakeLock;
 
     public static class AutoSignClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
@@ -1521,10 +1533,179 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void onPause() {
-        WebView webView = this.mActiveWebView;
-        if (webView != null) {
-            webView.onPause();
+        // Continuous background execution: do NOT pause WebView so macros,
+        // timers, Web3 RPCs, and auto-runners keep executing when Termux is minimized.
+        if (this.mTabList != null) {
+            for (int i = 0; i < this.mTabList.size(); i++) {
+                FusionTab tab = (FusionTab) this.mTabList.get(i);
+                if (tab != null && tab.mWebView != null) {
+                    tab.mWebView.resumeTimers();
+                }
+            }
         }
+    }
+
+    public void acquireWakeLock() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        act.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (mMacroWakeLock == null) {
+                        PowerManager pm = (PowerManager) act.getSystemService(Context.POWER_SERVICE);
+                        if (pm != null) {
+                            mMacroWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "termux:fusion-macro-runner");
+                        }
+                    }
+                    if (mMacroWakeLock != null && !mMacroWakeLock.isHeld()) {
+                        mMacroWakeLock.acquire(4 * 60 * 60_000L);
+                    }
+                } catch (Exception unused) {
+                }
+            }
+        });
+    }
+
+    public void releaseWakeLock() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        act.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (mMacroWakeLock != null && mMacroWakeLock.isHeld()) {
+                        mMacroWakeLock.release();
+                    }
+                } catch (Exception unused) {
+                }
+            }
+        });
+    }
+
+    public static final String WEB_NOTIFICATION_CHANNEL_ID = "termux_fusion_web_notifications";
+    private static int sNextNotificationId = 7000;
+
+    public void maximizeWebView() {
+        maximizeWebView(null);
+    }
+
+    public void maximizeWebView(final String targetUrl) {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        act.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                FusionTab activeTab = FusionTabStateHelper.getActiveTab(FusionWebViewManager.this);
+                if (activeTab != null && activeTab.mIsMinimized) {
+                    FusionTabStateHelper.toggleMinimize(FusionWebViewManager.this);
+                } else if (mActiveWebView != null) {
+                    mActiveWebView.setVisibility(View.VISIBLE);
+                    mActiveWebView.bringToFront();
+                    if (mTerminalPaneHost != null) {
+                        mTerminalPaneHost.setVisibility(View.GONE);
+                    }
+                    if (mPaneHost != null) {
+                        mPaneHost.setVisibility(View.VISIBLE);
+                        mPaneHost.bringToFront();
+                    }
+                    if (mControlPill != null) {
+                        mControlPill.bringToFront();
+                    }
+                }
+                if (targetUrl != null && !targetUrl.trim().isEmpty() && mActiveWebView != null) {
+                    mActiveWebView.loadUrl(targetUrl.trim());
+                }
+            }
+        });
+    }
+
+    public void showWebNotification(final String title, final String body, final String iconUrl, final String targetUrl) {
+        final TermuxActivity act = this.mActivity;
+        if (act == null) return;
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                Bitmap avatar = null;
+                if (iconUrl != null && (iconUrl.startsWith("http://") || iconUrl.startsWith("https://"))) {
+                    try {
+                        URL url = new URL(iconUrl);
+                        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                        conn.setConnectTimeout(2500);
+                        conn.setReadTimeout(2500);
+                        conn.setInstanceFollowRedirects(true);
+                        conn.connect();
+                        InputStream input = conn.getInputStream();
+                        avatar = BitmapFactory.decodeStream(input);
+                        if (input != null) input.close();
+                    } catch (Exception ignored) {
+                    }
+                }
+                final Bitmap finalAvatar = avatar;
+
+                act.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            NotificationManager notificationManager = (NotificationManager) act.getSystemService(Context.NOTIFICATION_SERVICE);
+                            if (notificationManager == null) return;
+
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                NotificationChannel channel = notificationManager.getNotificationChannel(WEB_NOTIFICATION_CHANNEL_ID);
+                                if (channel == null) {
+                                    channel = new NotificationChannel(
+                                        WEB_NOTIFICATION_CHANNEL_ID,
+                                        "Fusion Web Notifications",
+                                        NotificationManager.IMPORTANCE_HIGH
+                                    );
+                                    channel.setDescription("Notifikasi real-time dari situs web & x.com di Fusion WebView");
+                                    channel.enableLights(true);
+                                    channel.enableVibration(true);
+                                    notificationManager.createNotificationChannel(channel);
+                                }
+                            }
+
+                            String cleanTitle = (title != null && !title.trim().isEmpty()) ? title.trim() : "X Notification";
+                            String cleanBody = (body != null) ? body.trim() : "";
+
+                            Intent tapIntent = TermuxActivity.newInstance(act);
+                            tapIntent.setAction("com.termux.FUSION_OPEN_WEBVIEW");
+                            tapIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                            if (targetUrl != null && !targetUrl.trim().isEmpty()) {
+                                tapIntent.putExtra("target_url", targetUrl.trim());
+                            }
+
+                            int reqCode = (int) (System.currentTimeMillis() & 0xFFFFFF);
+                            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                flags |= PendingIntent.FLAG_IMMUTABLE;
+                            }
+                            PendingIntent pendingIntent = PendingIntent.getActivity(act, reqCode, tapIntent, flags);
+
+                            NotificationCompat.Builder builder = new NotificationCompat.Builder(act, WEB_NOTIFICATION_CHANNEL_ID)
+                                .setSmallIcon(com.termux.R.drawable.ic_service_notification)
+                                .setContentTitle(cleanTitle)
+                                .setContentText(cleanBody)
+                                .setStyle(new NotificationCompat.BigTextStyle().bigText(cleanBody))
+                                .setAutoCancel(true)
+                                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                                .setDefaults(NotificationCompat.DEFAULT_ALL)
+                                .setContentIntent(pendingIntent);
+
+                            if (finalAvatar != null) {
+                                builder.setLargeIcon(finalAvatar);
+                            }
+
+                            int notifId = sNextNotificationId++;
+                            if (sNextNotificationId > 8999) sNextNotificationId = 7000;
+                            notificationManager.notify(notifId, builder.build());
+                        } catch (Exception ignored) {
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     @Override // android.webkit.ValueCallback
@@ -1533,12 +1714,16 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void onResume() {
-        WebView webView = this.mActiveWebView;
-        if (webView != null) {
-            webView.onResume();
-            webView.resumeTimers();
-            syncVisibility();
+        if (this.mTabList != null) {
+            for (int i = 0; i < this.mTabList.size(); i++) {
+                FusionTab tab = (FusionTab) this.mTabList.get(i);
+                if (tab != null && tab.mWebView != null) {
+                    tab.mWebView.onResume();
+                    tab.mWebView.resumeTimers();
+                }
+            }
         }
+        syncVisibility();
     }
 
     public void onStatusTextClicked() {
@@ -1965,6 +2150,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     FusionTab fusionTab3 = (FusionTab) arrayList.get(i3);
                     if (fusionTab3 != null && (webView2 = fusionTab3.mWebView) != null && i3 != i) {
                         webView2.setVisibility(8);
+                        webView2.resumeTimers();
                     }
                 }
                 if (fusionTab2.mIsMinimized) {
@@ -2056,9 +2242,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab4 = (FusionTab) arrayList.get(i4);
             if (fusionTab4 != null && (webView = fusionTab4.mWebView) != null) {
                 webView.setVisibility(8);
+                webView.resumeTimers();
             }
         }
-        this.mActiveWebView = null;
+        if (this.mActiveWebView == null && arrayList != null && !arrayList.isEmpty()) {
+            FusionTab fallbackTab = (FusionTab) arrayList.get(0);
+            if (fallbackTab != null) {
+                this.mActiveWebView = fallbackTab.mWebView;
+            }
+        }
         LinearLayout linearLayout4 = this.mControlPill;
         if (linearLayout4 != null) {
             linearLayout4.setVisibility(8);

@@ -497,6 +497,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         deliverPendingShellNotificationTap();
     }
 
+    private void handleFusionNotificationIntent(@Nullable Intent intent) {
+        if (intent == null) return;
+        if ("com.termux.FUSION_OPEN_WEBVIEW".equals(intent.getAction())) {
+            com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+            if (mgr != null) {
+                String targetUrl = intent.getStringExtra("target_url");
+                mgr.maximizeWebView(targetUrl);
+            }
+        }
+    }
+
     /**
      * Acts on a tapped message once the shells exist. On a cold start they do not yet, so this
      * runs again when the service connects.
@@ -1883,6 +1894,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             handleShowHelpIntent(getIntent());
             handleHelpScreenActionIntent(getIntent());
             handleShellNotificationIntent(getIntent());
+            handleFusionNotificationIntent(getIntent());
         }
         FileReceiverActivity.updateFileReceiverActivityComponentsState(this);
         try {
@@ -2089,6 +2101,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         handleHelpScreenActionIntent(intent);
         handleReplayTourIntent(intent);
         handleShellNotificationIntent(intent);
+        handleFusionNotificationIntent(intent);
         if (isLauncherHomeIntent(intent)) {
             mLastLaunchWasLauncherEntry = true;
         }

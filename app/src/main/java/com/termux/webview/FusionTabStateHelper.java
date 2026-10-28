@@ -247,7 +247,7 @@ public class FusionTabStateHelper {
         if (webView.getVisibility() == 0) {
             activeTab.mIsMinimized = true;
             webView.setVisibility(8);
-            webView.onPause();
+            webView.resumeTimers();
             LinearLayout linearLayout = fusionWebViewManager.mMenuCard;
             if (linearLayout != null) {
                 linearLayout.setVisibility(8);
@@ -280,6 +280,7 @@ public class FusionTabStateHelper {
             }
             webView.setVisibility(0);
             webView.onResume();
+            webView.resumeTimers();
             webView.bringToFront();
             FrameLayout frameLayout = fusionWebViewManager.mPaneHost;
             if (frameLayout != null) {
