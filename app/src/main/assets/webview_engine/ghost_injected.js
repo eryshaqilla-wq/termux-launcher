@@ -2887,24 +2887,26 @@
         modal.style.left = "0";
         modal.style.width = "100%";
         modal.style.height = "100%";
-        modal.style.backgroundColor = "rgba(0, 0, 0, 0.55)";
+        modal.style.backgroundColor = "rgba(17, 17, 27, 0.65)";
+        modal.style.backdropFilter = "blur(6px)";
+        modal.style.webkitBackdropFilter = "blur(6px)";
         modal.style.zIndex = "2147483647";
         modal.style.display = "flex";
         modal.style.justifyContent = "flex-start";
         modal.style.alignItems = "stretch";
-        modal.style.fontFamily = "system-ui, -apple-system, sans-serif";
+        modal.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
         var card = document.createElement("div");
-        card.style.background = "#1F1F24";
+        card.style.background = "#181825";
         card.style.border = "none";
-        card.style.borderRight = "1px solid #36373D";
+        card.style.borderRight = "1px solid #313244";
         card.style.borderRadius = "0px";
-        card.style.width = "70%";
-        card.style.maxWidth = "360px";
+        card.style.width = "82%";
+        card.style.maxWidth = "380px";
         card.style.height = "100%";
-        card.style.padding = "16px";
-        card.style.boxShadow = "6px 0 24px rgba(0,0,0,0.75)";
-        card.style.color = "#FFFFFF";
+        card.style.padding = "20px 16px 16px 16px";
+        card.style.boxShadow = "10px 0 36px rgba(0,0,0,0.85)";
+        card.style.color = "#cdd6f4";
         card.style.display = "flex";
         card.style.flexDirection = "column";
         card.style.boxSizing = "border-box";
@@ -2932,19 +2934,38 @@
             }
         });
 
-        // Header: Bersih tanpa tombol X di atas
+        // Header Title Row
         var titleRow = document.createElement("div");
         titleRow.style.display = "flex";
+        titleRow.style.justifyContent = "space-between";
         titleRow.style.alignItems = "center";
         titleRow.style.marginBottom = "8px";
         titleRow.style.flexShrink = "0";
 
+        var titleBlock = document.createElement("div");
         var title = document.createElement("h3");
         title.innerText = "🔍 Inspeksi DOM & Tombol (" + scanned.length + ")";
         title.style.margin = "0";
         title.style.fontSize = "15px";
-        title.style.color = "#00E5FF";
-        titleRow.appendChild(title);
+        title.style.fontWeight = "700";
+        title.style.color = "#89dceb";
+        titleBlock.appendChild(title);
+        titleRow.appendChild(titleBlock);
+
+        var closeX = document.createElement("div");
+        closeX.innerText = "✕";
+        closeX.style.cursor = "pointer";
+        closeX.style.color = "#a6adc8";
+        closeX.style.fontSize = "15px";
+        closeX.style.width = "28px";
+        closeX.style.height = "28px";
+        closeX.style.borderRadius = "8px";
+        closeX.style.display = "flex";
+        closeX.style.alignItems = "center";
+        closeX.style.justifyContent = "center";
+        closeX.style.background = "#1e1e2e";
+        closeX.onclick = handleCloseModal;
+        titleRow.appendChild(closeX);
         card.appendChild(titleRow);
 
         // Topbar Mode Rekam
@@ -3177,13 +3198,13 @@
         var closeBtn = document.createElement("button");
         closeBtn.innerText = "TUTUP";
         closeBtn.style.width = "100%";
-        closeBtn.style.background = "#2B3040";
-        closeBtn.style.color = "#FFF";
-        closeBtn.style.border = "none";
-        closeBtn.style.borderRadius = "6px";
-        closeBtn.style.padding = "10px";
+        closeBtn.style.background = "#313244";
+        closeBtn.style.color = "#cdd6f4";
+        closeBtn.style.border = "1px solid rgba(255,255,255,0.08)";
+        closeBtn.style.borderRadius = "12px";
+        closeBtn.style.padding = "11px";
         closeBtn.style.fontSize = "12px";
-        closeBtn.style.fontWeight = "bold";
+        closeBtn.style.fontWeight = "700";
         closeBtn.style.cursor = "pointer";
         closeBtn.style.textAlign = "center";
         closeBtn.onclick = handleCloseModal;

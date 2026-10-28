@@ -18,11 +18,31 @@ public class FusionUiHelper {
         return gradientDrawable;
     }
 
+    public static int getDrawerWidth(Context context) {
+        if (context == null) {
+            return 880;
+        }
+        android.util.DisplayMetrics dm = context.getResources().getDisplayMetrics();
+        int widthPixels = dm.widthPixels;
+        int width82 = (widthPixels * 82) / 100;
+        int maxDpPixels = (int) (400 * dm.density);
+        return Math.min(width82, maxDpPixels);
+    }
+
     public static int getScreenWidth70(Context context) {
         if (context == null) {
             return 720;
         }
         return (context.getResources().getDisplayMetrics().widthPixels * 7) / 10;
+    }
+
+    public static void setDrawerCloseBtn(TextView textView) {
+        if (textView == null) {
+            return;
+        }
+        textView.setBackground(createRounded(-13548988, -12234918, 10.0f)); // #313244, border #45475a, 10dp radius
+        textView.setTextColor(-328965); // #cdd6f4
+        textView.setTypeface(null, 1);
     }
 
     public static void setSolidAccentBtn(TextView textView, int i, int i2) {

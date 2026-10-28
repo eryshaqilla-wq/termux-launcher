@@ -19,6 +19,7 @@ import android.webkit.WebView;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
@@ -964,10 +965,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout5.setOrientation(1);
             linearLayout5.setBackgroundColor(-300016092);
             linearLayout5.setPadding(16, 16, 16, 16);
-            FrameLayout.LayoutParams layoutParams8 = new FrameLayout.LayoutParams(-2, -2, 8388661);
-            layoutParams8.setMargins(0, 48, 12, 0);
+            FrameLayout.LayoutParams layoutParams8 = new FrameLayout.LayoutParams(FusionUiHelper.getDrawerWidth(this.mActivity), -1, 8388659);
+            layoutParams8.setMargins(0, 0, 0, 0);
             this.mMenuCard.setElevation(170.0f);
-            this.mMenuCard.setBackground(FusionUiHelper.createRounded(-15658473, -13418155, 12.0f));
+            this.mMenuCard.setBackground(FusionUiHelper.createRounded(-15198171, -13548988, 0.0f));
             View view = new View(this.mActivity);
             this.mMenuBackdrop = view;
             view.setVisibility(8);
@@ -998,6 +999,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView8.setOnClickListener(new CloseMenuClick(this));
             linearLayout6.addView(textView8);
             this.mMenuCard.addView(linearLayout6);
+
+            ScrollView menuScrollView = new ScrollView(this.mActivity);
+            menuScrollView.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1.0f));
+            menuScrollView.setVerticalScrollBarEnabled(false);
+            LinearLayout menuContent = new LinearLayout(this.mActivity);
+            menuContent.setOrientation(1);
+
             LinearLayout linearLayout7 = new LinearLayout(this.mActivity);
             linearLayout7.setOrientation(0);
             linearLayout7.setPadding(0, 4, 0, 6);
@@ -1021,21 +1029,21 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView10.setClickable(z);
             textView10.setOnClickListener(this);
             linearLayout7.addView(textView10);
-            this.mMenuCard.addView(linearLayout7);
+            menuContent.addView(linearLayout7);
             TextView textView11 = new TextView(this.mActivity);
             this.mChainInfoText = textView11;
             textView11.setText("Network: Base (8453) [v]");
             textView11.setTextColor(-2258875);
             textView11.setTextSize(2, 11.0f);
             textView11.setPadding(0, 2, 0, 3);
-            this.mMenuCard.addView(textView11);
+            menuContent.addView(textView11);
             TextView textView12 = new TextView(this.mActivity);
             this.mWalletInfoText = textView12;
             textView12.setText("Active: Master\nAddress: 0x87A6...b359");
             textView12.setTextColor(-3355444);
             textView12.setTextSize(2, 11.0f);
             textView12.setPadding(0, 2, 0, 8);
-            this.mMenuCard.addView(textView12);
+            menuContent.addView(textView12);
             LinearLayout linearLayout8 = new LinearLayout(this.mActivity);
             linearLayout8.setOrientation(0);
             linearLayout8.setPadding(0, 3, 0, 3);
@@ -1063,7 +1071,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView14.setClickable(z);
             textView14.setOnClickListener(new SwitchChainClick(this));
             linearLayout8.addView(textView14, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            this.mMenuCard.addView(linearLayout8);
+            menuContent.addView(linearLayout8);
             TextView textView15 = new TextView(this.mActivity);
             textView15.setText("Lokasi GhostWallet / Load DB");
             FusionUiHelper.setSolidBtn(textView15);
@@ -1074,7 +1082,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView15.setOnClickListener(new FusionWalletPathBtnClick(this));
             LinearLayout.LayoutParams layoutParams10 = new LinearLayout.LayoutParams(-1, -2);
             layoutParams10.setMargins(0, 5, 0, 5);
-            this.mMenuCard.addView(textView15, layoutParams10);
+            menuContent.addView(textView15, layoutParams10);
             LinearLayout linearLayout9 = new LinearLayout(this.mActivity);
             linearLayout9.setOrientation(0);
             linearLayout9.setPadding(0, 3, 0, 3);
@@ -1101,7 +1109,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView17.setClickable(z);
             textView17.setOnClickListener(new CopyAddressClick(this));
             linearLayout9.addView(textView17, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            this.mMenuCard.addView(linearLayout9);
+            menuContent.addView(linearLayout9);
             LinearLayout linearLayout10 = new LinearLayout(this.mActivity);
             linearLayout10.setOrientation(0);
             linearLayout10.setPadding(0, 3, 0, 3);
@@ -1129,7 +1137,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView19.setClickable(z);
             textView19.setOnClickListener(this);
             linearLayout10.addView(textView19, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            this.mMenuCard.addView(linearLayout10);
+            menuContent.addView(linearLayout10);
             LinearLayout linearLayout11 = new LinearLayout(this.mActivity);
             linearLayout11.setOrientation(0);
             linearLayout11.setPadding(0, 3, 0, 3);
@@ -1157,7 +1165,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView21.setClickable(z);
             textView21.setOnClickListener(this);
             linearLayout11.addView(textView21, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            this.mMenuCard.addView(linearLayout11);
+            menuContent.addView(linearLayout11);
             LinearLayout linearLayout12 = new LinearLayout(this.mActivity);
             linearLayout12.setOrientation(0);
             linearLayout12.setPadding(0, 3, 0, 3);
@@ -1185,7 +1193,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView23.setClickable(z);
             textView23.setOnClickListener(this);
             linearLayout12.addView(textView23, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            this.mMenuCard.addView(linearLayout12);
+            menuContent.addView(linearLayout12);
             LinearLayout linearLayout13 = new LinearLayout(this.mActivity);
             linearLayout13.setOrientation(0);
             linearLayout13.setPadding(0, 3, 0, 3);
@@ -1212,7 +1220,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView25.setClickable(z);
             textView25.setOnClickListener(new DesktopClick(this));
             linearLayout13.addView(textView25, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            this.mMenuCard.addView(linearLayout13);
+            menuContent.addView(linearLayout13);
             LinearLayout linearLayout14 = new LinearLayout(this.mActivity);
             linearLayout14.setOrientation(0);
             linearLayout14.setPadding(0, 10, 0, 6);
@@ -1259,7 +1267,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView29.setClickable(z);
             textView29.setOnClickListener(new CloseClick(this));
             linearLayout14.addView(textView29, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            this.mMenuCard.addView(linearLayout14);
+            menuContent.addView(linearLayout14);
             LinearLayout linearLayout15 = new LinearLayout(this.mActivity);
             linearLayout15.setOrientation(1);
             linearLayout15.setPadding(0, 8, 0, 4);
@@ -1298,7 +1306,23 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             textView32.setOnClickListener(this);
             linearLayout16.addView(textView32, new LinearLayout.LayoutParams(0, -2, 1.0f));
             linearLayout15.addView(linearLayout16, new LinearLayout.LayoutParams(-1, -2));
-            this.mMenuCard.addView(linearLayout15);
+            menuContent.addView(linearLayout15);
+
+            menuScrollView.addView(menuContent);
+            this.mMenuCard.addView(menuScrollView);
+
+            TextView menuCloseBtn = new TextView(this.mActivity);
+            menuCloseBtn.setText("TUTUP");
+            FusionUiHelper.setDrawerCloseBtn(menuCloseBtn);
+            menuCloseBtn.setTextSize(2, 12.0f);
+            menuCloseBtn.setGravity(17);
+            menuCloseBtn.setPadding(12, 12, 12, 12);
+            menuCloseBtn.setClickable(true);
+            menuCloseBtn.setOnClickListener(new CloseMenuClick(this));
+            LinearLayout.LayoutParams lpMenuClose = new LinearLayout.LayoutParams(-1, -2);
+            lpMenuClose.setMargins(0, 10, 0, 0);
+            this.mMenuCard.addView(menuCloseBtn, lpMenuClose);
+
             this.mControlPill.setVisibility(8);
             this.mMenuCard.setVisibility(8);
             FrameLayout frameLayout4 = this.mPaneHost;

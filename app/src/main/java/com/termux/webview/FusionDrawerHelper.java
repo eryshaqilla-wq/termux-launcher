@@ -157,9 +157,9 @@ public class FusionDrawerHelper {
         view.setElevation(165.0f);
         view.setVisibility(0);
         view.bringToFront();
-        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(FusionUiHelper.getScreenWidth70(appCompatActivity), -1, 8388659);
+        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(FusionUiHelper.getDrawerWidth(appCompatActivity), -1, 8388659);
         layoutParams.setMargins(0, 0, 0, 0);
-        linearLayout.setBackground(FusionUiHelper.createRounded(-15329252, -12762806, 4.0f));
+        linearLayout.setBackground(FusionUiHelper.createRounded(-15198171, -13548988, 0.0f));
         linearLayout.setElevation(170.0f);
         linearLayout.setClickable(true);
         linearLayout.setFocusable(true);
@@ -269,58 +269,68 @@ public class FusionDrawerHelper {
         View view = new View(appCompatActivity);
         LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(-1, 1);
         layoutParams2.setMargins(0, 6, 0, 12);
-        view.setBackgroundColor(-12762806);
+        view.setBackgroundColor(-13548988);
         linearLayout2.addView(view, layoutParams2);
+
+        ScrollView scrollView = new ScrollView(appCompatActivity);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1.0f));
+        LinearLayout contentLayout = new LinearLayout(appCompatActivity);
+        contentLayout.setOrientation(1);
+
         TextView textView5 = new TextView(appCompatActivity);
         textView5.setText("Jalankan Resep");
         FusionUiHelper.setSolidBtn(textView5);
         textView5.setTextSize(2, 13.0f);
-        textView5.setPadding(14, 10, 14, 10);
+        textView5.setPadding(14, 11, 14, 11);
         textView5.setClickable(true);
         textView5.setOnClickListener(new FusionAgyActionClick(fusionWebViewManager, 0));
         LinearLayout.LayoutParams layoutParams3 = new LinearLayout.LayoutParams(-1, -2);
         layoutParams3.setMargins(0, 4, 0, 4);
-        linearLayout2.addView(textView5, layoutParams3);
+        contentLayout.addView(textView5, layoutParams3);
         TextView textView6 = new TextView(appCompatActivity);
         textView6.setText("Kelola Resep");
         FusionUiHelper.setSolidBtn(textView6);
         textView6.setTextSize(2, 13.0f);
-        textView6.setPadding(14, 10, 14, 10);
+        textView6.setPadding(14, 11, 14, 11);
         textView6.setClickable(true);
         textView6.setOnClickListener(new FusionAgyManageRecipeClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams4 = new LinearLayout.LayoutParams(-1, -2);
         layoutParams4.setMargins(0, 4, 0, 4);
-        linearLayout2.addView(textView6, layoutParams4);
+        contentLayout.addView(textView6, layoutParams4);
         TextView textView7 = new TextView(appCompatActivity);
         textView7.setText("Inspeksi DOM");
         FusionUiHelper.setSolidBtn(textView7);
         textView7.setTextSize(2, 13.0f);
-        textView7.setPadding(14, 10, 14, 10);
+        textView7.setPadding(14, 11, 14, 11);
         textView7.setClickable(true);
         textView7.setOnClickListener(new FusionAgyActionClick(fusionWebViewManager, 2));
         LinearLayout.LayoutParams layoutParams5 = new LinearLayout.LayoutParams(-1, -2);
         layoutParams5.setMargins(0, 4, 0, 4);
-        linearLayout2.addView(textView7, layoutParams5);
+        contentLayout.addView(textView7, layoutParams5);
         TextView textViewDev = new TextView(appCompatActivity);
         textViewDev.setText("Developer");
         FusionUiHelper.setSolidBtn(textViewDev);
         textViewDev.setTextSize(2, 13.0f);
-        textViewDev.setPadding(14, 10, 14, 10);
+        textViewDev.setPadding(14, 11, 14, 11);
         textViewDev.setClickable(true);
         textViewDev.setOnClickListener(new FusionAgyActionClick(fusionWebViewManager, 5));
         LinearLayout.LayoutParams layoutParamsDev = new LinearLayout.LayoutParams(-1, -2);
         layoutParamsDev.setMargins(0, 4, 0, 4);
-        linearLayout2.addView(textViewDev, layoutParamsDev);
+        contentLayout.addView(textViewDev, layoutParamsDev);
+
+        scrollView.addView(contentLayout);
+        linearLayout2.addView(scrollView);
+
         TextView textView8 = new TextView(appCompatActivity);
         textView8.setText("TUTUP");
-        FusionUiHelper.setSolidBtn(textView8);
+        FusionUiHelper.setDrawerCloseBtn(textView8);
         textView8.setTextSize(2, 12.0f);
         textView8.setGravity(17);
-        textView8.setPadding(14, 10, 14, 10);
+        textView8.setPadding(14, 12, 14, 12);
         textView8.setClickable(true);
         textView8.setOnClickListener(new FusionDrawerCloseClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams6 = new LinearLayout.LayoutParams(-1, -2);
-        layoutParams6.setMargins(0, 12, 0, 0);
+        layoutParams6.setMargins(0, 10, 0, 0);
         linearLayout2.addView(textView8, layoutParams6);
         prepareDrawer(fusionWebViewManager, linearLayout2);
     }
@@ -514,14 +524,14 @@ public class FusionDrawerHelper {
         linearLayout2.addView(scrollView);
         TextView textView5 = new TextView(appCompatActivity);
         textView5.setText("TUTUP");
-        FusionUiHelper.setSolidBtn(textView5);
+        FusionUiHelper.setDrawerCloseBtn(textView5);
         textView5.setTextSize(2, 12.0f);
         textView5.setGravity(17);
-        textView5.setPadding(12, 10, 12, 10);
+        textView5.setPadding(12, 12, 12, 12);
         textView5.setClickable(true);
         textView5.setOnClickListener(new FusionDrawerCloseClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(-1, -2);
-        layoutParams2.setMargins(0, 12, 0, 0);
+        layoutParams2.setMargins(0, 10, 0, 0);
         linearLayout2.addView(textView5, layoutParams2);
         prepareDrawer(fusionWebViewManager, linearLayout2);
     }
@@ -572,6 +582,11 @@ public class FusionDrawerHelper {
         textView3.setTextSize(2, 11.0f);
         textView3.setPadding(0, 2, 0, 10);
         linearLayout2.addView(textView3);
+        ScrollView scrollView = new ScrollView(appCompatActivity);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1.0f));
+        LinearLayout contentLayout = new LinearLayout(appCompatActivity);
+        contentLayout.setOrientation(1);
+
         LinearLayout linearLayout4 = new LinearLayout(appCompatActivity);
         linearLayout4.setOrientation(1);
         FusionUiHelper.setSolidBox(linearLayout4);
@@ -591,7 +606,8 @@ public class FusionDrawerHelper {
         linearLayout4.addView(textView5);
         linearLayout4.setClickable(true);
         linearLayout4.setOnClickListener(new FusionRecModeSelectClick(fusionWebViewManager, "dom"));
-        linearLayout2.addView(linearLayout4, layoutParams);
+        contentLayout.addView(linearLayout4, layoutParams);
+
         LinearLayout linearLayout5 = new LinearLayout(appCompatActivity);
         linearLayout5.setOrientation(1);
         FusionUiHelper.setSolidBox(linearLayout5);
@@ -611,7 +627,8 @@ public class FusionDrawerHelper {
         linearLayout5.addView(textView7);
         linearLayout5.setClickable(true);
         linearLayout5.setOnClickListener(new FusionRecModeSelectClick(fusionWebViewManager, "touch"));
-        linearLayout2.addView(linearLayout5, layoutParams2);
+        contentLayout.addView(linearLayout5, layoutParams2);
+
         LinearLayout linearLayout6 = new LinearLayout(appCompatActivity);
         linearLayout6.setOrientation(1);
         FusionUiHelper.setSolidBox(linearLayout6);
@@ -631,7 +648,7 @@ public class FusionDrawerHelper {
         linearLayout6.addView(textView9);
         linearLayout6.setClickable(true);
         linearLayout6.setOnClickListener(new FusionRecModeSelectClick(fusionWebViewManager, "hybrid"));
-        linearLayout2.addView(linearLayout6, layoutParams3);
+        contentLayout.addView(linearLayout6, layoutParams3);
 
         LinearLayout linearLayout7 = new LinearLayout(appCompatActivity);
         linearLayout7.setOrientation(1);
@@ -652,18 +669,21 @@ public class FusionDrawerHelper {
         linearLayout7.addView(textViewStepDesc);
         linearLayout7.setClickable(true);
         linearLayout7.setOnClickListener(new FusionRecModeSelectClick(fusionWebViewManager, "step_by_step"));
-        linearLayout2.addView(linearLayout7, layoutParamsStep);
+        contentLayout.addView(linearLayout7, layoutParamsStep);
+
+        scrollView.addView(contentLayout);
+        linearLayout2.addView(scrollView);
 
         TextView textView10 = new TextView(appCompatActivity);
-        textView10.setText("BATAL");
-        FusionUiHelper.setSolidBtn(textView10);
+        textView10.setText("BATAL / TUTUP");
+        FusionUiHelper.setDrawerCloseBtn(textView10);
         textView10.setTextSize(2, 12.0f);
         textView10.setGravity(17);
-        textView10.setPadding(0, 10, 0, 10);
+        textView10.setPadding(12, 12, 12, 12);
         textView10.setClickable(true);
         textView10.setOnClickListener(new FusionDrawerCloseClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams4 = new LinearLayout.LayoutParams(-1, -2);
-        layoutParams4.topMargin = 14;
+        layoutParams4.topMargin = 10;
         linearLayout2.addView(textView10, layoutParams4);
         prepareDrawer(fusionWebViewManager, linearLayout2);
     }
@@ -796,6 +816,19 @@ public class FusionDrawerHelper {
         textView7.setOnClickListener(new FusionTabCloseCurrentClick(fusionWebViewManager));
         linearLayout6.addView(textView7, new LinearLayout.LayoutParams(0, -2, 1.0f));
         linearLayout2.addView(linearLayout6);
+
+        TextView textViewCloseTabDrawer = new TextView(appCompatActivity);
+        textViewCloseTabDrawer.setText("TUTUP");
+        FusionUiHelper.setDrawerCloseBtn(textViewCloseTabDrawer);
+        textViewCloseTabDrawer.setTextSize(2, 12.0f);
+        textViewCloseTabDrawer.setGravity(17);
+        textViewCloseTabDrawer.setPadding(12, 12, 12, 12);
+        textViewCloseTabDrawer.setClickable(true);
+        textViewCloseTabDrawer.setOnClickListener(new FusionDrawerCloseClick(fusionWebViewManager));
+        LinearLayout.LayoutParams layoutParamsClose = new LinearLayout.LayoutParams(-1, -2);
+        layoutParamsClose.setMargins(0, 10, 0, 0);
+        linearLayout2.addView(textViewCloseTabDrawer, layoutParamsClose);
+
         prepareDrawer(fusionWebViewManager, linearLayout2);
     }
 
@@ -867,14 +900,14 @@ public class FusionDrawerHelper {
         linearLayout2.addView(scrollView);
         TextView textView5 = new TextView(appCompatActivity);
         textView5.setText("TUTUP");
-        FusionUiHelper.setSolidBtn(textView5);
+        FusionUiHelper.setDrawerCloseBtn(textView5);
         textView5.setTextSize(2, 12.0f);
         textView5.setGravity(17);
-        textView5.setPadding(12, 10, 12, 10);
+        textView5.setPadding(12, 12, 12, 12);
         textView5.setClickable(true);
         textView5.setOnClickListener(new FusionDrawerCloseClick(fusionWebViewManager));
         LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(-1, -2);
-        layoutParams2.setMargins(0, 12, 0, 0);
+        layoutParams2.setMargins(0, 10, 0, 0);
         linearLayout2.addView(textView5, layoutParams2);
         prepareDrawer(fusionWebViewManager, linearLayout2);
     }
