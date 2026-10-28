@@ -557,7 +557,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
     /** All sessions the drawer lists. Each owns one or more windows. */
     private final java.util.List<WSession> mWSessions = new java.util.ArrayList<>();
-    @Nullable private WSession mCurrentWSession;
+    @Nullable WSession mCurrentWSession;
     /** Session the switch indicator last fired for; compared by identity, never dereferenced. */
     /** Resolves per-pane foreground process / open file for the window pill labels. */
     @Nullable private com.termux.app.statusbar.WindowForegroundResolver mWindowForegroundResolver;
@@ -26182,6 +26182,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             } catch (Exception ignored) {}
         }
         return array;
+    }
+
+    /**
+     * IPC Helper: Returns the index of a window in the current session, or -1 if not found.
+     */
+    public int getWindowIndexOf(@Nullable com.termux.app.terminal.TerminalPaneController.Window w) {
+        if (mCurrentWSession == null || w == null) return -1;
+        return mCurrentWSession.windows.indexOf(w);
     }
 
     /**

@@ -317,7 +317,7 @@ public class TermuxIpcServer {
                                             res.put("status", "ok");
                                             res.put("id", w.id);
                                             res.put("name", w.name != null ? w.name : "");
-                                            int index = act.mCurrentWSession != null ? act.mCurrentWSession.windows.indexOf(w) : -1;
+                                            int index = act.getWindowIndexOf(w);
                                             res.put("index", index);
                                             resultRef.set(res.toString());
                                         } else {
