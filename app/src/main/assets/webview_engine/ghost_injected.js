@@ -3401,42 +3401,77 @@
         modal.style.left = "0";
         modal.style.width = "100%";
         modal.style.height = "100%";
-        modal.style.backgroundColor = "rgba(0, 0, 0, 0.85)";
+        modal.style.backgroundColor = "rgba(17, 17, 27, 0.65)";
+        modal.style.backdropFilter = "blur(6px)";
+        modal.style.webkitBackdropFilter = "blur(6px)";
         modal.style.zIndex = "2147483647";
         modal.style.display = "flex";
-        modal.style.alignItems = "center";
-        modal.style.justifyContent = "center";
-        modal.style.fontFamily = "system-ui, -apple-system, sans-serif";
+        modal.style.justifyContent = "flex-start";
+        modal.style.alignItems = "stretch";
+        modal.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
         var card = document.createElement("div");
-        card.style.background = "#14161E";
-        card.style.border = "1px solid #2B3040";
-        card.style.borderRadius = "16px";
-        card.style.width = "90%";
-        card.style.maxWidth = "400px";
-        card.style.padding = "20px";
-        card.style.boxShadow = "0 10px 40px rgba(0,0,0,0.85)";
-        card.style.color = "#FFFFFF";
+        card.style.background = "#181825";
+        card.style.border = "none";
+        card.style.borderRight = "1px solid #313244";
+        card.style.borderRadius = "0px";
+        card.style.width = "82%";
+        card.style.maxWidth = "380px";
+        card.style.height = "100%";
+        card.style.padding = "20px 16px 16px 16px";
+        card.style.boxShadow = "10px 0 36px rgba(0,0,0,0.85)";
+        card.style.color = "#cdd6f4";
+        card.style.display = "flex";
+        card.style.flexDirection = "column";
+        card.style.boxSizing = "border-box";
+
+        modal.addEventListener("click", function(e) {
+            if (e.target === modal) {
+                e.stopPropagation();
+                modal.remove();
+                if (window.GhostBridge && window.GhostBridge.onDrawerClose) { try { window.GhostBridge.onDrawerClose(); } catch(_) {} }
+                AgyRecorder.updateUi();
+            }
+        });
 
         var titleRow = document.createElement("div");
         titleRow.style.display = "flex";
         titleRow.style.justifyContent = "space-between";
         titleRow.style.alignItems = "center";
-        titleRow.style.marginBottom = "12px";
+        titleRow.style.marginBottom = "14px";
+        titleRow.style.flexShrink = "0";
 
+        var titleBlock = document.createElement("div");
         var title = document.createElement("h3");
-        title.innerText = "🔴 Pilih Metode Rekam Resep";
+        title.innerText = "🔴 Metode Rekam";
         title.style.margin = "0";
-        title.style.fontSize = "15px";
-        title.style.color = "#FF5252";
-        titleRow.appendChild(title);
+        title.style.fontSize = "16px";
+        title.style.fontWeight = "700";
+        title.style.color = "#f38ba8";
+        titleBlock.appendChild(title);
 
-        var closeX = document.createElement("span");
+        var subTitle = document.createElement("div");
+        subTitle.innerText = "Pilih cara interaksi yang ingin dicatat";
+        subTitle.style.fontSize = "11px";
+        subTitle.style.color = "#a6adc8";
+        subTitle.style.marginTop = "2px";
+        titleBlock.appendChild(subTitle);
+        titleRow.appendChild(titleBlock);
+
+        var closeX = document.createElement("div");
         closeX.innerText = "✕";
         closeX.style.cursor = "pointer";
-        closeX.style.color = "#888";
-        closeX.style.fontSize = "16px";
-        closeX.onclick = function() {
+        closeX.style.color = "#a6adc8";
+        closeX.style.fontSize = "15px";
+        closeX.style.width = "28px";
+        closeX.style.height = "28px";
+        closeX.style.borderRadius = "8px";
+        closeX.style.display = "flex";
+        closeX.style.alignItems = "center";
+        closeX.style.justifyContent = "center";
+        closeX.style.background = "#1e1e2e";
+        closeX.onclick = function(e) {
+            e.stopPropagation();
             modal.remove();
             if (window.GhostBridge && window.GhostBridge.onDrawerClose) { try { window.GhostBridge.onDrawerClose(); } catch(_) {} }
             AgyRecorder.updateUi();
@@ -3444,42 +3479,47 @@
         titleRow.appendChild(closeX);
         card.appendChild(titleRow);
 
+        var scrollContainer = document.createElement("div");
+        scrollContainer.style.flex = "1";
+        scrollContainer.style.overflowY = "auto";
+        scrollContainer.style.paddingRight = "4px";
+
         var nameLabel = document.createElement("label");
         nameLabel.innerText = "Nama Resep:";
         nameLabel.style.fontSize = "11px";
         nameLabel.style.fontWeight = "bold";
-        nameLabel.style.color = "#EEE";
+        nameLabel.style.color = "#cdd6f4";
         nameLabel.style.display = "block";
         nameLabel.style.marginBottom = "4px";
-        card.appendChild(nameLabel);
+        scrollContainer.appendChild(nameLabel);
 
         var nameInp = document.createElement("input");
         nameInp.type = "text";
         nameInp.value = recipeName || ("Resep_" + new Date().getHours() + "h" + new Date().getMinutes() + "m");
         nameInp.style.width = "100%";
         nameInp.style.boxSizing = "border-box";
-        nameInp.style.background = "#1D202B";
-        nameInp.style.border = "1px solid #37474F";
-        nameInp.style.borderRadius = "6px";
-        nameInp.style.padding = "7px 10px";
-        nameInp.style.color = "#FFF";
+        nameInp.style.background = "#1e1e2e";
+        nameInp.style.border = "1px solid #313244";
+        nameInp.style.borderRadius = "8px";
+        nameInp.style.padding = "8px 10px";
+        nameInp.style.color = "#cdd6f4";
         nameInp.style.fontSize = "12px";
         nameInp.style.marginBottom = "14px";
-        card.appendChild(nameInp);
+        scrollContainer.appendChild(nameInp);
 
         var modeLabel = document.createElement("div");
         modeLabel.innerText = "Pilih Jenis Aksi yang Direkam:";
         modeLabel.style.fontSize = "11px";
         modeLabel.style.fontWeight = "bold";
-        modeLabel.style.color = "#00E5FF";
+        modeLabel.style.color = "#89dceb";
         modeLabel.style.marginBottom = "8px";
-        card.appendChild(modeLabel);
+        scrollContainer.appendChild(modeLabel);
 
         function createModeOption(id, titleText, descText, isDefault, colorHex) {
             var optBox = document.createElement("div");
-            optBox.style.background = "#181B24";
-            optBox.style.border = isDefault ? ("1px solid " + colorHex) : "1px solid #2B3040";
-            optBox.style.borderRadius = "8px";
+            optBox.style.background = "#1e1e2e";
+            optBox.style.border = isDefault ? ("1px solid " + colorHex) : "1px solid #313244";
+            optBox.style.borderRadius = "10px";
             optBox.style.padding = "10px";
             optBox.style.marginBottom = "8px";
             optBox.style.cursor = "pointer";
@@ -3501,7 +3541,7 @@
             var oDesc = document.createElement("div");
             oDesc.innerText = descText;
             oDesc.style.fontSize = "10px";
-            oDesc.style.color = "#AAA";
+            oDesc.style.color = "#a6adc8";
             oDesc.style.marginTop = "3px";
             oDesc.style.marginLeft = "22px";
 
@@ -3512,37 +3552,40 @@
             optBox.onclick = function() {
                 radio.checked = true;
                 var allBoxes = card.querySelectorAll("[data-opt-box='1']");
-                allBoxes.forEach(function(b) { b.style.border = "1px solid #2B3040"; });
+                allBoxes.forEach(function(b) { b.style.border = "1px solid #313244"; });
                 optBox.style.border = "1px solid " + colorHex;
             };
             optBox.setAttribute("data-opt-box", "1");
             return { box: optBox, radio: radio };
         }
 
-        var optStep = createModeOption("step_by_step", "👣 Mode Step by Step (DOM + Smart)", "Ambil elemen DOM bertahap + Smart Action (Wallet, Email, Ref, Reload, Wipe, Fingerprint)", true, "#7C4DFF");
-        var optDom = createModeOption("dom", "🎯 Hanya Rekam DOM (Form & Web3)", "Mencatat klik tombol & input form presisi. Auto-token wallet & email.", false, "#00E5FF");
-        var optTouch = createModeOption("touch", "👆 Rekam Touch (Gestur Layar)", "Murni merekam sentuhan & usapan jempol (Swipe, Drag, Geser).", false, "#FFB300");
-        var optHybrid = createModeOption("hybrid", "⚡ Rekam Touch + DOM (Hybrid)", "Gabungan cerdas: tombol dicatat sebagai elemen DOM, sentuhan sebagai Touch.", false, "#4CAF50");
+        var optStep = createModeOption("step_by_step", "👣 Mode Step by Step (DOM + Smart)", "Ambil elemen DOM bertahap + Smart Action (Wallet, Email, Ref, Reload, Wipe, Fingerprint)", true, "#cba6f7");
+        var optDom = createModeOption("dom", "🎯 Hanya Rekam DOM (Form & Web3)", "Mencatat klik tombol & input form presisi. Auto-token wallet & email.", false, "#89dceb");
+        var optTouch = createModeOption("touch", "👆 Rekam Touch (Gestur Layar)", "Murni merekam sentuhan & usapan jempol (Swipe, Drag, Geser).", false, "#f9e2af");
+        var optHybrid = createModeOption("hybrid", "⚡ Rekam Touch + DOM (Hybrid)", "Gabungan cerdas: tombol dicatat sebagai elemen DOM, sentuhan sebagai Touch.", false, "#a6e3a1");
 
-        card.appendChild(optStep.box);
-        card.appendChild(optDom.box);
-        card.appendChild(optTouch.box);
-        card.appendChild(optHybrid.box);
+        scrollContainer.appendChild(optStep.box);
+        scrollContainer.appendChild(optDom.box);
+        scrollContainer.appendChild(optTouch.box);
+        scrollContainer.appendChild(optHybrid.box);
+        card.appendChild(scrollContainer);
 
         var actionRow = document.createElement("div");
         actionRow.style.display = "flex";
         actionRow.style.gap = "8px";
         actionRow.style.marginTop = "14px";
+        actionRow.style.flexShrink = "0";
 
         var cancelBtn = document.createElement("button");
-        cancelBtn.innerText = "Batal";
+        cancelBtn.innerText = "BATAL";
         cancelBtn.style.flex = "1";
-        cancelBtn.style.background = "#2B3040";
-        cancelBtn.style.color = "#FFF";
-        cancelBtn.style.border = "none";
-        cancelBtn.style.borderRadius = "8px";
-        cancelBtn.style.padding = "9px";
+        cancelBtn.style.background = "#313244";
+        cancelBtn.style.color = "#cdd6f4";
+        cancelBtn.style.border = "1px solid rgba(255,255,255,0.08)";
+        cancelBtn.style.borderRadius = "12px";
+        cancelBtn.style.padding = "11px";
         cancelBtn.style.fontSize = "12px";
+        cancelBtn.style.fontWeight = "700";
         cancelBtn.style.cursor = "pointer";
         cancelBtn.onclick = function() {
             modal.remove();
@@ -3552,15 +3595,15 @@
         actionRow.appendChild(cancelBtn);
 
         var startBtn = document.createElement("button");
-        startBtn.innerText = "▶ MULAI REKAM";
+        startBtn.innerText = "▶ MULAI";
         startBtn.style.flex = "1.5";
-        startBtn.style.background = "#E53935";
-        startBtn.style.color = "#FFF";
+        startBtn.style.background = "linear-gradient(135deg, #f38ba8 0%, #fab387 100%)";
+        startBtn.style.color = "#11111b";
         startBtn.style.border = "none";
-        startBtn.style.borderRadius = "8px";
-        startBtn.style.padding = "9px";
+        startBtn.style.borderRadius = "12px";
+        startBtn.style.padding = "11px";
         startBtn.style.fontSize = "12px";
-        startBtn.style.fontWeight = "bold";
+        startBtn.style.fontWeight = "700";
         startBtn.style.cursor = "pointer";
         startBtn.onclick = function() {
             var selectedMode = "step_by_step";
@@ -4477,53 +4520,88 @@
         modal.style.left = "0";
         modal.style.width = "100%";
         modal.style.height = "100%";
-        modal.style.backgroundColor = "rgba(0, 0, 0, 0.85)";
+        modal.style.backgroundColor = "rgba(17, 17, 27, 0.65)";
+        modal.style.backdropFilter = "blur(6px)";
+        modal.style.webkitBackdropFilter = "blur(6px)";
         modal.style.zIndex = "2147483647";
         modal.style.display = "flex";
-        modal.style.alignItems = "center";
-        modal.style.justifyContent = "center";
-        modal.style.fontFamily = "system-ui, -apple-system, sans-serif";
+        modal.style.justifyContent = "flex-start";
+        modal.style.alignItems = "stretch";
+        modal.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+        modal.addEventListener("click", function(e) {
+            if (e.target === modal) {
+                e.stopPropagation();
+                modal.remove();
+                if (window.GhostBridge && window.GhostBridge.onDrawerClose) { try { window.GhostBridge.onDrawerClose(); } catch(_) {} }
+            }
+        });
 
         var card = document.createElement("div");
-        card.style.background = "#14161E";
-        card.style.border = "1px solid #2B3040";
-        card.style.borderRadius = "16px";
-        card.style.width = "90%";
-        card.style.maxWidth = "420px";
-        card.style.maxHeight = "90vh";
-        card.style.overflowY = "auto";
-        card.style.padding = "18px";
-        card.style.boxShadow = "0 10px 40px rgba(0,0,0,0.85)";
-        card.style.color = "#FFFFFF";
+        card.style.background = "#181825";
+        card.style.border = "none";
+        card.style.borderRight = "1px solid #313244";
+        card.style.borderRadius = "0px";
+        card.style.width = "82%";
+        card.style.maxWidth = "380px";
+        card.style.height = "100%";
+        card.style.padding = "20px 16px 16px 16px";
+        card.style.boxShadow = "10px 0 36px rgba(0,0,0,0.85)";
+        card.style.color = "#cdd6f4";
+        card.style.display = "flex";
+        card.style.flexDirection = "column";
+        card.style.boxSizing = "border-box";
 
         var headerRow = document.createElement("div");
         headerRow.style.display = "flex";
         headerRow.style.justifyContent = "space-between";
         headerRow.style.alignItems = "center";
         headerRow.style.marginBottom = "14px";
+        headerRow.style.flexShrink = "0";
 
+        var titleBlock = document.createElement("div");
         var hTitle = document.createElement("h3");
-        hTitle.innerText = "🗄️ AGY Hub (Database & Settings)";
+        hTitle.innerText = "🗄️ AGY Hub";
         hTitle.style.margin = "0";
-        hTitle.style.fontSize = "15px";
-        hTitle.style.color = "#FFD54F";
-        headerRow.appendChild(hTitle);
+        hTitle.style.fontSize = "16px";
+        hTitle.style.fontWeight = "700";
+        hTitle.style.color = "#f9e2af";
+        titleBlock.appendChild(hTitle);
 
-        var closeX = document.createElement("span");
+        var subTitle = document.createElement("div");
+        subTitle.innerText = "Database & Pengaturan Global";
+        subTitle.style.fontSize = "11px";
+        subTitle.style.color = "#a6adc8";
+        subTitle.style.marginTop = "2px";
+        titleBlock.appendChild(subTitle);
+        headerRow.appendChild(titleBlock);
+
+        var closeX = document.createElement("div");
         closeX.innerText = "✕";
         closeX.style.cursor = "pointer";
-        closeX.style.color = "#888";
-        closeX.style.fontSize = "16px";
-        closeX.onclick = function() { modal.remove();
-                if (window.GhostBridge && window.GhostBridge.onDrawerClose) { try { window.GhostBridge.onDrawerClose(); } catch(_) {} } };
+        closeX.style.color = "#a6adc8";
+        closeX.style.fontSize = "15px";
+        closeX.style.width = "28px";
+        closeX.style.height = "28px";
+        closeX.style.borderRadius = "8px";
+        closeX.style.display = "flex";
+        closeX.style.alignItems = "center";
+        closeX.style.justifyContent = "center";
+        closeX.style.background = "#1e1e2e";
+        closeX.onclick = function(e) {
+            e.stopPropagation();
+            modal.remove();
+            if (window.GhostBridge && window.GhostBridge.onDrawerClose) { try { window.GhostBridge.onDrawerClose(); } catch(_) {} }
+        };
         headerRow.appendChild(closeX);
         card.appendChild(headerRow);
 
         // Tab Navigation
         var tabRow = document.createElement("div");
         tabRow.style.display = "flex";
-        tabRow.style.borderBottom = "1px solid #2B3040";
+        tabRow.style.borderBottom = "1px solid #313244";
         tabRow.style.marginBottom = "14px";
+        tabRow.style.flexShrink = "0";
 
         var tabDb = document.createElement("button");
         tabDb.innerText = "🗄️ Database";
@@ -4550,6 +4628,9 @@
         card.appendChild(tabRow);
 
         var tabContent = document.createElement("div");
+        tabContent.style.flex = "1";
+        tabContent.style.overflowY = "auto";
+        tabContent.style.paddingRight = "4px";
         card.appendChild(tabContent);
 
         function renderTab() {
@@ -4948,6 +5029,27 @@
         tabDb.onclick = function() { currentTab = "database"; renderTab(); };
         tabSettings.onclick = function() { currentTab = "settings"; renderTab(); };
         renderTab();
+
+        var closeHubBtn = document.createElement("button");
+        closeHubBtn.innerText = "TUTUP";
+        closeHubBtn.style.width = "100%";
+        closeHubBtn.style.background = "#313244";
+        closeHubBtn.style.color = "#cdd6f4";
+        closeHubBtn.style.border = "1px solid rgba(255,255,255,0.08)";
+        closeHubBtn.style.borderRadius = "12px";
+        closeHubBtn.style.padding = "11px";
+        closeHubBtn.style.fontSize = "12px";
+        closeHubBtn.style.fontWeight = "700";
+        closeHubBtn.style.cursor = "pointer";
+        closeHubBtn.style.textAlign = "center";
+        closeHubBtn.style.marginTop = "10px";
+        closeHubBtn.style.flexShrink = "0";
+        closeHubBtn.onclick = function(e) {
+            e.stopPropagation();
+            modal.remove();
+            if (window.GhostBridge && window.GhostBridge.onDrawerClose) { try { window.GhostBridge.onDrawerClose(); } catch(_) {} }
+        };
+        card.appendChild(closeHubBtn);
 
         modal.appendChild(card);
         (document.body || document.documentElement).appendChild(modal);
@@ -5671,46 +5773,62 @@
         editorModal.style.left = "0";
         editorModal.style.width = "100%";
         editorModal.style.height = "100%";
-        editorModal.style.backgroundColor = "rgba(0, 0, 0, 0.88)";
+        editorModal.style.backgroundColor = "rgba(17, 17, 27, 0.65)";
+        editorModal.style.backdropFilter = "blur(6px)";
+        editorModal.style.webkitBackdropFilter = "blur(6px)";
         editorModal.style.zIndex = "2147483647";
         editorModal.style.display = "flex";
-        editorModal.style.alignItems = "center";
-        editorModal.style.justifyContent = "center";
-        editorModal.style.fontFamily = "system-ui, -apple-system, sans-serif";
+        editorModal.style.justifyContent = "flex-start";
+        editorModal.style.alignItems = "stretch";
+        editorModal.style.fontFamily = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
 
         var card = document.createElement("div");
-        card.style.background = "#14161E";
-        card.style.border = "1px solid #2B3040";
-        card.style.borderRadius = "16px";
-        card.style.width = "92%";
-        card.style.maxWidth = "440px";
-        card.style.maxHeight = "92vh";
+        card.style.background = "#181825";
+        card.style.border = "none";
+        card.style.borderRight = "1px solid #313244";
+        card.style.borderRadius = "0px";
+        card.style.width = "82%";
+        card.style.maxWidth = "380px";
+        card.style.height = "100%";
         card.style.display = "flex";
         card.style.flexDirection = "column";
-        card.style.padding = "16px";
-        card.style.boxShadow = "0 10px 40px rgba(0,0,0,0.85)";
-        card.style.color = "#FFFFFF";
+        card.style.padding = "20px 16px 16px 16px";
+        card.style.boxShadow = "10px 0 36px rgba(0,0,0,0.85)";
+        card.style.color = "#cdd6f4";
+        card.style.boxSizing = "border-box";
 
         var titleRow = document.createElement("div");
         titleRow.style.display = "flex";
         titleRow.style.justifyContent = "space-between";
         titleRow.style.alignItems = "center";
         titleRow.style.marginBottom = "8px";
+        titleRow.style.flexShrink = "0";
 
+        var titleBlock = document.createElement("div");
         var title = document.createElement("h3");
         title.innerText = "🛠️ Editor Langkah Resep";
         title.style.margin = "0";
         title.style.fontSize = "15px";
-        title.style.color = "#00E5FF";
-        titleRow.appendChild(title);
+        title.style.fontWeight = "700";
+        title.style.color = "#cba6f7";
+        titleBlock.appendChild(title);
+        titleRow.appendChild(titleBlock);
 
-        var closeX = document.createElement("span");
+        var closeX = document.createElement("div");
         closeX.innerText = "✕";
         closeX.style.cursor = "pointer";
-        closeX.style.color = "#AAA";
-        closeX.style.fontSize = "18px";
-        closeX.style.fontWeight = "bold";
-        closeX.style.padding = "6px 12px";
+        closeX.style.color = "#a6adc8";
+        closeX.style.fontSize = "15px";
+        closeX.style.width = "28px";
+        closeX.style.height = "28px";
+        closeX.style.borderRadius = "8px";
+        closeX.style.display = "flex";
+        closeX.style.alignItems = "center";
+        closeX.style.justifyContent = "center";
+        closeX.style.background = "#1e1e2e";
+        closeX.style.touchAction = "manipulation";
+        closeX.style.userSelect = "none";
+        closeX.style.webkitUserSelect = "none";
         closeX.style.touchAction = "manipulation";
         closeX.style.userSelect = "none";
         closeX.style.webkitUserSelect = "none";
