@@ -12,6 +12,14 @@ import com.termux.webview.FusionWebViewDispatcher;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class TermuxIpcServer {
@@ -186,6 +194,269 @@ public class TermuxIpcServer {
                                 TermuxActivity act = TermuxIpcServer.getActivity();
                                 boolean on = act != null && com.termux.launcherctl.LauncherCtlApiServer.getInstance().isEnabled(act);
                                 outputStream.write((on ? "ON\n" : "OFF\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("TAB_NEW ") || strTrim.equals("TAB_NEW")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act == null) {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"TermuxActivity not available\"}\n".getBytes());
+                                    outputStream.flush();
+                                    continue;
+                                }
+                                String argStr = strTrim.length() > 7 ? strTrim.substring(7).trim() : "";
+                                String tabName = "";
+                                String cmdStr = null;
+                                String cwd = null;
+                                String env = "auto";
+                                boolean focus = true;
+                                boolean stayBehind = true;
+
+                                if (argStr.startsWith("{") && argStr.endsWith("}")) {
+                                    try {
+                                        JSONObject j = new JSONObject(argStr);
+                                        tabName = j.optString("name", "");
+                                        if (j.has("command")) cmdStr = j.optString("command", null);
+                                        if (j.has("cwd")) cwd = j.optString("cwd", null);
+                                        if (j.has("env")) env = j.optString("env", "auto");
+                                        focus = j.optBoolean("focus", true);
+                                        stayBehind = j.optBoolean("stayBehind", true);
+                                    } catch (Exception ignored) {}
+                                } else if (!argStr.isEmpty()) {
+                                    // Parse flags: --chroot, --proot, --native, --env <target>
+                                    if (argStr.contains("--chroot")) {
+                                        env = "chroot";
+                                        argStr = argStr.replace("--chroot", " ").trim();
+                                    } else if (argStr.contains("--proot")) {
+                                        env = "proot";
+                                        argStr = argStr.replace("--proot", " ").trim();
+                                    } else if (argStr.contains("--native") || argStr.contains("--termux")) {
+                                        env = "native";
+                                        argStr = argStr.replace("--native", " ").replace("--termux", " ").trim();
+                                    } else if (argStr.contains("--env ")) {
+                                        int eIdx = argStr.indexOf("--env ");
+                                        String rem = argStr.substring(eIdx + 6).trim();
+                                        int sp = rem.indexOf(" ");
+                                        if (sp != -1) {
+                                            env = rem.substring(0, sp).trim();
+                                            argStr = (argStr.substring(0, eIdx) + " " + rem.substring(sp)).trim();
+                                        } else {
+                                            env = rem.trim();
+                                            argStr = argStr.substring(0, eIdx).trim();
+                                        }
+                                    }
+
+                                    if (argStr.startsWith("\"")) {
+                                        int endQuote = argStr.indexOf("\"", 1);
+                                        if (endQuote != -1) {
+                                            tabName = argStr.substring(1, endQuote).trim();
+                                            cmdStr = argStr.substring(endQuote + 1).trim();
+                                        } else {
+                                            tabName = argStr.substring(1).trim();
+                                        }
+                                    } else {
+                                        int firstSpace = argStr.indexOf(" ");
+                                        if (firstSpace != -1) {
+                                            tabName = argStr.substring(0, firstSpace).trim();
+                                            cmdStr = argStr.substring(firstSpace + 1).trim();
+                                        } else {
+                                            tabName = argStr.trim();
+                                        }
+                                    }
+                                    if (cmdStr != null && cmdStr.isEmpty()) cmdStr = null;
+                                }
+
+                                final String finalName = tabName;
+                                final List<String> cmdList = new ArrayList<>();
+                                String cleanEnv = env.toLowerCase().trim();
+
+                                if ("native".equals(cleanEnv) || "termux".equals(cleanEnv)) {
+                                    if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                        cmdList.add("sh");
+                                        cmdList.add("-c");
+                                        cmdList.add(cmdStr.trim());
+                                    }
+                                } else if ("chroot".equals(cleanEnv) || "nethunter".equals(cleanEnv)) {
+                                    cmdList.add("bashnh");
+                                    cmdList.add("chroot");
+                                    if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                        cmdList.add(cmdStr.trim());
+                                    }
+                                } else if ("droidspaces".equals(cleanEnv) || "ubuntu".equals(cleanEnv)) {
+                                    cmdList.add("bashnh");
+                                    cmdList.add("droidspaces");
+                                    if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                        cmdList.add(cmdStr.trim());
+                                    }
+                                } else if ("proot".equals(cleanEnv)) {
+                                    cmdList.add("bashnh");
+                                    cmdList.add("proot");
+                                    if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                        cmdList.add(cmdStr.trim());
+                                    }
+                                } else {
+                                    // "auto" (Default): Jalankan bashnh agar otomatis masuk ke distro/chroot aktif
+                                    cmdList.add("bashnh");
+                                    if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                        cmdList.add(cmdStr.trim());
+                                    }
+                                }
+                                final String finalCwd = cwd;
+                                final boolean finalFocus = focus;
+                                final boolean finalStayBehind = stayBehind;
+
+                                final AtomicReference<String> resultRef =
+                                    new AtomicReference<>("{\"status\":\"error\",\"message\":\"timeout\"}");
+                                final CountDownLatch latch = new CountDownLatch(1);
+
+                                act.runOnUiThread(() -> {
+                                    try {
+                                        com.termux.app.terminal.TerminalPaneController.Window w =
+                                            act.openNamedWindow(finalName, cmdList, finalCwd, finalFocus, finalStayBehind);
+                                        if (w != null) {
+                                            JSONObject res = new JSONObject();
+                                            res.put("status", "ok");
+                                            res.put("id", w.id);
+                                            res.put("name", w.name != null ? w.name : "");
+                                            int index = act.mCurrentWSession != null ? act.mCurrentWSession.windows.indexOf(w) : -1;
+                                            res.put("index", index);
+                                            resultRef.set(res.toString());
+                                        } else {
+                                            resultRef.set("{\"status\":\"error\",\"message\":\"Failed to open window\"}");
+                                        }
+                                    } catch (Exception e) {
+                                        resultRef.set("{\"status\":\"error\",\"message\":\"" + e.getMessage() + "\"}");
+                                    } finally {
+                                        latch.countDown();
+                                    }
+                                });
+
+                                try {
+                                    latch.await(3, TimeUnit.SECONDS);
+                                } catch (InterruptedException ignored) {}
+
+                                outputStream.write((resultRef.get() + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equalsIgnoreCase("TAB_LIST") || strTrim.equalsIgnoreCase("TAB_LS")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act == null) {
+                                    outputStream.write("[]\n".getBytes());
+                                    outputStream.flush();
+                                    continue;
+                                }
+                                final AtomicReference<String> resultRef = new AtomicReference<>("[]");
+                                final CountDownLatch latch = new CountDownLatch(1);
+
+                                act.runOnUiThread(() -> {
+                                    try {
+                                        resultRef.set(act.listWindowsJson().toString());
+                                    } catch (Exception ignored) {
+                                    } finally {
+                                        latch.countDown();
+                                    }
+                                });
+
+                                try {
+                                    latch.await(2, TimeUnit.SECONDS);
+                                } catch (InterruptedException ignored) {}
+
+                                outputStream.write((resultRef.get() + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("TAB_CLOSE ") || strTrim.equalsIgnoreCase("TAB_CLOSE")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act == null) {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"TermuxActivity not available\"}\n".getBytes());
+                                    outputStream.flush();
+                                    continue;
+                                }
+                                final String target = strTrim.length() > 9 ? strTrim.substring(9).trim() : "current";
+                                final AtomicBoolean closedRef = new AtomicBoolean(false);
+                                final CountDownLatch latch = new CountDownLatch(1);
+
+                                act.runOnUiThread(() -> {
+                                    try {
+                                        closedRef.set(act.closeNamedWindow(target));
+                                    } catch (Exception ignored) {
+                                    } finally {
+                                        latch.countDown();
+                                    }
+                                });
+
+                                try {
+                                    latch.await(2, TimeUnit.SECONDS);
+                                } catch (InterruptedException ignored) {}
+
+                                if (closedRef.get()) {
+                                    outputStream.write("{\"status\":\"ok\",\"closed\":true}\n".getBytes());
+                                } else {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"Window not found or could not be closed\"}\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("TAB_FOCUS ") || strTrim.startsWith("TAB_SWITCH ")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act == null) {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"TermuxActivity not available\"}\n".getBytes());
+                                    outputStream.flush();
+                                    continue;
+                                }
+                                final String target = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                final AtomicBoolean focusRef = new AtomicBoolean(false);
+                                final CountDownLatch latch = new CountDownLatch(1);
+
+                                act.runOnUiThread(() -> {
+                                    try {
+                                        focusRef.set(act.focusNamedWindow(target));
+                                    } catch (Exception ignored) {
+                                    } finally {
+                                        latch.countDown();
+                                    }
+                                });
+
+                                try {
+                                    latch.await(2, TimeUnit.SECONDS);
+                                } catch (InterruptedException ignored) {}
+
+                                if (focusRef.get()) {
+                                    outputStream.write("{\"status\":\"ok\",\"focused\":true}\n".getBytes());
+                                } else {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"Window not found\"}\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("TAB_RENAME ")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act == null) {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"TermuxActivity not available\"}\n".getBytes());
+                                    outputStream.flush();
+                                    continue;
+                                }
+                                String rem = strTrim.substring(11).trim();
+                                int sp = rem.indexOf(" ");
+                                final String target = sp != -1 ? rem.substring(0, sp).trim() : "current";
+                                final String newName = sp != -1 ? rem.substring(sp + 1).trim() : rem;
+                                final AtomicBoolean renameRef = new AtomicBoolean(false);
+                                final CountDownLatch latch = new CountDownLatch(1);
+
+                                act.runOnUiThread(() -> {
+                                    try {
+                                        renameRef.set(act.renameNamedWindow(target, newName));
+                                    } catch (Exception ignored) {
+                                    } finally {
+                                        latch.countDown();
+                                    }
+                                });
+
+                                try {
+                                    latch.await(2, TimeUnit.SECONDS);
+                                } catch (InterruptedException ignored) {}
+
+                                if (renameRef.get()) {
+                                    outputStream.write("{\"status\":\"ok\",\"renamed\":true}\n".getBytes());
+                                } else {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"Window not found\"}\n".getBytes());
+                                }
                                 outputStream.flush();
                                 continue;
                             } else if ((strTrim.equalsIgnoreCase("KEYBOARD_SHOW") || strTrim.equalsIgnoreCase("SHOW")) && (activity = TermuxIpcServer.getActivity()) != null) {

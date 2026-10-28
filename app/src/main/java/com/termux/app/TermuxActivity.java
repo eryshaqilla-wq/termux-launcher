@@ -25976,6 +25976,215 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     /**
+     * IPC Helper: Opens a new terminal window/tab with a given name, command, cwd, focus, and stayBehind.
+     */
+    @Nullable
+    com.termux.app.terminal.TerminalPaneController.Window openNamedWindow(
+            @Nullable String name,
+            @Nullable java.util.List<String> command,
+            @Nullable String cwd,
+            boolean focus,
+            boolean stayBehind) {
+        if (!isSplitPanesEnabled() || mPaneController == null) return null;
+        if (mCurrentWSession == null) {
+            if (getTermuxTerminalSessionClient() != null) {
+                getTermuxTerminalSessionClient().addNewSession(false, null);
+            }
+            if (mCurrentWSession == null) return null;
+        }
+        if (command == null) command = new java.util.ArrayList<>();
+        if (cwd == null || cwd.isEmpty()) {
+            TerminalSession cur = getCurrentSession();
+            cwd = cur != null ? cur.getCwd() : getProperties().getDefaultWorkingDirectory();
+        }
+        TerminalSession shell = createCommandShell(command, cwd, name, stayBehind);
+        if (shell == null) return null;
+        boolean seeded = seedWindowSize(shell);
+        if (!seeded && !isVisible()) {
+            if (mTermuxService != null) mTermuxService.killTermuxSession(shell);
+            return null;
+        }
+        com.termux.app.terminal.TerminalPaneController.Window w = mPaneController.newWindow(shell, name);
+        mCurrentWSession.windows.add(w);
+        if (focus) {
+            mCurrentWSession.current = mCurrentWSession.windows.size() - 1;
+            if (isVisible()) {
+                runWithoutNotices(() -> {
+                    captureTerminalDeparture();
+                    mPaneController.showWindow(w);
+                    animateTerminalWindowLifecycleArrival(1);
+                });
+            } else {
+                mPaneController.showWindow(w);
+            }
+        }
+        rebuildDrawerSessions();
+        refreshTerminalWindowBar();
+        return w;
+    }
+
+    /**
+     * IPC Helper: Closes a window by name, id, or index.
+     */
+    boolean closeNamedWindow(@NonNull String target) {
+        if (mPaneController == null || mCurrentWSession == null || mCurrentWSession.windows.isEmpty()) {
+            return false;
+        }
+        String t = target.trim();
+        int targetIndex = -1;
+        if (t.isEmpty() || t.equalsIgnoreCase("current") || t.equalsIgnoreCase("active")) {
+            targetIndex = mCurrentWSession.current;
+        } else {
+            // 1. Exact name match
+            for (int i = 0; i < mCurrentWSession.windows.size(); i++) {
+                com.termux.app.terminal.TerminalPaneController.Window w = mCurrentWSession.windows.get(i);
+                if (w.name != null && w.name.equals(t)) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+            // 2. Case-insensitive name match
+            if (targetIndex < 0) {
+                for (int i = 0; i < mCurrentWSession.windows.size(); i++) {
+                    com.termux.app.terminal.TerminalPaneController.Window w = mCurrentWSession.windows.get(i);
+                    if (w.name != null && w.name.equalsIgnoreCase(t)) {
+                        targetIndex = i;
+                        break;
+                    }
+                }
+            }
+            // 3. Window ID match
+            if (targetIndex < 0) {
+                try {
+                    long id = Long.parseLong(t);
+                    for (int i = 0; i < mCurrentWSession.windows.size(); i++) {
+                        if (mCurrentWSession.windows.get(i).id == id) {
+                            targetIndex = i;
+                            break;
+                        }
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+            // 4. Index match (#0 or 0)
+            if (targetIndex < 0) {
+                try {
+                    String numStr = t.startsWith("#") ? t.substring(1) : t;
+                    int idx = Integer.parseInt(numStr);
+                    if (idx >= 0 && idx < mCurrentWSession.windows.size()) {
+                        targetIndex = idx;
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        if (targetIndex >= 0) {
+            return closeWindow(targetIndex);
+        }
+        return false;
+    }
+
+    /**
+     * IPC Helper: Focuses a window by name, id, or index.
+     */
+    boolean focusNamedWindow(@NonNull String target) {
+        if (mPaneController == null || mCurrentWSession == null || mCurrentWSession.windows.isEmpty()) {
+            return false;
+        }
+        String t = target.trim();
+        int targetIndex = -1;
+        for (int i = 0; i < mCurrentWSession.windows.size(); i++) {
+            com.termux.app.terminal.TerminalPaneController.Window w = mCurrentWSession.windows.get(i);
+            if (w.name != null && w.name.equals(t)) {
+                targetIndex = i;
+                break;
+            }
+        }
+        if (targetIndex < 0) {
+            for (int i = 0; i < mCurrentWSession.windows.size(); i++) {
+                com.termux.app.terminal.TerminalPaneController.Window w = mCurrentWSession.windows.get(i);
+                if (w.name != null && w.name.equalsIgnoreCase(t)) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+        if (targetIndex < 0) {
+            try {
+                long id = Long.parseLong(t);
+                for (int i = 0; i < mCurrentWSession.windows.size(); i++) {
+                    if (mCurrentWSession.windows.get(i).id == id) {
+                        targetIndex = i;
+                        break;
+                    }
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+        if (targetIndex < 0) {
+            try {
+                String numStr = t.startsWith("#") ? t.substring(1) : t;
+                int idx = Integer.parseInt(numStr);
+                if (idx >= 0 && idx < mCurrentWSession.windows.size()) {
+                    targetIndex = idx;
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+        if (targetIndex >= 0) {
+            return selectWindow(targetIndex);
+        }
+        return false;
+    }
+
+    /**
+     * IPC Helper: Renames a window by target (or current).
+     */
+    boolean renameNamedWindow(@NonNull String target, @Nullable String newName) {
+        if (mPaneController == null || mCurrentWSession == null || mCurrentWSession.windows.isEmpty()) {
+            return false;
+        }
+        String t = target.trim();
+        com.termux.app.terminal.TerminalPaneController.Window targetWindow = null;
+        if (t.isEmpty() || t.equalsIgnoreCase("current") || t.equalsIgnoreCase("active")) {
+            targetWindow = mCurrentWSession.currentWindow();
+        } else {
+            for (com.termux.app.terminal.TerminalPaneController.Window w : mCurrentWSession.windows) {
+                if ((w.name != null && w.name.equalsIgnoreCase(t)) || String.valueOf(w.id).equals(t)) {
+                    targetWindow = w;
+                    break;
+                }
+            }
+        }
+        if (targetWindow != null) {
+            mPaneController.setWindowName(targetWindow, newName);
+            refreshTerminalWindowBar();
+            refreshSessionsDrawer();
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * IPC Helper: Returns a JSON array of all windows in current session.
+     */
+    @NonNull
+    org.json.JSONArray listWindowsJson() {
+        org.json.JSONArray array = new org.json.JSONArray();
+        if (mPaneController == null || mCurrentWSession == null) return array;
+        for (int i = 0; i < mCurrentWSession.windows.size(); i++) {
+            com.termux.app.terminal.TerminalPaneController.Window w = mCurrentWSession.windows.get(i);
+            org.json.JSONObject obj = new org.json.JSONObject();
+            try {
+                obj.put("id", w.id);
+                obj.put("index", i);
+                obj.put("name", w.name != null ? w.name : "");
+                obj.put("active", i == mCurrentWSession.current);
+                obj.put("session", mCurrentWSession.name != null ? mCurrentWSession.name : "default");
+                obj.put("panes", mPaneController.shellsOf(w).size());
+                array.put(obj);
+            } catch (Exception ignored) {}
+        }
+        return array;
+    }
+
+    /**
      * Gives a brand-new, not-yet-shown window's shell a starting size right away, borrowed from
      * whichever pane is already on screen, so its subprocess forks even though nothing will lay
      * its own (still unattached) view out yet — see {@link #openCommandWindow}. {@link TerminalPaneController#newWindow}

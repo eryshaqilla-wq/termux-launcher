@@ -71,6 +71,24 @@ ipc_send() {
     fi
 }
 
+# JIKA ADA ARGUMEN EKSEKUSI (misal: login -c "..." atau login cmd ...):
+# Langsung jalankan tanpa tertahan di menu selector
+if [ "$1" = "-c" ]; then
+    shift
+    if [ -x "$PREFIX/bin/zsh" ]; then
+        exec "$PREFIX/bin/zsh" -c "$*"
+    else
+        exec "$PREFIX/bin/bash" -c "$*"
+    fi
+fi
+if [ $# -gt 0 ]; then
+    if [ -x "$PREFIX/bin/bashnh" ]; then
+        exec "$PREFIX/bin/bashnh" "$@"
+    else
+        exec "$@"
+    fi
+fi
+
 # JIKA TANPA LINUX: Langsung luncurkan Termux Shell secara cepat & bersih
 if [ "$HAS_LINUX" = "0" ]; then
     printf "\033]0;home\007"

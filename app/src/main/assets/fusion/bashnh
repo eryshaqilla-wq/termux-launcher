@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/usr/bin/env bash
 # ==============================================================================
 # ⚡ ESO:LAUNCHER - UNIVERSAL LINUX LAUNCHER (BASHNH)
 # ==============================================================================
@@ -14,6 +14,10 @@ PREFIX="${PREFIX:-/data/data/com.termux/files/usr}"
 HOME="${HOME:-/data/data/com.termux/files/home}"
 FUSION_DIR="$HOME/.fusion"
 
+# 2. Pertahankan tab terminal tetap bernama 'home'
+printf "\033]0;home\007"
+printf "\033]2;home\007"
+
 # Cek hak akses root
 HAS_SU=0
 if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
@@ -26,14 +30,61 @@ TARGET_DISTRO="$1"
 # ------------------------------------------------------------------------------
 # FUNGSI LUNCURKAN NETHUNTER CHROOT
 # ------------------------------------------------------------------------------
+launch_proot_or_native() {
+    if command -v proot-distro >/dev/null 2>&1; then
+        local PROOT_NAME=""
+        [ -f "$FUSION_DIR/distro_slug.txt" ] && PROOT_NAME=$(cat "$FUSION_DIR/distro_slug.txt" 2>/dev/null | tr -d '[:space:]')
+        if [ -z "$PROOT_NAME" ]; then
+            PROOT_NAME=$(proot-distro list 2>/dev/null | awk '/installed/ {print $2}' | head -n1)
+        fi
+        if [ -n "$PROOT_NAME" ]; then
+            if [ -n "$*" ]; then
+                exec proot-distro login "$PROOT_NAME" -- "$@"
+            else
+                exec proot-distro login "$PROOT_NAME"
+            fi
+        fi
+    fi
+
+    # Fallback ke Native Termux
+    if [ -x "$PREFIX/bin/zsh" ]; then
+        exec -a "-zsh" "$PREFIX/bin/zsh" "$@"
+    else
+        exec -a "-bash" "$PREFIX/bin/bash" "$@"
+    fi
+}
+
 launch_nethunter() {
     local nh_path="$1"
+    shift 2>/dev/null || true
+
+    # Safeguard Non-Root
+    if [ $HAS_SU -ne 1 ]; then
+        echo -e "\e[1;33m[!] Kali NetHunter Chroot membutuhkan hak akses root (su).\e[0m"
+        echo -e "\e[90mMengalihkan ke PRoot / Native Termux...\e[0m"
+        launch_proot_or_native "$@"
+        return
+    fi
+
     [ -z "$nh_path" ] && nh_path="/data/local/nhsystem/kali-arm64"
     if [ ! -d "$nh_path" ] && su -c "[ -d '/data/local/nhsystem/kalifs' ]" 2>/dev/null; then
         nh_path="/data/local/nhsystem/kalifs"
     fi
 
-    printf "\033]0;NetHunter\007"
+    # Jika sudah berada di dalam NetHunter chroot
+    if [ "$YOU_KNOW_WHAT" = "THIS_IS_KALI_LINUX_NETHUNTER_FROM_JAVA_BINKY" ]; then
+        if [ -n "$*" ]; then
+            exec /bin/zsh -l -c "$*"
+        else
+            exec /bin/zsh -l
+        fi
+    fi
+
+    local SHELL_CMD="/bin/zsh -l"
+    if [ -n "$*" ]; then
+        SHELL_CMD="/bin/zsh -l -c \"$*\""
+    fi
+
     exec su -mm -c "chroot $nh_path /usr/bin/env -i \
         HOME=/root \
         TERM=xterm-256color \
@@ -41,9 +92,9 @@ launch_nethunter() {
         USER=root \
         LOGNAME=root \
         MAIL=/var/mail/root \
-        AUTO_TITLE=true \
+        DISABLE_AUTO_TITLE=true \
         YOU_KNOW_WHAT=THIS_IS_KALI_LINUX_NETHUNTER_FROM_JAVA_BINKY \
-        /bin/zsh -l"
+        $SHELL_CMD"
 }
 
 # ------------------------------------------------------------------------------
@@ -51,7 +102,16 @@ launch_nethunter() {
 # ------------------------------------------------------------------------------
 launch_droidspaces() {
     local ds_name="$1"
-    shift
+    shift 2>/dev/null || true
+
+    # Safeguard Non-Root
+    if [ $HAS_SU -ne 1 ]; then
+        echo -e "\e[1;33m[!] Droidspaces container membutuhkan hak akses root (su).\e[0m"
+        echo -e "\e[90mMengalihkan ke PRoot / Native Termux...\e[0m"
+        launch_proot_or_native "$@"
+        return
+    fi
+
     local ds_bin="/data/local/Droidspaces/bin/droidspaces"
 
     if [ ! -x "$ds_bin" ]; then
@@ -75,7 +135,6 @@ launch_droidspaces() {
         su -c "$ds_bin --name='$ds_name' start" >/dev/null 2>&1 || true
     fi
 
-    printf "\033]0;Droidspaces\007"
     if [ -n "$*" ]; then
         exec su -c "$ds_bin --name=\"$ds_name\" run -- $*"
     else
@@ -88,12 +147,40 @@ launch_droidspaces() {
 # ------------------------------------------------------------------------------
 if [ -n "$TARGET_DISTRO" ]; then
     case "$TARGET_DISTRO" in
-        kali|nethunter|nh)
-            launch_nethunter "/data/local/nhsystem/kali-arm64"
+        kali|nethunter|nh|chroot)
+            launch_nethunter "/data/local/nhsystem/kali-arm64" "$@"
+            ;;
+        droidspaces|ds|ubuntu|debian)
+            launch_droidspaces "$TARGET_DISTRO" "$@"
+            ;;
+        proot|proot-distro)
+            PROOT_NAME="kali"
+            if [ -n "$1" ]; then
+                PROOT_NAME="$1"
+                shift
+            fi
+            if [ -n "$*" ]; then
+                exec proot-distro login "$PROOT_NAME" -- "$@"
+            else
+                exec proot-distro login "$PROOT_NAME"
+            fi
+            ;;
+        termux|native|host)
+            if [ -x "$PREFIX/bin/zsh" ]; then
+                exec -a "-zsh" "$PREFIX/bin/zsh" "$@"
+            else
+                exec -a "-bash" "$PREFIX/bin/bash" "$@"
+            fi
             ;;
         *)
-            # Asumsikan nama container Droidspaces
-            launch_droidspaces "$TARGET_DISTRO" "$@"
+            # Cek apakah nama container Droidspaces
+            if [ $HAS_SU -eq 1 ] && su -c "[ -d '/data/local/Droidspaces/Containers/$TARGET_DISTRO' ] || [ -d '/data/local/Droidspaces/spaces/$TARGET_DISTRO' ]" 2>/dev/null; then
+                launch_droidspaces "$TARGET_DISTRO" "$@"
+            else
+                # Kembalikan parameter untuk auto-detect
+                set -- "$TARGET_DISTRO" "$@"
+                TARGET_DISTRO=""
+            fi
             ;;
     esac
 fi
@@ -146,9 +233,9 @@ if [ $HAS_SU -eq 1 ]; then
 
     # 3. Deteksi Kali NetHunter
     if su -c "[ -d '/data/local/nhsystem/kali-arm64' ]" 2>/dev/null; then
-        launch_nethunter "/data/local/nhsystem/kali-arm64"
+        launch_nethunter "/data/local/nhsystem/kali-arm64" "$@"
     elif su -c "[ -d '/data/local/nhsystem/kalifs' ]" 2>/dev/null; then
-        launch_nethunter "/data/local/nhsystem/kalifs"
+        launch_nethunter "/data/local/nhsystem/kalifs" "$@"
     fi
 fi
 
@@ -161,7 +248,11 @@ if command -v proot-distro >/dev/null 2>&1; then
         [ -n "$PROOT_INSTALLED" ] && PROOT_NAME="$PROOT_INSTALLED"
     fi
     if [ -n "$PROOT_NAME" ]; then
-        exec proot-distro login "$PROOT_NAME"
+        if [ -n "$*" ]; then
+            exec proot-distro login "$PROOT_NAME" -- "$@"
+        else
+            exec proot-distro login "$PROOT_NAME"
+        fi
     fi
 fi
 

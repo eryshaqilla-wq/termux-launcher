@@ -8,7 +8,8 @@ ACTION="$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
 shift
 
 if [ -z "$ACTION" ]; then
-    echo "Usage: termux-ipc <toast|vibrate|clip-get|clip-set|run|input|mouse-on|mouse-off|disable|enable|hide|show|api|x11-start|x11-stop|x11-launch|x11-audio|webview|launcherctl|ping> [args...]"
+    echo "Usage: termux-ipc <tab|webview|toast|vibrate|clip-get|clip-set|run|input|mouse-on|mouse-off|disable|enable|hide|show|api|x11-start|x11-stop|x11-launch|x11-audio|launcherctl|ping> [args...]"
+    echo "Untuk kontrol Tab Terminal: termux-ipc tab --help"
     echo "Untuk kontrol WebView: termux-ipc webview --help"
     exit 1
 fi
@@ -43,6 +44,170 @@ if resp:
     print(resp)
 " "$payload"
     fi
+}
+
+handle_tab() {
+    local SUB_CMD="$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
+    shift 2>/dev/null || true
+
+    case "$SUB_CMD" in
+        ""|help|--help|-h)
+            echo "Usage: termux-ipc tab <sub-command> [args...]"
+            echo ""
+            echo "Manajemen Tab Terminal (0% CPU IPC):"
+            echo "  new <name> [options] [cmd] Buka tab baru dengan nama khusus"
+            echo "                             Pilihan: --chroot, --proot, --native, --env <target>"
+            echo "  close [target]             Tutup tab berdasarkan nama, ID, nomor index, atau 'current'"
+            echo "  list | ls [--json]         Daftar seluruh tab terminal aktif beserta ID & namanya"
+            echo "  focus <target>             Pindah fokus ke tab berdasarkan nama, ID, atau index"
+            echo "  rename <target> <new>      Ubah nama tab target"
+            echo "  env                        Cek lingkungan sistem yang sedang aktif (Chroot/PRoot/Native)"
+            return 0
+            ;;
+        new|open)
+            local TAB_NAME=""
+            local ENV_FLAG=""
+            local PARAMS=()
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --chroot|-c)
+                        ENV_FLAG="--chroot"
+                        shift
+                        ;;
+                    --proot|-p)
+                        ENV_FLAG="--proot"
+                        shift
+                        ;;
+                    --native|--termux|-n)
+                        ENV_FLAG="--native"
+                        shift
+                        ;;
+                    --env)
+                        shift
+                        ENV_FLAG="--env $1"
+                        shift
+                        ;;
+                    *)
+                        if [ -z "$TAB_NAME" ]; then
+                            TAB_NAME="$1"
+                        else
+                            PARAMS+=("$1")
+                        fi
+                        shift
+                        ;;
+                esac
+            done
+
+            local TAB_CMD="${PARAMS[*]}"
+            if [ -z "$TAB_NAME" ]; then
+                echo "Error: Nama tab wajib disertakan. Contoh: termux-ipc tab new worker \"npm start\""
+                return 1
+            fi
+            local PAYLOAD="TAB_NEW \"$TAB_NAME\" $ENV_FLAG $TAB_CMD"
+            local RES
+            RES=$(send_cmd "$PAYLOAD")
+            if [ "$TAB_CMD" = "--json" ] || [ "$ENV_FLAG" = "--json" ]; then
+                echo "$RES"
+            else
+                if echo "$RES" | grep -q '"status":"ok"'; then
+                    local TAB_ID
+                    TAB_ID=$(echo "$RES" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+                    echo "Tab '$TAB_NAME' berhasil dibuka (ID: $TAB_ID)."
+                else
+                    echo "$RES"
+                fi
+            fi
+            ;;
+        env|sys)
+            if [ -f "/etc/os-release" ] && grep -qi "kali" /etc/os-release; then
+                echo "Active System: Kali NetHunter Chroot (RunnerType.NETHUNTER)"
+            elif [ -d "/data/local/Droidspaces" ] || grep -qi "ubuntu" /etc/os-release 2>/dev/null; then
+                echo "Active System: Droidspaces Container (RunnerType.DROIDSPACES)"
+            elif [ -n "$PROOT_TMP_DIR" ]; then
+                echo "Active System: PRoot Distro Environment"
+            elif [ -n "$PREFIX" ] && echo "$PREFIX" | grep -q "com.termux"; then
+                echo "Active System: Native Android Termux"
+            else
+                echo "Active System: Linux Environment"
+            fi
+            ;;
+        close|kill)
+            local TARGET="${1:-current}"
+            local RES
+            RES=$(send_cmd "TAB_CLOSE $TARGET")
+            if [ "$2" = "--json" ] || [ "$1" = "--json" ]; then
+                echo "$RES"
+            else
+                if echo "$RES" | grep -q '"status":"ok"'; then
+                    echo "Tab '$TARGET' berhasil ditutup."
+                else
+                    echo "$RES"
+                fi
+            fi
+            ;;
+        list|ls)
+            local RES
+            RES=$(send_cmd "TAB_LIST")
+            if [ "$1" = "--json" ]; then
+                echo "$RES"
+            else
+                python3 -c "
+import json, sys
+try:
+    raw = sys.argv[1].strip()
+    tabs = json.loads(raw)
+    if not isinstance(tabs, list) or len(tabs) == 0:
+        print('Tidak ada tab terminal aktif.')
+    else:
+        print('{:<6} {:<6} {:<24} {:<8} {:<6}'.format('INDEX', 'ID', 'NAME', 'ACTIVE', 'PANES'))
+        print('-' * 54)
+        for t in tabs:
+            act = '*' if t.get('active') else ''
+            name = t.get('name') or '(unnamed)'
+            print('{:<6} {:<6} {:<24} {:<8} {:<6}'.format(t.get('index', 0), t.get('id', 0), name, act, t.get('panes', 1)))
+except Exception as e:
+    print(sys.argv[1])
+" "$RES"
+            fi
+            ;;
+        focus|switch)
+            local TARGET="$1"
+            if [ -z "$TARGET" ]; then
+                echo "Error: Target tab wajib disertakan (nama, ID, atau index)."
+                return 1
+            fi
+            local RES
+            RES=$(send_cmd "TAB_FOCUS $TARGET")
+            if [ "$2" = "--json" ]; then
+                echo "$RES"
+            else
+                if echo "$RES" | grep -q '"status":"ok"'; then
+                    echo "Fokus beralih ke tab '$TARGET'."
+                else
+                    echo "$RES"
+                fi
+            fi
+            ;;
+        rename)
+            local TARGET="$1"
+            local NEW_NAME="$2"
+            if [ -z "$TARGET" ] || [ -z "$NEW_NAME" ]; then
+                echo "Penggunaan: termux-ipc tab rename <target> <nama-baru>"
+                return 1
+            fi
+            local RES
+            RES=$(send_cmd "TAB_RENAME $TARGET $NEW_NAME")
+            if echo "$RES" | grep -q '"status":"ok"'; then
+                echo "Tab '$TARGET' berhasil diubah nama menjadi '$NEW_NAME'."
+            else
+                echo "$RES"
+            fi
+            ;;
+        *)
+            echo "Sub-command tab tidak dikenal: $SUB_CMD. Ketik 'termux-ipc tab help' untuk bantuan."
+            return 1
+            ;;
+    esac
 }
 
 handle_webview() {
@@ -285,11 +450,15 @@ handle_webview() {
             while [ $# -gt 0 ]; do
                 case "$1" in
                     --profile)
-                        TG_PROF="$2"
-                        shift 2
+                        if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
+                            TG_PROF="$2"
+                            shift 2
+                        else
+                            shift 1
+                        fi
                         ;;
                     *)
-                        shift
+                        shift 1
                         ;;
                 esac
             done
@@ -317,8 +486,12 @@ handle_webview() {
     while [ $# -gt 0 ]; do
         case "$1" in
             --profile)
-                PROFILE="$2"
-                shift 2
+                if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
+                    PROFILE="$2"
+                    shift 2
+                else
+                    shift 1
+                fi
                 ;;
             --wallet)
                 if [ -n "$2" ] && [[ ! "$2" =~ ^-- ]] && [[ ! "$2" =~ ^https?:// ]]; then
@@ -371,9 +544,13 @@ handle_webview() {
                 shift
                 ;;
             --wc)
-                WC="$2"
+                if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
+                    WC="$2"
+                    shift 2
+                else
+                    shift 1
+                fi
                 IS_GHOST=1
-                shift 2
                 ;;
             --help|-h)
                 handle_webview help
@@ -603,7 +780,7 @@ sys.exit(res.returncode)
         echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview kill-worker'." >&2
         handle_webview "kill-worker" "$@"
         ;;
-    switch-tab|tab)
+    switch-tab)
         echo "[termux-ipc] Catatan: Perintah '$ACTION' telah dibungkus ke 'termux-ipc webview switch-tab'." >&2
         handle_webview "switch-tab" "$@"
         ;;
@@ -656,6 +833,24 @@ sys.exit(res.returncode)
         ;;
     agy-stop|stop)
         handle_webview "agy-stop" "$@"
+        ;;
+    tab)
+        handle_tab "$@"
+        ;;
+    tab-new|tab-open)
+        handle_tab "new" "$@"
+        ;;
+    tab-close|tab-kill)
+        handle_tab "close" "$@"
+        ;;
+    tab-list|tab-ls)
+        handle_tab "list" "$@"
+        ;;
+    tab-focus|tab-switch)
+        handle_tab "focus" "$@"
+        ;;
+    tab-rename)
+        handle_tab "rename" "$@"
         ;;
     launcherctl)
         SUB="${1:-status}"
