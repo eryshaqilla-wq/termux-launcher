@@ -291,7 +291,7 @@ public class TerminalPaneController {
          * process. Held per window rather than per shell so the label survives every pane change
          * inside it — splitting, closing and refocusing panes all leave the name alone.
          */
-        @Nullable String name;
+        public @Nullable String name;
         /**
          * Panes detached from the tiled tree into freely positioned floats. List order is z-order
          * (last on top). A float always coexists with a non-empty tiled tree: the last tiled pane
