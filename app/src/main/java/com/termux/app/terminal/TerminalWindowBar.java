@@ -2194,12 +2194,18 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             return middleEllipsize(leaf, LABEL_MAX_CHARS);
         }
 
+        if ("Dashboard".equalsIgnoreCase(fromTitle) || "Dashboard".equalsIgnoreCase(clean(title))) {
+            return "Dashboard";
+        }
+
         // 3. Fallback to detected chroot environment label:
         if (environmentLabel != null && !environmentLabel.trim().isEmpty()) {
             return middleEllipsize(environmentLabel.trim(), LABEL_MAX_CHARS);
         }
 
-        if ("Dashboard".equalsIgnoreCase(fromTitle)) {
+        // For newly spawned sessions starting at home before the shell reports its title,
+        // default to "Dashboard" to eliminate the millisecond flicker before the login selector renders.
+        if (clean(title) == null) {
             return "Dashboard";
         }
 
