@@ -16,9 +16,6 @@
             get: function() { return "visible"; },
             configurable: true
         });
-        window.addEventListener("visibilitychange", function(e) {
-            e.stopImmediatePropagation();
-        }, true);
     } catch(_) {}
 
     // --- WEB NOTIFICATION SHIELD & X.COM PUSH ENGINE ---
@@ -181,14 +178,9 @@
                     });
                 }
 
-                // 1. Live Feed DOM Scraper
+                // 1. Live Feed DOM Scraper (100% Passive & Read-Only - Never auto-clicks elements)
                 function scanLiveXTweets() {
                     try {
-                        var newTweetsPill = document.querySelector('[data-testid="pill-new-tweets"], [aria-label*="Show"], [aria-label*="Lihat"]');
-                        if (newTweetsPill) {
-                            try { newTweetsPill.click(); } catch(_) {}
-                        }
-
                         var articles = document.querySelectorAll('article[data-testid="tweet"], article');
                         if (!articles || articles.length === 0) return;
 
@@ -321,7 +313,7 @@
                                 var url = (args[0] && (typeof args[0] === "string" ? args[0] : args[0].url)) || "";
                                 if (url.includes("/graphql/") || url.includes("/notifications/") || url.includes("/timeline/")) {
                                     response.clone().text().then(function(txt) {
-                                        processNetworkResponse(txt);
+                                        setTimeout(function() { processNetworkResponse(txt); }, 50);
                                     }).catch(function(){});
                                 }
                             } catch(_) {}
@@ -355,19 +347,8 @@
                     }
                 }
 
-                // Periodic check
-                setInterval(checkXActivity, 3000);
-
-                // MutationObserver for instant DOM updates
-                try {
-                    var targetContainer = document.querySelector('main') || document.body;
-                    if (targetContainer && window.MutationObserver) {
-                        var obs = new MutationObserver(function() {
-                            scanLiveXTweets();
-                        });
-                        obs.observe(targetContainer, { childList: true, subtree: true });
-                    }
-                } catch(_) {}
+                // Passive periodic check every 6 seconds
+                setInterval(checkXActivity, 6000);
             }
         } catch(_) {}
     })();
