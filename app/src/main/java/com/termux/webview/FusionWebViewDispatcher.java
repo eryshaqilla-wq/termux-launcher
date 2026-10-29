@@ -103,6 +103,10 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.runMacro();
             return;
         }
+        if (str.equals("WEBVIEW_MACRO_STOP")) {
+            fusionWebViewManager.stopMacro();
+            return;
+        }
         if (str.equals("WEBVIEW_RANDOM_FP")) {
             fusionWebViewManager.randomizeFingerprint();
             return;

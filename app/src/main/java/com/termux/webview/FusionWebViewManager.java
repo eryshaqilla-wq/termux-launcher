@@ -1955,6 +1955,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
+    public void stopMacro() {
+        if (this.mIsRecording) {
+            toggleMacroRecording();
+        }
+        evalOnActiveTab("if(window.AgyBridge && window.AgyBridge.stop){window.AgyBridge.stop();}if(window.AgyBatchRunner && window.AgyBatchRunner.stop){window.AgyBatchRunner.stop();}if(window.AgyRecorder && window.AgyRecorder.cancel){window.AgyRecorder.cancel();}");
+        AppCompatActivity appCompatActivity = this.mActivity;
+        if (appCompatActivity != null) {
+            Toast.makeText((Context) appCompatActivity, (CharSequence) "Menghentikan Makro...", 0).show();
+        }
+    }
+
     public void saveBridgeResult(String str) {
         if (str == null || str.equals("null")) {
             return;

@@ -378,6 +378,98 @@
                 hud.style.fontFamily = "system-ui, -apple-system, sans-serif";
                 hud.style.pointerEvents = "none";
                 hud.style.transition = "opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, box-shadow 0.2s ease";
+
+                // Layout internal persisten: Left Box (Icon + Text) + Stop Button
+                var leftBox = document.createElement("div");
+                leftBox.id = "__agy_hud_left__";
+                leftBox.style.display = "flex";
+                leftBox.style.alignItems = "center";
+                leftBox.style.gap = "8px";
+                leftBox.style.minWidth = "0";
+                leftBox.style.flex = "1";
+
+                var iconEl = document.createElement("div");
+                iconEl.id = "__agy_hud_icon__";
+                iconEl.style.width = "20px";
+                iconEl.style.height = "20px";
+                iconEl.style.borderRadius = "50%";
+                iconEl.style.display = "flex";
+                iconEl.style.alignItems = "center";
+                iconEl.style.justifyContent = "center";
+                iconEl.style.fontSize = "10px";
+                iconEl.style.fontWeight = "900";
+                iconEl.style.flexShrink = "0";
+                iconEl.style.lineHeight = "1";
+                leftBox.appendChild(iconEl);
+
+                var textBox = document.createElement("div");
+                textBox.style.display = "flex";
+                textBox.style.flexDirection = "column";
+                textBox.style.minWidth = "0";
+                textBox.style.flex = "1";
+                textBox.style.overflow = "hidden";
+
+                var titleEl = document.createElement("span");
+                titleEl.id = "__agy_hud_title__";
+                titleEl.style.fontSize = "11.5px";
+                titleEl.style.fontWeight = "700";
+                titleEl.style.color = "#cdd6f4";
+                titleEl.style.whiteSpace = "nowrap";
+                titleEl.style.overflow = "hidden";
+                titleEl.style.textOverflow = "ellipsis";
+                titleEl.style.lineHeight = "1.25";
+                textBox.appendChild(titleEl);
+
+                var subEl = document.createElement("span");
+                subEl.id = "__agy_hud_sub__";
+                subEl.style.fontSize = "10px";
+                subEl.style.color = "#a6adc8";
+                subEl.style.whiteSpace = "nowrap";
+                subEl.style.overflow = "hidden";
+                subEl.style.textOverflow = "ellipsis";
+                subEl.style.lineHeight = "1.2";
+                subEl.style.marginTop = "1px";
+                textBox.appendChild(subEl);
+
+                leftBox.appendChild(textBox);
+                hud.appendChild(leftBox);
+
+                var stopBtn = document.createElement("button");
+                stopBtn.id = "__agy_stop_btn__";
+                stopBtn.innerText = "⏹ STOP";
+                stopBtn.style.background = "rgba(243, 139, 168, 0.22)";
+                stopBtn.style.color = "#f38ba8";
+                stopBtn.style.border = "1px solid #f38ba8";
+                stopBtn.style.borderRadius = "9999px";
+                stopBtn.style.padding = "4px 10px";
+                stopBtn.style.fontSize = "10px";
+                stopBtn.style.fontWeight = "800";
+                stopBtn.style.cursor = "pointer";
+                stopBtn.style.flexShrink = "0";
+                stopBtn.style.marginLeft = "10px";
+                stopBtn.style.outline = "none";
+                stopBtn.style.letterSpacing = "0.4px";
+                stopBtn.style.display = "none";
+                stopBtn.style.touchAction = "manipulation";
+
+                var handleStop = function(e) {
+                    if (e) {
+                        try { e.preventDefault(); } catch(_) {}
+                        try { e.stopPropagation(); } catch(_) {}
+                    }
+                    if (window.AgyBridge && window.AgyBridge.stop) {
+                        window.AgyBridge.stop();
+                    } else if (typeof AgyBatchRunner !== "undefined" && AgyBatchRunner.stop) {
+                        AgyBatchRunner.stop();
+                    }
+                };
+
+                // Respon kilat 0ms pada sentuhan pertama di mobile
+                stopBtn.addEventListener("pointerdown", handleStop, { passive: false });
+                stopBtn.addEventListener("touchstart", handleStop, { passive: false });
+                stopBtn.addEventListener("click", handleStop);
+
+                hud.appendChild(stopBtn);
                 doc.appendChild(hud);
             }
 
@@ -420,38 +512,33 @@
                 glowShadow = "0 8px 24px rgba(0, 0, 0, 0.65), 0 0 8px rgba(250, 179, 135, 0.3)";
             }
 
+            // Update isi elemen persisten tanpa pernah me-destroy DOM node
+            var iconEl = document.getElementById("__agy_hud_icon__");
+            var titleEl = document.getElementById("__agy_hud_title__");
+            var subEl = document.getElementById("__agy_hud_sub__");
+            var stopBtn = document.getElementById("__agy_stop_btn__");
+
+            if (iconEl) {
+                iconEl.innerText = icon;
+                iconEl.style.background = iconBg;
+                iconEl.style.color = iconColor;
+            }
+            if (titleEl) {
+                titleEl.innerText = titleStr;
+            }
+            if (subEl) {
+                subEl.innerText = subStr;
+                subEl.style.display = subStr ? "block" : "none";
+            }
+            if (stopBtn) {
+                stopBtn.style.display = (statusType === "running") ? "inline-flex" : "none";
+            }
+
             hud.style.border = "1px solid " + borderColor;
             hud.style.boxShadow = glowShadow;
-
-            // Internal horizontal capsule layout
-            var contentHtml = "<div style='display:flex; align-items:center; gap:8px; min-width:0; flex:1;'>" +
-                              "<div style='width:20px; height:20px; border-radius:50%; background:" + iconBg + "; color:" + iconColor + "; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:900; flex-shrink:0; line-height:1;'>" + icon + "</div>" +
-                              "<div style='display:flex; flex-direction:column; min-width:0; flex:1; overflow:hidden;'>" +
-                              "<span style='font-size:11.5px; font-weight:700; color:#cdd6f4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.25;'>" + titleStr + "</span>" +
-                              (subStr.length > 0 ? "<span style='font-size:10px; color:#a6adc8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.2; margin-top:1px;'>" + subStr + "</span>" : "") +
-                              "</div>" +
-                              "</div>";
-
-            if (statusType === "running") {
-                contentHtml += "<button id='__agy_stop_btn__' style='background:rgba(243, 139, 168, 0.15); color:#f38ba8; border:1px solid #f38ba8; border-radius:9999px; padding:3px 9px; font-size:9.5px; font-weight:700; cursor:pointer; flex-shrink:0; margin-left:8px; outline:none; letter-spacing:0.4px;'>⏹ STOP</button>";
-                hud.style.pointerEvents = "auto";
-            } else {
-                hud.style.pointerEvents = "none";
-            }
-
-            hud.innerHTML = contentHtml;
+            hud.style.pointerEvents = (statusType === "running") ? "auto" : "none";
             hud.style.opacity = "1";
             hud.style.transform = "translateX(-50%) translateY(0)";
-
-            if (statusType === "running") {
-                var stopBtn = document.getElementById("__agy_stop_btn__");
-                if (stopBtn) {
-                    stopBtn.onclick = function(e) {
-                        e.stopPropagation();
-                        if (window.AgyBridge && window.AgyBridge.stop) window.AgyBridge.stop();
-                    };
-                }
-            }
 
             if (hud.__timer) {
                 clearTimeout(hud.__timer);
@@ -731,14 +818,38 @@
         isRunning: false,
         isAborted: false,
         activeTimer: null,
+        activeTimers: [],
+
+        registerTimer: function(t) {
+            if (t) this.activeTimers.push(t);
+            return t;
+        },
+
+        clearAllTimers: function() {
+            if (this.activeTimer) {
+                try { clearTimeout(this.activeTimer); } catch(_) {}
+                this.activeTimer = null;
+            }
+            if (Array.isArray(this.activeTimers)) {
+                for (var i = 0; i < this.activeTimers.length; i++) {
+                    try {
+                        clearTimeout(this.activeTimers[i]);
+                        clearInterval(this.activeTimers[i]);
+                    } catch(_) {}
+                }
+                this.activeTimers = [];
+            }
+        },
 
         stop: function() {
             this.isAborted = true;
             this.isRunning = false;
-            if (this.activeTimer) {
-                clearTimeout(this.activeTimer);
-                this.activeTimer = null;
-            }
+            window.__AGY_ABORT_RUN__ = true;
+            this.clearAllTimers();
+            try {
+                sessionStorage.removeItem("__agy_active_recipe_run__");
+                sessionStorage.removeItem("__agy_pending_prompt_queue__");
+            } catch(_) {}
             try {
                 if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
                     window.GhostBridge.releaseWakeLock();
@@ -754,8 +865,14 @@
                 return;
             }
 
+            // Hentikan runner aktif sebelumnya agar tidak terjadi tumpang tindih
+            if (self.isRunning) {
+                self.clearAllTimers();
+            }
+
             self.isRunning = true;
             self.isAborted = false;
+            window.__AGY_ABORT_RUN__ = false;
 
             try {
                 if (window.GhostBridge && window.GhostBridge.acquireWakeLock) {
@@ -767,13 +884,21 @@
             var emails = AgyDB.getEmails();
             var cfg = AgyConfig.get();
 
-            var mode = runMode || "multi";
+            // Default mode adalah "raw" (100% Mengikuti Rekaman Asli)
+            var mode = runMode || "raw";
             var loops = parseInt(loopCount, 10);
             if (isNaN(loops) || loops <= 0) loops = 1;
             var isInfinite = (loopCount === -1 || loopCount === "inf" || loopCount === "infinity" || loops >= 999999);
 
             var queue = [];
-            if (mode === "single") {
+            if (mode === "raw") {
+                // 100% Ikuti Rekaman Asli: Tidak ada rotasi dompet, loop murni rekaman apa adanya
+                var totalL = isInfinite ? 999999 : loops;
+                for (var l = 0; l < totalL; l++) {
+                    queue.push(0);
+                }
+            } else if (mode === "single") {
+                // Fokus 1 Wallet
                 var singleTarget = parseInt(targetExpr, 10);
                 if (isNaN(singleTarget) || singleTarget < 1) singleTarget = 1;
                 var totalL = isInfinite ? 999999 : loops;
@@ -781,11 +906,13 @@
                     queue.push(singleTarget);
                 }
             } else if (mode === "standalone") {
+                // Tanpa Wallet (Web Macro Murni)
                 var totalL = isInfinite ? 999999 : loops;
                 for (var l = 0; l < totalL; l++) {
-                    queue.push(0); // 0 = Standalone Web Macro (Tanpa Wallet)
+                    queue.push(0);
                 }
             } else {
+                // Rotasi Tuyul (Multi-Wallet)
                 queue = parseTargetExpression(targetExpr, wallets.length);
             }
 
@@ -794,7 +921,7 @@
             var currentIdxInQueue = 0;
 
             function runAccount() {
-                if (self.isAborted) return;
+                if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                 if (!isInfinite && currentIdxInQueue >= queue.length) {
                     self.isRunning = false;
                     try {
@@ -802,7 +929,10 @@
                             window.GhostBridge.releaseWakeLock();
                         }
                     } catch(_) {}
-                    updateAgyHUD("Batch Selesai!", "Total: " + queue.length + " (Sukses: " + successCount + ", Gagal: " + failCount + ")", "success");
+                    try {
+                        sessionStorage.removeItem("__agy_active_recipe_run__");
+                    } catch(_) {}
+                    updateAgyHUD("Selesai!", "Total: " + queue.length + " (Sukses: " + successCount + ", Gagal: " + failCount + ")", "success");
                     if (onComplete) onComplete({ success: successCount, failed: failCount });
                     return;
                 }
@@ -813,7 +943,13 @@
                 var title = "";
                 var sub = "";
 
-                if (mode === "standalone") {
+                if (mode === "raw") {
+                    // 100% Mengikuti Rekaman: pertahankan dompet aktif apa adanya
+                    curWallet = AgyDB.getActiveWallet() || { name: "Aktif", address: "" };
+                    curEmail = (curWallet.name ? curWallet.name.toLowerCase().replace(/[^a-z0-9]/g, "") : "user") + "@termux.local";
+                    title = isInfinite ? (recipeName + " [Loop #" + (currentIdxInQueue + 1) + "]") : ((queue.length > 1) ? (recipeName + " [" + (currentIdxInQueue + 1) + "/" + queue.length + "]") : recipeName);
+                    sub = "100% Sesuai Rekaman (" + (curWallet.name || "Dompet Aktif") + ")";
+                } else if (mode === "standalone") {
                     curWallet = { name: "Web Macro", address: "" };
                     curEmail = "macro@termux.local";
                     title = isInfinite ? (recipeName + " [Loop #" + (currentIdxInQueue + 1) + "]") : ((queue.length > 1) ? (recipeName + " [" + (currentIdxInQueue + 1) + "/" + queue.length + "]") : recipeName);
@@ -839,7 +975,7 @@
                 updateAgyHUD(title, sub, "running");
 
                 self.executeStepList(recipeEvents, curWallet, curEmail, title, function(isSuccess) {
-                    if (self.isAborted) return;
+                    if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                     if (isSuccess) successCount++;
                     else failCount++;
 
@@ -850,13 +986,13 @@
 
                     if (shouldDelay) {
                         var waitSec = (cfg.batchDelay / 1000).toFixed(1);
-                        var nextLabel = (mode === "single" || mode === "standalone") ? ("Jeda Putaran (" + waitSec + "s)...") : ("Menuju Akun berikutnya (" + waitSec + "s)...");
+                        var nextLabel = (mode === "raw" || mode === "single" || mode === "standalone") ? ("Jeda Putaran (" + waitSec + "s)...") : ("Menuju Akun berikutnya (" + waitSec + "s)...");
                         updateAgyHUD("Jeda Antar Alur", nextLabel, "running");
 
-                        self.activeTimer = setTimeout(function() {
-                            if (self.isAborted) return;
+                        self.registerTimer(setTimeout(function() {
+                            if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                             runAccount();
-                        }, cfg.batchDelay);
+                        }, cfg.batchDelay));
                     } else if (hasMore) {
                         runAccount();
                     } else {
@@ -866,46 +1002,55 @@
                                 window.GhostBridge.releaseWakeLock();
                             }
                         } catch(_) {}
+                        try {
+                            sessionStorage.removeItem("__agy_active_recipe_run__");
+                        } catch(_) {}
                         updateAgyHUD("Selesai!", "Sukses: " + successCount + " | Gagal: " + failCount, "success");
                         if (onComplete) onComplete({ success: successCount, failed: failCount });
                     }
-                });
+                }, 0, mode);
             }
 
             runAccount();
         },
 
-        executeStepList: function(eventsList, curWallet, curEmail, runTitle, doneCallback, startIdx) {
+        executeStepList: function(eventsList, curWallet, curEmail, runTitle, doneCallback, startIdx, runMode) {
             var self = this;
             var cfg = AgyConfig.get();
             var stepDelay = cfg.stepDelay || 1500;
             var waitMode = cfg.waitMode || "strict";
             var maxTimeout = cfg.elementTimeout || 8000;
+            var activeMode = runMode || "raw";
 
             function waitDocReady(next) {
+                if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                 if (waitMode === "fast") {
                     if (document.readyState === "complete" || document.readyState === "interactive") {
-                        setTimeout(next, 50);
+                        self.registerTimer(setTimeout(next, 50));
                         return;
                     }
                 }
                 waitForDocumentReady(function() {
-                    setTimeout(next, waitMode === "strict" ? 600 : 100);
+                    if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+                    self.registerTimer(setTimeout(next, waitMode === "strict" ? 600 : 100));
                 }, 5000);
             }
 
             waitDocReady(function() {
-                if (self.isAborted) return;
+                if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                 var idx = (typeof startIdx === "number") ? startIdx : 0;
 
                 function runNextStep() {
-                    if (self.isAborted) {
+                    if (self.isAborted || window.__AGY_ABORT_RUN__) {
                         try { sessionStorage.removeItem("__agy_active_recipe_run__"); } catch(_) {}
                         return;
                     }
                     if (idx >= eventsList.length) {
                         try { sessionStorage.removeItem("__agy_active_recipe_run__"); } catch(_) {}
-                        setTimeout(function() { doneCallback(true); }, 400);
+                        self.registerTimer(setTimeout(function() {
+                            if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+                            doneCallback(true);
+                        }, 400));
                         return;
                     }
 
@@ -920,6 +1065,7 @@
                             idx: idx,
                             curWallet: curWallet,
                             curEmail: curEmail,
+                            runMode: activeMode,
                             timestamp: Date.now()
                         }));
                     } catch(_) {}
@@ -929,18 +1075,24 @@
                     if (ev.type === "wait") {
                         var dur = ev.duration || stepDelay;
                         updateAgyHUD(runTitle, "Jeda langkah " + stepNum + "/" + eventsList.length + " (" + (dur / 1000).toFixed(1) + "s)", "running");
-                        self.activeTimer = setTimeout(runNextStep, dur);
+                        self.registerTimer(setTimeout(runNextStep, dur));
                         return;
                     }
 
                     if (ev.type === "next_wallet") {
+                        // Jika mode Fokus 1 Wallet atau Tanpa Wallet: LEWATI pergantian dompet!
+                        if (activeMode === "single" || activeMode === "standalone") {
+                            updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Lewati Ganti Wallet (" + (activeMode === "single" ? "Fokus 1 Wallet" : "Tanpa Wallet") + ")", "running");
+                            self.registerTimer(setTimeout(runNextStep, 350));
+                            return;
+                        }
                         updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Ganti Wallet", "running");
                         try {
                             if (window.GhostBridge && window.GhostBridge.nextWallet) {
                                 window.GhostBridge.nextWallet();
                             }
                         } catch(_) {}
-                        self.activeTimer = setTimeout(runNextStep, 800);
+                        self.registerTimer(setTimeout(runNextStep, 800));
                         return;
                     }
 
@@ -953,12 +1105,14 @@
                                 idx: idx,
                                 curWallet: curWallet,
                                 curEmail: curEmail,
+                                runMode: activeMode,
                                 timestamp: Date.now()
                             }));
                         } catch(_) {}
-                        setTimeout(function() {
+                        self.registerTimer(setTimeout(function() {
+                            if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                             location.reload();
-                        }, 500);
+                        }, 500));
                         return;
                     }
 
@@ -970,7 +1124,7 @@
                             }
                         } catch(_) {}
                         try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
-                        self.activeTimer = setTimeout(runNextStep, 600);
+                        self.registerTimer(setTimeout(runNextStep, 600));
                         return;
                     }
 
@@ -978,14 +1132,14 @@
                         var ne = ev.value || ((typeof AgyDB !== "undefined" && AgyDB.nextEmail) ? AgyDB.nextEmail() : "tuyul@gmail.com");
                         curEmail = ne;
                         updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Ganti Email -> " + ne, "running");
-                        self.activeTimer = setTimeout(runNextStep, 600);
+                        self.registerTimer(setTimeout(runNextStep, 600));
                         return;
                     }
 
                     if (ev.type === "ref") {
                         var nr = ev.value || ((typeof AgyDB !== "undefined" && AgyDB.nextRef) ? AgyDB.nextRef() : "REF123");
                         updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Ref Code -> " + nr, "running");
-                        self.activeTimer = setTimeout(runNextStep, 600);
+                        self.registerTimer(setTimeout(runNextStep, 600));
                         return;
                     }
 
@@ -996,7 +1150,7 @@
                                 window.GhostBridge.nextFingerprint();
                             }
                         } catch(_) {}
-                        self.activeTimer = setTimeout(runNextStep, 800);
+                        self.registerTimer(setTimeout(runNextStep, 800));
                         return;
                     }
 
@@ -1008,16 +1162,16 @@
                             window.scrollBy({ left: distX, top: distY, behavior: "smooth" });
                         } catch(_) {}
                         updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Swipe " + dir.toUpperCase(), "running");
-                        self.activeTimer = setTimeout(function() {
+                        self.registerTimer(setTimeout(function() {
                             waitDocReady(runNextStep);
-                        }, stepDelay);
+                        }, stepDelay));
                         return;
                     }
 
                     smartWaitForElementWithTimeout(ev, stepNum, eventsList.length, maxTimeout, function(targetEl) {
-                        if (self.isAborted) return;
+                        if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                         if (!targetEl) {
-                            self.activeTimer = setTimeout(runNextStep, 400);
+                            self.registerTimer(setTimeout(runNextStep, 400));
                             return;
                         }
 
@@ -1025,9 +1179,20 @@
 
                         if (ev.type === "fill" || ev.type === "input") {
                             var valToFill = ev.value || "";
-                            if (valToFill.includes("{{WALLET_ADDRESS}}")) valToFill = valToFill.replace(/\{\{WALLET_ADDRESS\}\}/g, curWallet.address);
-                            if (valToFill.includes("{{EMAIL}}")) valToFill = valToFill.replace(/\{\{EMAIL\}\}/g, curEmail);
-                            if (valToFill.includes("{{NAME}}")) valToFill = valToFill.replace(/\{\{NAME\}\}/g, curWallet.name);
+                            if (activeMode === "raw") {
+                                // 100% Asli Mengikuti Rekaman: hanya ganti jika ada variabel template
+                                if (valToFill.includes("{{WALLET_ADDRESS}}")) valToFill = valToFill.replace(/\{\{WALLET_ADDRESS\}\}/g, curWallet.address || "");
+                                if (valToFill.includes("{{EMAIL}}")) valToFill = valToFill.replace(/\{\{EMAIL\}\}/g, curEmail || "");
+                                if (valToFill.includes("{{NAME}}")) valToFill = valToFill.replace(/\{\{NAME\}\}/g, curWallet.name || "");
+                            } else if (activeMode === "standalone") {
+                                if (valToFill.includes("{{WALLET_ADDRESS}}")) valToFill = valToFill.replace(/\{\{WALLET_ADDRESS\}\}/g, "");
+                                if (valToFill.includes("{{EMAIL}}")) valToFill = valToFill.replace(/\{\{EMAIL\}\}/g, curEmail || "");
+                                if (valToFill.includes("{{NAME}}")) valToFill = valToFill.replace(/\{\{NAME\}\}/g, "User");
+                            } else {
+                                if (valToFill.includes("{{WALLET_ADDRESS}}")) valToFill = valToFill.replace(/\{\{WALLET_ADDRESS\}\}/g, curWallet.address);
+                                if (valToFill.includes("{{EMAIL}}")) valToFill = valToFill.replace(/\{\{EMAIL\}\}/g, curEmail);
+                                if (valToFill.includes("{{NAME}}")) valToFill = valToFill.replace(/\{\{NAME\}\}/g, curWallet.name);
+                            }
 
                             targetEl.focus();
                             var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set ||
@@ -1039,9 +1204,9 @@
                             targetEl.dispatchEvent(new Event("change", { bubbles: true }));
                             updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Isi " + valToFill.substring(0, 16), "running");
 
-                            self.activeTimer = setTimeout(function() {
+                            self.registerTimer(setTimeout(function() {
                                 waitDocReady(runNextStep);
-                            }, stepDelay);
+                            }, stepDelay));
                         } else {
                             var commonOpts = { bubbles: true, cancelable: true, view: window };
                             if (window.PointerEvent) {
@@ -1060,9 +1225,9 @@
                             }
                             updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Klik " + (ev.text || targetEl.tagName), "running");
 
-                            self.activeTimer = setTimeout(function() {
+                            self.registerTimer(setTimeout(function() {
                                 waitDocReady(runNextStep);
-                            }, stepDelay);
+                            }, stepDelay));
                         }
                     });
                 }
@@ -1105,7 +1270,7 @@
 
         var label = ev.text || ev.name || ev.id || ev.selector || ev.type;
         var pollTimer = setInterval(function() {
-            if (AgyBatchRunner.isAborted) {
+            if (AgyBatchRunner.isAborted || window.__AGY_ABORT_RUN__) {
                 clearInterval(pollTimer);
                 return;
             }
@@ -1113,13 +1278,16 @@
             var el = findTarget();
             if (el) {
                 clearInterval(pollTimer);
+                if (AgyBatchRunner.isAborted || window.__AGY_ABORT_RUN__) return;
                 callback(el);
             } else if (elapsed >= timeoutLimit) {
                 clearInterval(pollTimer);
+                if (AgyBatchRunner.isAborted || window.__AGY_ABORT_RUN__) return;
                 console.warn("[AgyReplay] Timeout waiting for element on step " + stepIdx + ":", ev);
                 callback(null);
             }
         }, interval);
+        AgyBatchRunner.registerTimer(pollTimer);
     }
 
     // --- 3. MULTI-RECIPE STORAGE MANAGER ---
@@ -2025,7 +2193,7 @@
             updateAgyHUD("Resep Kosong", "Tidak ada langkah untuk dijalankan", "warning");
             return "No events";
         }
-        AgyBatchRunner.run(events, AgyRecorder.sessionName || "Resep", "1", false, null);
+        AgyBatchRunner.run(events, AgyRecorder.sessionName || "Resep", "1", false, null, "raw", 1);
         return "PLAYING";
     };
 
@@ -3992,8 +4160,20 @@
             card.appendChild(urlRow);
         }
 
-        // Tri-Mode Segmented Control
-        var currentRunMode = "multi"; // "multi" | "single" | "standalone"
+        // Deteksi dompet aktif saat ini untuk fokus 1 wallet
+        var activeW = (typeof AgyDB !== "undefined" && AgyDB.getActiveWallet) ? AgyDB.getActiveWallet() : { name: "Master", address: "" };
+        var activeWName = activeW.name || "Master";
+        var activeWAddr = activeW.address || "";
+        var activeIdx = 1;
+        for (var wi = 0; wi < wallets.length; wi++) {
+            if (wallets[wi].address && activeWAddr && wallets[wi].address.toLowerCase() === activeWAddr.toLowerCase()) {
+                activeIdx = wi + 1;
+                break;
+            }
+        }
+
+        // 4-Mode Segmented Control (Default: ⚡ 100% Asli Mengikuti Rekaman)
+        var currentRunMode = "raw"; // "raw" | "single" | "standalone" | "multi"
 
         var modeSegment = document.createElement("div");
         modeSegment.style.display = "flex";
@@ -4001,18 +4181,30 @@
         modeSegment.style.border = "1px solid #313244";
         modeSegment.style.borderRadius = "12px";
         modeSegment.style.padding = "3px";
-        modeSegment.style.marginBottom = "14px";
+        modeSegment.style.marginBottom = "8px";
         modeSegment.style.gap = "4px";
 
-        var btnMulti = document.createElement("button");
+        var btnRaw = document.createElement("button");
         var btnSingle = document.createElement("button");
         var btnStandalone = document.createElement("button");
+        var btnMulti = document.createElement("button");
+
+        var modeDesc = document.createElement("div");
+        modeDesc.style.fontSize = "10.5px";
+        modeDesc.style.color = "#bac2de";
+        modeDesc.style.marginBottom = "14px";
+        modeDesc.style.padding = "6px 10px";
+        modeDesc.style.background = "#11111b";
+        modeDesc.style.borderRadius = "8px";
+        modeDesc.style.border = "1px solid #313244";
+        modeDesc.style.lineHeight = "1.35";
 
         var updateModeTabs = function() {
             var tabs = [
-                { btn: btnMulti, id: "multi", label: "🔄 Rotasi Tuyul" },
-                { btn: btnSingle, id: "single", label: "🎯 Fokus 1 Wallet" },
-                { btn: btnStandalone, id: "standalone", label: "🌐 Tanpa Wallet" }
+                { btn: btnRaw, id: "raw", label: "⚡ 100% Asli" },
+                { btn: btnSingle, id: "single", label: "🎯 Fokus 1" },
+                { btn: btnStandalone, id: "standalone", label: "🌐 Tanpa Wallet" },
+                { btn: btnMulti, id: "multi", label: "🔄 Rotasi" }
             ];
             tabs.forEach(function(t) {
                 var active = (currentRunMode === t.id);
@@ -4020,8 +4212,8 @@
                 t.btn.style.flex = "1";
                 t.btn.style.border = "none";
                 t.btn.style.borderRadius = "9px";
-                t.btn.style.padding = "7px 3px";
-                t.btn.style.fontSize = "10px";
+                t.btn.style.padding = "7px 2px";
+                t.btn.style.fontSize = "9.5px";
                 t.btn.style.fontWeight = active ? "700" : "500";
                 t.btn.style.cursor = "pointer";
                 t.btn.style.background = active ? "linear-gradient(135deg, rgba(203, 166, 247, 0.3) 0%, rgba(137, 220, 235, 0.25) 100%)" : "transparent";
@@ -4029,42 +4221,58 @@
                 t.btn.style.boxShadow = active ? "0 2px 8px rgba(0,0,0,0.4)" : "none";
             });
 
-            if (currentRunMode === "multi") {
-                targetSection.style.display = "block";
-                targetLabel.innerText = "TARGET AKUN DOMPET:";
-                targetInp.placeholder = "1  atau  1-5  atau  1,3,4  atau  *";
-                quickRowMulti.style.display = "flex";
+            if (currentRunMode === "raw") {
+                modeDesc.innerHTML = "⚡ <b style='color:#a6e3a1;'>100% Ikuti Rekaman:</b> Putar alur persis apa adanya langkah demi langkah tanpa aturan atau pergantian dompet.";
+                targetSection.style.display = "none";
+                quickRowMulti.style.display = "none";
                 quickRowSingle.style.display = "none";
-                loopSection.style.display = "none";
-                batchCard.style.display = "flex";
-                sWallets.innerHTML = "<span style='color:#a6e3a1; font-weight:700;'>👛 " + wallets.length + "</span> Akun Dompet";
+                loopSection.style.display = "block";
+                batchCard.style.display = "none";
+                sWallets.innerHTML = "<span style='color:#a6e3a1; font-weight:700;'>⚡ 100% Murni</span> Sesuai Rekaman";
             } else if (currentRunMode === "single") {
+                modeDesc.innerHTML = "🎯 <b style='color:#cba6f7;'>Fokus 1 Wallet:</b> Hanya berjalan untuk 1 dompet (aksi ganti dompet di rekaman otomatis dilewati).";
                 targetSection.style.display = "block";
-                targetLabel.innerText = "TARGET DOMPET (FOKUS 1 AKUN):";
-                targetInp.placeholder = "Nomor Akun (contoh: 1)";
+                targetLabel.innerText = "DOMPET FOKUS:";
+                targetInp.placeholder = "Nomor Akun (contoh: " + activeIdx + ")";
+                targetInp.value = String(activeIdx);
                 quickRowMulti.style.display = "none";
                 quickRowSingle.style.display = "flex";
                 loopSection.style.display = "block";
                 batchCard.style.display = "none";
                 sWallets.innerHTML = "<span style='color:#cba6f7; font-weight:700;'>🎯 Fokus</span> 1 Dompet";
-            } else {
+            } else if (currentRunMode === "standalone") {
+                modeDesc.innerHTML = "🌐 <b style='color:#89dceb;'>Tanpa Wallet:</b> Macro web browser murni tanpa dompet/web3 (aksi ganti dompet dilewati).";
                 targetSection.style.display = "none";
                 quickRowMulti.style.display = "none";
                 quickRowSingle.style.display = "none";
                 loopSection.style.display = "block";
                 batchCard.style.display = "none";
                 sWallets.innerHTML = "<span style='color:#89dceb; font-weight:700;'>🌐 Standalone</span> (Tanpa Wallet)";
+            } else {
+                modeDesc.innerHTML = "🔄 <b style='color:#f9e2af;'>Rotasi Tuyul:</b> Putar resep bergantian secara otomatis ke banyak dompet (batch loop).";
+                targetSection.style.display = "block";
+                targetLabel.innerText = "TARGET AKUN DOMPET:";
+                targetInp.placeholder = "1  atau  1-5  atau  1,3,4  atau  *";
+                targetInp.value = "1";
+                quickRowMulti.style.display = "flex";
+                quickRowSingle.style.display = "none";
+                loopSection.style.display = "none";
+                batchCard.style.display = "flex";
+                sWallets.innerHTML = "<span style='color:#a6e3a1; font-weight:700;'>👛 " + wallets.length + "</span> Akun Dompet";
             }
         };
 
-        btnMulti.onclick = function() { currentRunMode = "multi"; updateModeTabs(); };
+        btnRaw.onclick = function() { currentRunMode = "raw"; updateModeTabs(); };
         btnSingle.onclick = function() { currentRunMode = "single"; updateModeTabs(); };
         btnStandalone.onclick = function() { currentRunMode = "standalone"; updateModeTabs(); };
+        btnMulti.onclick = function() { currentRunMode = "multi"; updateModeTabs(); };
 
-        modeSegment.appendChild(btnMulti);
+        modeSegment.appendChild(btnRaw);
         modeSegment.appendChild(btnSingle);
         modeSegment.appendChild(btnStandalone);
+        modeSegment.appendChild(btnMulti);
         card.appendChild(modeSegment);
+        card.appendChild(modeDesc);
 
         // Target Input Section
         var targetSection = document.createElement("div");
@@ -4079,7 +4287,7 @@
 
         var targetInp = document.createElement("input");
         targetInp.type = "text";
-        targetInp.value = "1";
+        targetInp.value = String(activeIdx);
         targetInp.placeholder = "1  atau  1-5  atau  1,3,4  atau  *";
         targetInp.style.width = "100%";
         targetInp.style.boxSizing = "border-box";
@@ -4128,17 +4336,18 @@
         quickRowSingle.style.display = "none";
         quickRowSingle.style.gap = "6px";
         quickRowSingle.style.marginBottom = "12px";
-        quickRowSingle.appendChild(makeChip("Akun #1", "1"));
-        if (wallets.length >= 2) quickRowSingle.appendChild(makeChip("Akun #2", "2"));
-        if (wallets.length >= 3) quickRowSingle.appendChild(makeChip("Akun #3", "3"));
+        quickRowSingle.appendChild(makeChip("🎯 Aktif (#" + activeIdx + ")", String(activeIdx)));
+        if (wallets.length >= 1 && activeIdx !== 1) quickRowSingle.appendChild(makeChip("Master (#1)", "1"));
+        if (wallets.length >= 2 && activeIdx !== 2) quickRowSingle.appendChild(makeChip("Tuyul 2 (#2)", "2"));
+        if (wallets.length >= 4 && activeIdx !== 4) quickRowSingle.appendChild(makeChip("Tuyul 4 (#4)", "4"));
         targetSection.appendChild(quickRowSingle);
 
         card.appendChild(targetSection);
 
-        // Loop Count Section (For Single & Standalone Modes)
+        // Loop Count Section (For Raw, Single & Standalone Modes)
         var loopSection = document.createElement("div");
         loopSection.style.marginBottom = "14px";
-        loopSection.style.display = "none";
+        loopSection.style.display = "block";
 
         var loopLabel = document.createElement("div");
         loopLabel.innerText = "JUMLAH PUTARAN (LOOP COUNT):";
@@ -4151,7 +4360,21 @@
 
         var loopInp = document.createElement("input");
         loopInp.type = "number";
-        loopInp.value = "5";
+        loopInp.value = "1"; // Default 1x
+        loopInp.style.width = "100%";
+        loopInp.style.boxSizing = "border-box";
+        loopInp.style.background = "#11111b";
+        loopInp.style.border = "1px solid #45475a";
+        loopInp.style.borderRadius = "12px";
+        loopInp.style.padding = "10px 14px";
+        loopInp.style.color = "#cdd6f4";
+        loopInp.style.fontSize = "13px";
+        loopInp.style.fontWeight = "600";
+        loopInp.style.marginBottom = "8px";
+        loopInp.style.outline = "none";
+        loopInp.onfocus = function() { loopInp.style.borderColor = "#cba6f7"; };
+        loopInp.onblur = function() { loopInp.style.borderColor = "#45475a"; };
+        loopSection.appendChild(loopInp);
         loopInp.style.width = "100%";
         loopInp.style.boxSizing = "border-box";
         loopInp.style.background = "#11111b";
@@ -4276,7 +4499,7 @@
         startBtn.style.boxShadow = "0 4px 16px rgba(166, 227, 161, 0.35)";
         startBtn.style.cursor = "pointer";
         startBtn.onclick = function() {
-            var targetExpr = targetInp.value.trim() || "1";
+            var targetExpr = targetInp.value.trim() || String(activeIdx);
             var isBatch = batchCb.checked;
             var lCount = parseInt(loopInp.value, 10);
             if (isNaN(lCount) || lCount <= 0) lCount = 1;
@@ -6379,7 +6602,7 @@
     }
 
     function replayEventsSequentially(eventsList, recipeLabel) {
-        AgyBatchRunner.run(eventsList, recipeLabel || "Resep", "1", false);
+        AgyBatchRunner.run(eventsList, recipeLabel || "Resep", "1", false, null, "raw", 1);
     }
 
     // --- 17. AGY BRIDGE INTERFACE ---
@@ -7206,11 +7429,15 @@
             if (st.eventsList && st.idx < st.eventsList.length) {
                 console.log("[AGY Co-Pilot] Melanjutkan resep setelah reload halaman ke langkah " + (st.idx + 1));
                 setTimeout(function() {
+                    if (window.__AGY_ABORT_RUN__) {
+                        sessionStorage.removeItem("__agy_active_recipe_run__");
+                        return;
+                    }
                     updateAgyHUD(st.runTitle, "Melanjutkan langkah " + (st.idx + 1) + "/" + st.eventsList.length + "...", "running");
                     AgyBatchRunner.executeStepList(st.eventsList, st.curWallet, st.curEmail, st.runTitle, function(ok) {
                         sessionStorage.removeItem("__agy_active_recipe_run__");
                         updateAgyHUD(st.runTitle, ok ? "Resep Selesai" : "Resep Berhenti", ok ? "success" : "warning");
-                    }, st.idx);
+                    }, st.idx, st.runMode || "raw");
                 }, 1000);
             } else {
                 sessionStorage.removeItem("__agy_active_recipe_run__");

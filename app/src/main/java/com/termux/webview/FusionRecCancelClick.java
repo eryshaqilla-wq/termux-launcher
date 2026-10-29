@@ -14,7 +14,7 @@ public class FusionRecCancelClick implements View.OnClickListener {
     public void onClick(View view) {
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
-            fusionWebViewManager.evalOnActiveTab("if(window.AgyRecorder&&window.AgyRecorder.cancel){window.AgyRecorder.cancel();}else{try{window.__FUSION_RECORDING__=false;localStorage.removeItem('__fusion_macro_events__');}catch(_){}}var h=document.getElementById('__agy_copilot_hud__');if(h)h.remove();");
+            fusionWebViewManager.evalOnActiveTab("if(window.AgyBridge&&window.AgyBridge.stop){window.AgyBridge.stop();}if(window.AgyBatchRunner&&window.AgyBatchRunner.stop){window.AgyBatchRunner.stop();}if(window.AgyRecorder&&window.AgyRecorder.cancel){window.AgyRecorder.cancel();}else{try{window.__FUSION_RECORDING__=false;localStorage.removeItem('__fusion_macro_events__');}catch(_){}}var h=document.getElementById('__agy_copilot_hud__');if(h)h.remove();");
             fusionWebViewManager.mIsRecording = false;
             FusionRecPillHelper.setStepCount(0);
             FusionRecPillHelper.updateRecUi(fusionWebViewManager);
