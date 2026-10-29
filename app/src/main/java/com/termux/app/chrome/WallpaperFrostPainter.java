@@ -90,7 +90,6 @@ public final class WallpaperFrostPainter {
             mSurfaces.findChromeView(R.id.terminal_status_bar_background), stripRadiusDp,
             SurfaceDirtyLedger.FrostRect.TOP_PANE_STATUS,
             stripIsDockSheet ? SurfaceDirtyLedger.FrostRadius.OFF_DOCK
-                : stripIsTerminal ? SurfaceDirtyLedger.FrostRadius.TERMINAL
                 : SurfaceDirtyLedger.FrostRadius.TOP_PANE,
             0f, ChromeEdgeRule.seams(false, ChromeEdgeRule.flushEdges(
                 com.termux.app.place.PlaceLayout.Edge.TOP), ChromeEdgeRule.BOTTOM),
