@@ -1,6 +1,7 @@
 package com.termux.webview;
 
 import android.os.Message;
+import android.util.Log;
 import android.webkit.ConsoleMessage;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JsPromptResult;
@@ -88,6 +89,9 @@ public class FusionWebChromeClient extends WebChromeClient {
 
     @Override // android.webkit.WebChromeClient
     public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+        if (consoleMessage != null && consoleMessage.message() != null) {
+            Log.d("FusionJS", "[" + consoleMessage.messageLevel() + "] " + consoleMessage.message() + " (" + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + ")");
+        }
         return true;
     }
 

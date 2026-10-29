@@ -18,6 +18,50 @@
         });
     } catch(_) {}
 
+    // --- STORAGE SHIELD (PROTECT AGY STATE FROM STORAGE WIPES) ---
+    try {
+        if (window.sessionStorage && typeof window.sessionStorage.clear === "function") {
+            var origSessionClear = window.sessionStorage.clear.bind(window.sessionStorage);
+            window.sessionStorage.clear = function() {
+                var preserved = {};
+                try {
+                    for (var i = 0; i < window.sessionStorage.length; i++) {
+                        var k = window.sessionStorage.key(i);
+                        if (k && (k.startsWith("__agy_") || k.startsWith("__fusion_") || k.startsWith("agy_") || k.startsWith("fusion_"))) {
+                            preserved[k] = window.sessionStorage.getItem(k);
+                        }
+                    }
+                } catch(_) {}
+                origSessionClear();
+                try {
+                    for (var pk in preserved) {
+                        window.sessionStorage.setItem(pk, preserved[pk]);
+                    }
+                } catch(_) {}
+            };
+        }
+        if (window.localStorage && typeof window.localStorage.clear === "function") {
+            var origLocalClear = window.localStorage.clear.bind(window.localStorage);
+            window.localStorage.clear = function() {
+                var preserved = {};
+                try {
+                    for (var i = 0; i < window.localStorage.length; i++) {
+                        var k = window.localStorage.key(i);
+                        if (k && (k.startsWith("__agy_") || k.startsWith("__fusion_") || k.startsWith("agy_") || k.startsWith("fusion_"))) {
+                            preserved[k] = window.localStorage.getItem(k);
+                        }
+                    }
+                } catch(_) {}
+                origLocalClear();
+                try {
+                    for (var pk in preserved) {
+                        window.localStorage.setItem(pk, preserved[pk]);
+                    }
+                } catch(_) {}
+            };
+        }
+    } catch(_) {}
+
     // --- WEB NOTIFICATION SHIELD & X.COM PUSH ENGINE ---
     (function setupWebNotifications() {
         function MockNotification(title, options) {
@@ -582,7 +626,7 @@
                 stepDelay: 1500,        // delay per langkah (ms)
                 batchDelay: 3000,       // jeda antar akun (ms)
                 waitMode: "strict",     // "strict" (complete) atau "fast" (interactive)
-                elementTimeout: 8000,   // timeout tunggu elemen (ms)
+                elementTimeout: 5000,   // timeout tunggu elemen (ms)
                 autoReload: false,      // auto reload tiap ganti akun
                 dbFolder: "/root/wallet/",
                 walletFile: "wallets_db.json",
@@ -850,6 +894,10 @@
                 sessionStorage.removeItem("__agy_batch_queue_state__");
                 sessionStorage.removeItem("__agy_active_recipe_run__");
                 sessionStorage.removeItem("__agy_pending_prompt_queue__");
+                localStorage.removeItem("__agy_batch_queue_state__");
+                localStorage.removeItem("__agy_active_recipe_run__");
+                localStorage.removeItem("__agy_pending_prompt_queue__");
+                window.__AGY_BATCH_BACKUP__ = null;
             } catch(_) {}
             try {
                 if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
@@ -870,11 +918,12 @@
                 batchState.runMode,
                 batchState.loopCount,
                 batchState.targetUrl,
-                batchState
+                batchState,
+                batchState.reloadBetweenLoops
             );
         },
 
-        run: function(recipeEvents, recipeName, targetExpr, isBatch, onComplete, runMode, loopCount, startUrl, resumedBatchState) {
+        run: function(recipeEvents, recipeName, targetExpr, isBatch, onComplete, runMode, loopCount, startUrl, resumedBatchState, reloadBetweenLoopsOpt) {
             var self = this;
             if (!recipeEvents || recipeEvents.length === 0) {
                 updateAgyHUD("Resep Kosong", "Tidak ada langkah untuk dieksekusi", "warning");
@@ -905,6 +954,7 @@
             var loops = parseInt(loopCount, 10);
             if (isNaN(loops) || loops <= 0) loops = (resumedBatchState && resumedBatchState.loopCount) || 1;
             var isInfinite = (loopCount === -1 || loopCount === "inf" || loopCount === "infinity" || loops >= 999999 || (resumedBatchState && resumedBatchState.isInfinite));
+            var reloadBetweenLoops = (typeof reloadBetweenLoopsOpt === "boolean") ? reloadBetweenLoopsOpt : ((resumedBatchState && typeof resumedBatchState.reloadBetweenLoops === "boolean") ? resumedBatchState.reloadBetweenLoops : true);
 
             var queue = [];
             if (resumedBatchState && Array.isArray(resumedBatchState.queue) && resumedBatchState.queue.length > 0) {
@@ -948,7 +998,7 @@
 
             var persistBatchState = function() {
                 try {
-                    sessionStorage.setItem("__agy_batch_queue_state__", JSON.stringify({
+                    var data = {
                         recipeName: recipeName,
                         events: recipeEvents,
                         targetExpr: targetExpr,
@@ -956,13 +1006,18 @@
                         runMode: mode,
                         loopCount: loops,
                         isInfinite: isInfinite,
+                        reloadBetweenLoops: reloadBetweenLoops,
                         queue: queue,
                         currentIdxInQueue: currentIdxInQueue,
                         successCount: successCount,
                         failCount: failCount,
                         targetUrl: finalTargetUrl,
                         timestamp: Date.now()
-                    }));
+                    };
+                    var jsonStr = JSON.stringify(data);
+                    sessionStorage.setItem("__agy_batch_queue_state__", jsonStr);
+                    localStorage.setItem("__agy_batch_queue_state__", jsonStr);
+                    window.__AGY_BATCH_BACKUP__ = data;
                 } catch(_) {}
             };
 
@@ -980,6 +1035,9 @@
                     try {
                         sessionStorage.removeItem("__agy_batch_queue_state__");
                         sessionStorage.removeItem("__agy_active_recipe_run__");
+                        localStorage.removeItem("__agy_batch_queue_state__");
+                        localStorage.removeItem("__agy_active_recipe_run__");
+                        window.__AGY_BATCH_BACKUP__ = null;
                     } catch(_) {}
                     updateAgyHUD("Selesai!", "Total: " + queue.length + " (Sukses: " + successCount + ", Gagal: " + failCount + ")", "success");
                     if (onComplete) onComplete({ success: successCount, failed: failCount });
@@ -1034,37 +1092,7 @@
                     persistBatchState();
 
                     var hasMore = isInfinite || (currentIdxInQueue < queue.length);
-                    var shouldDelay = (mode === "multi" ? isBatch : true) && hasMore;
-
-                    if (shouldDelay) {
-                        var waitSec = (cfg.batchDelay / 1000).toFixed(1);
-                        var nextLoopNum = currentIdxInQueue + 1;
-                        var totalLoopsStr = isInfinite ? "♾️" : queue.length;
-                        var nextLabel = (mode === "raw" || mode === "single" || mode === "standalone") ? ("Jeda Putaran " + nextLoopNum + "/" + totalLoopsStr + " (" + waitSec + "s)...") : ("Menuju Akun berikutnya (" + waitSec + "s)...");
-                        updateAgyHUD("Jeda Antar Alur", nextLabel, "running");
-
-                        self.registerTimer(setTimeout(function() {
-                            if (self.isAborted || window.__AGY_ABORT_RUN__) return;
-
-                            // Jika URL browser saat ini berbeda dari URL awal resep, kembalikan halaman ke URL awal
-                            var curUrl = (window.location && window.location.href) ? window.location.href.split("#")[0] : "";
-                            if (finalTargetUrl && curUrl && finalTargetUrl !== curUrl && finalTargetUrl.indexOf("http") === 0) {
-                                updateAgyHUD("Mereset Halaman", "Kembali ke URL awal alur...", "running");
-                                window.location.href = finalTargetUrl;
-                                return;
-                            }
-
-                            runAccount();
-                        }, cfg.batchDelay));
-                    } else if (hasMore) {
-                        var curUrl = (window.location && window.location.href) ? window.location.href.split("#")[0] : "";
-                        if (finalTargetUrl && curUrl && finalTargetUrl !== curUrl && finalTargetUrl.indexOf("http") === 0) {
-                            updateAgyHUD("Mereset Halaman", "Kembali ke URL awal alur...", "running");
-                            window.location.href = finalTargetUrl;
-                            return;
-                        }
-                        runAccount();
-                    } else {
+                    if (!hasMore) {
                         self.isRunning = false;
                         try {
                             if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
@@ -1074,10 +1102,52 @@
                         try {
                             sessionStorage.removeItem("__agy_batch_queue_state__");
                             sessionStorage.removeItem("__agy_active_recipe_run__");
+                            localStorage.removeItem("__agy_batch_queue_state__");
+                            localStorage.removeItem("__agy_active_recipe_run__");
+                            window.__AGY_BATCH_BACKUP__ = null;
                         } catch(_) {}
-                        updateAgyHUD("Selesai!", "Sukses: " + successCount + " | Gagal: " + failCount, "success");
+                        updateAgyHUD("Selesai!", "Total: " + queue.length + " (Sukses: " + successCount + ", Gagal: " + failCount + ")", "success");
                         if (onComplete) onComplete({ success: successCount, failed: failCount });
+                        return;
                     }
+
+                    var waitSec = (cfg.batchDelay / 1000).toFixed(1);
+                    var nextLoopNum = currentIdxInQueue + 1;
+                    var totalLoopsStr = isInfinite ? "♾️" : queue.length;
+                    var nextLabel = (mode === "raw" || mode === "single" || mode === "standalone") ? ("Jeda Putaran " + nextLoopNum + "/" + totalLoopsStr + " (" + waitSec + "s)...") : ("Menuju Akun berikutnya (" + waitSec + "s)...");
+                    updateAgyHUD("Jeda Antar Alur", nextLabel, "running");
+
+                    self.registerTimer(setTimeout(function() {
+                        if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+
+                        var curUrl = (window.location && window.location.href) ? window.location.href.split("#")[0] : "";
+                        var isDifferentUrl = (finalTargetUrl && curUrl && finalTargetUrl !== curUrl && finalTargetUrl.indexOf("http") === 0);
+
+                        // Cek apakah resep dimulai dengan langkah reload mandiri (misal: step 1-5 ada reload)
+                        var recipeHasInitialReload = false;
+                        if (Array.isArray(recipeEvents)) {
+                            for (var ri = 0; ri < Math.min(recipeEvents.length, 5); ri++) {
+                                if (recipeEvents[ri] && recipeEvents[ri].type === "reload") {
+                                    recipeHasInitialReload = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (isDifferentUrl) {
+                            updateAgyHUD("Mereset Halaman", "Kembali ke URL awal alur...", "running");
+                            window.location.href = finalTargetUrl;
+                            return;
+                        }
+
+                        if (reloadBetweenLoops && !recipeHasInitialReload) {
+                            updateAgyHUD("Mereset Halaman", "Memuat ulang halaman untuk putaran " + nextLoopNum + "/" + totalLoopsStr + "...", "running");
+                            window.location.reload();
+                            return;
+                        }
+
+                        runAccount();
+                    }, cfg.batchDelay));
                 }, 0, mode);
             }
 
@@ -1112,11 +1182,17 @@
 
                 function runNextStep() {
                     if (self.isAborted || window.__AGY_ABORT_RUN__) {
-                        try { sessionStorage.removeItem("__agy_active_recipe_run__"); } catch(_) {}
+                        try {
+                            sessionStorage.removeItem("__agy_active_recipe_run__");
+                            localStorage.removeItem("__agy_active_recipe_run__");
+                        } catch(_) {}
                         return;
                     }
                     if (idx >= eventsList.length) {
-                        try { sessionStorage.removeItem("__agy_active_recipe_run__"); } catch(_) {}
+                        try {
+                            sessionStorage.removeItem("__agy_active_recipe_run__");
+                            localStorage.removeItem("__agy_active_recipe_run__");
+                        } catch(_) {}
                         self.registerTimer(setTimeout(function() {
                             if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                             doneCallback(true);
@@ -1129,7 +1205,7 @@
 
                     // Simpan progress sebelum eksekusi agar survive saat halaman reload / berpindah URL
                     try {
-                        sessionStorage.setItem("__agy_active_recipe_run__", JSON.stringify({
+                        var actPayload = JSON.stringify({
                             runTitle: runTitle,
                             eventsList: eventsList,
                             idx: idx,
@@ -1137,7 +1213,9 @@
                             curEmail: curEmail,
                             runMode: activeMode,
                             timestamp: Date.now()
-                        }));
+                        });
+                        sessionStorage.setItem("__agy_active_recipe_run__", actPayload);
+                        localStorage.setItem("__agy_active_recipe_run__", actPayload);
                     } catch(_) {}
 
                     idx++;
@@ -1169,7 +1247,7 @@
                     if (ev.type === "reload") {
                         updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Reload Halaman...", "running");
                         try {
-                            sessionStorage.setItem("__agy_active_recipe_run__", JSON.stringify({
+                            var relPayload = JSON.stringify({
                                 runTitle: runTitle,
                                 eventsList: eventsList,
                                 idx: idx,
@@ -1177,7 +1255,9 @@
                                 curEmail: curEmail,
                                 runMode: activeMode,
                                 timestamp: Date.now()
-                            }));
+                            });
+                            sessionStorage.setItem("__agy_active_recipe_run__", relPayload);
+                            localStorage.setItem("__agy_active_recipe_run__", relPayload);
                         } catch(_) {}
                         self.registerTimer(setTimeout(function() {
                             if (self.isAborted || window.__AGY_ABORT_RUN__) return;
@@ -1193,7 +1273,31 @@
                                 window.GhostBridge.wipeCache();
                             }
                         } catch(_) {}
-                        try { localStorage.clear(); sessionStorage.clear(); } catch(_) {}
+                        try {
+                            var sPreserved = {};
+                            for (var si = 0; si < sessionStorage.length; si++) {
+                                var sk = sessionStorage.key(si);
+                                if (sk && (sk.startsWith("__agy_") || sk.startsWith("__fusion_") || sk.startsWith("agy_") || sk.startsWith("fusion_"))) {
+                                    sPreserved[sk] = sessionStorage.getItem(sk);
+                                }
+                            }
+                            sessionStorage.clear();
+                            for (var psk in sPreserved) {
+                                sessionStorage.setItem(psk, sPreserved[psk]);
+                            }
+
+                            var lPreserved = {};
+                            for (var li = 0; li < localStorage.length; li++) {
+                                var lk = localStorage.key(li);
+                                if (lk && (lk.startsWith("__agy_") || lk.startsWith("__fusion_") || lk.startsWith("agy_") || lk.startsWith("fusion_"))) {
+                                    lPreserved[lk] = localStorage.getItem(lk);
+                                }
+                            }
+                            localStorage.clear();
+                            for (var plk in lPreserved) {
+                                localStorage.setItem(plk, lPreserved[plk]);
+                            }
+                        } catch(_) {}
                         self.registerTimer(setTimeout(runNextStep, 600));
                         return;
                     }
@@ -1310,7 +1414,7 @@
     function smartWaitForElementWithTimeout(ev, stepIdx, totalSteps, maxWaitMs, callback) {
         var interval = 250;
         var elapsed = 0;
-        var timeoutLimit = maxWaitMs || 8000;
+        var timeoutLimit = maxWaitMs || 5000;
 
         function findTarget() {
             var targetEl = null;
@@ -1339,6 +1443,7 @@
         }
 
         var label = ev.text || ev.name || ev.id || ev.selector || ev.type;
+        var lastHudUpdate = 0;
         var pollTimer = setInterval(function() {
             if (AgyBatchRunner.isAborted || window.__AGY_ABORT_RUN__) {
                 clearInterval(pollTimer);
@@ -1355,6 +1460,11 @@
                 if (AgyBatchRunner.isAborted || window.__AGY_ABORT_RUN__) return;
                 console.warn("[AgyReplay] Timeout waiting for element on step " + stepIdx + ":", ev);
                 callback(null);
+            } else if (elapsed - lastHudUpdate >= 1000) {
+                lastHudUpdate = elapsed;
+                var remainSec = Math.ceil((timeoutLimit - elapsed) / 1000);
+                var elemName = (label && label.length > 20) ? (label.substring(0, 18) + "...") : (label || "elemen");
+                updateAgyHUD("Menunggu Elemen (" + remainSec + "s)", "Langkah " + stepIdx + "/" + totalSteps + ": " + elemName, "running");
             }
         }, interval);
         AgyBatchRunner.registerTimer(pollTimer);
@@ -4562,6 +4672,43 @@
         batchCard.appendChild(batchCb);
         card.appendChild(batchCard);
 
+        // Auto-Reset / Reload Halaman Antar Putaran
+        var reloadCard = document.createElement("label");
+        reloadCard.style.display = "flex";
+        reloadCard.style.alignItems = "center";
+        reloadCard.style.justifyContent = "space-between";
+        reloadCard.style.background = "#11111b";
+        reloadCard.style.border = "1px solid #313244";
+        reloadCard.style.borderRadius = "12px";
+        reloadCard.style.padding = "10px 14px";
+        reloadCard.style.marginBottom = "14px";
+        reloadCard.style.cursor = "pointer";
+
+        var reloadTextCol = document.createElement("div");
+        var rTitle = document.createElement("div");
+        rTitle.innerText = "Muat Ulang Halaman Tiap Putaran";
+        rTitle.style.fontSize = "12px";
+        rTitle.style.fontWeight = "600";
+        rTitle.style.color = "#cdd6f4";
+        reloadTextCol.appendChild(rTitle);
+
+        var rSub = document.createElement("div");
+        rSub.innerText = "Reset halaman agar tombol & form segar kembali";
+        rSub.style.fontSize = "10px";
+        rSub.style.color = "#a6adc8";
+        reloadTextCol.appendChild(rSub);
+        reloadCard.appendChild(reloadTextCol);
+
+        var reloadCb = document.createElement("input");
+        reloadCb.type = "checkbox";
+        reloadCb.checked = true;
+        reloadCb.style.width = "18px";
+        reloadCb.style.height = "18px";
+        reloadCb.style.accentColor = "#89dceb";
+        reloadCb.style.cursor = "pointer";
+        reloadCard.appendChild(reloadCb);
+        card.appendChild(reloadCard);
+
         updateModeTabs(); // Initialize mode view
 
         // Timing Note Pill
@@ -4610,12 +4757,13 @@
         startBtn.onclick = function() {
             var targetExpr = targetInp.value.trim() || String(activeIdx);
             var isBatch = batchCb.checked;
+            var shouldReload = reloadCb.checked;
             var lCount = parseInt(loopInp.value, 10);
             if (isNaN(lCount) || lCount <= 0) lCount = 1;
 
             modal.remove();
             if (typeof AgyBatchRunner !== "undefined" && AgyBatchRunner.run) {
-                AgyBatchRunner.run(events, recipeName, targetExpr, isBatch, null, currentRunMode, lCount, targetUrl);
+                AgyBatchRunner.run(events, recipeName, targetExpr, isBatch, null, currentRunMode, lCount, targetUrl, null, shouldReload);
             } else {
                 replayEventsSequentially(events, recipeName);
             }
@@ -7528,24 +7676,26 @@
     // Auto-resume active recipe on page reload / navigation
     (function checkAndResumeActiveRecipe() {
         try {
-            var rawBatch = sessionStorage.getItem("__agy_batch_queue_state__");
+            var rawBatch = sessionStorage.getItem("__agy_batch_queue_state__") || localStorage.getItem("__agy_batch_queue_state__");
             var batchState = null;
             if (rawBatch) {
                 try {
                     var parsedB = JSON.parse(rawBatch);
-                    if (parsedB && Date.now() - (parsedB.timestamp || 0) < 180000) {
+                    if (parsedB && Date.now() - (parsedB.timestamp || 0) < 300000) {
                         batchState = parsedB;
                     } else {
                         sessionStorage.removeItem("__agy_batch_queue_state__");
+                        localStorage.removeItem("__agy_batch_queue_state__");
                     }
                 } catch(_) {}
             }
 
-            var rawStep = sessionStorage.getItem("__agy_active_recipe_run__");
+            var rawStep = sessionStorage.getItem("__agy_active_recipe_run__") || localStorage.getItem("__agy_active_recipe_run__");
             if (rawStep) {
                 var st = JSON.parse(rawStep);
                 if (Date.now() - st.timestamp > 120000) {
                     sessionStorage.removeItem("__agy_active_recipe_run__");
+                    localStorage.removeItem("__agy_active_recipe_run__");
                     st = null;
                 }
                 if (st && st.eventsList && st.idx < st.eventsList.length) {
@@ -7554,17 +7704,23 @@
                         if (window.__AGY_ABORT_RUN__) {
                             sessionStorage.removeItem("__agy_active_recipe_run__");
                             sessionStorage.removeItem("__agy_batch_queue_state__");
+                            localStorage.removeItem("__agy_active_recipe_run__");
+                            localStorage.removeItem("__agy_batch_queue_state__");
                             return;
                         }
                         updateAgyHUD(st.runTitle, "Melanjutkan langkah " + (st.idx + 1) + "/" + st.eventsList.length + "...", "running");
                         AgyBatchRunner.executeStepList(st.eventsList, st.curWallet, st.curEmail, st.runTitle, function(ok) {
                             sessionStorage.removeItem("__agy_active_recipe_run__");
+                            localStorage.removeItem("__agy_active_recipe_run__");
                             if (batchState) {
                                 // Putaran saat ini selesai pasca reload, lanjutkan antrean batch!
                                 batchState.currentIdxInQueue = (batchState.currentIdxInQueue || 0) + 1;
                                 if (ok) batchState.successCount = (batchState.successCount || 0) + 1;
                                 else batchState.failCount = (batchState.failCount || 0) + 1;
-                                sessionStorage.setItem("__agy_batch_queue_state__", JSON.stringify(batchState));
+                                batchState.timestamp = Date.now();
+                                var bStr = JSON.stringify(batchState);
+                                sessionStorage.setItem("__agy_batch_queue_state__", bStr);
+                                localStorage.setItem("__agy_batch_queue_state__", bStr);
                                 if (typeof AgyBatchRunner !== "undefined" && AgyBatchRunner.resumeBatch) {
                                     AgyBatchRunner.resumeBatch(batchState);
                                 }
@@ -7576,6 +7732,7 @@
                     return;
                 } else {
                     sessionStorage.removeItem("__agy_active_recipe_run__");
+                    localStorage.removeItem("__agy_active_recipe_run__");
                 }
             }
 

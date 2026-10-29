@@ -532,7 +532,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             webView.clearCache(true);
             webView.clearFormData();
             webView.clearHistory();
-            webView.evaluateJavascript("try { localStorage.clear(); sessionStorage.clear(); } catch(e){}", null);
+            webView.evaluateJavascript("(function(){ try { var sPreserved={}; for(var i=0;i<sessionStorage.length;i++){ var k=sessionStorage.key(i); if(k&&(k.startsWith('__agy_')||k.startsWith('__fusion_'))) sPreserved[k]=sessionStorage.getItem(k); } sessionStorage.clear(); for(var pk in sPreserved) sessionStorage.setItem(pk, sPreserved[pk]); var lPreserved={}; for(var j=0;j<localStorage.length;j++){ var lk=localStorage.key(j); if(lk&&(lk.startsWith('__agy_')||lk.startsWith('__fusion_')||lk.startsWith('fusion_')||lk.startsWith('agy_'))) lPreserved[lk]=localStorage.getItem(lk); } localStorage.clear(); for(var plk in lPreserved) localStorage.setItem(plk, lPreserved[plk]); } catch(e){} })();", null);
         }
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
@@ -1948,10 +1948,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (webView == null) {
             return;
         }
-        webView.evaluateJavascript("window.__FUSION_PLAY_MACRO__ && window.__FUSION_PLAY_MACRO__();", null);
+        webView.evaluateJavascript("if(window.AgyBridge && window.AgyBridge.showRecipePicker){window.AgyBridge.showRecipePicker();}else if(window.__FUSION_PLAY_MACRO__){window.__FUSION_PLAY_MACRO__();}", null);
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "Memutar Ulang Makro...", 0).show();
+            Toast.makeText((Context) appCompatActivity, (CharSequence) "Buka Rekaman...", 0).show();
         }
     }
 
