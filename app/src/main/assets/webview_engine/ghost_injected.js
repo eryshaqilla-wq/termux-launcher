@@ -1382,20 +1382,31 @@
                                 waitDocReady(runNextStep);
                             }, stepDelay));
                         } else {
-                            var commonOpts = { bubbles: true, cancelable: true, view: window };
-                            if (window.PointerEvent) {
+                            var now = Date.now();
+                            if (targetEl.__agy_last_sim_click__ && (now - targetEl.__agy_last_sim_click__) < 800) {
+                                // Debounce: hindari pemicu klik dobel pada elemen yang sama dalam 800ms
+                            } else {
+                                targetEl.__agy_last_sim_click__ = now;
+                                try { targetEl.focus(); } catch(_) {}
+                                var commonOpts = { bubbles: true, cancelable: true, view: window };
+                                if (window.PointerEvent) {
+                                    try {
+                                        targetEl.dispatchEvent(new PointerEvent("pointerdown", commonOpts));
+                                        targetEl.dispatchEvent(new PointerEvent("pointerup", commonOpts));
+                                    } catch(_) {}
+                                }
                                 try {
-                                    targetEl.dispatchEvent(new PointerEvent("pointerdown", commonOpts));
-                                    targetEl.dispatchEvent(new PointerEvent("pointerup", commonOpts));
+                                    targetEl.dispatchEvent(new MouseEvent("mousedown", commonOpts));
+                                    targetEl.dispatchEvent(new MouseEvent("mouseup", commonOpts));
                                 } catch(_) {}
-                            }
-                            try {
-                                targetEl.dispatchEvent(new MouseEvent("mousedown", commonOpts));
-                                targetEl.dispatchEvent(new MouseEvent("mouseup", commonOpts));
-                                targetEl.dispatchEvent(new MouseEvent("click", commonOpts));
-                            } catch(_) {}
-                            if (typeof targetEl.click === "function") {
-                                try { targetEl.click(); } catch(_) {}
+                                // Single-fire execution: Gunakan native .click() ATAU dispatchEvent, TIDAK PERNAH keduanya!
+                                if (typeof targetEl.click === "function") {
+                                    try { targetEl.click(); } catch(_) {
+                                        try { targetEl.dispatchEvent(new MouseEvent("click", commonOpts)); } catch(_) {}
+                                    }
+                                } else {
+                                    try { targetEl.dispatchEvent(new MouseEvent("click", commonOpts)); } catch(_) {}
+                                }
                             }
                             updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Klik " + (ev.text || targetEl.tagName), "running");
 
@@ -3811,7 +3822,7 @@
                 } catch(_) {}
             }
 
-            // Pointer & Mouse Events
+            // Pointer & Mouse Events (Mousedown & mouseup untuk active visual state)
             if (window.PointerEvent) {
                 try {
                     targetEl.dispatchEvent(new PointerEvent("pointerdown", commonOpts));
@@ -3821,12 +3832,17 @@
             try {
                 targetEl.dispatchEvent(new MouseEvent("mousedown", commonOpts));
                 targetEl.dispatchEvent(new MouseEvent("mouseup", commonOpts));
-                targetEl.dispatchEvent(new MouseEvent("click", commonOpts));
             } catch(_) {}
 
-            // Native click
+            // Single-fire execution: Panggil native .click() ATAU dispatchEvent, TIDAK PERNAH keduanya!
             if (typeof targetEl.click === "function") {
-                try { targetEl.click(); } catch(_) {}
+                try {
+                    targetEl.click();
+                } catch(_) {
+                    try { targetEl.dispatchEvent(new MouseEvent("click", commonOpts)); } catch(_) {}
+                }
+            } else {
+                try { targetEl.dispatchEvent(new MouseEvent("click", commonOpts)); } catch(_) {}
             }
 
             // Lepaskan pelindung setelah animasi klik selesai

@@ -65,9 +65,20 @@ public class TermuxInputMethodService extends InputMethodService {
     private String mAppliedSettingsSignature = "";
     private SpeechRecognizer mSpeechRecognizer;
     private boolean mIsListeningVoice;
+    private int mSelectionStart = -1;
+    private int mSelectionEnd = -1;
 
     public boolean isListeningVoice() {
         return mIsListeningVoice;
+    }
+
+    public boolean hasActiveSelection() {
+        return mSelectionStart >= 0 && mSelectionEnd >= 0 && mSelectionStart != mSelectionEnd;
+    }
+
+    public void clearSelectionState() {
+        mSelectionStart = -1;
+        mSelectionEnd = -1;
     }
 
     @Override
@@ -384,6 +395,12 @@ public class TermuxInputMethodService extends InputMethodService {
         if (mKeyEventHandler != null) {
             mKeyEventHandler.reset();
         }
+        if (info != null) {
+            mSelectionStart = info.initialSelStart;
+            mSelectionEnd = info.initialSelEnd;
+        } else {
+            clearSelectionState();
+        }
 
         mPreferences = TermuxAppSharedPreferences.build(this);
         TermuxThemeManager.applyThemeOverlays(this);
@@ -403,6 +420,8 @@ public class TermuxInputMethodService extends InputMethodService {
     public void onUpdateSelection(int oldSelStart, int oldSelEnd, int newSelStart, int newSelEnd,
             int candidatesStart, int candidatesEnd) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd);
+        mSelectionStart = newSelStart;
+        mSelectionEnd = newSelEnd;
         updateEditorAction(getCurrentInputEditorInfo());
     }
 
@@ -410,6 +429,7 @@ public class TermuxInputMethodService extends InputMethodService {
     public void onFinishInputView(boolean finishingInput) {
         super.onFinishInputView(finishingInput);
         stopVoiceTyping();
+        clearSelectionState();
         if (mKeyEventHandler != null) {
             mKeyEventHandler.reset();
         }

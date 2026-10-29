@@ -232,8 +232,28 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
         }
     }
 
+    private boolean hasActiveSelection(InputConnection ic) {
+        if (ic == null) return false;
+        if (mService != null && mService.hasActiveSelection()) {
+            return true;
+        }
+        try {
+            CharSequence selected = ic.getSelectedText(0);
+            return selected != null && selected.length() > 0;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     private void handleBackspace(InputConnection ic) {
         if (ic == null) return;
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            if (mService != null) {
+                mService.clearSelectionState();
+            }
+            return;
+        }
         if (!ic.deleteSurroundingText(1, 0)) {
             long now = SystemClock.uptimeMillis();
             ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL, 0, 0));
@@ -243,6 +263,13 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
 
     private void handleForwardDelete(InputConnection ic) {
         if (ic == null) return;
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            if (mService != null) {
+                mService.clearSelectionState();
+            }
+            return;
+        }
         if (!ic.deleteSurroundingText(0, 1)) {
             long now = SystemClock.uptimeMillis();
             ic.sendKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_FORWARD_DEL, 0, 0));
@@ -252,6 +279,13 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
 
     private void deletePreviousWord(InputConnection ic) {
         if (ic == null) return;
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            if (mService != null) {
+                mService.clearSelectionState();
+            }
+            return;
+        }
         CharSequence before = null;
         try {
             before = ic.getTextBeforeCursor(50, 0);
@@ -279,6 +313,13 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
 
     private void deleteNextWord(InputConnection ic) {
         if (ic == null) return;
+        if (hasActiveSelection(ic)) {
+            ic.commitText("", 1);
+            if (mService != null) {
+                mService.clearSelectionState();
+            }
+            return;
+        }
         CharSequence after = null;
         try {
             after = ic.getTextAfterCursor(50, 0);
