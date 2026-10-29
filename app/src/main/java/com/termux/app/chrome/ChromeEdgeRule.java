@@ -36,7 +36,9 @@ public final class ChromeEdgeRule {
         /** The status bar's window bar: the strip continues its glass, as it always has. */
         WINDOW_BAR,
         /** A sheet in the dock's material off the dock: the pinned apps plank, the alphabets bar. */
-        DOCK_SHEET
+        DOCK_SHEET,
+        /** The terminal canvas itself leading the top edge when status bar is moved to LEFT, RIGHT, or BOTTOM. */
+        TERMINAL
     }
 
     /** The one edge a bar standing on {@code edge} of the screen touches. */

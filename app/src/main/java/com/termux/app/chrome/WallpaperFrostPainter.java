@@ -76,7 +76,10 @@ public final class WallpaperFrostPainter {
         // The strip continues whatever leads the top edge: the window bar's own glass, or the
         // dock's material on a sheet off the dock, at that material's own radius.
         boolean stripIsDockSheet = lead == ChromeEdgeRule.TopLead.DOCK_SHEET;
-        int stripRadiusDp = stripIsDockSheet ? mSurfaces.effectiveDockBlurRadiusDp() : blurRadiusDp;
+        boolean stripIsTerminal = lead == ChromeEdgeRule.TopLead.TERMINAL;
+        int stripRadiusDp = stripIsDockSheet ? mSurfaces.effectiveDockBlurRadiusDp()
+            : stripIsTerminal ? mSurfaces.effectiveTerminalBlurRadiusDp()
+            : blurRadiusDp;
         if (!mSurfaces.wallpaperPassthroughEnabled() || (blurRadiusDp <= 0 && stripRadiusDp <= 0)) {
             clearTopPane();
             return;
@@ -87,27 +90,29 @@ public final class WallpaperFrostPainter {
             mSurfaces.findChromeView(R.id.terminal_status_bar_background), stripRadiusDp,
             SurfaceDirtyLedger.FrostRect.TOP_PANE_STATUS,
             stripIsDockSheet ? SurfaceDirtyLedger.FrostRadius.OFF_DOCK
+                : stripIsTerminal ? SurfaceDirtyLedger.FrostRadius.TERMINAL
                 : SurfaceDirtyLedger.FrostRadius.TOP_PANE,
             0f, ChromeEdgeRule.seams(false, ChromeEdgeRule.flushEdges(
                 com.termux.app.place.PlaceLayout.Edge.TOP), ChromeEdgeRule.BOTTOM),
-            stripIsDockSheet ? dockCover() : statusCover());
+            stripIsDockSheet ? dockCover() : (stripIsTerminal ? terminalCover() : statusCover()));
         if (lead == ChromeEdgeRule.TopLead.NONE)
             hide(statusFrost, SurfaceDirtyLedger.FrostRect.TOP_PANE_STATUS);
         // A bar standing between the dock's own rows is on the dock's sheet, which already carries
         // this frost: a frost of its own here would draw the same blurred wallpaper a second time,
         // and with no wash over it — the bar wears no glass on the plank.
         boolean onPlank = mSurfaces.statusBarOnDockPlank();
+        boolean statusBarAtTop = mSurfaces.statusBarEdge() == com.termux.app.place.PlaceLayout.Edge.TOP;
         // Docked, the bar's screen edges are seams, and so is its top while the strip continues
         // it — whether or not the strip's own frost is up this pass. Only the edge the shape model
         // says faces the opening keeps its rim: a bar joined to the dock under it keeps none. The
         // capsule keeps its rim all round.
         int paneSeams = mSurfaces.statusBarSeamEdges();
-        boolean paneApplied = !onPlank && applyFrost(paneFrost,
+        boolean paneApplied = statusBarAtTop && !onPlank && applyFrost(paneFrost,
             mSurfaces.findChromeView(R.id.terminal_window_bar_host), blurRadiusDp,
             SurfaceDirtyLedger.FrostRect.TOP_PANE_WINDOW_BAR, SurfaceDirtyLedger.FrostRadius.TOP_PANE,
             capsule ? mSurfaces.statusBarRimCornerRadiusPx() : 0f,
             paneSeams, statusCover());
-        if (onPlank) hide(paneFrost, SurfaceDirtyLedger.FrostRect.TOP_PANE_WINDOW_BAR);
+        if (!statusBarAtTop || onPlank) hide(paneFrost, SurfaceDirtyLedger.FrostRect.TOP_PANE_WINDOW_BAR);
         View statusBlur = mSurfaces.findChromeView(R.id.terminal_status_bar_glass_blur);
         View paneBlur = mSurfaces.findChromeView(R.id.terminal_window_bar_blur);
         if (statusApplied && statusBlur != null) statusBlur.setVisibility(View.GONE);
@@ -342,6 +347,13 @@ public final class WallpaperFrostPainter {
         com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
             mSurfaces.preferences();
         return preferences != null ? preferences.getStatusBarOpacity() / 100f : 0f;
+    }
+
+    /** What the terminal's tint covers of its frost. */
+    private float terminalCover() {
+        com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
+            mSurfaces.preferences();
+        return preferences != null ? preferences.getTerminalBackgroundOpacity() / 100f : 0f;
     }
 
     /** What the dock's material (the planes and sheets wear it) covers of its frost. */

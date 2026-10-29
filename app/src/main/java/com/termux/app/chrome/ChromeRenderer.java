@@ -208,6 +208,11 @@ public final class ChromeRenderer {
         /** The status bar's own effective blur radius; tuned apart from the dock's. */
         int effectiveStatusBarBlurRadiusDp();
 
+        /** The terminal canvas's effective blur radius. */
+        default int effectiveTerminalBlurRadiusDp() {
+            return 0;
+        }
+
         // ---- the render pass
 
         @NonNull ChromeSpec buildChromeSpec();

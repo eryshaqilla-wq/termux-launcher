@@ -1706,6 +1706,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return getEffectiveStatusBarBlurRadius();
         }
 
+        @Override public int effectiveTerminalBlurRadiusDp() {
+            return getEffectiveTerminalBlurRadius();
+        }
+
         @NonNull @Override public ChromeSpec buildChromeSpec() {
             return TermuxActivity.this.buildChromeSpec();
         }
@@ -3116,8 +3120,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             terminalSurfaceHost.setBackgroundColor(Color.TRANSPARENT);
             applyTerminalBodySurface(terminalBodySurface, Color.TRANSPARENT, false);
             applyFrameGutterGlass(frameGlassHost(), glassPane && hasDockedFrameCard());
-            terminalStatusSurface.setBackgroundColor(Color.TRANSPARENT);
-            terminalStatusSurface.setVisibility(View.GONE);
+            if (mStatusBarEdge != PlaceLayout.Edge.TOP) {
+                terminalStatusSurface.setVisibility(View.VISIBLE);
+                terminalStatusSurface.setBackgroundColor(Color.TRANSPARENT);
+            } else {
+                terminalStatusSurface.setBackgroundColor(Color.TRANSPARENT);
+                terminalStatusSurface.setVisibility(View.GONE);
+            }
             if (terminalView != null) {
                 terminalView.setBackgroundColor(Color.TRANSPARENT);
                 if (terminalView instanceof TerminalView) {
@@ -4241,7 +4250,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void applyTerminalStatusBarSurfaceColor(boolean showSurface, int terminalSurfaceColor) {
         int targetColor;
-        if (shouldUseWallpaperPassthroughMode()) {
+        if (mStatusBarEdge != PlaceLayout.Edge.TOP) {
+            targetColor = shouldUseWallpaperPassthroughMode() ? Color.TRANSPARENT : terminalSurfaceColor;
+        } else if (shouldUseWallpaperPassthroughMode()) {
             // The full-screen root dim already covers the status-bar region uniformly. A seamless
             // status scrim here would dim it a second time, making the notification area read darker
             // than the terminal — so keep the system status bar transparent in wallpaper mode.
@@ -6066,6 +6077,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int getEffectiveStatusBarBlurRadius() {
         if (mPreferences == null || mPreferences.isV0239EffectsPresetEnabled() || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
         return Math.max(0, mPreferences.getStatusBarBlurRadius());
+    }
+
+    /** The terminal canvas's own blur radius when following terminal color/effects rules. */
+    private int getEffectiveTerminalBlurRadius() {
+        if (mPreferences == null || mPreferences.isV0239EffectsPresetEnabled() || !wallpaperPicture().blurs() || !mPreferences.isWallpaperBlurEnabled()) return 0;
+        return Math.max(0, mPreferences.getTerminalGlassBlurRadius());
     }
 
     /**
@@ -9100,7 +9117,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private com.termux.app.chrome.ChromeEdgeRule.TopLead topEdgeStackLead() {
         if (isRoundedDockStyle()) return com.termux.app.chrome.ChromeEdgeRule.TopLead.NONE;
         View lead = topEdgeStackLeadView();
-        if (lead == null) return com.termux.app.chrome.ChromeEdgeRule.TopLead.NONE;
+        if (lead == null) {
+            // When Termux status bar is placed on LEFT, RIGHT, or BOTTOM, the terminal canvas leads the top edge!
+            if (mStatusBarEdge != PlaceLayout.Edge.TOP) {
+                return com.termux.app.chrome.ChromeEdgeRule.TopLead.TERMINAL;
+            }
+            return com.termux.app.chrome.ChromeEdgeRule.TopLead.NONE;
+        }
         int id = lead.getId();
         if (id == R.id.terminal_window_bar_host)
             return com.termux.app.chrome.ChromeEdgeRule.TopLead.WINDOW_BAR;
@@ -9113,7 +9136,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @NonNull
     private com.termux.app.chrome.ChromeEdgeRule.TopLead statusInsetStripLead() {
         // Under a joined Docked frame the frame's glass runs up under the system bar: no strip.
-        if (frameStandsDown()) return com.termux.app.chrome.ChromeEdgeRule.TopLead.NONE;
+        if (mStatusBarEdge == PlaceLayout.Edge.TOP && frameStandsDown()) {
+            return com.termux.app.chrome.ChromeEdgeRule.TopLead.NONE;
+        }
         return com.termux.app.chrome.ChromeEdgeRule.statusInsetLead(isRoundedDockStyle(),
             !shouldEnableSeamlessStatusBackground(), mLastStatusBarInsetTop, topEdgeStackLead());
     }
@@ -9167,6 +9192,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if (lead == com.termux.app.chrome.ChromeEdgeRule.TopLead.DOCK_SHEET) {
             applyStatusInsetStripOverDockSheet(statusGlass, statusBlur, statusSurface);
+            return;
+        }
+        if (lead == com.termux.app.chrome.ChromeEdgeRule.TopLead.TERMINAL) {
+            applyStatusInsetStripOverTerminal(statusGlass, statusBlur, statusSurface);
             return;
         }
         float opacity = mPreferences != null ? mPreferences.getStatusBarOpacity() / 100f : 1f;
@@ -9256,6 +9285,69 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             statusSurface.setVisibility(View.VISIBLE);
         }
         mChrome.requestSync(ChromeRenderer.SCOPE_TOP_PANE_FROST);
+    }
+
+    /**
+     * Dressed to follow terminal appearance 100% (opacity, blur, tint, grain) when the Termux
+     * status bar is moved to the bottom, left, or right edges so the system status bar seamlessly
+     * blends into the terminal body.
+     */
+    private void applyStatusInsetStripOverTerminal(@NonNull View statusGlass,
+                                                   @Nullable View statusBlur,
+                                                   @Nullable View statusSurface) {
+        if (mLastStatusBarInsetTop > 0) {
+            ViewGroup.LayoutParams layoutParams = statusGlass.getLayoutParams();
+            if (layoutParams != null && layoutParams.height != mLastStatusBarInsetTop) {
+                layoutParams.height = mLastStatusBarInsetTop;
+                statusGlass.setLayoutParams(layoutParams);
+            }
+        }
+        ViewGroup.LayoutParams glassParams = statusGlass.getLayoutParams();
+        if (glassParams instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams glassMargins = (ViewGroup.MarginLayoutParams) glassParams;
+            if (glassMargins.leftMargin != 0 || glassMargins.rightMargin != 0) {
+                glassMargins.leftMargin = 0;
+                glassMargins.rightMargin = 0;
+                statusGlass.setLayoutParams(glassMargins);
+            }
+        }
+        statusGlass.setTranslationY(-mLastStatusBarInsetTop);
+        statusGlass.setBackgroundColor(Color.TRANSPARENT);
+        statusGlass.setVisibility(View.VISIBLE);
+
+        int blurRadiusDp = getEffectiveTerminalBlurRadius();
+        boolean statusBlurEnabled = ChromePolicy.dockBlurEnabled(blurRadiusDp);
+        applyRealtimeBlurRadius(statusBlur, blurRadiusDp);
+        applyRealtimeBlurDownsampleFactor(statusBlur, ChromePolicy.ACCESSORY_BLUR_DOWNSAMPLE_FACTOR);
+        applyRealtimeBlurOverlayColor(statusBlur, Color.TRANSPARENT);
+        if (statusBlur != null) {
+            statusBlur.setVisibility(statusBlurEnabled ? View.VISIBLE : View.GONE);
+            restLiveBlur(statusBlur, true);
+            restLiveBlurAfterLayout(statusBlur);
+        }
+
+        if (statusSurface != null) {
+            int terminalSurfaceColor = resolveTerminalSurfaceColor();
+            if (mPreferences != null && mPreferences.getTerminalTintStrength() > 0 && mChrome != null) {
+                terminalSurfaceColor = mChrome.glass().look(mPreferences.getTerminalTintStrength())
+                    .flatTint(terminalSurfaceColor);
+            }
+            int grain = (mPreferences != null && !mPreferences.isV0239EffectsPresetEnabled() && mPreferences.isFilmGrainEnabled())
+                ? mPreferences.getTerminalGlassGrain() : 0;
+            if (grain > 0 && mChrome != null) {
+                statusSurface.setBackground(new LayerDrawable(new Drawable[] {
+                    new ColorDrawable(terminalSurfaceColor),
+                    mChrome.glass().grainLayer(grain)
+                }));
+            } else {
+                statusSurface.setBackground(null);
+                statusSurface.setBackgroundColor(terminalSurfaceColor);
+            }
+            statusSurface.setVisibility(View.VISIBLE);
+        }
+        if (mChrome != null) {
+            mChrome.requestSync(ChromeRenderer.SCOPE_TOP_PANE_FROST);
+        }
     }
 
     /**
