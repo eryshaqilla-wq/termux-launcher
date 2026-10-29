@@ -15271,10 +15271,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // And it is the terminal's own device: it exists to land the dock on a whole terminal row.
         // On a place with no rows to land on it is only a height that changes as the keyboard comes
         // and goes — on the home place, a grid re-cut around every widget for nothing.
-        boolean terminalOnScreen =
-            mLastWallPage == com.termux.app.wall.PaneWallPage.TERMINAL;
+        // Absorbed remainder lands the dock on a whole terminal row without a sub-line gap.
+        // Kept consistent across all wall pages so swiping between canvases has zero dock resize jump.
         int terminalFlushPaddingPx = state.keyboardShown || !state.toolbarShown
-            || visiblePaneCount() > 1 || activePaneFloating || isImeVisible() || !terminalOnScreen
+            || visiblePaneCount() > 1 || activePaneFloating || isImeVisible()
             ? 0
             : resolveTerminalFlushDockPaddingPx(accessoryContentHeightPx, accessoryBottomMarginPx);
         mAppliedTerminalFlushPaddingPx = terminalFlushPaddingPx;
@@ -20229,8 +20229,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** The same, for the place with its keyboard up or down as {@code keyboardShown} says. */
     private int travelRestReservationPx(@NonNull com.termux.app.wall.PaneWallPage place,
                                         boolean toolbarShown, boolean keyboardShown) {
-        int flushPadding = place == com.termux.app.wall.PaneWallPage.TERMINAL
-            && place == mLastWallPage && !keyboardShown ? mAppliedTerminalFlushPaddingPx : 0;
+        int flushPadding = !keyboardShown ? mAppliedTerminalFlushPaddingPx : 0;
         return KeyboardOverlayPolicy.restReservationPx(mAppliedDockContentHeightPx, flushPadding,
             keyboardShown, KeyboardOverlayPolicy.overlays(place, currentPlaceLayout()),
             Math.max(0, mKeyboardGeometry.desiredHeightPx()),
@@ -20730,7 +20729,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int keyboardDownFlushPaddingPx() {
         boolean toolbarShown = buildChromeSpec().toolbarShown;
         if (!toolbarShown || visiblePaneCount() > 1 || isImeVisible()
-            || mLastWallPage != com.termux.app.wall.PaneWallPage.TERMINAL
             || (mPaneController != null && mPaneController.isActivePaneFloating()))
             return 0;
         return Math.max(0, resolveTerminalFlushDockPaddingPx(
