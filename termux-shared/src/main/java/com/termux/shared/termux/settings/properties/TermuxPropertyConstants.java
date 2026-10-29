@@ -401,9 +401,14 @@ public final class TermuxPropertyConstants {
     public static final String KEY_EXTRA_KEYS = "extra-keys";
     public static final String KEY_EXTRA_KEYS2 = "extra-keys2";
     public static final String KEY_EXTRA_KEYS_COMPACT = "extra-keys-compact";
+    public static final String KEY_EXTRA_KEYS_STATUSBAR = "extra-keys-statusbar";
 
     public static final String DEFAULT_IVALUE_EXTRA_KEYS_COMPACT =
         "[[{key: 'ESC'}, {key: 'TAB'}, {key: 'CTRL'}, {key: 'ALT'}, {key: 'DOCK', display: 'DOCK'}, {key: 'UP', display: '↑'}, {key: 'DOWN', display: '↓'}]]";
+
+    public static final String DEFAULT_IVALUE_EXTRA_KEYS_STATUSBAR =
+        "[[{key: 'tool:ipc.wallet', display: '👛'}, {key: 'tool:ipc.web', display: '🌐'}, {key: 'tool:ipc.telegram', display: '✈️'}, {key: 'tool:ipc.ai', display: '🤖'}, {key: 'tool:ipc.run', display: '>_'}]," +
+        "[{key: 'ESC'}, {key: 'TAB'}, {key: 'CTRL'}, {key: 'ALT'}, {key: 'DRAWER', display: '☰'}, {key: 'KEYBOARD', display: '⌨'}, {key: 'tool:terminal.reset', display: 'CLR'}]]";
 
 
     //public static final String DEFAULT_IVALUE_EXTRA_KEYS = "[[ESC, TAB, CTRL, ALT, {key: '-', popup: '|'}, DOWN, UP]]"; // Upstream Termux's row
@@ -506,7 +511,7 @@ public final class TermuxPropertyConstants {
     KEY_BELL_BEHAVIOUR, KEY_DELETE_TMPDIR_FILES_OLDER_THAN_X_DAYS_ON_EXIT, KEY_TERMINAL_CURSOR_BLINK_RATE, KEY_TERMINAL_CURSOR_STYLE, KEY_TERMINAL_MARGIN_HORIZONTAL, KEY_TERMINAL_MARGIN_VERTICAL, KEY_TERMINAL_TRANSCRIPT_ROWS, /* float */
     KEY_TERMINAL_TOOLBAR_HEIGHT_SCALE_FACTOR, /* Integer */
     KEY_SHORTCUT_CREATE_SESSION, KEY_SHORTCUT_NEXT_SESSION, KEY_SHORTCUT_PREVIOUS_SESSION, KEY_SHORTCUT_RENAME_SESSION, /* String */
-    KEY_BACK_KEY_BEHAVIOUR, KEY_DEFAULT_WORKING_DIRECTORY, KEY_EXTRA_KEYS, KEY_EXTRA_KEYS2, KEY_EXTRA_KEYS_COMPACT, KEY_EXTRA_KEYS_STYLE, KEY_NIGHT_MODE, KEY_SOFT_KEYBOARD_TOGGLE_BEHAVIOUR, KEY_VOLUME_KEYS_BEHAVIOUR, KEY_BACKGROUND_OVERLAY_COLOR, KEY_TERMINAL_TERM));
+    KEY_BACK_KEY_BEHAVIOUR, KEY_DEFAULT_WORKING_DIRECTORY, KEY_EXTRA_KEYS, KEY_EXTRA_KEYS2, KEY_EXTRA_KEYS_COMPACT, KEY_EXTRA_KEYS_STATUSBAR, KEY_EXTRA_KEYS_STYLE, KEY_NIGHT_MODE, KEY_SOFT_KEYBOARD_TOGGLE_BEHAVIOUR, KEY_VOLUME_KEYS_BEHAVIOUR, KEY_BACKGROUND_OVERLAY_COLOR, KEY_TERMINAL_TERM));
 
     /**
      * Defines the set for keys loaded by termux that have default boolean behaviour with false as default.

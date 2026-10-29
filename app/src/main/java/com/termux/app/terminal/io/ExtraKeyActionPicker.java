@@ -229,7 +229,7 @@ public final class ExtraKeyActionPicker {
                     && !matches(group.getKey(), needle)
                     && !matchesAny(choices, needle)) continue;
                 if (!groupHeaderWritten) {
-                    results.addView(header(group.getKey()));
+                    results.addView(header(categoryHeaderTitle(group.getKey())));
                     groupHeaderWritten = true;
                 }
                 if (choices != null) {
@@ -414,6 +414,14 @@ public final class ExtraKeyActionPicker {
         view.setTextColor(colorText);
         view.setPaddingRelative(pad(4), 0, 0, 0);
         return view;
+    }
+
+    @NonNull
+    private String categoryHeaderTitle(@NonNull String category) {
+        if (LauncherToolRegistry.CATEGORY_IPC.equals(category)) {
+            return context.getString(R.string.settings_extra_keys_category_ipc);
+        }
+        return category;
     }
 
     private TextView header(@NonNull String text) {

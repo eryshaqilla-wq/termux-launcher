@@ -48,6 +48,10 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
         default void onFoldDrag(float towardOpenPx) { }
         /** The fold drag's stream was cancelled under it: the bar goes back to the form it had. */
         default void onFoldDragCancelled() { }
+        /** A horizontal swipe to the left was completed across the status bar. */
+        default void onHorizontalSwipeLeft() { }
+        /** A horizontal swipe to the right was completed across the status bar. */
+        default void onHorizontalSwipeRight() { }
         default boolean isStatusGestureBlocked() { return false; }
     }
 
@@ -102,6 +106,16 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
 
     public void setAnotherSurfaceEngaged(boolean engaged) { mAnotherSurfaceEngaged = engaged; }
 
+    private boolean mHorizontalSwipeEnabled = true;
+
+    public void setHorizontalSwipeEnabled(boolean enabled) {
+        mHorizontalSwipeEnabled = enabled;
+    }
+
+    public boolean isHorizontalSwipeEnabled() {
+        return mHorizontalSwipeEnabled;
+    }
+
     /**
      * The edge the bar stands on. It decides which way a drag folds the bar; a live stream is
      * dropped rather than reinterpreted mid-gesture.
@@ -118,6 +132,12 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
     private static boolean isFoldClaim(@NonNull StatusBarGesturePolicy.Claim claim) {
         return claim == StatusBarGesturePolicy.Claim.EXPAND_SWIPE
             || claim == StatusBarGesturePolicy.Claim.COLLAPSE_SWIPE;
+    }
+
+    /** Whether {@code claim} is a horizontal swipe along the bar. */
+    private static boolean isHorizontalSwipeClaim(@NonNull StatusBarGesturePolicy.Claim claim) {
+        return claim == StatusBarGesturePolicy.Claim.SWIPE_LEFT
+            || claim == StatusBarGesturePolicy.Claim.SWIPE_RIGHT;
     }
 
     /** A fold the finger was driving lost its stream; the listener puts the bar back. */
@@ -278,7 +298,7 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
         // those children usable: they get their CANCEL, exactly as a scroll container's children
         // do, so the finger that folded the bar never also opens what it started on. A tap is
         // untouched — it never travels far enough to make this claim.
-        return isFoldClaim(gesture.claim());
+        return isFoldClaim(gesture.claim()) || isHorizontalSwipeClaim(gesture.claim());
     }
 
     @Override
@@ -292,6 +312,8 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
             case PENDING:
             case EXPAND_SWIPE:
             case COLLAPSE_SWIPE:
+            case SWIPE_LEFT:
+            case SWIPE_RIGHT:
                 return true;
             default:
                 return false;
@@ -309,6 +331,9 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
             case MotionEvent.ACTION_MOVE:
                 if (mGesture != null) {
                     StatusBarGesturePolicy.Claim after = mGesture.move(event.getX(), event.getY());
+                    if (isFoldClaim(after) || isHorizontalSwipeClaim(after)) {
+                        super.requestDisallowInterceptTouchEvent(false);
+                    }
                     if (isFoldClaim(after) && mListener != null) {
                         // The fold is the finger's while the finger is down: the bar stands
                         // where the travel across it says, the way it opens being positive.
@@ -361,7 +386,7 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
         StatusBarGesturePolicy.Down down = new StatusBarGesturePolicy.Down(
             event.getPointerId(0), event.getRawX(), event.getRawY(), event.getX(), event.getY(),
             event.getEventTime(), mState, inWindowBar, interactive, nestedChildOwned,
-            blocked, formEligible, mTouchSlop, mEdge);
+            blocked, formEligible, mHorizontalSwipeEnabled && !blocked, mTouchSlop, mEdge);
         mGesture = new StatusBarGesturePolicy(down);
         if (mVelocityTracker == null) mVelocityTracker = android.view.VelocityTracker.obtain();
         mVelocityTracker.clear();
@@ -377,6 +402,14 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
             mFoldDragActive = false;
             if (mListener != null) {
                 mListener.onCollapsedStateRequested(collapsed, foldVelocityTowardOpen());
+            }
+        } else if (gesture != null && gesture.claim() == StatusBarGesturePolicy.Claim.SWIPE_LEFT) {
+            if (mListener != null) {
+                mListener.onHorizontalSwipeLeft();
+            }
+        } else if (gesture != null && gesture.claim() == StatusBarGesturePolicy.Claim.SWIPE_RIGHT) {
+            if (mListener != null) {
+                mListener.onHorizontalSwipeRight();
             }
         } else if (gesture != null && gesture.claim() == StatusBarGesturePolicy.Claim.PENDING) {
             // eligible() is the "this touch was the bar's own, not a child's" test — the
@@ -486,6 +519,15 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
         view.getLocationOnScreen(location);
         return event.getRawX() >= location[0] && event.getRawX() < location[0] + view.getWidth()
             && event.getRawY() >= location[1] && event.getRawY() < location[1] + view.getHeight();
+    }
+
+    @Override
+    public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+        if (disallowIntercept && mGesture != null
+            && (isFoldClaim(mGesture.claim()) || isHorizontalSwipeClaim(mGesture.claim()))) {
+            return;
+        }
+        super.requestDisallowInterceptTouchEvent(disallowIntercept);
     }
 
     @Override

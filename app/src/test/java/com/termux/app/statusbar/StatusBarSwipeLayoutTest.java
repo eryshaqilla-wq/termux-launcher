@@ -52,6 +52,28 @@ public class StatusBarSwipeLayoutTest {
     }
 
     @Test
+    public void sidewaysSwipes_invokeHorizontalSwipeCallbacks() {
+        StatusBarSwipeLayout view = createView();
+        AtomicInteger leftSwipes = new AtomicInteger();
+        AtomicInteger rightSwipes = new AtomicInteger();
+        view.setListener(new StatusBarSwipeLayout.Listener() {
+            @Override public void onCollapsedStateRequested(boolean collapsed) { }
+            @Override public void onHorizontalSwipeLeft() { leftSwipes.incrementAndGet(); }
+            @Override public void onHorizontalSwipeRight() { rightSwipes.incrementAndGet(); }
+        });
+
+        // Swipe right (from 30 to 160)
+        swipe(view, 30f, 160f, 40f, 40f);
+        assertEquals(1, rightSwipes.get());
+        assertEquals(0, leftSwipes.get());
+
+        // Swipe left (from 160 to 30)
+        swipe(view, 160f, 30f, 40f, 40f);
+        assertEquals(1, rightSwipes.get());
+        assertEquals(1, leftSwipes.get());
+    }
+
+    @Test
     public void emptyTap_performsClickWithoutExpansionAction() {
         StatusBarSwipeLayout view = createView();
         List<Boolean> requests = new ArrayList<>();

@@ -90,6 +90,9 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
             case "status_widget_weather_fahrenheit":
                 mPreferences.setStatusWidgetWeatherFahrenheit(value);
                 break;
+            case "status_bar_expanded_shortcuts":
+                mPreferences.setStatusBarExpandedShortcutsEnabled(value);
+                break;
             case "lazy_mode":
                 mPreferences.setLazyModeEnabled(value);
                 break;
@@ -138,6 +141,8 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isStatusWidgetWeatherEnabled();
             case "status_widget_weather_fahrenheit":
                 return mPreferences.isStatusWidgetWeatherFahrenheit();
+            case "status_bar_expanded_shortcuts":
+                return mPreferences.isStatusBarExpandedShortcutsEnabled();
             case "lazy_mode":
                 return mPreferences.isLazyModeEnabled();
             case "fancier_glass":
@@ -154,6 +159,10 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
             mPreferences.setTopPaneClockStyle(value);
         } else if ("top_pane_clock_alignment".equals(key)) {
             mPreferences.setTopPaneClockAlignment(value);
+        } else if ("status_bar_expanded_mode".equals(key)) {
+            mPreferences.setStatusBarExpandedMode(value != null ? value : "clock");
+        } else if ("status_bar_horizontal_swipe_action".equals(key)) {
+            mPreferences.setStatusBarHorizontalSwipeAction(value != null ? value : "wall");
         }
     }
 
@@ -165,6 +174,12 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
         }
         if ("top_pane_clock_alignment".equals(key)) {
             return mPreferences.getTopPaneClockAlignment();
+        }
+        if ("status_bar_expanded_mode".equals(key)) {
+            return mPreferences.getStatusBarExpandedMode();
+        }
+        if ("status_bar_horizontal_swipe_action".equals(key)) {
+            return mPreferences.getStatusBarHorizontalSwipeAction();
         }
         return defValue;
     }

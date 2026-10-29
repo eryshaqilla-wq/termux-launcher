@@ -399,6 +399,13 @@ public final class TermuxPreferenceConstants {
         public static final boolean DEFAULT_APP_LAUNCHER_MOST_USED_PAGE = false;
 
         /**
+         * Defines the key for two-finger swipe right/left gesture to collapse/expand the dock.
+         */
+        public static final String KEY_APP_LAUNCHER_TWO_FINGER_DOCK_SWIPE = "app_launcher_two_finger_dock_swipe";
+
+        public static final boolean DEFAULT_APP_LAUNCHER_TWO_FINGER_DOCK_SWIPE = true;
+
+        /**
          * Defines the key for app launcher bar height scale.
          */
         public static final String KEY_APP_LAUNCHER_BAR_HEIGHT = "app_launcher_bar_height";
@@ -646,6 +653,25 @@ public final class TermuxPreferenceConstants {
         /** Show weather temperatures in Fahrenheit instead of the default Celsius. */
         public static final String KEY_STATUS_WIDGET_WEATHER_FAHRENHEIT = "status_widget_weather_fahrenheit";
         public static final boolean DEFAULT_STATUS_WIDGET_WEATHER_FAHRENHEIT = false;
+
+        /**
+         * Whether the status bar's expanded slot shows custom extra keys / shortcuts instead of the clock.
+         */
+        public static final String KEY_STATUS_BAR_EXPANDED_SHORTCUTS = "status_bar_expanded_shortcuts";
+        public static final boolean DEFAULT_STATUS_BAR_EXPANDED_SHORTCUTS = false;
+
+        public static final String KEY_STATUS_BAR_EXPANDED_MODE = "status_bar_expanded_mode";
+        public static final String VALUE_STATUS_BAR_EXPANDED_MODE_CLOCK = "clock";
+        public static final String VALUE_STATUS_BAR_EXPANDED_MODE_EXTRA_KEYS = "extra_keys";
+        public static final String DEFAULT_VALUE_STATUS_BAR_EXPANDED_MODE = VALUE_STATUS_BAR_EXPANDED_MODE_CLOCK;
+
+        /** Action triggered by horizontal swipe left/right on the status bar. */
+        public static final String KEY_STATUS_BAR_HORIZONTAL_SWIPE_ACTION = "status_bar_horizontal_swipe_action";
+        public static final String ACTION_STATUS_BAR_SWIPE_WALL = "wall";
+        public static final String ACTION_STATUS_BAR_SWIPE_WINDOW = "window";
+        public static final String ACTION_STATUS_BAR_SWIPE_SESSION = "session";
+        public static final String ACTION_STATUS_BAR_SWIPE_NONE = "none";
+        public static final String DEFAULT_STATUS_BAR_HORIZONTAL_SWIPE_ACTION = ACTION_STATUS_BAR_SWIPE_WALL;
 
         /**
          * The label of a place picked in Settings ("Salmiya, Hawalli") that the weather is fetched

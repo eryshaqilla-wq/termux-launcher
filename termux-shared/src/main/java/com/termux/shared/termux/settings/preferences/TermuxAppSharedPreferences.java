@@ -920,6 +920,54 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             TERMUX_APP.KEY_STATUS_WIDGET_WEATHER_FAHRENHEIT, TERMUX_APP.DEFAULT_STATUS_WIDGET_WEATHER_FAHRENHEIT);
     }
 
+    public boolean isStatusBarExpandedShortcutsEnabled() {
+        String mode = SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_EXPANDED_MODE, null, false);
+        if (mode != null) {
+            return TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_EXTRA_KEYS.equals(mode);
+        }
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_EXPANDED_SHORTCUTS, TERMUX_APP.DEFAULT_STATUS_BAR_EXPANDED_SHORTCUTS);
+    }
+
+    public void setStatusBarExpandedShortcutsEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_STATUS_BAR_EXPANDED_SHORTCUTS, value, false);
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_STATUS_BAR_EXPANDED_MODE,
+            value ? TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_EXTRA_KEYS : TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_CLOCK, false);
+    }
+
+    public String getStatusBarExpandedMode() {
+        String mode = SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_EXPANDED_MODE, null, false);
+        if (mode != null) {
+            return mode;
+        }
+        return isStatusBarExpandedShortcutsEnabled()
+            ? TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_EXTRA_KEYS
+            : TERMUX_APP.DEFAULT_VALUE_STATUS_BAR_EXPANDED_MODE;
+    }
+
+    public void setStatusBarExpandedMode(String mode) {
+        SharedPreferenceUtils.setString(mSharedPreferences, TERMUX_APP.KEY_STATUS_BAR_EXPANDED_MODE, mode, false);
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_STATUS_BAR_EXPANDED_SHORTCUTS,
+            TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_EXTRA_KEYS.equals(mode), false);
+    }
+
+    public String getStatusBarHorizontalSwipeAction() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_HORIZONTAL_SWIPE_ACTION,
+            TERMUX_APP.DEFAULT_STATUS_BAR_HORIZONTAL_SWIPE_ACTION, false);
+    }
+
+    public void setStatusBarHorizontalSwipeAction(String action) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_HORIZONTAL_SWIPE_ACTION, action, false);
+    }
+
+    public boolean isStatusBarHorizontalSwipeEnabled() {
+        return !TERMUX_APP.ACTION_STATUS_BAR_SWIPE_NONE.equals(getStatusBarHorizontalSwipeAction());
+    }
+
     public void setStatusWidgetWeatherFahrenheit(boolean value) {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_STATUS_WIDGET_WEATHER_FAHRENHEIT, value, false);
     }
@@ -1524,6 +1572,18 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
 
     public void setAppLauncherMostUsedPageEnabled(boolean value) {
         SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_MOST_USED_PAGE, value, false);
+    }
+
+    public boolean isTwoFingerDockSwipeEnabled() {
+        return SharedPreferenceUtils.getBoolean(
+            mSharedPreferences,
+            TERMUX_APP.KEY_APP_LAUNCHER_TWO_FINGER_DOCK_SWIPE,
+            TERMUX_APP.DEFAULT_APP_LAUNCHER_TWO_FINGER_DOCK_SWIPE
+        );
+    }
+
+    public void setTwoFingerDockSwipeEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_APP_LAUNCHER_TWO_FINGER_DOCK_SWIPE, value, false);
     }
 
     /**

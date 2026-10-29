@@ -116,7 +116,11 @@ public final class ExtraKeysPresets {
     public static List<Preset> presetsForPage(int page, @Nullable String previousPageValue) {
         String shipped = page == 0
             ? TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS
-            : TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS2;
+            : (page == TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX
+                ? TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_COMPACT
+                : (page == TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX
+                    ? TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STATUSBAR
+                    : TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS2));
         List<Preset> presets = new ArrayList<>(5);
         if (previousPageValue != null && ExtraKeysDefaultOffer.hasPreviousRow(previousPageValue)) {
             presets.add(new Preset(com.termux.R.string.settings_extra_keys_preset_previous,

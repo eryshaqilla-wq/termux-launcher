@@ -10,6 +10,32 @@
             app:defaultValue="false" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="@string/settings_status_expanded_header">
+        <ListPreference
+            app:key="status_bar_expanded_mode"
+            app:title="@string/settings_status_expanded_mode_title"
+            app:entries="@array/settings_status_expanded_mode_entries"
+            app:entryValues="@array/settings_status_expanded_mode_values"
+            app:defaultValue="clock"
+            app:useSimpleSummaryProvider="true" />
+        <Preference
+            app:key="edit_status_bar_extra_keys"
+            app:persistent="false"
+            app:fragment="com.termux.app.fragments.settings.termux.ExtraKeysEditorFragment"
+            app:title="@string/settings_edit_status_bar_extra_keys_title"
+            app:summary="@string/settings_edit_status_bar_extra_keys_summary" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="@string/settings_status_gestures_header">
+        <ListPreference
+            app:key="status_bar_horizontal_swipe_action"
+            app:title="@string/settings_status_bar_horizontal_swipe_title"
+            app:entries="@array/settings_status_bar_horizontal_swipe_entries"
+            app:entryValues="@array/settings_status_bar_horizontal_swipe_values"
+            app:defaultValue="wall"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="@string/settings_status_indicators_header">
         <SwitchPreferenceCompat
             app:key="status_widget_cpu"

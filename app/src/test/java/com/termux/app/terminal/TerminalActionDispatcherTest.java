@@ -69,7 +69,8 @@ public class TerminalActionDispatcherTest {
             "keyboard.cycle_layout", "keyboard.select_layout",
             "keyboard.cycle_form", "keyboard.set_form", "keyboard.show", "keyboard.hide",
             "keyboard.clipboard", "keyboard.toggle_enabled", "voice.dictate",
-            "pane.open", "pane.list", "pane.focus", "pane.close", "pane.write", "pane.read", "pane.split"};
+            "pane.open", "pane.list", "pane.focus", "pane.close", "pane.write", "pane.read", "pane.split",
+            "ipc.wallet", "ipc.web", "ipc.telegram", "ipc.ai", "ipc.run"};
         for (String name : handled) {
             assertTrue(name, TerminalActionDispatcher.handles(name));
         }

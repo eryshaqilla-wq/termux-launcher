@@ -156,6 +156,18 @@ public class StatusBarGesturePolicyTest {
         }
     }
 
+    @Test public void horizontalSwipeClaimsLeftAndRightWhenEnabled() {
+        StatusBarGesturePolicy.Down downLeft = new StatusBarGesturePolicy.Down(0, 50, 10, 50, 10,
+            100, TopStatusBarState.COMPACT, false, false, false, false, true, true, 8, Edge.TOP);
+        StatusBarGesturePolicy policyLeft = new StatusBarGesturePolicy(downLeft);
+        assertEquals(StatusBarGesturePolicy.Claim.SWIPE_LEFT, policyLeft.move(20, 10));
+
+        StatusBarGesturePolicy.Down downRight = new StatusBarGesturePolicy.Down(0, 50, 10, 50, 10,
+            100, TopStatusBarState.EXPANDED, false, false, false, false, true, true, 8, Edge.TOP);
+        StatusBarGesturePolicy policyRight = new StatusBarGesturePolicy(downRight);
+        assertEquals(StatusBarGesturePolicy.Claim.SWIPE_RIGHT, policyRight.move(80, 10));
+    }
+
     @Test public void expansionIsAllowedOnlyAlongTopOrBottom() {
         assertTrue(StatusBarGesturePolicy.expansionAllowed(Edge.TOP));
         assertTrue(StatusBarGesturePolicy.expansionAllowed(Edge.BOTTOM));

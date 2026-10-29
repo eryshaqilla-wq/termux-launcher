@@ -194,6 +194,17 @@
 
                 </com.termux.app.statusbar.TopPaneWidgetSlot>
 
+                <FrameLayout
+                    android:id="@+id/terminal_status_extra_keys_host"
+                    android:layout_width="match_parent"
+                    android:layout_height="65dp"
+                    android:layout_gravity="top"
+                    android:elevation="6dp"
+                    android:outlineProvider="none"
+                    android:clipChildren="true"
+                    android:clipToPadding="true"
+                    android:visibility="gone" />
+
                 <!-- The clock a bar standing in a column wears, in place of the widget slot
                      above: the hour over the minutes with the date beneath. Shown only while
                      such a bar is open; lifted over the glass like the slot and the row. -->

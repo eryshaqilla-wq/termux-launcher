@@ -5469,20 +5469,26 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 host.setLayoutParams(mlp);
             }
             View topWidgets = findViewById(R.id.terminal_top_widget_area);
-            if (topWidgets != null && topWidgets.getLayoutParams() != null) {
+            View shortcutsHost = findViewById(R.id.terminal_status_extra_keys_host);
+            boolean shortcutsEnabled = mPreferences != null && mPreferences.isStatusBarExpandedShortcutsEnabled();
+            if (shortcutsEnabled && !collapsed) syncStatusBarExtraKeysHost();
+            View activeSlot = shortcutsEnabled ? shortcutsHost : topWidgets;
+            View inactiveSlot = shortcutsEnabled ? topWidgets : shortcutsHost;
+            if (inactiveSlot != null) inactiveSlot.setVisibility(View.GONE);
+            if (activeSlot != null && activeSlot.getLayoutParams() != null) {
                 int targetWidgetHeight = Math.round(dpToPx(capsule
                     ? com.termux.app.statusbar.StatusBarEdgeGeometry.SLOT_CAPSULE_DP
                     : com.termux.app.statusbar.StatusBarEdgeGeometry.SLOT_DOCKED_DP));
-                ViewGroup.LayoutParams widgetParams = topWidgets.getLayoutParams();
+                ViewGroup.LayoutParams widgetParams = activeSlot.getLayoutParams();
                 if (widgetParams.height != targetWidgetHeight) {
                     widgetParams.height = targetWidgetHeight;
-                    topWidgets.setLayoutParams(widgetParams);
+                    activeSlot.setLayoutParams(widgetParams);
                 }
                 if (!isStatusBarFoldInteractive()) {
-                    topWidgets.setAlpha(1f);
-                    topWidgets.setTranslationY(0f);
+                    activeSlot.setAlpha(1f);
+                    activeSlot.setTranslationY(0f);
                     // A column carries the stacked clock instead of the row's widget slot.
-                    topWidgets.setVisibility(collapsed || vertical ? View.GONE : View.VISIBLE);
+                    activeSlot.setVisibility(collapsed || vertical ? View.GONE : View.VISIBLE);
                 }
             }
             View stackedClock = findViewById(R.id.terminal_status_column_clock);
@@ -13793,6 +13799,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private boolean checkTwoFingerSwipe(@NonNull MotionEvent ev) {
+        if (mPreferences == null || !mPreferences.isTwoFingerDockSwipeEnabled()) {
+            mTwoFingerCandidate = false;
+            mTwoFingerGestureTriggered = false;
+            return false;
+        }
+
         int action = ev.getActionMasked();
         int pointerCount = ev.getPointerCount();
 
@@ -14484,6 +14496,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             });
         };
         band.addOnLayoutChangeListener(mExtraKeysColumnFollower);
+    }
+
+    public void syncStatusBarExtraKeysHost() {
+        ViewGroup host = findViewById(R.id.terminal_status_extra_keys_host);
+        if (host == null) return;
+        boolean shortcutsEnabled = mPreferences != null && mPreferences.isStatusBarExpandedShortcutsEnabled();
+        if (!shortcutsEnabled) {
+            host.setVisibility(View.GONE);
+            return;
+        }
+        ExtraKeysView keys = getExtraKeysView(com.termux.app.terminal.io.TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX);
+        boolean needsRebuild = keys == null || keys.getParent() != host;
+        if (needsRebuild) {
+            keys = lendExtraKeysPage(com.termux.app.terminal.io.TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX);
+            host.removeAllViews();
+            keys.setVertical(false);
+            keys.setExtraKeysViewClient(getTermuxTerminalExtraKeys(com.termux.app.terminal.io.TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX));
+            keys.setButtonTextAllCaps(mProperties != null && mProperties.shouldExtraKeysTextBeAllCaps());
+            applyExtraKeysFeedbackAccent(keys);
+            keys.reload(getTermuxTerminalExtraKeys(com.termux.app.terminal.io.TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX).getExtraKeysInfo(), dpToPx(65f));
+            host.addView(keys, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            applyExtraKeysPlaceEligibility(keys);
+        }
     }
 
     /**
@@ -18597,6 +18632,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (host instanceof ViewGroup) ((ViewGroup) host).removeAllViews();
         mExtraKeysHostEdge = null;
         syncExtraKeysHost();
+        View statusHost = findViewById(R.id.terminal_status_extra_keys_host);
+        if (statusHost instanceof ViewGroup) ((ViewGroup) statusHost).removeAllViews();
+        syncStatusBarExtraKeysHost();
         setTerminalToolbarHeight();
     }
 
@@ -23735,6 +23773,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             swipeHost.setCollapsed(isStatusBarCompact());
             swipeHost.setExpansionAllowed(
                 com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge));
+            swipeHost.setHorizontalSwipeEnabled(mPreferences != null && mPreferences.isStatusBarHorizontalSwipeEnabled());
             swipeHost.setListener(new com.termux.app.statusbar.StatusBarSwipeLayout.Listener() {
                 @Override public void onCollapsedStateRequested(boolean collapsed) {
                     setTopStatusBarCollapsed(collapsed, true);
@@ -23750,6 +23789,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @Override public void onFoldDragCancelled() {
                     // Back to the form the bar had, from wherever the finger left it.
                     if (mStatusBarFoldDragging) setTopStatusBarCollapsed(isStatusBarCompact(), true, 0f);
+                }
+                @Override public void onHorizontalSwipeLeft() {
+                    handleStatusBarHorizontalSwipe(true);
+                }
+                @Override public void onHorizontalSwipeRight() {
+                    handleStatusBarHorizontalSwipe(false);
                 }
                 @Override public boolean isStatusGestureBlocked() {
                     // A live COMPACT/EXPANDED animator is deliberately eligible for takeover.
@@ -23819,7 +23864,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             stackedClock.setVisibility(expansion > 0.02f ? View.VISIBLE : View.GONE);
             stackedClock.setAlpha(expansion);
         }
-        if (topWidgets != null && !vertical) {
+        View shortcutsHost = findViewById(R.id.terminal_status_extra_keys_host);
+        boolean shortcutsEnabled = mPreferences != null && mPreferences.isStatusBarExpandedShortcutsEnabled();
+        if (shortcutsEnabled) syncStatusBarExtraKeysHost();
+        View expandedContent = shortcutsEnabled ? shortcutsHost : topWidgets;
+        View otherContent = shortcutsEnabled ? topWidgets : shortcutsHost;
+        if (otherContent != null) otherContent.setVisibility(View.GONE);
+        if (expandedContent != null && !vertical) {
             // The slot stands above the row on both row edges, so what it shows is always the
             // stretch the row has not reached — its own top down to the row's crown. It slides in
             // the way the bar is growing: down out of a top bar, up out of a bottom one.
@@ -23829,14 +23880,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             // height, so a fold reads the same curve down and half-drawn content never shows. The
             // clock's own flip to the current time after it is revealed is its own behaviour.
             float content = com.termux.app.statusbar.StatusBarFoldMotion.contentAlpha(expansion);
-            topWidgets.setVisibility(View.VISIBLE);
-            topWidgets.setAlpha(content);
-            topWidgets.setTranslationY(-sign * dpToPx(8) * (1f - content));
-            int clipRight = Math.max(1, Math.max(host.getWidth(), topWidgets.getWidth()));
-            int widgetHeight = topWidgets.getHeight() > 0
-                ? topWidgets.getHeight() : rowGeometry.clockClipBottom;
+            expandedContent.setVisibility(View.VISIBLE);
+            expandedContent.setAlpha(content);
+            expandedContent.setTranslationY(-sign * dpToPx(8) * (1f - content));
+            int clipRight = Math.max(1, Math.max(host.getWidth(), expandedContent.getWidth()));
+            int widgetHeight = expandedContent.getHeight() > 0
+                ? expandedContent.getHeight() : rowGeometry.clockClipBottom;
             int clear = Math.max(0, Math.min(widgetHeight, rowGeometry.clockClipBottom));
-            topWidgets.setClipBounds(new Rect(0, 0, clipRight, clear));
+            expandedContent.setClipBounds(new Rect(0, 0, clipRight, clear));
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             // The clip radius must follow the CURRENT interactive height, not the endpoint it is
@@ -23996,6 +24047,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             || !com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge);
         View host = findViewById(R.id.terminal_window_bar_host);
         View topWidgets = findViewById(R.id.terminal_top_widget_area);
+        View shortcutsHost = findViewById(R.id.terminal_status_extra_keys_host);
+        boolean shortcutsEnabled = mPreferences != null && mPreferences.isStatusBarExpandedShortcutsEnabled();
+        if (shortcutsEnabled && !collapsed) syncStatusBarExtraKeysHost();
+        View expandedContent = shortcutsEnabled ? shortcutsHost : topWidgets;
+        View otherContent = shortcutsEnabled ? topWidgets : shortcutsHost;
+        if (otherContent != null) otherContent.setVisibility(View.GONE);
         com.termux.app.statusbar.StatusBarSwipeLayout swipeHost = host instanceof
             com.termux.app.statusbar.StatusBarSwipeLayout
             ? (com.termux.app.statusbar.StatusBarSwipeLayout) host : null;
@@ -24005,11 +24062,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean geometryChanged = host != null && currentTopStatusBarHeight(host) != targetHeight;
         if (swipeHost != null) swipeHost.setCollapsed(collapsed);
         if (!preferenceChanged && !geometryChanged) {
-            if (topWidgets != null) {
-                topWidgets.setClipBounds(null);
-                topWidgets.setAlpha(1f);
-                topWidgets.setTranslationY(0f);
-                topWidgets.setVisibility(collapsed || isStatusBarVertical()
+            if (expandedContent != null) {
+                expandedContent.setClipBounds(null);
+                expandedContent.setAlpha(1f);
+                expandedContent.setTranslationY(0f);
+                expandedContent.setVisibility(collapsed || isStatusBarVertical()
                     ? View.GONE : View.VISIBLE);
             }
             // Nothing began a resize here, so nothing is finished either — except the lease a
@@ -24030,6 +24087,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!animate || isReducedMotionEnabled()) {
             GeometryScheduler.Transition snap = dragLease != null ? dragLease
                 : beginStatusBarTerminalResize();
+            if (expandedContent != null) {
+                expandedContent.setClipBounds(null);
+                expandedContent.setAlpha(1f);
+                expandedContent.setTranslationY(0f);
+                expandedContent.setVisibility(collapsed || isStatusBarVertical()
+                    ? View.GONE : View.VISIBLE);
+            }
             refreshTerminalWindowBar();
             finishStatusBarTerminalResize(snap, true);
             return;
@@ -24073,11 +24137,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     finishStatusBarTerminalResize(foldTransition, false);
                     return;
                 }
-                if (topWidgets != null) {
-                    topWidgets.setClipBounds(null);
-                    topWidgets.setAlpha(1f);
-                    topWidgets.setTranslationY(0f);
-                    topWidgets.setVisibility(collapsed || isStatusBarVertical()
+                if (expandedContent != null) {
+                    expandedContent.setClipBounds(null);
+                    expandedContent.setAlpha(1f);
+                    expandedContent.setTranslationY(0f);
+                    expandedContent.setVisibility(collapsed || isStatusBarVertical()
                         ? View.GONE : View.VISIBLE);
                 }
                 refreshTerminalWindowBar();
@@ -24180,6 +24244,33 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return mStatusBarFoldDragging ? travel : 0;
     }
 
+    private void handleStatusBarHorizontalSwipe(boolean isLeft) {
+        String action = mPreferences != null
+            ? mPreferences.getStatusBarHorizontalSwipeAction()
+            : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_STATUS_BAR_HORIZONTAL_SWIPE_ACTION;
+        if (TermuxPreferenceConstants.TERMUX_APP.ACTION_STATUS_BAR_SWIPE_NONE.equals(action)) {
+            return;
+        }
+
+        switch (action) {
+            case TermuxPreferenceConstants.TERMUX_APP.ACTION_STATUS_BAR_SWIPE_WALL:
+                if (mPaneWallController != null) {
+                    mPaneWallController.goTo(isLeft ? "left" : "right");
+                }
+                break;
+            case TermuxPreferenceConstants.TERMUX_APP.ACTION_STATUS_BAR_SWIPE_WINDOW:
+                switchWindow(!isLeft);
+                break;
+            case TermuxPreferenceConstants.TERMUX_APP.ACTION_STATUS_BAR_SWIPE_SESSION:
+                if (getTermuxTerminalSessionClient() != null) {
+                    getTermuxTerminalSessionClient().switchToSession(!isLeft);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
     /** Refresh visibility, labels, selection and the shared dock/keyboard glass treatment. */
     public void refreshTerminalWindowBar() {
         if (mWindowBarRefreshBatchDepth > 0) {
@@ -24221,6 +24312,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View host = findViewById(R.id.terminal_window_bar_host);
         com.termux.app.terminal.TerminalWindowBar bar = findViewById(R.id.terminal_window_bar);
         if (host == null || bar == null) return;
+        if (host instanceof com.termux.app.statusbar.StatusBarSwipeLayout) {
+            ((com.termux.app.statusbar.StatusBarSwipeLayout) host)
+                .setHorizontalSwipeEnabled(mPreferences != null && mPreferences.isStatusBarHorizontalSwipeEnabled());
+        }
         // Re-applied here, not only at setup, so a lazy-mode toggle takes effect on the
         // settings-return refresh instead of waiting for the activity to be recreated.
         applyLazyMode();

@@ -514,6 +514,9 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 mPreferences.setAppLauncherMostUsedPageEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
                 break;
+            case "app_launcher_two_finger_dock_swipe":
+                mPreferences.setTwoFingerDockSwipeEnabled(value);
+                break;
             case "app_launcher_drawer_enabled":
                 mPreferences.setAppLauncherDrawerEnabled(value);
                 scheduleTermuxActivityStylingSync(false);
@@ -588,6 +591,8 @@ class TermuxStylePreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isAppLauncherNotificationDotsEnabled();
             case "app_launcher_most_used_page":
                 return mPreferences.isAppLauncherMostUsedPageEnabled();
+            case "app_launcher_two_finger_dock_swipe":
+                return mPreferences.isTwoFingerDockSwipeEnabled();
             case "app_launcher_drawer_enabled":
                 return mPreferences.isAppLauncherDrawerEnabled();
             case "app_launcher_drawer_search_on_open":

@@ -217,6 +217,11 @@ public final class TerminalActionDispatcher {
     public static final String TOOL_CLIPBOARD_COPY_SELECTED = "clipboard.copy_selected";
     public static final String TOOL_FONTS_PICK = "fonts.pick";
     public static final String TOOL_FONTS_INSTALL = "fonts.install";
+    public static final String TOOL_IPC_WALLET = "ipc.wallet";
+    public static final String TOOL_IPC_WEB = "ipc.web";
+    public static final String TOOL_IPC_TELEGRAM = "ipc.telegram";
+    public static final String TOOL_IPC_AI = "ipc.ai";
+    public static final String TOOL_IPC_RUN = "ipc.run";
 
     private static final TerminalActionDispatcher INSTANCE = new TerminalActionDispatcher();
 
@@ -302,6 +307,11 @@ public final class TerminalActionDispatcher {
             case TOOL_SHELL_PROGRESS:
             case TOOL_CLIPBOARD_WRITE:
             case TOOL_CLIPBOARD_READ:
+            case TOOL_IPC_WALLET:
+            case TOOL_IPC_WEB:
+            case TOOL_IPC_TELEGRAM:
+            case TOOL_IPC_AI:
+            case TOOL_IPC_RUN:
                 return true;
             default:
                 return false;
@@ -419,6 +429,11 @@ public final class TerminalActionDispatcher {
             case TOOL_SHELL_PROGRESS:
             case TOOL_CLIPBOARD_WRITE:
             case TOOL_CLIPBOARD_READ:
+            case TOOL_IPC_WALLET:
+            case TOOL_IPC_WEB:
+            case TOOL_IPC_TELEGRAM:
+            case TOOL_IPC_AI:
+            case TOOL_IPC_RUN:
                 return true;
             default:
                 return false;
@@ -1255,6 +1270,65 @@ public final class TerminalActionDispatcher {
                     }
                     return ok().put("familyId", family.id).put("installed", false)
                         .put("downloaded", true).put("downloadBytes", family.downloadBytes);
+                }
+
+                case TOOL_IPC_WALLET: {
+                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
+                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    if (activity != null) {
+                        com.termux.app.TermuxIpcServer.injectCommand(activity,
+                            com.termux.webview.FusionWalletHelper.getStartWalletDaemonCommand(), true);
+                        return ok().put("ran", "wallet");
+                    }
+                    return noSession(toolName);
+                }
+                case TOOL_IPC_WEB: {
+                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
+                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    if (activity != null) {
+                        String url = arguments.optString("url", "").trim();
+                        if (!url.isEmpty()) {
+                            com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                            if (mgr != null) {
+                                mgr.openUrl(url, "default", true, false);
+                            } else {
+                                com.termux.app.TermuxIpcServer.injectCommand(activity, "browser " + url, true);
+                            }
+                        } else {
+                            com.termux.app.TermuxIpcServer.injectCommand(activity, "browser", true);
+                        }
+                        return ok().put("ran", "web");
+                    }
+                    return noSession(toolName);
+                }
+                case TOOL_IPC_TELEGRAM: {
+                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
+                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    if (activity != null) {
+                        com.termux.app.TermuxIpcServer.injectCommand(activity, "pmt", true);
+                        return ok().put("ran", "telegram");
+                    }
+                    return noSession(toolName);
+                }
+                case TOOL_IPC_AI: {
+                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
+                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    if (activity != null) {
+                        com.termux.app.TermuxIpcServer.injectCommand(activity, "ai", true);
+                        return ok().put("ran", "ai");
+                    }
+                    return noSession(toolName);
+                }
+                case TOOL_IPC_RUN: {
+                    String cmd = arguments.optString("cmd", arguments.optString("command", "")).trim();
+                    if (cmd.isEmpty()) return error(400, "bad_request", "Missing 'cmd'");
+                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
+                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    if (activity != null) {
+                        com.termux.app.TermuxIpcServer.injectCommand(activity, cmd, true);
+                        return ok().put("command", cmd);
+                    }
+                    return noSession(toolName);
                 }
 
                 case TOOL_APP_COMMAND_PALETTE:

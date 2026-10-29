@@ -146,6 +146,11 @@ public final class ExtraKeyEligibility {
         tools.put(LauncherToolRegistry.TOOL_APPEARANCE_SURFACE_EDITOR, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_FONTS_PICK, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_FONTS_INSTALL, Band.LAUNCHER);
+        tools.put(LauncherToolRegistry.TOOL_IPC_WALLET, Band.LAUNCHER);
+        tools.put(LauncherToolRegistry.TOOL_IPC_WEB, Band.LAUNCHER);
+        tools.put(LauncherToolRegistry.TOOL_IPC_TELEGRAM, Band.LAUNCHER);
+        tools.put(LauncherToolRegistry.TOOL_IPC_AI, Band.LAUNCHER);
+        tools.put(LauncherToolRegistry.TOOL_IPC_RUN, Band.LAUNCHER);
 
         // --------------------------------------------------------------- the sessions overlays
         tools.put(LauncherToolRegistry.TOOL_SESSION_BROWSER, Band.SESSION_OVERLAY);

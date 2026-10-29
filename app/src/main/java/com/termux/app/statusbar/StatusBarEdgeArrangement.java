@@ -73,15 +73,26 @@ public final class StatusBarEdgeArrangement {
         // stands on and the slot grows off it towards the middle, so the clock is over the stats
         // on a top bar and a bottom one alike, and the two never share a stretch of the bar.
         View widgetSlot = host.findViewById(R.id.terminal_top_widget_area);
+        View shortcutsHost = host.findViewById(R.id.terminal_status_extra_keys_host);
         if (widgetSlot != null && vertical) widgetSlot.setVisibility(View.GONE);
+        if (shortcutsHost != null && vertical) shortcutsHost.setVisibility(View.GONE);
+        int gravity = StatusBarLensPolicy.slotLeadsRow(edge) ? Gravity.TOP : Gravity.BOTTOM;
         if (widgetSlot != null
             && widgetSlot.getLayoutParams() instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams slotParams =
                 (FrameLayout.LayoutParams) widgetSlot.getLayoutParams();
-            int gravity = StatusBarLensPolicy.slotLeadsRow(edge) ? Gravity.TOP : Gravity.BOTTOM;
             if (slotParams.gravity != gravity) {
                 slotParams.gravity = gravity;
                 widgetSlot.setLayoutParams(slotParams);
+            }
+        }
+        if (shortcutsHost != null
+            && shortcutsHost.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams slotParams =
+                (FrameLayout.LayoutParams) shortcutsHost.getLayoutParams();
+            if (slotParams.gravity != gravity) {
+                slotParams.gravity = gravity;
+                shortcutsHost.setLayoutParams(slotParams);
             }
         }
         View stackedClock = host.findViewById(R.id.terminal_status_column_clock);

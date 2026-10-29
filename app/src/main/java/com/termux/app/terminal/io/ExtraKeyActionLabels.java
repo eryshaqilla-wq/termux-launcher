@@ -63,6 +63,11 @@ public final class ExtraKeyActionLabels {
     @Nullable
     public static String defaultCapGlyph(@NonNull String toolName) {
         switch (toolName) {
+            case LauncherToolRegistry.TOOL_IPC_WALLET: return "👛";
+            case LauncherToolRegistry.TOOL_IPC_WEB: return "🌐";
+            case LauncherToolRegistry.TOOL_IPC_TELEGRAM: return "✈️";
+            case LauncherToolRegistry.TOOL_IPC_AI: return "🤖";
+            case LauncherToolRegistry.TOOL_IPC_RUN: return ">_";
             case LauncherToolRegistry.TOOL_WALL_WIDGETS: return "\uf015";
             case LauncherToolRegistry.TOOL_WALL_TERMINAL: return "\uf120";
             case LauncherToolRegistry.TOOL_WALL_DISPLAY: return "\uf108";

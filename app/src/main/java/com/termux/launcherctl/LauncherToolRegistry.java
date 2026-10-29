@@ -76,6 +76,7 @@ public final class LauncherToolRegistry {
     public static final String CATEGORY_CLIPBOARD = "clipboard";
     public static final String CATEGORY_APPEARANCE = "appearance";
     public static final String CATEGORY_APP = "app";
+    public static final String CATEGORY_IPC = "ipc";
     /** The pane wall's places: Widgets, Terminal, Display. */
     public static final String CATEGORY_WALL = "wall";
     /** Installed Android apps, contributed by the palette rather than by tools. */
@@ -474,6 +475,11 @@ public final class LauncherToolRegistry {
     public static final String TOOL_CLIPBOARD_COPY_SELECTED = "clipboard.copy_selected";
     public static final String TOOL_FONTS_PICK = "fonts.pick";
     public static final String TOOL_FONTS_INSTALL = "fonts.install";
+    public static final String TOOL_IPC_WALLET = "ipc.wallet";
+    public static final String TOOL_IPC_WEB = "ipc.web";
+    public static final String TOOL_IPC_TELEGRAM = "ipc.telegram";
+    public static final String TOOL_IPC_AI = "ipc.ai";
+    public static final String TOOL_IPC_RUN = "ipc.run";
 
     private static LauncherToolRegistry instance;
 
@@ -1256,6 +1262,37 @@ public final class LauncherToolRegistry {
                 .build(),
             ToolRisk.MEDIUM, true, ToolExecutor.TERMINAL,
             CATEGORY_APPEARANCE, R.string.tool_fonts_install, 0, null);
+
+        // IPC & Automation tools (Ghost Wallet, Browser, Telegram, AI, custom runner)
+        addUi(map, TOOL_IPC_WALLET,
+            "Start Ghost Web3 wallet daemon (port 3333).",
+            schemaEmpty(),
+            ToolRisk.LOW, false, ToolExecutor.TERMINAL,
+            CATEGORY_IPC, R.string.tool_ipc_wallet, R.string.tool_desc_ipc_wallet, null);
+        addUi(map, TOOL_IPC_WEB,
+            "Open WebView browser or navigate to URL.",
+            schemaObject()
+                .withString("url", "URL to open in webview", false)
+                .build(),
+            ToolRisk.LOW, false, ToolExecutor.TERMINAL,
+            CATEGORY_IPC, R.string.tool_ipc_web, R.string.tool_desc_ipc_web, null);
+        addUi(map, TOOL_IPC_TELEGRAM,
+            "Run Telegram link & code sniper (pemantau).",
+            schemaEmpty(),
+            ToolRisk.LOW, false, ToolExecutor.TERMINAL,
+            CATEGORY_IPC, R.string.tool_ipc_telegram, R.string.tool_desc_ipc_telegram, null);
+        addUi(map, TOOL_IPC_AI,
+            "Run Tri-Engine Auto-Engine AI CLI.",
+            schemaEmpty(),
+            ToolRisk.LOW, false, ToolExecutor.TERMINAL,
+            CATEGORY_IPC, R.string.tool_ipc_ai, R.string.tool_desc_ipc_ai, null);
+        addUi(map, TOOL_IPC_RUN,
+            "Send a command to the active terminal via IPC.",
+            schemaObject()
+                .withString("cmd", "Command to run", true)
+                .build(),
+            ToolRisk.LOW, false, ToolExecutor.TERMINAL,
+            CATEGORY_IPC, R.string.tool_ipc_run, R.string.tool_desc_ipc_run, null);
     }
 
     @NonNull

@@ -542,7 +542,7 @@ public class LauncherToolRegistryTest {
     @Test
     public void terminalActions_groupByCategory() {
         java.util.Map<String, List<LauncherToolRegistry.ToolMetadata>> grouped = registry.getUiToolsByCategory();
-        assertEquals(10, grouped.size());
+        assertEquals(11, grouped.size());
         // Exact per-group counts churn with every added action; assert the
         // invariant instead: every grouped tool is a UI tool and vice versa.
         int total = 0;

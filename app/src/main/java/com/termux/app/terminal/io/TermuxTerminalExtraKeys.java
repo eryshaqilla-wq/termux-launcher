@@ -27,6 +27,7 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         TermuxPropertyConstants.KEY_EXTRA_KEYS,
         TermuxPropertyConstants.KEY_EXTRA_KEYS2,
         TermuxPropertyConstants.KEY_EXTRA_KEYS_COMPACT,
+        TermuxPropertyConstants.KEY_EXTRA_KEYS_STATUSBAR,
     };
 
     /** The default value of each page, index-aligned with {@link #PAGE_PROPERTY_KEYS}. */
@@ -34,9 +35,11 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
         TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS,
         TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS2,
         TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_COMPACT,
+        TermuxPropertyConstants.DEFAULT_IVALUE_EXTRA_KEYS_STATUSBAR,
     };
 
     public static final int COMPACT_PAGE_INDEX = 2;
+    public static final int STATUSBAR_PAGE_INDEX = 3;
 
     private ExtraKeysInfo mExtraKeysInfo;
 

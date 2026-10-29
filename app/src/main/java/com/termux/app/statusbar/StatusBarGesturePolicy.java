@@ -16,7 +16,7 @@ import com.termux.app.place.PlaceLayout.Edge;
  */
 public final class StatusBarGesturePolicy {
     public enum Claim {
-        PENDING, EXPAND_SWIPE, COLLAPSE_SWIPE, CHILD_OWNED, CANCELLED
+        PENDING, EXPAND_SWIPE, COLLAPSE_SWIPE, SWIPE_LEFT, SWIPE_RIGHT, CHILD_OWNED, CANCELLED
     }
 
     public static final class Down {
@@ -38,6 +38,7 @@ public final class StatusBarGesturePolicy {
          * drags on the fold's own axis takes it away. The layout computes it from the DOWN point.
          */
         public final boolean formEligible;
+        public final boolean horizontalSwipeEnabled;
         public final int touchSlop;
         /** The edge the bar stands on, which is what decides the two axes. */
         @NonNull public final Edge edge;
@@ -69,6 +70,18 @@ public final class StatusBarGesturePolicy {
                     boolean insideInteractiveChild, boolean nestedChildOwned,
                     boolean anotherSurfaceEngaged, boolean formEligible, int touchSlop,
                     @NonNull Edge edge) {
+            this(pointerId, rawX, rawY, localX, localY, uptimeMillis, state, insideWindowBar,
+                insideInteractiveChild, nestedChildOwned, anotherSurfaceEngaged, formEligible,
+                false, touchSlop, edge);
+        }
+
+        public Down(int pointerId, float rawX, float rawY, float localX, float localY,
+                    long uptimeMillis, @NonNull TopStatusBarState state,
+                    boolean insideWindowBar,
+                    boolean insideInteractiveChild, boolean nestedChildOwned,
+                    boolean anotherSurfaceEngaged, boolean formEligible,
+                    boolean horizontalSwipeEnabled, int touchSlop,
+                    @NonNull Edge edge) {
             this.pointerId = pointerId;
             this.rawX = rawX;
             this.rawY = rawY;
@@ -81,6 +94,7 @@ public final class StatusBarGesturePolicy {
             this.nestedChildOwned = nestedChildOwned;
             this.anotherSurfaceEngaged = anotherSurfaceEngaged;
             this.formEligible = formEligible;
+            this.horizontalSwipeEnabled = horizontalSwipeEnabled;
             this.touchSlop = Math.max(0, touchSlop);
             this.edge = edge;
         }
@@ -95,7 +109,9 @@ public final class StatusBarGesturePolicy {
 
     public StatusBarGesturePolicy(@NonNull Down down) {
         this.down = down;
-        claim = down.eligible() || down.formEligible ? Claim.PENDING : Claim.CHILD_OWNED;
+        claim = down.eligible() || down.formEligible
+            || (down.horizontalSwipeEnabled && !down.anotherSurfaceEngaged)
+            ? Claim.PENDING : Claim.CHILD_OWNED;
     }
 
     @NonNull public Down down() { return down; }
@@ -152,9 +168,11 @@ public final class StatusBarGesturePolicy {
                     ? Claim.COLLAPSE_SWIPE : Claim.CHILD_OWNED;
             }
         } else if (aAlong > down.touchSlop && aAlong > aAcross) {
-            // A drag along the bar is the chip strip's to scroll, or nobody's: the bar does not
-            // page the wall.
-            claim = Claim.CHILD_OWNED;
+            if (down.horizontalSwipeEnabled) {
+                claim = along < 0f ? Claim.SWIPE_LEFT : Claim.SWIPE_RIGHT;
+            } else {
+                claim = Claim.CHILD_OWNED;
+            }
         }
         return claim;
     }

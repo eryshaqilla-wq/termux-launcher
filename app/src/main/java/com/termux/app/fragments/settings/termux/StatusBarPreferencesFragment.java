@@ -38,6 +38,13 @@ public final class StatusBarPreferencesFragment extends MaterialPreferenceFragme
         StatusWidgetPrivilegedGate.attach(context, findPreference("status_widget_cpu"));
         StatusWidgetPrivilegedGate.attach(context, findPreference("status_widget_ram"));
         bindWeatherPlace(findPreference("status_widget_weather_location"));
+
+        Preference editKeys = findPreference("edit_status_bar_extra_keys");
+        if (editKeys != null) {
+            android.os.Bundle args = new android.os.Bundle();
+            args.putInt("initial_page", com.termux.app.terminal.io.TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX);
+            editKeys.getExtras().putAll(args);
+        }
     }
 
     /**

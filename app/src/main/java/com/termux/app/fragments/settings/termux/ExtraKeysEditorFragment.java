@@ -207,6 +207,12 @@ public class ExtraKeysEditorFragment extends Fragment {
             pages.add(ExtraKeysLayoutModel.parse(value));
         }
         if (pages.isEmpty()) pages.add(ExtraKeysLayoutModel.empty());
+        if (getArguments() != null) {
+            int initial = getArguments().getInt("initial_page", -1);
+            if (initial >= 0 && initial < pages.size()) {
+                currentPage = initial;
+            }
+        }
         currentPage = Math.min(currentPage, pages.size() - 1);
     }
 
@@ -414,6 +420,8 @@ public class ExtraKeysEditorFragment extends Fragment {
             Chip chip = new Chip(context);
             if (page == TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
                 chip.setText(R.string.settings_extra_keys_compact_page);
+            } else if (page == TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX) {
+                chip.setText(R.string.settings_extra_keys_statusbar_page);
             } else {
                 chip.setText(getString(R.string.settings_extra_keys_page, page + 1));
             }
@@ -448,6 +456,8 @@ public class ExtraKeysEditorFragment extends Fragment {
         }
         if (currentPage == TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
             pageHint.setText(R.string.settings_extra_keys_compact_page_hint);
+        } else if (currentPage == TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX) {
+            pageHint.setText(R.string.settings_extra_keys_statusbar_page_hint);
         } else if (page().isEmpty()) {
             pageHint.setText(currentPage == 0
                 ? R.string.settings_extra_keys_page_hint_first_empty
@@ -865,6 +875,8 @@ public class ExtraKeysEditorFragment extends Fragment {
         };
         if (currentPage == TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
             pageHint.setText(R.string.settings_extra_keys_compact_page_hint);
+        } else if (currentPage == TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX) {
+            pageHint.setText(R.string.settings_extra_keys_statusbar_page_hint);
         } else if (page().isEmpty()) {
             apply.run();
             return;

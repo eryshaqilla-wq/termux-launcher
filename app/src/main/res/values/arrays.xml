@@ -456,4 +456,24 @@
         <item>crt_amber</item>
         <item>tft</item>
     </string-array>
+    <string-array name="settings_status_expanded_mode_entries">
+        <item>@string/settings_status_expanded_mode_clock</item>
+        <item>@string/settings_status_expanded_mode_extra_keys</item>
+    </string-array>
+    <string-array name="settings_status_expanded_mode_values">
+        <item>clock</item>
+        <item>extra_keys</item>
+    </string-array>
+    <string-array name="settings_status_bar_horizontal_swipe_entries">
+        <item>@string/settings_status_bar_horizontal_swipe_wall</item>
+        <item>@string/settings_status_bar_horizontal_swipe_window</item>
+        <item>@string/settings_status_bar_horizontal_swipe_session</item>
+        <item>@string/settings_status_bar_horizontal_swipe_none</item>
+    </string-array>
+    <string-array name="settings_status_bar_horizontal_swipe_values">
+        <item>wall</item>
+        <item>window</item>
+        <item>session</item>
+        <item>none</item>
+    </string-array>
 </resources>

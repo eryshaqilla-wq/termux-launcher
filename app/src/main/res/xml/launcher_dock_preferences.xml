@@ -14,4 +14,12 @@
             android:defaultValue="false" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="@string/settings_dock_gestures_header">
+        <SwitchPreferenceCompat
+            app:key="app_launcher_two_finger_dock_swipe"
+            app:title="@string/settings_two_finger_dock_swipe_title"
+            app:summary="@string/settings_two_finger_dock_swipe_summary"
+            android:defaultValue="true" />
+    </PreferenceCategory>
+
 </PreferenceScreen>
