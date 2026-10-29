@@ -5994,7 +5994,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean isDisplayAtRest = isDisplayPageShowing()
             && (mPaneWallController == null || !mPaneWallController.wall().isMoving());
         if (isDisplayAtRest && isEmbeddedDisplayRunning()) {
-            boolean showDock = !mDisplayFullscreenActive && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            boolean showDock = (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
             if (!showDock) {
                 appsRowEnabled = false;
                 azRowEnabled = false;
@@ -21630,28 +21630,30 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             }
 
-            boolean isFullscreen = mDisplayFullscreenActive;
             applyFullscreenMode();
             applySeamlessStatusBackgroundModeIfNeeded();
 
-            // Extra keys dock: hidden in fullscreen, or follows switch when not fullscreen
-            boolean showDock = !isFullscreen && (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            // Extra keys dock & status bar: follow user preference switches
+            boolean showDock = (mPreferences == null || mPreferences.isX11ShowExtraKeysEnabled());
+            boolean showBar = (mPreferences == null || mPreferences.isX11ShowStatusBarEnabled());
             boolean inAppKeyboardOrPadUp = (mInAppKeyboard != null && mInAppKeyboard.isVisible())
                 || isTouchpadShown() || isWholeFrameTouchpadShown();
+
+            boolean isBottomStatusBar = (mStatusBarEdge == PlaceLayout.Edge.BOTTOM);
+            boolean needAccessoryStack = showDock || inAppKeyboardOrPadUp || (showBar && isBottomStatusBar);
 
             if (toolbarHost != null) toolbarHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
             if (appsBarRowHost != null) appsBarRowHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
             if (appsBarAzHost != null) appsBarAzHost.setVisibility(showDock ? View.VISIBLE : View.GONE);
-            if (accessoryRowStack != null) accessoryRowStack.setVisibility(showDock ? View.VISIBLE : View.GONE);
-            if (surfaceHost != null) surfaceHost.setVisibility((showDock || inAppKeyboardOrPadUp) ? View.VISIBLE : View.GONE);
-            if (stackContainer != null) stackContainer.setVisibility((showDock || inAppKeyboardOrPadUp) ? View.VISIBLE : View.GONE);
+            if (accessoryRowStack != null) accessoryRowStack.setVisibility(needAccessoryStack ? View.VISIBLE : View.GONE);
+            if (surfaceHost != null) surfaceHost.setVisibility(needAccessoryStack ? View.VISIBLE : View.GONE);
+            if (stackContainer != null) stackContainer.setVisibility(needAccessoryStack ? View.VISIBLE : View.GONE);
 
             // Status bar switch
-            boolean showBar = mPreferences == null || mPreferences.isX11ShowStatusBarEnabled();
             if (statusBarHost != null) statusBarHost.setVisibility(showBar ? View.VISIBLE : View.GONE);
         }
 
-        setTerminalToolbarHeight(false);
+        setTerminalToolbarHeight(true);
 
         if (quickCluster != null) {
             populateDisplayQuickKeys(quickCluster);
