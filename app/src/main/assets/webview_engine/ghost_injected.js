@@ -847,6 +847,7 @@
             window.__AGY_ABORT_RUN__ = true;
             this.clearAllTimers();
             try {
+                sessionStorage.removeItem("__agy_batch_queue_state__");
                 sessionStorage.removeItem("__agy_active_recipe_run__");
                 sessionStorage.removeItem("__agy_pending_prompt_queue__");
             } catch(_) {}
@@ -858,7 +859,22 @@
             updateAgyHUD("Otomatisasi Dihentikan", "Eksekusi dibatalkan oleh pengguna", "warning");
         },
 
-        run: function(recipeEvents, recipeName, targetExpr, isBatch, onComplete, runMode, loopCount) {
+        resumeBatch: function(batchState) {
+            if (!batchState || !batchState.events) return;
+            this.run(
+                batchState.events,
+                batchState.recipeName,
+                batchState.targetExpr,
+                batchState.isBatch,
+                null,
+                batchState.runMode,
+                batchState.loopCount,
+                batchState.targetUrl,
+                batchState
+            );
+        },
+
+        run: function(recipeEvents, recipeName, targetExpr, isBatch, onComplete, runMode, loopCount, startUrl, resumedBatchState) {
             var self = this;
             if (!recipeEvents || recipeEvents.length === 0) {
                 updateAgyHUD("Resep Kosong", "Tidak ada langkah untuk dieksekusi", "warning");
@@ -885,13 +901,15 @@
             var cfg = AgyConfig.get();
 
             // Default mode adalah "raw" (100% Mengikuti Rekaman Asli)
-            var mode = runMode || "raw";
+            var mode = runMode || (resumedBatchState && resumedBatchState.runMode) || "raw";
             var loops = parseInt(loopCount, 10);
-            if (isNaN(loops) || loops <= 0) loops = 1;
-            var isInfinite = (loopCount === -1 || loopCount === "inf" || loopCount === "infinity" || loops >= 999999);
+            if (isNaN(loops) || loops <= 0) loops = (resumedBatchState && resumedBatchState.loopCount) || 1;
+            var isInfinite = (loopCount === -1 || loopCount === "inf" || loopCount === "infinity" || loops >= 999999 || (resumedBatchState && resumedBatchState.isInfinite));
 
             var queue = [];
-            if (mode === "raw") {
+            if (resumedBatchState && Array.isArray(resumedBatchState.queue) && resumedBatchState.queue.length > 0) {
+                queue = resumedBatchState.queue;
+            } else if (mode === "raw") {
                 // 100% Ikuti Rekaman Asli: Tidak ada rotasi dompet, loop murni rekaman apa adanya
                 var totalL = isInfinite ? 999999 : loops;
                 for (var l = 0; l < totalL; l++) {
@@ -912,13 +930,43 @@
                     queue.push(0);
                 }
             } else {
-                // Rotasi Tuyul (Multi-Wallet)
-                queue = parseTargetExpression(targetExpr, wallets.length);
+                // Rotasi Tuyul (Multi-Wallet): dukung multi-loop siklus rotasi
+                var baseTargets = parseTargetExpression(targetExpr, wallets.length);
+                if (!baseTargets || baseTargets.length === 0) baseTargets = [1];
+                var totalL = isInfinite ? 999999 : loops;
+                for (var l = 0; l < totalL; l++) {
+                    for (var b = 0; b < baseTargets.length; b++) {
+                        queue.push(baseTargets[b]);
+                    }
+                }
             }
 
-            var successCount = 0;
-            var failCount = 0;
-            var currentIdxInQueue = 0;
+            var successCount = (resumedBatchState && typeof resumedBatchState.successCount === "number") ? resumedBatchState.successCount : 0;
+            var failCount = (resumedBatchState && typeof resumedBatchState.failCount === "number") ? resumedBatchState.failCount : 0;
+            var currentIdxInQueue = (resumedBatchState && typeof resumedBatchState.currentIdxInQueue === "number") ? resumedBatchState.currentIdxInQueue : 0;
+            var finalTargetUrl = startUrl || (resumedBatchState && resumedBatchState.targetUrl) || ((window.location && window.location.href) ? window.location.href.split("#")[0] : "");
+
+            var persistBatchState = function() {
+                try {
+                    sessionStorage.setItem("__agy_batch_queue_state__", JSON.stringify({
+                        recipeName: recipeName,
+                        events: recipeEvents,
+                        targetExpr: targetExpr,
+                        isBatch: isBatch,
+                        runMode: mode,
+                        loopCount: loops,
+                        isInfinite: isInfinite,
+                        queue: queue,
+                        currentIdxInQueue: currentIdxInQueue,
+                        successCount: successCount,
+                        failCount: failCount,
+                        targetUrl: finalTargetUrl,
+                        timestamp: Date.now()
+                    }));
+                } catch(_) {}
+            };
+
+            persistBatchState();
 
             function runAccount() {
                 if (self.isAborted || window.__AGY_ABORT_RUN__) return;
@@ -930,12 +978,15 @@
                         }
                     } catch(_) {}
                     try {
+                        sessionStorage.removeItem("__agy_batch_queue_state__");
                         sessionStorage.removeItem("__agy_active_recipe_run__");
                     } catch(_) {}
                     updateAgyHUD("Selesai!", "Total: " + queue.length + " (Sukses: " + successCount + ", Gagal: " + failCount + ")", "success");
                     if (onComplete) onComplete({ success: successCount, failed: failCount });
                     return;
                 }
+
+                persistBatchState();
 
                 var accNumber = queue[currentIdxInQueue % queue.length];
                 var curWallet = null;
@@ -980,20 +1031,38 @@
                     else failCount++;
 
                     currentIdxInQueue++;
+                    persistBatchState();
 
                     var hasMore = isInfinite || (currentIdxInQueue < queue.length);
                     var shouldDelay = (mode === "multi" ? isBatch : true) && hasMore;
 
                     if (shouldDelay) {
                         var waitSec = (cfg.batchDelay / 1000).toFixed(1);
-                        var nextLabel = (mode === "raw" || mode === "single" || mode === "standalone") ? ("Jeda Putaran (" + waitSec + "s)...") : ("Menuju Akun berikutnya (" + waitSec + "s)...");
+                        var nextLoopNum = currentIdxInQueue + 1;
+                        var totalLoopsStr = isInfinite ? "♾️" : queue.length;
+                        var nextLabel = (mode === "raw" || mode === "single" || mode === "standalone") ? ("Jeda Putaran " + nextLoopNum + "/" + totalLoopsStr + " (" + waitSec + "s)...") : ("Menuju Akun berikutnya (" + waitSec + "s)...");
                         updateAgyHUD("Jeda Antar Alur", nextLabel, "running");
 
                         self.registerTimer(setTimeout(function() {
                             if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+
+                            // Jika URL browser saat ini berbeda dari URL awal resep, kembalikan halaman ke URL awal
+                            var curUrl = (window.location && window.location.href) ? window.location.href.split("#")[0] : "";
+                            if (finalTargetUrl && curUrl && finalTargetUrl !== curUrl && finalTargetUrl.indexOf("http") === 0) {
+                                updateAgyHUD("Mereset Halaman", "Kembali ke URL awal alur...", "running");
+                                window.location.href = finalTargetUrl;
+                                return;
+                            }
+
                             runAccount();
                         }, cfg.batchDelay));
                     } else if (hasMore) {
+                        var curUrl = (window.location && window.location.href) ? window.location.href.split("#")[0] : "";
+                        if (finalTargetUrl && curUrl && finalTargetUrl !== curUrl && finalTargetUrl.indexOf("http") === 0) {
+                            updateAgyHUD("Mereset Halaman", "Kembali ke URL awal alur...", "running");
+                            window.location.href = finalTargetUrl;
+                            return;
+                        }
                         runAccount();
                     } else {
                         self.isRunning = false;
@@ -1003,6 +1072,7 @@
                             }
                         } catch(_) {}
                         try {
+                            sessionStorage.removeItem("__agy_batch_queue_state__");
                             sessionStorage.removeItem("__agy_active_recipe_run__");
                         } catch(_) {}
                         updateAgyHUD("Selesai!", "Sukses: " + successCount + " | Gagal: " + failCount, "success");
@@ -4227,6 +4297,7 @@
                 quickRowMulti.style.display = "none";
                 quickRowSingle.style.display = "none";
                 loopSection.style.display = "block";
+                loopLabel.innerText = "JUMLAH PUTARAN (LOOP COUNT):";
                 batchCard.style.display = "none";
                 sWallets.innerHTML = "<span style='color:#a6e3a1; font-weight:700;'>⚡ 100% Murni</span> Sesuai Rekaman";
             } else if (currentRunMode === "single") {
@@ -4238,6 +4309,7 @@
                 quickRowMulti.style.display = "none";
                 quickRowSingle.style.display = "flex";
                 loopSection.style.display = "block";
+                loopLabel.innerText = "JUMLAH PUTARAN (LOOP COUNT):";
                 batchCard.style.display = "none";
                 sWallets.innerHTML = "<span style='color:#cba6f7; font-weight:700;'>🎯 Fokus</span> 1 Dompet";
             } else if (currentRunMode === "standalone") {
@@ -4246,6 +4318,7 @@
                 quickRowMulti.style.display = "none";
                 quickRowSingle.style.display = "none";
                 loopSection.style.display = "block";
+                loopLabel.innerText = "JUMLAH PUTARAN (LOOP COUNT):";
                 batchCard.style.display = "none";
                 sWallets.innerHTML = "<span style='color:#89dceb; font-weight:700;'>🌐 Standalone</span> (Tanpa Wallet)";
             } else {
@@ -4256,7 +4329,8 @@
                 targetInp.value = "1";
                 quickRowMulti.style.display = "flex";
                 quickRowSingle.style.display = "none";
-                loopSection.style.display = "none";
+                loopSection.style.display = "block";
+                loopLabel.innerText = "PUTARAN ROTASI (LOOP COUNT):";
                 batchCard.style.display = "flex";
                 sWallets.innerHTML = "<span style='color:#a6e3a1; font-weight:700;'>👛 " + wallets.length + "</span> Akun Dompet";
             }
@@ -4312,6 +4386,7 @@
 
         var makeChip = function(lbl, val) {
             var chip = document.createElement("button");
+            chip.type = "button";
             chip.innerText = lbl;
             chip.style.flex = "1";
             chip.style.background = "#1e1e2e";
@@ -4322,7 +4397,18 @@
             chip.style.fontSize = "11px";
             chip.style.fontWeight = "600";
             chip.style.cursor = "pointer";
-            chip.onclick = function() { targetInp.value = val; };
+            chip.style.outline = "none";
+            chip.style.touchAction = "manipulation";
+            var handleTargetChip = function(e) {
+                if (e) {
+                    try { e.preventDefault(); } catch(_) {}
+                    try { e.stopPropagation(); } catch(_) {}
+                }
+                targetInp.value = val;
+            };
+            chip.addEventListener("pointerdown", handleTargetChip, { passive: false });
+            chip.addEventListener("touchstart", handleTargetChip, { passive: false });
+            chip.addEventListener("click", handleTargetChip);
             return chip;
         };
 
@@ -4344,7 +4430,7 @@
 
         card.appendChild(targetSection);
 
-        // Loop Count Section (For Raw, Single & Standalone Modes)
+        // Loop Count Section (Universal untuk semua 4 mode)
         var loopSection = document.createElement("div");
         loopSection.style.marginBottom = "14px";
         loopSection.style.display = "block";
@@ -4360,21 +4446,8 @@
 
         var loopInp = document.createElement("input");
         loopInp.type = "number";
+        loopInp.min = "1";
         loopInp.value = "1"; // Default 1x
-        loopInp.style.width = "100%";
-        loopInp.style.boxSizing = "border-box";
-        loopInp.style.background = "#11111b";
-        loopInp.style.border = "1px solid #45475a";
-        loopInp.style.borderRadius = "12px";
-        loopInp.style.padding = "10px 14px";
-        loopInp.style.color = "#cdd6f4";
-        loopInp.style.fontSize = "13px";
-        loopInp.style.fontWeight = "600";
-        loopInp.style.marginBottom = "8px";
-        loopInp.style.outline = "none";
-        loopInp.onfocus = function() { loopInp.style.borderColor = "#cba6f7"; };
-        loopInp.onblur = function() { loopInp.style.borderColor = "#45475a"; };
-        loopSection.appendChild(loopInp);
         loopInp.style.width = "100%";
         loopInp.style.boxSizing = "border-box";
         loopInp.style.background = "#11111b";
@@ -4394,19 +4467,48 @@
         loopChipsRow.style.display = "flex";
         loopChipsRow.style.gap = "6px";
 
+        var loopChips = [];
+        var updateChipStyles = function(curVal) {
+            for (var c = 0; c < loopChips.length; c++) {
+                var item = loopChips[c];
+                var isActive = (String(curVal) === String(item.val));
+                item.btn.style.background = isActive ? "linear-gradient(135deg, rgba(203, 166, 247, 0.35) 0%, rgba(137, 220, 235, 0.3) 100%)" : "#1e1e2e";
+                item.btn.style.borderColor = isActive ? "#cba6f7" : "#313244";
+                item.btn.style.color = isActive ? "#ffffff" : "#a6adc8";
+                item.btn.style.boxShadow = isActive ? "0 2px 8px rgba(203, 166, 247, 0.3)" : "none";
+            }
+        };
+
         var makeLoopChip = function(lbl, val) {
             var chip = document.createElement("button");
+            chip.type = "button";
             chip.innerText = lbl;
             chip.style.flex = "1";
             chip.style.background = "#1e1e2e";
             chip.style.border = "1px solid #313244";
-            chip.style.color = "#cdd6f4";
+            chip.style.color = "#a6adc8";
             chip.style.borderRadius = "8px";
-            chip.style.padding = "6px 2px";
+            chip.style.padding = "7px 2px";
             chip.style.fontSize = "10px";
             chip.style.fontWeight = "600";
             chip.style.cursor = "pointer";
-            chip.onclick = function() { loopInp.value = val; };
+            chip.style.outline = "none";
+            chip.style.touchAction = "manipulation";
+
+            var handleSelect = function(e) {
+                if (e) {
+                    try { e.preventDefault(); } catch(_) {}
+                    try { e.stopPropagation(); } catch(_) {}
+                }
+                loopInp.value = val;
+                updateChipStyles(val);
+            };
+
+            chip.addEventListener("pointerdown", handleSelect, { passive: false });
+            chip.addEventListener("touchstart", handleSelect, { passive: false });
+            chip.addEventListener("click", handleSelect);
+
+            loopChips.push({ btn: chip, val: val });
             return chip;
         };
 
@@ -4417,6 +4519,11 @@
         loopChipsRow.appendChild(makeLoopChip("♾️ Non-stop", "999999"));
         loopSection.appendChild(loopChipsRow);
         card.appendChild(loopSection);
+
+        loopInp.oninput = function() {
+            updateChipStyles(loopInp.value);
+        };
+        updateChipStyles("1");
 
         // Auto-Rotate Loop Section
         var batchCard = document.createElement("label");
@@ -4472,6 +4579,7 @@
         actionRow.style.gap = "8px";
 
         var cancelBtn = document.createElement("button");
+        cancelBtn.type = "button";
         cancelBtn.innerText = "Batal";
         cancelBtn.style.flex = "1";
         cancelBtn.style.background = "#313244";
@@ -4486,6 +4594,7 @@
         actionRow.appendChild(cancelBtn);
 
         var startBtn = document.createElement("button");
+        startBtn.type = "button";
         startBtn.innerText = "▶ GAS JALANKAN";
         startBtn.style.flex = "1.8";
         startBtn.style.background = "linear-gradient(135deg, #a6e3a1 0%, #89dceb 100%)";
@@ -4506,7 +4615,7 @@
 
             modal.remove();
             if (typeof AgyBatchRunner !== "undefined" && AgyBatchRunner.run) {
-                AgyBatchRunner.run(events, recipeName, targetExpr, isBatch, null, currentRunMode, lCount);
+                AgyBatchRunner.run(events, recipeName, targetExpr, isBatch, null, currentRunMode, lCount, targetUrl);
             } else {
                 replayEventsSequentially(events, recipeName);
             }
@@ -7419,28 +7528,66 @@
     // Auto-resume active recipe on page reload / navigation
     (function checkAndResumeActiveRecipe() {
         try {
-            var raw = sessionStorage.getItem("__agy_active_recipe_run__");
-            if (!raw) return;
-            var st = JSON.parse(raw);
-            if (Date.now() - st.timestamp > 120000) {
-                sessionStorage.removeItem("__agy_active_recipe_run__");
-                return;
-            }
-            if (st.eventsList && st.idx < st.eventsList.length) {
-                console.log("[AGY Co-Pilot] Melanjutkan resep setelah reload halaman ke langkah " + (st.idx + 1));
-                setTimeout(function() {
-                    if (window.__AGY_ABORT_RUN__) {
-                        sessionStorage.removeItem("__agy_active_recipe_run__");
-                        return;
+            var rawBatch = sessionStorage.getItem("__agy_batch_queue_state__");
+            var batchState = null;
+            if (rawBatch) {
+                try {
+                    var parsedB = JSON.parse(rawBatch);
+                    if (parsedB && Date.now() - (parsedB.timestamp || 0) < 180000) {
+                        batchState = parsedB;
+                    } else {
+                        sessionStorage.removeItem("__agy_batch_queue_state__");
                     }
-                    updateAgyHUD(st.runTitle, "Melanjutkan langkah " + (st.idx + 1) + "/" + st.eventsList.length + "...", "running");
-                    AgyBatchRunner.executeStepList(st.eventsList, st.curWallet, st.curEmail, st.runTitle, function(ok) {
-                        sessionStorage.removeItem("__agy_active_recipe_run__");
-                        updateAgyHUD(st.runTitle, ok ? "Resep Selesai" : "Resep Berhenti", ok ? "success" : "warning");
-                    }, st.idx, st.runMode || "raw");
-                }, 1000);
-            } else {
-                sessionStorage.removeItem("__agy_active_recipe_run__");
+                } catch(_) {}
+            }
+
+            var rawStep = sessionStorage.getItem("__agy_active_recipe_run__");
+            if (rawStep) {
+                var st = JSON.parse(rawStep);
+                if (Date.now() - st.timestamp > 120000) {
+                    sessionStorage.removeItem("__agy_active_recipe_run__");
+                    st = null;
+                }
+                if (st && st.eventsList && st.idx < st.eventsList.length) {
+                    console.log("[AGY Co-Pilot] Melanjutkan resep setelah reload halaman ke langkah " + (st.idx + 1));
+                    setTimeout(function() {
+                        if (window.__AGY_ABORT_RUN__) {
+                            sessionStorage.removeItem("__agy_active_recipe_run__");
+                            sessionStorage.removeItem("__agy_batch_queue_state__");
+                            return;
+                        }
+                        updateAgyHUD(st.runTitle, "Melanjutkan langkah " + (st.idx + 1) + "/" + st.eventsList.length + "...", "running");
+                        AgyBatchRunner.executeStepList(st.eventsList, st.curWallet, st.curEmail, st.runTitle, function(ok) {
+                            sessionStorage.removeItem("__agy_active_recipe_run__");
+                            if (batchState) {
+                                // Putaran saat ini selesai pasca reload, lanjutkan antrean batch!
+                                batchState.currentIdxInQueue = (batchState.currentIdxInQueue || 0) + 1;
+                                if (ok) batchState.successCount = (batchState.successCount || 0) + 1;
+                                else batchState.failCount = (batchState.failCount || 0) + 1;
+                                sessionStorage.setItem("__agy_batch_queue_state__", JSON.stringify(batchState));
+                                if (typeof AgyBatchRunner !== "undefined" && AgyBatchRunner.resumeBatch) {
+                                    AgyBatchRunner.resumeBatch(batchState);
+                                }
+                            } else {
+                                updateAgyHUD(st.runTitle, ok ? "Resep Selesai" : "Resep Berhenti", ok ? "success" : "warning");
+                            }
+                        }, st.idx, st.runMode || "raw");
+                    }, 1000);
+                    return;
+                } else {
+                    sessionStorage.removeItem("__agy_active_recipe_run__");
+                }
+            }
+
+            // Jika tidak ada step tertunda tetapi ada batchState tertunda (misalnya setelah reset halaman antar-putaran)
+            if (batchState && !window.__AGY_ABORT_RUN__) {
+                console.log("[AGY Co-Pilot] Melanjutkan batch queue setelah navigasi/reset ke putaran " + ((batchState.currentIdxInQueue || 0) + 1));
+                setTimeout(function() {
+                    if (window.__AGY_ABORT_RUN__) return;
+                    if (typeof AgyBatchRunner !== "undefined" && AgyBatchRunner.resumeBatch) {
+                        AgyBatchRunner.resumeBatch(batchState);
+                    }
+                }, 900);
             }
         } catch(e) {}
     })();
