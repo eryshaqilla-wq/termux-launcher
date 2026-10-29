@@ -1887,6 +1887,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         setTerminalToolbarView(savedInstanceState);
         syncPinnedAppsHost();
         initializeInAppKeyboard(savedInstanceState);
+        syncPlaceLayout();
         // Only a fresh launch may enter adjust mode: after process death the system re-delivers
         // the original launch intent with the extra still set, which must not re-enter it.
         if (savedInstanceState == null) {
@@ -2551,6 +2552,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 // Settings may have flipped the pane behaviour toggles while we were away.
                 applyPaneBehaviourPreferences();
             }
+            syncPlaceLayout();
             refreshTerminalWindowBar();
             if (isDisplayPageShowing()) {
                 syncDisplayStatusKeys();
@@ -15069,6 +15071,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // The bar's column is a band on its edge like the rail's; the insets pass re-derives what
         // the content gives up to the whole stack.
         if (mTermuxActivityRootView != null) ViewCompat.requestApplyInsets(mTermuxActivityRootView);
+        if (edge == PlaceLayout.Edge.BOTTOM || edgeChanged) {
+            setTerminalToolbarHeight(true);
+        }
     }
 
     /**
@@ -15083,7 +15088,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int bottomStatusBandPx() {
         if (mStatusBarEdge != PlaceLayout.Edge.BOTTOM) return 0;
         View host = findViewById(R.id.terminal_window_bar_host);
-        if (host == null || host.getVisibility() != View.VISIBLE) return 0;
+        if (host == null) return 0;
+        if (mAppliedPlaceLayout != null && mAppliedPlaceLayout.slot(Element.STATUS).hidden) return 0;
         ViewGroup.LayoutParams params = host.getLayoutParams();
         int thicknessPx = params != null && params.height > 0
             ? params.height : targetStatusBarHeightPx(isRoundedDockStyle(), isStatusBarCompact());
