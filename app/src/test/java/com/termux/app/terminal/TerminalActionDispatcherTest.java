@@ -118,7 +118,8 @@ public class TerminalActionDispatcherTest {
             "pane.layout", "pane.equalize", "pane.rotate", "pane.move_to_edge",
             "pane.next_layout", "pane.toggle_float",
             "keyboard.cycle_form", "keyboard.set_form", "keyboard.show", "keyboard.hide",
-            "keyboard.clipboard", "keyboard.toggle_enabled", "voice.dictate"};
+            "keyboard.clipboard", "keyboard.toggle_enabled", "voice.dictate",
+            "ipc.wallet", "ipc.web", "ipc.telegram", "ipc.ai", "ipc.run"};
         for (String name : tools) {
             JSONObject result = dispatcher.execute(name, new JSONObject());
             assertFalse(name, result.getBoolean("ok"));

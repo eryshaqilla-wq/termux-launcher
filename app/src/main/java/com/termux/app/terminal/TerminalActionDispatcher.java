@@ -1273,8 +1273,7 @@ public final class TerminalActionDispatcher {
                 }
 
                 case TOOL_IPC_WALLET: {
-                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
-                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    com.termux.app.TermuxActivity activity = resolveActivity(host);
                     if (activity != null) {
                         com.termux.app.TermuxIpcServer.injectCommand(activity,
                             com.termux.webview.FusionWalletHelper.getStartWalletDaemonCommand(), true);
@@ -1283,8 +1282,7 @@ public final class TerminalActionDispatcher {
                     return noSession(toolName);
                 }
                 case TOOL_IPC_WEB: {
-                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
-                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    com.termux.app.TermuxActivity activity = resolveActivity(host);
                     if (activity != null) {
                         String url = arguments.optString("url", "").trim();
                         if (!url.isEmpty()) {
@@ -1302,8 +1300,7 @@ public final class TerminalActionDispatcher {
                     return noSession(toolName);
                 }
                 case TOOL_IPC_TELEGRAM: {
-                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
-                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    com.termux.app.TermuxActivity activity = resolveActivity(host);
                     if (activity != null) {
                         com.termux.app.TermuxIpcServer.injectCommand(activity, "pmt", true);
                         return ok().put("ran", "telegram");
@@ -1311,8 +1308,7 @@ public final class TerminalActionDispatcher {
                     return noSession(toolName);
                 }
                 case TOOL_IPC_AI: {
-                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
-                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    com.termux.app.TermuxActivity activity = resolveActivity(host);
                     if (activity != null) {
                         com.termux.app.TermuxIpcServer.injectCommand(activity, "ai", true);
                         return ok().put("ran", "ai");
@@ -1322,8 +1318,7 @@ public final class TerminalActionDispatcher {
                 case TOOL_IPC_RUN: {
                     String cmd = arguments.optString("cmd", arguments.optString("command", "")).trim();
                     if (cmd.isEmpty()) return error(400, "bad_request", "Missing 'cmd'");
-                    com.termux.app.TermuxActivity activity = host instanceof com.termux.app.TermuxActivity
-                        ? (com.termux.app.TermuxActivity) host : com.termux.app.TermuxIpcServer.getActivity();
+                    com.termux.app.TermuxActivity activity = resolveActivity(host);
                     if (activity != null) {
                         com.termux.app.TermuxIpcServer.injectCommand(activity, cmd, true);
                         return ok().put("command", cmd);
@@ -1804,6 +1799,14 @@ public final class TerminalActionDispatcher {
     @NonNull
     private static JSONObject badDirection() {
         return error(400, "bad_request", "Missing or invalid 'direction'; expected left, right, up, or down");
+    }
+
+    @Nullable
+    private static com.termux.app.TermuxActivity resolveActivity(@NonNull TerminalHost host) {
+        if (host.context() instanceof com.termux.app.TermuxActivity) {
+            return (com.termux.app.TermuxActivity) host.context();
+        }
+        return com.termux.app.TermuxIpcServer.getActivity();
     }
 
     /**
