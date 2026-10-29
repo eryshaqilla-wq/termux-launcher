@@ -552,6 +552,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mCurrentWalletAddress = nextAddr;
         GhostBridgeInterface.setWallet(nextName, nextAddr);
 
+        final String fNextAddr = nextAddr;
+        final String fNextName = nextName;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    GhostBridgeInterface.forwardToDaemon("{\"method\":\"fusion_switchWallet\",\"params\":[\"" + fNextAddr + "\",\"" + fNextName + "\"]}");
+                } catch (Throwable ignored) {}
+            }
+        }).start();
+
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
             appCompatActivity.runOnUiThread(new Runnable() {
@@ -1780,6 +1791,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (linearLayout != null) {
             linearLayout.setVisibility(8);
         }
+
+        final String finalAddr = address;
+        final String finalName = name;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    GhostBridgeInterface.forwardToDaemon("{\"method\":\"fusion_switchWallet\",\"params\":[\"" + finalAddr + "\",\"" + finalName + "\"]}");
+                } catch (Throwable ignored) {}
+            }
+        }).start();
+
         WebView webView = this.mActiveWebView;
         if (webView != null) {
             webView.evaluateJavascript("if(window.ethereum){window.ethereum.selectedAddress='" + address + "';window.dispatchEvent(new CustomEvent('accountsChanged',{detail:['" + address + "']}));}", null);
