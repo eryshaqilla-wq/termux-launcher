@@ -407,7 +407,7 @@ public final class TermuxPropertyConstants {
         "[[{key: 'ESC'}, {key: 'TAB'}, {key: 'CTRL'}, {key: 'ALT'}, {key: 'DOCK', display: 'DOCK'}, {key: 'UP', display: '↑'}, {key: 'DOWN', display: '↓'}]]";
 
     public static final String DEFAULT_IVALUE_EXTRA_KEYS_STATUSBAR =
-        "[[{key: 'tool:ipc.wallet', display: '👛'}, {key: 'tool:ipc.web', display: '🌐'}, {key: 'tool:ipc.telegram', display: '✈️'}, {key: 'tool:ipc.ai', display: '🤖'}, {key: 'tool:ipc.run', display: '>_'}]," +
+        "[[{key: 'tool:ipc.wallet', display: '👛'}, {key: 'tool:ipc.web', display: '🌐'}, {key: 'tool:ipc.telegram', display: '✈️'}, {key: 'tool:ipc.ai', display: '🤖'}, {key: 'tool:ipc.run', display: '>_'}, {key: 'UP', display: '↑'}, {key: 'DOWN', display: '↓'}]," +
         "[{key: 'ESC'}, {key: 'TAB'}, {key: 'CTRL'}, {key: 'ALT'}, {key: 'DRAWER', display: '☰'}, {key: 'KEYBOARD', display: '⌨'}, {key: 'tool:terminal.reset', display: 'CLR'}]]";
 
 

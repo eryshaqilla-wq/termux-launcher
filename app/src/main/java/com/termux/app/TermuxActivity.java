@@ -14506,6 +14506,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             host.setVisibility(View.GONE);
             return;
         }
+        int leading = com.termux.app.statusbar.StatusBarLensView.leadingCellWidthPx(this);
+        int trailing = Math.round(dpToPx(24f));
+        if (host.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
+            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) host.getLayoutParams();
+            if (mlp.leftMargin != leading || mlp.rightMargin != trailing) {
+                mlp.leftMargin = leading;
+                mlp.rightMargin = trailing;
+                mlp.setMarginStart(leading);
+                mlp.setMarginEnd(trailing);
+                host.setLayoutParams(mlp);
+            }
+        }
+        int padV = Math.round(dpToPx(5f));
+        if (host.getPaddingTop() != padV || host.getPaddingBottom() != padV) {
+            host.setPadding(0, padV, 0, padV);
+        }
         ExtraKeysView keys = getExtraKeysView(com.termux.app.terminal.io.TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX);
         boolean needsRebuild = keys == null || keys.getParent() != host;
         if (needsRebuild) {

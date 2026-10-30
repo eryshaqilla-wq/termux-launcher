@@ -90,8 +90,21 @@ public final class StatusBarEdgeArrangement {
             && shortcutsHost.getLayoutParams() instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams slotParams =
                 (FrameLayout.LayoutParams) shortcutsHost.getLayoutParams();
+            boolean changed = false;
             if (slotParams.gravity != gravity) {
                 slotParams.gravity = gravity;
+                changed = true;
+            }
+            int leading = StatusBarLensView.leadingCellWidthPx(host.getContext());
+            int trailing = Math.round(24f * host.getContext().getResources().getDisplayMetrics().density);
+            if (slotParams.leftMargin != leading || slotParams.rightMargin != trailing) {
+                slotParams.leftMargin = leading;
+                slotParams.rightMargin = trailing;
+                slotParams.setMarginStart(leading);
+                slotParams.setMarginEnd(trailing);
+                changed = true;
+            }
+            if (changed) {
                 shortcutsHost.setLayoutParams(slotParams);
             }
         }
