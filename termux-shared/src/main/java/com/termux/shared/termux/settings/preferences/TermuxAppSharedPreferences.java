@@ -1451,7 +1451,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     public boolean isStatusBarShowSessionIndicatorEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,
             TERMUX_APP.KEY_STATUS_BAR_SHOW_SESSION_INDICATOR,
-            TERMUX_APP.DEFAULT_STATUS_BAR_SHOW_SESSION_INDICATOR, false);
+            TERMUX_APP.DEFAULT_STATUS_BAR_SHOW_SESSION_INDICATOR);
     }
 
     public void setStatusBarShowSessionIndicatorEnabled(boolean enabled) {
@@ -1462,7 +1462,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     public boolean isStatusBarCornerPageTapEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,
             TERMUX_APP.KEY_STATUS_BAR_CORNER_PAGE_TAP_ENABLED,
-            TERMUX_APP.DEFAULT_STATUS_BAR_CORNER_PAGE_TAP_ENABLED, false);
+            TERMUX_APP.DEFAULT_STATUS_BAR_CORNER_PAGE_TAP_ENABLED);
     }
 
     public void setStatusBarCornerPageTapEnabled(boolean enabled) {
@@ -1473,7 +1473,7 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     public boolean isStatusBarBorderHoldPageEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,
             TERMUX_APP.KEY_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED,
-            TERMUX_APP.DEFAULT_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED, false);
+            TERMUX_APP.DEFAULT_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED);
     }
 
     public void setStatusBarBorderHoldPageEnabled(boolean enabled) {
