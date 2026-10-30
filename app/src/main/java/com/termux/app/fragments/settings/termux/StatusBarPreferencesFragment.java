@@ -45,6 +45,17 @@ public final class StatusBarPreferencesFragment extends MaterialPreferenceFragme
             args.putInt("initial_page", com.termux.app.terminal.io.TermuxTerminalExtraKeys.STATUSBAR_PAGE_INDEX);
             editKeys.getExtras().putAll(args);
         }
+
+        Preference editTerminalKeys = findPreference("edit_terminal_quick_extra_keys");
+        if (editTerminalKeys != null) {
+            editTerminalKeys.setOnPreferenceClickListener(preference -> {
+                Context ctx = getContext();
+                if (ctx != null) {
+                    TerminalQuickKeysEditorSheet.show(ctx, null);
+                }
+                return true;
+            });
+        }
     }
 
     /**

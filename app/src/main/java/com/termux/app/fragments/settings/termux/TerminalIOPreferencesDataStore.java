@@ -99,6 +99,15 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
             case "fancier_glass":
                 mPreferences.setFancierGlassEnabled(value);
                 break;
+            case "status_bar_show_session_indicator":
+                mPreferences.setStatusBarShowSessionIndicatorEnabled(value);
+                break;
+            case "status_bar_corner_page_tap_enabled":
+                mPreferences.setStatusBarCornerPageTapEnabled(value);
+                break;
+            case "status_bar_border_hold_page_enabled":
+                mPreferences.setStatusBarBorderHoldPageEnabled(value);
+                break;
             default:
                 break;
         }
@@ -147,6 +156,12 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isLazyModeEnabled();
             case "fancier_glass":
                 return mPreferences.isFancierGlassEnabled();
+            case "status_bar_show_session_indicator":
+                return mPreferences.isStatusBarShowSessionIndicatorEnabled();
+            case "status_bar_corner_page_tap_enabled":
+                return mPreferences.isStatusBarCornerPageTapEnabled();
+            case "status_bar_border_hold_page_enabled":
+                return mPreferences.isStatusBarBorderHoldPageEnabled();
             default:
                 return defValue;
         }
@@ -163,6 +178,8 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
             mPreferences.setStatusBarExpandedMode(value != null ? value : "clock");
         } else if ("status_bar_horizontal_swipe_action".equals(key)) {
             mPreferences.setStatusBarHorizontalSwipeAction(value != null ? value : "wall");
+        } else if ("terminal_back_key_action".equals(key)) {
+            mPreferences.setTerminalBackKeyAction(value != null ? value : "sessions");
         }
     }
 
@@ -180,6 +197,9 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
         }
         if ("status_bar_horizontal_swipe_action".equals(key)) {
             return mPreferences.getStatusBarHorizontalSwipeAction();
+        }
+        if ("terminal_back_key_action".equals(key)) {
+            return mPreferences.getTerminalBackKeyAction();
         }
         return defValue;
     }

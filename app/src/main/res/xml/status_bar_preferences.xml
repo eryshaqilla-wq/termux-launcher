@@ -26,6 +26,14 @@
             app:summary="@string/settings_edit_status_bar_extra_keys_summary" />
     </PreferenceCategory>
 
+    <PreferenceCategory app:title="@string/settings_terminal_quick_keys_header">
+        <Preference
+            app:key="edit_terminal_quick_extra_keys"
+            app:persistent="false"
+            app:title="@string/settings_terminal_quick_keys_title"
+            app:summary="@string/settings_terminal_quick_keys_summary" />
+    </PreferenceCategory>
+
     <PreferenceCategory app:title="@string/settings_status_gestures_header">
         <ListPreference
             app:key="status_bar_horizontal_swipe_action"
@@ -34,9 +42,31 @@
             app:entryValues="@array/settings_status_bar_horizontal_swipe_values"
             app:defaultValue="wall"
             app:useSimpleSummaryProvider="true" />
+        <SwitchPreferenceCompat
+            app:key="status_bar_corner_page_tap_enabled"
+            app:title="@string/settings_status_bar_corner_page_tap_title"
+            app:summary="@string/settings_status_bar_corner_page_tap_summary"
+            app:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="status_bar_border_hold_page_enabled"
+            app:title="@string/settings_status_bar_border_hold_page_title"
+            app:summary="@string/settings_status_bar_border_hold_page_summary"
+            app:defaultValue="true" />
+        <ListPreference
+            app:key="terminal_back_key_action"
+            app:title="@string/settings_terminal_back_action_title"
+            app:entries="@array/settings_terminal_back_action_entries"
+            app:entryValues="@array/settings_terminal_back_action_values"
+            app:defaultValue="sessions"
+            app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_status_indicators_header">
+        <SwitchPreferenceCompat
+            app:key="status_bar_show_session_indicator"
+            app:title="@string/settings_status_bar_session_indicator_title"
+            app:summary="@string/settings_status_bar_session_indicator_summary"
+            app:defaultValue="true" />
         <SwitchPreferenceCompat
             app:key="status_widget_cpu"
             app:title="@string/settings_cpu_usage_title"

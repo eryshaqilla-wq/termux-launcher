@@ -97,6 +97,8 @@ public final class PaneWallController implements PaneWallLayout.Listener {
          * their glass already; the terminal's slabs are the host's.
          */
         default void onPagePoseChanged() { }
+        /** Whether pressing and holding on the border/corner of a canvas initiates paging/canvas switch. */
+        default boolean isBorderHoldPagingEnabled() { return true; }
     }
 
     /** Saved-instance-state key for the page the wall is showing. */
@@ -383,6 +385,11 @@ public final class PaneWallController implements PaneWallLayout.Listener {
     @Override
     public boolean isBorderStatusSwipeEnabled() {
         return mHost.isBorderStatusSwipeEnabled();
+    }
+
+    @Override
+    public boolean isBorderHoldPagingEnabled() {
+        return mHost.isBorderHoldPagingEnabled();
     }
 
     @Override

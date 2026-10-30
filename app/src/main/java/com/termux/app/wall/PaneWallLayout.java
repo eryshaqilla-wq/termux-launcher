@@ -189,6 +189,10 @@ public final class PaneWallLayout extends ViewGroup {
          * pages is aimed past their transforms and re-aims here.
          */
         default void onPagePoseChanged() { }
+        /**
+         * Whether pressing and holding on the border/corner of a canvas initiates paging/canvas switch.
+         */
+        default boolean isBorderHoldPagingEnabled() { return true; }
     }
 
     private final Map<PaneWallPage, View> mPageViews = new EnumMap<>(PaneWallPage.class);
@@ -842,7 +846,8 @@ public final class PaneWallLayout extends ViewGroup {
     private void armBorderDrag(@NonNull MotionEvent event) {
         releaseBorderDrag();
         if (!mGesturesEnabled) return;
-        boolean canPage = mPages.size() > 1;
+        boolean holdPaging = mListener == null || mListener.isBorderHoldPagingEnabled();
+        boolean canPage = mPages.size() > 1 && holdPaging;
         boolean keyboardSwipe = mListener != null && mListener.isBorderKeyboardSwipeEnabled();
         boolean statusSwipe = mListener != null && mListener.isBorderStatusSwipeEnabled();
         if (!canPage && !keyboardSwipe && !statusSwipe) return;
@@ -977,7 +982,8 @@ public final class PaneWallLayout extends ViewGroup {
      *         gesture is swallowed
      */
     private boolean takeBorderDrag(float fingerX) {
-        if (!mGesturesEnabled || mPages.size() <= 1) {
+        boolean holdPaging = mListener == null || mListener.isBorderHoldPagingEnabled();
+        if (!mGesturesEnabled || mPages.size() <= 1 || !holdPaging) {
             mBorderDrag.abandon();
             syncBorderGlow();
             return false;

@@ -9,6 +9,7 @@ import android.graphics.Paint;
 import android.graphics.RadialGradient;
 import android.graphics.RectF;
 import android.graphics.Shader;
+import android.os.SystemClock;
 import android.util.AttributeSet;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -68,6 +69,7 @@ public final class StatusBarLensView extends View {
     private final RectF mTile = new RectF();
     private final RectF mGlow = new RectF();
     private final RectF[] mHitRects = new RectF[PaneWallPage.values().length];
+    private final float[] mHitInk = new float[PaneWallPage.values().length];
     /**
      * Each place's glow and dissolve, built once in unit space for the colours they carry and
      * aimed at the mark with {@link #mShaderMatrix}; rebuilt only when those colours change.
@@ -126,6 +128,36 @@ public final class StatusBarLensView extends View {
     @NonNull private String mDisplayGlyph = "";
     @Nullable private Listener mListener;
     @Nullable private PaneWallPage mPressed;
+    private boolean mCornerTapEnabled = true;
+    private boolean mCornerHoldEnabled = true;
+    private boolean mLongPressFired;
+    private long mDownTime;
+
+    private final Runnable mLongPressRunnable = () -> {
+        PaneWallPage pressed = mPressed;
+        if (pressed != null && mCornerHoldEnabled) {
+            mLongPressFired = true;
+            Haptics.tick(this, HapticFeedbackConstants.LONG_PRESS);
+            if (mListener != null) mListener.onPlaceIconTapped(pressed);
+            mPressed = null;
+        }
+    };
+
+    public void setCornerTapEnabled(boolean enabled) {
+        mCornerTapEnabled = enabled;
+    }
+
+    public boolean isCornerTapEnabled() {
+        return mCornerTapEnabled;
+    }
+
+    public void setCornerHoldEnabled(boolean enabled) {
+        mCornerHoldEnabled = enabled;
+    }
+
+    public boolean isCornerHoldEnabled() {
+        return mCornerHoldEnabled;
+    }
     /** The last bar the marks were laid out in, and where they are written, kept across draws. */
     @Nullable private StatusBarLensMetrics.Bar mBar;
     private final StatusBarLensMetrics.MarkBuffer mMarks = new StatusBarLensMetrics.MarkBuffer();
@@ -358,6 +390,7 @@ public final class StatusBarLensView extends View {
         int height = getHeight();
         if (width <= 0 || height <= 0) return;
         for (RectF rect : mHitRects) rect.setEmpty();
+        java.util.Arrays.fill(mHitInk, 0f);
         if (mWallWidthPx <= 0 || mPages.isEmpty()) return;
 
         List<StatusBarLensMetrics.Mark> marks = StatusBarLensMetrics.marks(bar(width, height),
@@ -366,8 +399,12 @@ public final class StatusBarLensView extends View {
             StatusBarLensMetrics.Mark mark = marks.get(index);
             mTile.set(mark.tile.left, mark.tile.top, mark.tile.right, mark.tile.bottom);
             if (!mark.home) {
-                mHitRects[mark.page.ordinal()].set(mark.target.left, mark.target.top,
-                    mark.target.right, mark.target.bottom);
+                int pageIdx = mark.page.ordinal();
+                RectF hit = mHitRects[pageIdx];
+                if (hit.isEmpty() || mark.effectiveInk > mHitInk[pageIdx]) {
+                    hit.set(mark.target.left, mark.target.top, mark.target.right, mark.target.bottom);
+                    mHitInk[pageIdx] = mark.effectiveInk;
+                }
             }
             // Weight and colour say what matters, and the row already says it: the place in front
             // is its own colour at full strength, the ones behind it are that same colour faded.
@@ -497,6 +534,7 @@ public final class StatusBarLensView extends View {
 
     @Override
     public boolean onTouchEvent(@NonNull MotionEvent event) {
+        if (!mCornerTapEnabled && !mCornerHoldEnabled) return false;
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN: {
                 PaneWallPage hit = iconAt(event.getX(), event.getY());
@@ -504,23 +542,39 @@ public final class StatusBarLensView extends View {
                 mPressed = hit;
                 mDownX = event.getX();
                 mDownY = event.getY();
+                mDownTime = SystemClock.uptimeMillis();
+                mLongPressFired = false;
+                removeCallbacks(mLongPressRunnable);
+                if (mCornerHoldEnabled) {
+                    postDelayed(mLongPressRunnable, ViewConfiguration.getLongPressTimeout());
+                }
                 return true;
             }
             case MotionEvent.ACTION_MOVE:
                 if (mPressed != null && Math.hypot(event.getX() - mDownX, event.getY() - mDownY)
                     > mTouchSlop) {
+                    removeCallbacks(mLongPressRunnable);
                     mPressed = null;
                 }
                 return mPressed != null;
             case MotionEvent.ACTION_UP: {
+                removeCallbacks(mLongPressRunnable);
+                if (mLongPressFired) {
+                    mPressed = null;
+                    return true;
+                }
                 PaneWallPage pressed = mPressed;
                 mPressed = null;
                 if (pressed == null) return false;
+                boolean isHold = (SystemClock.uptimeMillis() - mDownTime) >= ViewConfiguration.getLongPressTimeout();
+                boolean allowed = isHold ? mCornerHoldEnabled : mCornerTapEnabled;
+                if (!allowed) return false;
                 Haptics.tick(this, HapticFeedbackConstants.CONTEXT_CLICK);
                 if (mListener != null) mListener.onPlaceIconTapped(pressed);
                 return true;
             }
             case MotionEvent.ACTION_CANCEL:
+                removeCallbacks(mLongPressRunnable);
                 mPressed = null;
                 return false;
             default:
@@ -530,7 +584,7 @@ public final class StatusBarLensView extends View {
 
     /** Whether a touch lands on a peeking icon that is present enough to be a target. */
     public boolean isIconAt(float x, float y) {
-        return iconAt(x, y) != null;
+        return (mCornerTapEnabled || mCornerHoldEnabled) && iconAt(x, y) != null;
     }
 
     @Nullable

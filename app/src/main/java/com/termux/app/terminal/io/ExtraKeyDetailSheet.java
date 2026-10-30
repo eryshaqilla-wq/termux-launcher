@@ -63,6 +63,16 @@ public final class ExtraKeyDetailSheet {
     private TextView headerCap;
     private TextView headerTitle;
     private TextView headerDetail;
+    @Nullable private Runnable onDismissListener;
+
+    public void setOnDismissListener(@Nullable Runnable onDismiss) {
+        this.onDismissListener = onDismiss;
+        if (dialog != null) {
+            dialog.setOnDismissListener(d -> {
+                if (onDismissListener != null) onDismissListener.run();
+            });
+        }
+    }
 
     public ExtraKeyDetailSheet(@NonNull Context context, @NonNull ExtraKeysLayoutModel.Key key,
                                @NonNull ExtraKeysConstants.ExtraKeyDisplayMap displayMap,
@@ -103,6 +113,9 @@ public final class ExtraKeyDetailSheet {
         BottomSheetBehavior<?> behavior = dialog.getBehavior();
         behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
         behavior.setSkipCollapsed(true);
+        dialog.setOnDismissListener(d -> {
+            if (onDismissListener != null) onDismissListener.run();
+        });
         dialog.show();
     }
 
@@ -159,6 +172,7 @@ public final class ExtraKeyDetailSheet {
                 key.display = picked.display;
                 changed(true);
             })));
+        body.addView(commandField("Command / Script / Key", "e.g. htop, clear, ./script.sh, ESC", key));
         body.addView(labelField(context.getString(R.string.settings_extra_keys_sheet_label),
             context.getString(R.string.settings_extra_keys_sheet_label_hint), key));
 
@@ -184,6 +198,7 @@ public final class ExtraKeyDetailSheet {
                 key.popup = picked;
                 changed(true);
             })));
+            body.addView(commandField("Swipe Command / Script / Key", "e.g. htop, clear, ./script.sh, ESC", popup));
             body.addView(labelField(context.getString(R.string.settings_extra_keys_sheet_swipe_label),
                 context.getString(R.string.settings_extra_keys_sheet_swipe_label_hint), popup));
         }
@@ -282,6 +297,53 @@ public final class ExtraKeyDetailSheet {
         glyphParams.setMarginStart(dp(8));
         glyphs.setLayoutParams(glyphParams);
         fieldRow.addView(glyphs);
+        return fieldRow;
+    }
+
+    /**
+     * A text field for directly entering or editing a custom shell command, script, or key spec.
+     */
+    private View commandField(@NonNull String label, @NonNull String hint,
+                              @NonNull ExtraKeysLayoutModel.Key target) {
+        LinearLayout fieldRow = row();
+        fieldRow.setPadding(0, dp(4), 0, dp(4));
+
+        TextInputLayout fieldLayout = new TextInputLayout(context);
+        fieldLayout.setHint(hint);
+        TextInputEditText field = new TextInputEditText(fieldLayout.getContext());
+        field.setSingleLine(true);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        field.setContentDescription(label);
+        fieldLayout.addView(field, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        String raw = target.key;
+        boolean hasEnter = raw != null && raw.endsWith("\n");
+        String displayCommand = (hasEnter && raw.length() > 1) ? raw.substring(0, raw.length() - 1) : (raw == null ? "" : raw);
+        field.setText(displayCommand);
+
+        field.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable s) {
+                String val = s.toString().trim();
+                if (!val.isEmpty()) {
+                    if (hasEnter || (!ExtraKeyActionLabels.isNamedKey(val) && !val.startsWith("tool:"))) {
+                        target.key = val.endsWith("\n") ? val : (val + "\n");
+                    } else {
+                        target.key = val;
+                    }
+                } else {
+                    target.key = "";
+                }
+                refreshHeader();
+                host.onKeyChanged();
+            }
+        });
+
+        fieldLayout.setLayoutParams(new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        fieldRow.addView(fieldLayout);
         return fieldRow;
     }
 

@@ -38,6 +38,9 @@ public final class ExtraKeyActionLabels {
             return argument == null || argument.isEmpty() ? label : label + " · " + argument;
         }
         if (isNamedKey(spec)) return spec;
+        if (spec.endsWith("\n")) {
+            return "Command: " + spec.substring(0, spec.length() - 1);
+        }
         return context.getString(R.string.settings_extra_keys_action_types_title, spec);
     }
 
@@ -53,6 +56,14 @@ public final class ExtraKeyActionLabels {
     @NonNull
     public static String capText(@NonNull ExtraKeysLayoutModel.Key key,
                                  @NonNull ExtraKeysConstants.ExtraKeyDisplayMap displayMap) {
+        if (key.display != null && !key.display.isEmpty()) {
+            return key.display;
+        }
+        if (key.key.endsWith("\n")) {
+            String cmd = key.key.substring(0, key.key.length() - 1).trim();
+            if (cmd.length() <= 4) return cmd.toUpperCase();
+            return ">_";
+        }
         return ExtraKeyButton.resolveDisplay(key.key, key.display, displayMap);
     }
 

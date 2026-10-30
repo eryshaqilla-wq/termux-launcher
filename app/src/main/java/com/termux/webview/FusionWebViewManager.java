@@ -1909,6 +1909,36 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
+    public boolean onBackPressed() {
+        if (this.mMenuCard != null && this.mMenuCard.getVisibility() == View.VISIBLE) {
+            closeAllDrawers();
+            return true;
+        }
+        WebView webView;
+        if (this.mActiveTab != 1 || (webView = this.mWorkerWebView) == null) {
+            webView = this.mActiveWebView;
+        }
+        if (webView != null && webView.getVisibility() == View.VISIBLE) {
+            if (webView.canGoBack()) {
+                webView.goBack();
+                return true;
+            } else {
+                toggleMinimize();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean isWebViewVisible() {
+        WebView webView;
+        if (this.mActiveTab != 1 || (webView = this.mWorkerWebView) == null) {
+            webView = this.mActiveWebView;
+        }
+        return (webView != null && webView.getVisibility() == View.VISIBLE)
+            || (this.mMenuCard != null && this.mMenuCard.getVisibility() == View.VISIBLE);
+    }
+
     public void promptNewTabUrl() {
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity == null) {

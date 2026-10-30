@@ -354,6 +354,16 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/terminal_quick_keys_cluster"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:visibility="gone"
+                        android:clipChildren="false"
+                        android:clipToPadding="false" />
+
+                    <LinearLayout
                         android:id="@+id/display_quick_keys_cluster"
                         android:layout_width="wrap_content"
                         android:layout_height="match_parent"

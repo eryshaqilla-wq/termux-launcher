@@ -1437,6 +1437,62 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             value == null ? TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS : value.trim(), false);
     }
 
+    public String getTerminalQuickExtraKeys() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_TERMINAL_QUICK_EXTRA_KEYS, TERMUX_APP.DEFAULT_TERMINAL_QUICK_EXTRA_KEYS, false);
+    }
+
+    public void setTerminalQuickExtraKeys(@Nullable String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_TERMINAL_QUICK_EXTRA_KEYS,
+            value == null ? TERMUX_APP.DEFAULT_TERMINAL_QUICK_EXTRA_KEYS : value.trim(), false);
+    }
+
+    public boolean isStatusBarShowSessionIndicatorEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_SHOW_SESSION_INDICATOR,
+            TERMUX_APP.DEFAULT_STATUS_BAR_SHOW_SESSION_INDICATOR, false);
+    }
+
+    public void setStatusBarShowSessionIndicatorEnabled(boolean enabled) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_SHOW_SESSION_INDICATOR, enabled, false);
+    }
+
+    public boolean isStatusBarCornerPageTapEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_CORNER_PAGE_TAP_ENABLED,
+            TERMUX_APP.DEFAULT_STATUS_BAR_CORNER_PAGE_TAP_ENABLED, false);
+    }
+
+    public void setStatusBarCornerPageTapEnabled(boolean enabled) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_CORNER_PAGE_TAP_ENABLED, enabled, false);
+    }
+
+    public boolean isStatusBarBorderHoldPageEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED,
+            TERMUX_APP.DEFAULT_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED, false);
+    }
+
+    public void setStatusBarBorderHoldPageEnabled(boolean enabled) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED, enabled, false);
+    }
+
+    public String getTerminalBackKeyAction() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_TERMINAL_BACK_KEY_ACTION,
+            TERMUX_APP.DEFAULT_TERMINAL_BACK_KEY_ACTION, false);
+    }
+
+    public void setTerminalBackKeyAction(String action) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_TERMINAL_BACK_KEY_ACTION,
+            action != null ? action : TERMUX_APP.DEFAULT_TERMINAL_BACK_KEY_ACTION, false);
+    }
+
     /** The name of the wall place last rested on, or null when none was recorded. */
     @Nullable
     public String getWallLastPage() {

@@ -318,6 +318,28 @@ public final class TermuxPreferenceConstants {
 
         public static final String DEFAULT_X11_QUICK_EXTRA_KEYS = "FULLSCREEN,KEYBOARD,tool:mouse.toggle";
 
+        /** Quick extra keys for the Terminal (center canvas) status bar. */
+        public static final String KEY_TERMINAL_QUICK_EXTRA_KEYS = "terminal_quick_extra_keys";
+
+        public static final String DEFAULT_TERMINAL_QUICK_EXTRA_KEYS =
+            "[{\"key\":\"BOOST\",\"display\":\"⚡\"},{\"key\":\"KEYBOARD\",\"display\":\"⌨\"},{\"key\":\"clear\\n\",\"display\":\"CLR\"}]";
+
+        /** Toggle for the session indicator box at the left corner of the status bar. */
+        public static final String KEY_STATUS_BAR_SHOW_SESSION_INDICATOR = "status_bar_show_session_indicator";
+        public static final boolean DEFAULT_STATUS_BAR_SHOW_SESSION_INDICATOR = true;
+
+        /** Toggle for tapping the corner place icon/lens in the status bar to switch canvas. */
+        public static final String KEY_STATUS_BAR_CORNER_PAGE_TAP_ENABLED = "status_bar_corner_page_tap_enabled";
+        public static final boolean DEFAULT_STATUS_BAR_CORNER_PAGE_TAP_ENABLED = true;
+
+        /** Toggle for pressing and holding on canvas corner/border to switch canvas. */
+        public static final String KEY_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED = "status_bar_border_hold_page_enabled";
+        public static final boolean DEFAULT_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED = true;
+
+        /** Action to perform on Back gesture/key when on the Terminal canvas (center canvas). */
+        public static final String KEY_TERMINAL_BACK_KEY_ACTION = "terminal_back_key_action";
+        public static final String DEFAULT_TERMINAL_BACK_KEY_ACTION = "sessions";
+
         /** The place the pane wall last rested on; the home screen comes back to it. */
         public static final String KEY_WALL_LAST_PAGE = "wall_last_page";
 

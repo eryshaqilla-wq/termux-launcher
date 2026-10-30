@@ -16883,6 +16883,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (mCommandPalette != null) mCommandPalette.dismissImmediately();
             }
         });
+        registry.register(new com.termux.app.chrome.OverlayRegistry.Overlay() {
+            @Override public boolean onBack() {
+                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                return mgr != null && mgr.onBackPressed();
+            }
+            @Override public boolean isOpen() {
+                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                return mgr != null && mgr.isWebViewVisible();
+            }
+        });
         registry.register(new com.termux.app.chrome.OverlayRegistry.TypedOverlay() {
             @Override public boolean onBack() {
                 // One level per press, never the whole plane: a row that has unfolded its actions
@@ -17435,7 +17445,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     @SuppressLint("RtlHardcoded")
     @Override
     public void onBackPressed() {
-        mOverlays.onBackPressed();
+        if (mOverlays.onBackPressed()) return;
+        handleTerminalCanvasBack();
+    }
+
+    private void handleTerminalCanvasBack() {
+        if (currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
+            return;
+        }
+        String action = mPreferences != null ? mPreferences.getTerminalBackKeyAction() : "sessions";
+        if ("sessions".equals(action)) {
+            toggleSessionsPanel();
+        } else if ("escape".equals(action)) {
+            TerminalSession session = getCurrentSession();
+            if (session != null) {
+                session.write("\033");
+            }
+        } else if ("ctrl_c".equals(action)) {
+            TerminalSession session = getCurrentSession();
+            if (session != null) {
+                session.write("\003");
+            }
+        } else if ("palette".equals(action)) {
+            if (mCommandPalette != null) {
+                mCommandPalette.toggle();
+            } else {
+                getCommandPaletteController().toggle();
+            }
+        } else if ("minimize".equals(action)) {
+            moveTaskToBack(true);
+        }
     }
 
     void finishActivityIfNotFinishing() {
@@ -20924,6 +20963,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @Override public boolean isBorderStatusSwipeEnabled() {
                     return isBorderStatusSwipeAvailable();
                 }
+                @Override public boolean isBorderHoldPagingEnabled() {
+                    return mPreferences == null || mPreferences.isStatusBarBorderHoldPageEnabled();
+                }
                 @Override public void onBorderStatusSwipe(boolean expand) {
                     if (isBorderStatusSwipeAvailable()) setTopStatusBarCollapsed(!expand, true);
                 }
@@ -21193,8 +21235,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             findViewById(R.id.terminal_sessions_indicator);
         if (sessions != null) {
             sessions.setAccent(placeAccent);
-            sessions.setVisibility(page == com.termux.app.wall.PaneWallPage.TERMINAL
-                ? View.VISIBLE : View.GONE);
+            boolean showSession = (page == com.termux.app.wall.PaneWallPage.TERMINAL)
+                && (mPreferences == null || mPreferences.isStatusBarShowSessionIndicatorEnabled());
+            sessions.setVisibility(showSession ? View.VISIBLE : View.GONE);
         }
         boolean windowsShown = page != com.termux.app.wall.PaneWallPage.WIDGETS;
         com.termux.app.terminal.TerminalWindowBar bar = findViewById(R.id.terminal_window_bar);
@@ -21424,12 +21467,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ? mPaneWallController.currentPage() : currentWallPage();
         float statsAlpha;
         float quickAlpha;
+        float termQuickAlpha;
         if (current == com.termux.app.wall.PaneWallPage.DISPLAY) {
             quickAlpha = alpha;
             statsAlpha = 0f;
+            termQuickAlpha = 0f;
+        } else if (current == com.termux.app.wall.PaneWallPage.TERMINAL) {
+            statsAlpha = alpha;
+            quickAlpha = 0f;
+            termQuickAlpha = alpha;
         } else {
             statsAlpha = alpha;
             quickAlpha = 0f;
+            termQuickAlpha = 0f;
         }
 
         ViewGroup cluster = hotView(R.id.terminal_status_stats_cluster);
@@ -21449,6 +21499,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             quickCluster.setAlpha(quickAlpha);
             quickCluster.setVisibility(quickAlpha > 0.01f ? View.VISIBLE : View.GONE);
         }
+        ViewGroup termQuickCluster = hotView(R.id.terminal_quick_keys_cluster);
+        if (termQuickCluster != null) {
+            if (termQuickCluster.getChildCount() == 0 && termQuickAlpha > 0.01f) {
+                populateTerminalQuickKeys(termQuickCluster);
+            }
+            termQuickCluster.setTranslationX(vertical ? 0f : offsetPx);
+            termQuickCluster.setTranslationY(vertical ? offsetPx : 0f);
+            termQuickCluster.setAlpha(termQuickAlpha);
+            termQuickCluster.setVisibility(termQuickAlpha > 0.01f ? View.VISIBLE : View.GONE);
+        }
         View endWidgets = hotView(R.id.terminal_status_widgets);
         if (endWidgets != null) {
             endWidgets.setTranslationX(vertical ? 0f : offsetPx);
@@ -21463,7 +21523,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** The badge at the start of the status row is the terminal session's; it shows nowhere else. */
     private void bindPlaceBadge(@Nullable com.termux.app.statusbar.SessionsIndicatorView badge) {
-        if (badge == null || currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) return;
+        if (badge == null) return;
+        boolean enabled = mPreferences == null || mPreferences.isStatusBarShowSessionIndicatorEnabled();
+        if (!enabled || currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
+            badge.setVisibility(View.GONE);
+            return;
+        }
+        badge.setVisibility(View.VISIBLE);
         int sessionIndex = mCurrentWSession == null ? -1 : mWSessions.indexOf(mCurrentWSession);
         badge.setSession(currentStatusSessionName(), mWSessions.size(), sessionIndex);
     }
@@ -21615,6 +21681,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean isRunning = isEmbeddedDisplayRunning();
         ViewGroup statsCluster = findViewById(R.id.terminal_status_stats_cluster);
         ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
+        ViewGroup termQuickCluster = findViewById(R.id.terminal_quick_keys_cluster);
         View statusBarHost = findViewById(R.id.terminal_window_bar_host);
         View toolbarHost = findViewById(R.id.terminal_toolbar_host);
         View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
@@ -21628,6 +21695,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 quickCluster.setVisibility(View.GONE);
                 if (quickCluster.getChildCount() == 0) {
                     populateDisplayQuickKeys(quickCluster);
+                }
+            }
+            boolean isTerminal = (currentWallPage() == com.termux.app.wall.PaneWallPage.TERMINAL);
+            if (termQuickCluster != null) {
+                termQuickCluster.setVisibility(isTerminal ? View.VISIBLE : View.GONE);
+                termQuickCluster.setAlpha(1.0f);
+                termQuickCluster.setTranslationX(0f);
+                termQuickCluster.setTranslationY(0f);
+                if (isTerminal) {
+                    populateTerminalQuickKeys(termQuickCluster);
                 }
             }
             if (statsCluster != null) {
@@ -21650,6 +21727,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         // On Display canvas (canvas kanan):
+        if (termQuickCluster != null) termQuickCluster.setVisibility(View.GONE);
         if (statsCluster != null) statsCluster.setVisibility(View.GONE);
         if (quickCluster != null) {
             quickCluster.setVisibility(View.VISIBLE);
@@ -21852,6 +21930,182 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             lp.gravity = android.view.Gravity.CENTER_VERTICAL;
             quickCluster.addView(btn, lp);
         }
+    }
+
+    @NonNull
+    private List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> getTerminalQuickKeysList() {
+        String json = mPreferences != null ? mPreferences.getTerminalQuickExtraKeys() : null;
+        List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list =
+            com.termux.app.terminal.io.ExtraKeysLayoutModel.parseKeyList(json);
+        if (list.isEmpty()) {
+            list = com.termux.app.terminal.io.ExtraKeysLayoutModel.parseKeyList(
+                com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_TERMINAL_QUICK_EXTRA_KEYS);
+        }
+        return list;
+    }
+
+    private void saveTerminalQuickKeysList(@NonNull List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list) {
+        String json = com.termux.app.terminal.io.ExtraKeysLayoutModel.serializeKeyList(list);
+        if (mPreferences != null) {
+            mPreferences.setTerminalQuickExtraKeys(json);
+        }
+    }
+
+    private void populateTerminalQuickKeys(@NonNull ViewGroup cluster) {
+        List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getTerminalQuickKeysList();
+        com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
+
+        int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
+        int defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+            ? windowBar.getSelectedStrokeColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
+        int defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+            ? windowBar.getSelectedFillColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
+        int defaultInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
+            ? windowBar.getSelectedTextColor()
+            : primary;
+
+        int btnHeight = Math.round(dpToPx(20));
+        int btnSquareW = Math.round(dpToPx(20));
+        float cornerRadius = (windowBar != null && windowBar.getStatusBarRadiusPx() >= 0)
+            ? windowBar.getStatusBarRadiusPx()
+            : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
+        int strokeWidth = Math.round(dpToPx(1));
+        int marginE = Math.round(dpToPx(3));
+
+        cluster.removeAllViews();
+        android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
+
+        for (int i = 0; i < keys.size(); i++) {
+            final int keyIndex = i;
+            final com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key = keys.get(i);
+            TextView btn = new TextView(this);
+            btn.setTag(key);
+
+            String label = key.display;
+            if (label == null || label.isEmpty()) {
+                if (key.key.endsWith("\n")) {
+                    String cmd = key.key.substring(0, key.key.length() - 1).trim();
+                    label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
+                } else {
+                    label = key.key;
+                }
+            }
+            btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
+            if (nerdFont != null) btn.setTypeface(nerdFont);
+            btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f);
+            btn.setIncludeFontPadding(false);
+
+            int btnStroke = defaultStroke;
+            int btnBg = defaultBg;
+            int btnInk = defaultInk;
+            if (key.color != null) {
+                int roleBg = key.color.background(this);
+                int roleLabel = key.color.label(this);
+                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 180);
+                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 80);
+                btnInk = roleLabel;
+            }
+            btn.setTextColor(btnInk);
+            btn.setGravity(android.view.Gravity.CENTER);
+
+            android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+            gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            gd.setCornerRadius(cornerRadius);
+            gd.setColor(btnBg);
+            gd.setStroke(strokeWidth, btnStroke);
+            btn.setBackground(gd);
+
+            btn.setOnClickListener(v -> executeTerminalQuickKey(key));
+            btn.setOnLongClickListener(v -> {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                openTerminalQuickKeyEditor(keyIndex, keys, cluster);
+                return true;
+            });
+
+            boolean isTextKey = label != null && label.length() > 2;
+            int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
+            if (isTextKey) {
+                btn.setMinWidth(btnSquareW);
+                int padH = Math.round(dpToPx(4));
+                btn.setPadding(padH, 0, padH, 0);
+            } else {
+                btn.setWidth(btnSquareW);
+                btn.setPadding(0, 0, 0, 0);
+            }
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(lpWidth, btnHeight);
+            lp.setMarginEnd(marginE);
+            lp.gravity = android.view.Gravity.CENTER_VERTICAL;
+            cluster.addView(btn, lp);
+        }
+    }
+
+    private void executeTerminalQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
+        getWindow().getDecorView().performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+        String actionKey = key.key;
+        if ("BOOST".equalsIgnoreCase(actionKey)) {
+            new Thread(() -> {
+                try {
+                    Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
+                } catch (Exception ignored) {}
+                runOnUiThread(() -> android.widget.Toast.makeText(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!", android.widget.Toast.LENGTH_SHORT).show());
+            }).start();
+        } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
+            if (mTermuxTerminalViewClient != null) {
+                mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
+            }
+        } else if (actionKey.endsWith("\n")) {
+            TerminalSession session = getCurrentSession();
+            if (session != null) {
+                session.write(actionKey);
+            }
+        } else if (mTermuxTerminalExtraKeys != null) {
+            View dummyView = new View(this);
+            mTermuxTerminalExtraKeys.onTerminalExtraKeyButtonClick(dummyView, actionKey, false, false, false, false);
+        }
+    }
+
+    private void openTerminalQuickKeyEditor(int index, @NonNull List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list, @NonNull ViewGroup cluster) {
+        final boolean isNew = (index < 0);
+        final com.termux.app.terminal.io.ExtraKeysLayoutModel.Key targetKey;
+        if (isNew) {
+            targetKey = new com.termux.app.terminal.io.ExtraKeysLayoutModel.Key("clear\n", false, "CLR", null);
+            list.add(targetKey);
+            index = list.size() - 1;
+        } else {
+            targetKey = list.get(index);
+        }
+
+        final int targetIndex = index;
+        com.termux.shared.termux.extrakeys.ExtraKeysConstants.ExtraKeyDisplayMap displayMap =
+            com.termux.shared.termux.extrakeys.ExtraKeysConstants.EXTRA_KEY_DISPLAY_MAPS.DEFAULT_CHAR_DISPLAY;
+
+        com.termux.app.terminal.io.ExtraKeyDetailSheet sheet =
+            new com.termux.app.terminal.io.ExtraKeyDetailSheet(this, targetKey, displayMap,
+                new com.termux.app.terminal.io.ExtraKeyDetailSheet.Host() {
+                    @Override
+                    public void onKeyChanged() {
+                        saveTerminalQuickKeysList(list);
+                        populateTerminalQuickKeys(cluster);
+                    }
+
+                    @Override
+                    public void onRemoveKey() {
+                        if (targetIndex >= 0 && targetIndex < list.size()) {
+                            list.remove(targetIndex);
+                            saveTerminalQuickKeysList(list);
+                            populateTerminalQuickKeys(cluster);
+                        }
+                    }
+                });
+
+        sheet.setOnDismissListener(() -> {
+            saveTerminalQuickKeysList(list);
+            populateTerminalQuickKeys(cluster);
+        });
+        sheet.show();
     }
 
     /** Whether a display server is up and connected to the Display page. */
@@ -23820,7 +24074,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         com.termux.app.statusbar.StatusBarLensView lens = findViewById(R.id.terminal_status_lens);
         if (lens != null) {
-            // A tap on a peeking place icon slides the wall to the place it stands for.
+            boolean cornerTapEnabled = mPreferences == null || mPreferences.isStatusBarCornerPageTapEnabled();
+            boolean borderHoldEnabled = mPreferences == null || mPreferences.isStatusBarBorderHoldPageEnabled();
+            lens.setCornerTapEnabled(cornerTapEnabled);
+            lens.setCornerHoldEnabled(borderHoldEnabled);
+            // A tap or hold on a peeking place icon slides the wall to the place it stands for.
             lens.setListener(page -> {
                 if (mPaneWallController != null) mPaneWallController.goTo(page, true);
             });
@@ -24379,6 +24637,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyTerminalWindowBarGlass(host);
 
         bindPlaceBadge(findViewById(R.id.terminal_sessions_indicator));
+
+        com.termux.app.statusbar.StatusBarLensView lens = findViewById(R.id.terminal_status_lens);
+        if (lens != null) {
+            boolean cornerTapEnabled = mPreferences == null || mPreferences.isStatusBarCornerPageTapEnabled();
+            boolean borderHoldEnabled = mPreferences == null || mPreferences.isStatusBarBorderHoldPageEnabled();
+            lens.setCornerTapEnabled(cornerTapEnabled);
+            lens.setCornerHoldEnabled(borderHoldEnabled);
+        }
 
         java.util.List<Integer> foregroundPids = syncWindowBarItems(bar);
         scheduleWindowLabelPoll(foregroundPids);
@@ -25187,6 +25453,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
         if (quickCluster != null && isDisplayPageShowing()) {
             populateDisplayQuickKeys(quickCluster);
+        }
+        ViewGroup termQuickCluster = findViewById(R.id.terminal_quick_keys_cluster);
+        if (termQuickCluster != null && currentWallPage() == com.termux.app.wall.PaneWallPage.TERMINAL) {
+            populateTerminalQuickKeys(termQuickCluster);
         }
     }
 

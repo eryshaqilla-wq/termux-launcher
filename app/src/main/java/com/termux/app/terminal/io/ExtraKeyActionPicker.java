@@ -178,6 +178,10 @@ public final class ExtraKeyActionPicker {
             // a space-separated value can additionally become a macro.
             String typed = query.trim();
             results.addView(entry(
+                "Run command: \"" + typed + "\"",
+                "Runs '" + typed + "' in terminal with Enter",
+                () -> pick.onPicked(new ExtraKeysLayoutModel.Key(typed.endsWith("\n") ? typed : (typed + "\n"), false, typed, null))));
+            results.addView(entry(
                 context.getString(R.string.settings_extra_keys_action_send_text, typed), null,
                 () -> pick.onPicked(new ExtraKeysLayoutModel.Key(typed))));
             if (typed.contains(" ")) {

@@ -104,7 +104,7 @@ public final class ExtraKeysLayoutModel {
     }
 
     @Nullable
-    private static Key parseKey(@Nullable Object element) {
+    public static Key parseKey(@Nullable Object element) {
         if (element == null) return null;
         if (element instanceof JSONObject) {
             JSONObject object = (JSONObject) element;
@@ -121,6 +121,29 @@ public final class ExtraKeysLayoutModel {
         }
         String literal = String.valueOf(element);
         return literal.isEmpty() ? null : new Key(literal);
+    }
+
+    @NonNull
+    public static List<Key> parseKeyList(@Nullable String json) {
+        List<Key> list = new ArrayList<>();
+        if (json == null || json.trim().isEmpty()) return list;
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                Key k = parseKey(arr.opt(i));
+                if (k != null) list.add(k);
+            }
+        } catch (JSONException ignored) {}
+        return list;
+    }
+
+    @NonNull
+    public static String serializeKeyList(@NonNull List<Key> list) {
+        JSONArray arr = new JSONArray();
+        for (Key k : list) {
+            arr.put(serializeKey(k));
+        }
+        return arr.toString();
     }
 
     @Nullable
