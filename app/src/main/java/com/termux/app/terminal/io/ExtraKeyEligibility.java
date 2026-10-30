@@ -131,6 +131,7 @@ public final class ExtraKeyEligibility {
         // The dock and the key row are chrome every place wears.
         tools.put(LauncherToolRegistry.TOOL_TERMINAL_TOGGLE_TOOLBAR, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_DOCK_TOGGLE, Band.LAUNCHER);
+        tools.put(LauncherToolRegistry.TOOL_STATUSBAR_TOGGLE, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_EXTRA_KEYS_EDIT, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_APP_OPEN_SETTINGS, Band.LAUNCHER);
         tools.put(LauncherToolRegistry.TOOL_APP_OPEN_HELP, Band.LAUNCHER);
