@@ -3,7 +3,6 @@ package com.termux.app.statusbar;
 import androidx.annotation.NonNull;
 
 import com.termux.app.wall.PaneWallPage;
-import com.termux.app.wall.PaneWallPolicy;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -354,64 +353,52 @@ public final class StatusBarLensMetrics {
         float slop = bar.dp(TOUCH_SLOP_DP);
         float minTarget = bar.dp(TOUCH_TARGET_DP);
 
-        int pageCount = pages.size();
-        boolean isRing = PaneWallPolicy.isRing(pages);
-        float offset = wallWidthPx <= 0 ? 0f : offsetPx / (float) wallWidthPx;
-
-        for (int index = 0; index < pageCount; index++) {
+        for (int index = 0; index < pages.size(); index++) {
             PaneWallPage page = pages.get(index);
-            int rel = page == current ? 0 : PaneWallPolicy.relativePosition(pages, current, page);
-            // On a ring during active motion (offset != 0), neighbours exist on both edges of the wrap
-            // so an icon leaving one edge fades out smoothly while its counterpart enters the other.
-            int wrapCount = (page != current && isRing && offset != 0f) ? 2 : 1;
-            for (int wrap = 0; wrap < wrapCount; wrap++) {
-                int r = (wrap == 0) ? rel : (rel > 0 ? rel - pageCount : rel + pageCount);
-                float t = r + offset;
-                float presence = StatusBarLensPolicy.presence(t);
-                // Whole at home only while the bar is expanded; in the compact row the mark at home is
-                // not there, so an arriving mark dissolves smoothly over its last stretch towards home.
-                float homeStretch = (bar.expansion < 1f) ? smoothstep(0f, 0.35f, presence) : 1f;
-                float alpha = StatusBarLensPolicy.alpha(t) * lerp(homeStretch, 1f, bar.expansion);
-                if (alpha <= VANISHED_ALPHA) continue;
-                // A mark on its way between home and an end takes the size of the end it is nearer, so
-                // the arriving one grows as it takes the home spot and the leaving one shrinks.
-                float size = lerp(homeSize, peekSize, presence) * StatusBarLensPolicy.scale(t);
-                float nearPeek = -size / 2f;
-                float farPeek = along - size / 2f;
-                float travelled = alongStart
-                    + StatusBarLensPolicy.iconX(t, homeX, nearPeek, farPeek, size) + size / 2f;
-                float centerX = bar.vertical ? line : travelled;
-                float centerY = bar.vertical ? travelled : line;
+            float t = StatusBarLensPolicy.distance(pages, current, page, offsetPx, wallWidthPx);
+            float presence = StatusBarLensPolicy.presence(t);
+            // Whole at home only while the bar is expanded; in the compact row the mark at home is
+            // not there, so an arriving mark dissolves over its last stretch.
+            float alpha = StatusBarLensPolicy.alpha(t) * lerp(presence, 1f, bar.expansion);
+            if (alpha <= VANISHED_ALPHA) continue;
+            // A mark on its way between home and an end takes the size of the end it is nearer, so
+            // the arriving one grows as it takes the home spot and the leaving one shrinks.
+            float size = lerp(homeSize, peekSize, presence) * StatusBarLensPolicy.scale(t);
+            float nearPeek = -size / 2f;
+            float farPeek = along - size / 2f;
+            float travelled = alongStart
+                + StatusBarLensPolicy.iconX(t, homeX, nearPeek, farPeek, size) + size / 2f;
+            float centerX = bar.vertical ? line : travelled;
+            float centerY = bar.vertical ? travelled : line;
 
-                boolean stoppedDisplay = page == PaneWallPage.DISPLAY && !displayRunning;
-                float ink = alpha * inkFor(presence, stoppedDisplay);
-                boolean fades = presence > 0.05f && t != 0f;
-                float fadeOuter = fades ? 1f - FADE_DEPTH * presence : 1f;
-                // The glyph is drawn at the mark's middle, which is halfway along the dissolve: that is
-                // the ink a finger's owner actually has to read.
-                float effectiveInk = ink * (fadeOuter + 1f) / 2f;
-                float glow = alpha * (1f - presence) * bar.expansion;
-                float radius = bar.chipRadiusPx >= 0f
-                    ? Math.min(size / 2f, bar.chipRadiusPx * (size / bar.dp(COMPACT_ICON_DP)))
-                    : size * FALLBACK_RADIUS_SHARE;
+            boolean stoppedDisplay = page == PaneWallPage.DISPLAY && !displayRunning;
+            float ink = alpha * inkFor(presence, stoppedDisplay);
+            boolean fades = presence > 0.05f && t != 0f;
+            float fadeOuter = fades ? 1f - FADE_DEPTH * presence : 1f;
+            // The glyph is drawn at the mark's middle, which is halfway along the dissolve: that is
+            // the ink a finger's owner actually has to read.
+            float effectiveInk = ink * (fadeOuter + 1f) / 2f;
+            float glow = alpha * (1f - presence) * bar.expansion;
+            float radius = bar.chipRadiusPx >= 0f
+                ? Math.min(size / 2f, bar.chipRadiusPx * (size / bar.dp(COMPACT_ICON_DP)))
+                : size * FALLBACK_RADIUS_SHARE;
 
-                Mark mark = buffer.next();
-                mark.tile.set(centerX - size / 2f, centerY - size / 2f,
-                    centerX + size / 2f, centerY + size / 2f);
-                float[] alongSpan = span(travelled, size / 2f + slop, minTarget,
-                    alongStart, alongStart + along, buffer.mAlongSpan);
-                float[] acrossSpan = span(line, size / 2f + slop, minTarget, 0f, across,
-                    buffer.mAcrossSpan);
-                if (bar.vertical) {
-                    mark.target.set(acrossSpan[0], alongSpan[0], acrossSpan[1], alongSpan[1]);
-                } else {
-                    mark.target.set(alongSpan[0], acrossSpan[0], alongSpan[1], acrossSpan[1]);
-                }
-
-                mark.set(page, t, presence, page == current && Math.abs(t) < 0.5f, centerX, centerY, size, radius,
-                    size * GLYPH_SHARE, alpha * glyphInkFor(presence, stoppedDisplay), ink,
-                    effectiveInk, fadeOuter, glow, fades, t < 0f);
+            Mark mark = buffer.next();
+            mark.tile.set(centerX - size / 2f, centerY - size / 2f,
+                centerX + size / 2f, centerY + size / 2f);
+            float[] alongSpan = span(travelled, size / 2f + slop, minTarget,
+                alongStart, alongStart + along, buffer.mAlongSpan);
+            float[] acrossSpan = span(line, size / 2f + slop, minTarget, 0f, across,
+                buffer.mAcrossSpan);
+            if (bar.vertical) {
+                mark.target.set(acrossSpan[0], alongSpan[0], acrossSpan[1], alongSpan[1]);
+            } else {
+                mark.target.set(alongSpan[0], acrossSpan[0], alongSpan[1], acrossSpan[1]);
             }
+
+            mark.set(page, t, presence, page == current, centerX, centerY, size, radius,
+                size * GLYPH_SHARE, alpha * glyphInkFor(presence, stoppedDisplay), ink,
+                effectiveInk, fadeOuter, glow, fades, t < 0f);
         }
         return buffer.marks();
     }
@@ -476,10 +463,5 @@ public final class StatusBarLensMetrics {
 
     private static float lerp(float from, float to, float fraction) {
         return from + (to - from) * fraction;
-    }
-
-    private static float smoothstep(float edge0, float edge1, float x) {
-        float t = Math.max(0f, Math.min(1f, (x - edge0) / (edge1 - edge0)));
-        return t * t * (3f - 2f * t);
     }
 }
