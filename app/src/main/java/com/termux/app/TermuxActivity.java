@@ -14506,6 +14506,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             host.setVisibility(View.GONE);
             return;
         }
+        com.termux.app.statusbar.StatusBarLensView lens = findViewById(R.id.terminal_status_lens);
+        if (lens != null) {
+            float targetHeight = dpToPx(com.termux.app.statusbar.StatusBarEdgeGeometry.SLOT_DOCKED_DP);
+            lens.setHomeAnchor(host.getTop() + targetHeight / 2f, dpToPx(com.termux.app.statusbar.StatusBarLensMetrics.ICON_DP));
+        }
         int leading = com.termux.app.statusbar.StatusBarLensView.leadingCellWidthPx(this);
         int trailing = Math.round(dpToPx(24f));
         if (host.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
@@ -24091,6 +24096,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 ((com.termux.app.statusbar.TopPaneWidgetSlot) slotView).setHomeAnchorListener(
                     (centerYPx, sizePx) -> lens.setHomeAnchor(slotView.getTop() + centerYPx,
                         sizePx));
+            }
+            View shortcutsHost = findViewById(R.id.terminal_status_extra_keys_host);
+            if (shortcutsHost != null) {
+                shortcutsHost.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                    com.termux.app.statusbar.StatusBarLensView l = findViewById(R.id.terminal_status_lens);
+                    if (l != null && shortcutsHost.getVisibility() == View.VISIBLE) {
+                        l.setHomeAnchor(top + (bottom - top) / 2f, dpToPx(com.termux.app.statusbar.StatusBarLensMetrics.ICON_DP));
+                    }
+                });
             }
         }
         refreshTerminalWindowBar();

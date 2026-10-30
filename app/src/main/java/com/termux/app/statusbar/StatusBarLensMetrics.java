@@ -342,8 +342,7 @@ public final class StatusBarLensMetrics {
         // arrives at home, so the row is never crowded.
         float expandedHome = bar.homeSizePx > 0f
             ? Math.min(bar.dp(ICON_DP), bar.homeSizePx) : bar.dp(ICON_DP);
-        float slotMiddle = bar.bottom
-            ? across - bar.dp(SLOT_HEIGHT_DP) / 2f : bar.dp(SLOT_HEIGHT_DP) / 2f;
+        float slotMiddle = bar.dp(SLOT_HEIGHT_DP) / 2f;
         float expandedLine = bar.homeCenterYPx >= 0f && !bar.vertical ? bar.homeCenterYPx : slotMiddle;
         float homeSize = lerp(bar.dp(COMPACT_ICON_DP), expandedHome, bar.expansion);
         float peekSize = lerp(bar.dp(COMPACT_ICON_DP), expandedHome * PEEK_SHARE, bar.expansion);
