@@ -16,6 +16,9 @@
     <string name="settings_status_expanded_mode_title">Tampilan Saat Status Bar Dibuka (Swipe)</string>
     <string name="settings_status_expanded_mode_clock">Jam Digital (Clock)</string>
     <string name="settings_status_expanded_mode_extra_keys">Shortcut / Extra Keys</string>
+    <string name="settings_status_expanded_mode_none">Nonaktif / Terkunci (None)</string>
+    <string name="settings_status_bar_swipe_expansion_title">Izinkan Swipe Buka Status Bar</string>
+    <string name="settings_status_bar_swipe_expansion_summary">Tarik atau swipe ke bawah pada status bar untuk menampilkan panel Jam atau Extra Keys. Matikan untuk mengunci status bar tetap compact.</string>
     <string name="settings_status_expanded_shortcuts_title">Gunakan Shortcut / Extra Keys</string>
     <string name="settings_status_expanded_shortcuts_summary">Tampilkan bilah tombol shortcut kustom saat status bar dibuka/di-swipe, bukan jam.</string>
     <string name="settings_edit_status_bar_extra_keys_title">Edit Tombol Shortcut Status Bar</string>
@@ -58,6 +61,8 @@
     <string name="settings_two_finger_dock_swipe_summary">Swipe 2 fingers right to hide dock, left to show</string>
     <string name="tool_dock_toggle">Toggle Dock</string>
     <string name="tool_desc_dock_toggle">Toggle between full dock and compact 1-row extra keys.</string>
+    <string name="tool_statusbar_toggle">Toggle Status Bar</string>
+    <string name="tool_desc_statusbar_toggle">Buka atau tutup panel status bar expanded (Jam / Extra Keys).</string>
     <string name="widget_add">Add widget</string>
     <string name="widget_empty_hint">Long-press to add widgets</string>
     <string name="widget_menu_edit_widgets">Edit widgets</string>

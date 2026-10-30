@@ -953,6 +953,17 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_EXTRA_KEYS.equals(mode), false);
     }
 
+    public boolean isStatusBarSwipeExpansionEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_SWIPE_EXPANSION_ENABLED,
+            TERMUX_APP.DEFAULT_STATUS_BAR_SWIPE_EXPANSION_ENABLED);
+    }
+
+    public void setStatusBarSwipeExpansionEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_STATUS_BAR_SWIPE_EXPANSION_ENABLED, value, false);
+    }
+
     public String getStatusBarHorizontalSwipeAction() {
         return SharedPreferenceUtils.getString(mSharedPreferences,
             TERMUX_APP.KEY_STATUS_BAR_HORIZONTAL_SWIPE_ACTION,

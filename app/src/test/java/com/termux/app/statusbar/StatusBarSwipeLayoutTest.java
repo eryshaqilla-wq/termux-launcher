@@ -135,6 +135,19 @@ public class StatusBarSwipeLayoutTest {
     }
 
     @Test
+    public void verticalSwipeWhenExpansionDisabled_neverExpands() {
+        StatusBarSwipeLayout view = createView();
+        List<Boolean> requests = new ArrayList<>();
+        view.setCollapsed(true);
+        view.setExpansionAllowed(false);
+        view.setListener(requests::add);
+
+        // Downward drag should not request expansion when expansion is disabled
+        swipe(view, 100f, 105f, 15f, 70f);
+        assertTrue(requests.isEmpty());
+    }
+
+    @Test
     public void nestedScrollConsumesZeroAndCancelsHold() {
         StatusBarSwipeLayout view = createView();
         List<Boolean> toggles = new ArrayList<>();

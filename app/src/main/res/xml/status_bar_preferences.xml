@@ -11,19 +11,26 @@
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_status_expanded_header">
+        <SwitchPreferenceCompat
+            app:key="status_bar_swipe_expansion_enabled"
+            app:title="@string/settings_status_bar_swipe_expansion_title"
+            app:summary="@string/settings_status_bar_swipe_expansion_summary"
+            app:defaultValue="true" />
         <ListPreference
             app:key="status_bar_expanded_mode"
             app:title="@string/settings_status_expanded_mode_title"
             app:entries="@array/settings_status_expanded_mode_entries"
             app:entryValues="@array/settings_status_expanded_mode_values"
             app:defaultValue="clock"
+            app:dependency="status_bar_swipe_expansion_enabled"
             app:useSimpleSummaryProvider="true" />
         <Preference
             app:key="edit_status_bar_extra_keys"
             app:persistent="false"
             app:fragment="com.termux.app.fragments.settings.termux.ExtraKeysEditorFragment"
             app:title="@string/settings_edit_status_bar_extra_keys_title"
-            app:summary="@string/settings_edit_status_bar_extra_keys_summary" />
+            app:summary="@string/settings_edit_status_bar_extra_keys_summary"
+            app:dependency="status_bar_swipe_expansion_enabled" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_terminal_quick_keys_header">

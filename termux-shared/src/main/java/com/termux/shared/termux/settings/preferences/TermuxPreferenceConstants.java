@@ -685,7 +685,12 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_STATUS_BAR_EXPANDED_MODE = "status_bar_expanded_mode";
         public static final String VALUE_STATUS_BAR_EXPANDED_MODE_CLOCK = "clock";
         public static final String VALUE_STATUS_BAR_EXPANDED_MODE_EXTRA_KEYS = "extra_keys";
+        public static final String VALUE_STATUS_BAR_EXPANDED_MODE_NONE = "none";
         public static final String DEFAULT_VALUE_STATUS_BAR_EXPANDED_MODE = VALUE_STATUS_BAR_EXPANDED_MODE_CLOCK;
+
+        /** Whether status bar vertical swipe down expansion is enabled. */
+        public static final String KEY_STATUS_BAR_SWIPE_EXPANSION_ENABLED = "status_bar_swipe_expansion_enabled";
+        public static final boolean DEFAULT_STATUS_BAR_SWIPE_EXPANSION_ENABLED = true;
 
         /** Action triggered by horizontal swipe left/right on the status bar. */
         public static final String KEY_STATUS_BAR_HORIZONTAL_SWIPE_ACTION = "status_bar_horizontal_swipe_action";

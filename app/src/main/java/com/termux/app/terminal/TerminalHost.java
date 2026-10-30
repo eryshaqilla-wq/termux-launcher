@@ -75,6 +75,13 @@ public interface TerminalHost extends SoftKeyboardPolicy {
         return false;
     }
 
+    /** Toggles the expanded status bar (Clock / Extra Keys). */
+    default void toggleTopStatusBarExpanded() {}
+
+    default boolean isTopStatusBarExpanded() {
+        return false;
+    }
+
     /** Asks the flush dock to re-measure after anything that changes terminal geometry. */
     void requestFlushDockGeometryUpdate();
 

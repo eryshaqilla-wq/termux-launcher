@@ -13790,6 +13790,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return mIsAccessoryStackCollapsed;
     }
 
+    public void toggleTopStatusBarExpanded() {
+        if (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+                .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode())) {
+            return;
+        }
+        setTopStatusBarCollapsed(!isStatusBarCompact(), true);
+    }
+
+    public boolean isTopStatusBarExpanded() {
+        return !isStatusBarCompact();
+    }
+
     public void setAppLaunching(boolean launching) {
         mIsAppLaunching = launching;
     }
@@ -13985,12 +13997,23 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)) {
             return true;
         }
+        if (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+                .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode())) {
+            return true;
+        }
         // The Look editor holds the bar open without touching the stored choice.
         if (mStatusBarExpandedForEditor) {
             return false;
         }
         PlaceLayoutStore store = placeLayoutStore();
         return store != null && store.isStatusCompact(currentPlaceOrientation());
+    }
+
+    public boolean isStatusBarSwipeExpansionAllowed() {
+        return mPreferences != null
+            && mPreferences.isStatusBarSwipeExpansionEnabled()
+            && !com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+                .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode());
     }
 
     private void setStatusBarCompact(boolean compact) {
@@ -15117,7 +15140,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 (com.termux.app.statusbar.StatusBarSwipeLayout) host;
             swipeHost.setEdge(edge);
             swipeHost.setExpansionAllowed(
-                com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(edge));
+                com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(edge)
+                && isStatusBarSwipeExpansionAllowed());
         }
         // The bar is not the system status bar's glass anywhere but along the top; everywhere else
         // the terminal simply starts under the system bar, as it does with the bar folded today.
@@ -20627,7 +20651,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             com.termux.app.statusbar.StatusBarSwipeLayout swipeHost =
                 (com.termux.app.statusbar.StatusBarSwipeLayout) host;
             swipeHost.setExpansionAllowed(
-                com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge));
+                com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)
+                && isStatusBarSwipeExpansionAllowed());
         }
         if (host != null && host.getAlpha() != 1f) host.setAlpha(1f);
         View row = findViewById(R.id.terminal_status_row);
@@ -24047,7 +24072,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 (com.termux.app.statusbar.StatusBarSwipeLayout) statusBarHost;
             swipeHost.setCollapsed(isStatusBarCompact());
             swipeHost.setExpansionAllowed(
-                com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge));
+                com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)
+                && isStatusBarSwipeExpansionAllowed());
             swipeHost.setHorizontalSwipeEnabled(mPreferences != null && mPreferences.isStatusBarHorizontalSwipeEnabled());
             swipeHost.setListener(new com.termux.app.statusbar.StatusBarSwipeLayout.Listener() {
                 @Override public void onCollapsedStateRequested(boolean collapsed) {
@@ -24332,7 +24358,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // A bar down a side never rests expanded; isStatusBarCompact() already reflects that, so
         // this coercion never lands on a preference write below — it only refuses the request.
         boolean collapsed = requestedCollapsed
-            || !com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge);
+            || !com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)
+            || (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+                .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode()));
         View host = findViewById(R.id.terminal_window_bar_host);
         View topWidgets = findViewById(R.id.terminal_top_widget_area);
         View shortcutsHost = findViewById(R.id.terminal_status_extra_keys_host);
@@ -24472,7 +24500,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     private void dragTopStatusBar(float towardOpenPx) {
         if (mPreferences == null
-            || !com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)) {
+            || !com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)
+            || !isStatusBarSwipeExpansionAllowed()) {
             return;
         }
         View host = findViewById(R.id.terminal_window_bar_host);
@@ -24508,7 +24537,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     private void syncBorderStatusSwipe(boolean barShown) {
         boolean foldable = barShown && mStatusBarEdge == PlaceLayout.Edge.TOP
-            && com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge);
+            && com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)
+            && isStatusBarSwipeExpansionAllowed();
         if (foldable == mBorderStatusBarFoldable) return;
         mBorderStatusBarFoldable = foldable;
         if (mPaneWallController != null) mPaneWallController.wall().invalidate();
@@ -24601,8 +24631,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         com.termux.app.terminal.TerminalWindowBar bar = findViewById(R.id.terminal_window_bar);
         if (host == null || bar == null) return;
         if (host instanceof com.termux.app.statusbar.StatusBarSwipeLayout) {
-            ((com.termux.app.statusbar.StatusBarSwipeLayout) host)
-                .setHorizontalSwipeEnabled(mPreferences != null && mPreferences.isStatusBarHorizontalSwipeEnabled());
+            com.termux.app.statusbar.StatusBarSwipeLayout swipeHost =
+                (com.termux.app.statusbar.StatusBarSwipeLayout) host;
+            swipeHost.setHorizontalSwipeEnabled(mPreferences != null && mPreferences.isStatusBarHorizontalSwipeEnabled());
+            swipeHost.setExpansionAllowed(
+                com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)
+                && isStatusBarSwipeExpansionAllowed());
+        }
+        if (!isStatusBarSwipeExpansionAllowed() && !isStatusBarCompact()) {
+            setTopStatusBarCollapsed(true, false);
         }
         // Re-applied here, not only at setup, so a lazy-mode toggle takes effect on the
         // settings-return refresh instead of waiting for the activity to be recreated.
@@ -27144,6 +27181,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         @Override public boolean isAccessoryStackCollapsed() {
             return TermuxActivity.this.isAccessoryStackCollapsed();
+        }
+
+        @Override public void toggleTopStatusBarExpanded() {
+            TermuxActivity.this.toggleTopStatusBarExpanded();
+        }
+
+        @Override public boolean isTopStatusBarExpanded() {
+            return TermuxActivity.this.isTopStatusBarExpanded();
         }
 
         @Override public void requestFlushDockGeometryUpdate() {

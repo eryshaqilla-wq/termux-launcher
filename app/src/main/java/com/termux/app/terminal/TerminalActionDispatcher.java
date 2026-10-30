@@ -90,6 +90,7 @@ public final class TerminalActionDispatcher {
     public static final String TOOL_WALL_TERMINAL = "wall.terminal";
     public static final String TOOL_WALL_DISPLAY = "wall.display";
     public static final String TOOL_DOCK_TOGGLE = "dock.toggle";
+    public static final String TOOL_STATUSBAR_TOGGLE = "statusbar.toggle";
     public static final String TOOL_MOUSE_TOGGLE = "mouse.toggle";
     public static final String TOOL_PANE_SPLIT = "pane.split";
     /** Panes opened and driven through the local API (agents, scripts); see AgentPaneRegistry. */
@@ -347,6 +348,7 @@ public final class TerminalActionDispatcher {
             case TOOL_WALL_TERMINAL:
             case TOOL_WALL_DISPLAY:
             case TOOL_DOCK_TOGGLE:
+            case TOOL_STATUSBAR_TOGGLE:
             case TOOL_MOUSE_TOGGLE:
             case TOOL_PANE_TOGGLE_FLOAT:
             case TOOL_PANE_OPEN:
@@ -690,6 +692,10 @@ public final class TerminalActionDispatcher {
                 case TOOL_DOCK_TOGGLE: {
                     host.toggleAccessoryStackCollapsed();
                     return ok().put("collapsed", host.isAccessoryStackCollapsed());
+                }
+                case TOOL_STATUSBAR_TOGGLE: {
+                    host.toggleTopStatusBarExpanded();
+                    return ok().put("expanded", host.isTopStatusBarExpanded());
                 }
                 case TOOL_MOUSE_TOGGLE:
                     return ok().put("mouseMode", host.toggleMouseMode());
