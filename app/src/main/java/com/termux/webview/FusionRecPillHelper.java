@@ -31,6 +31,7 @@ public class FusionRecPillHelper {
     public static TextView sReloadBtn;
     public static TextView sWipeBtn;
     public static TextView sFpBtn;
+    public static TextView sStopIfBtn;
 
     public static void hideRecPill() {
         LinearLayout container = sRecContainer;
@@ -246,6 +247,27 @@ public class FusionRecPillHelper {
         fpLp.setMargins(1, 0, 1, 0);
         stepPill.addView(fpBtn, fpLp);
 
+        // STOP-IF
+        TextView stopIfBtn = new TextView(appCompatActivity);
+        sStopIfBtn = stopIfBtn;
+        stopIfBtn.setText(" STOP-IF ");
+        FusionUiHelper.setSolidAccentBtn(stopIfBtn, -29372, -13947597);
+        stopIfBtn.setTextSize(2, 10.0f);
+        stopIfBtn.setPadding(6, 3, 6, 3);
+        stopIfBtn.setClickable(true);
+        stopIfBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                WebView webView = fusionWebViewManager.mActiveWebView;
+                if (webView != null) {
+                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.promptStopCondition) { window.AgyRecorder.promptStopCondition(); } else { var w = prompt('Masukkan kata pemicu AUTO-STOP loop (misal: Sold out, Limit):'); if (w && w.trim()) { window.AgyRecorder.recordEvent({type:'stop_if', text:w.trim(), timestamp:Date.now()}); updateAgyHUD('Auto-Stop Terekam', 'Berhenti jika ada: ' + w.trim(), 'success'); } }", null);
+                }
+            }
+        });
+        LinearLayout.LayoutParams stopLp = new LinearLayout.LayoutParams(-2, -2);
+        stopLp.setMargins(1, 0, 1, 0);
+        stepPill.addView(stopIfBtn, stopLp);
+
         // 3. Baris Bawah: sRecPill (Ketua / Baris Utama) - Ukuran Senada 100% dengan sStepPill
         LinearLayout linearLayout2 = new LinearLayout(appCompatActivity);
         sRecPill = linearLayout2;
@@ -385,6 +407,7 @@ public class FusionRecPillHelper {
                 if (sReloadBtn != null) sReloadBtn.setVisibility(stepVisibility);
                 if (sWipeBtn != null) sWipeBtn.setVisibility(stepVisibility);
                 if (sFpBtn != null) sFpBtn.setVisibility(stepVisibility);
+                if (sStopIfBtn != null) sStopIfBtn.setVisibility(stepVisibility);
             }
         }
 

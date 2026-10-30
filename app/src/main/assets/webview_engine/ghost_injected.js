@@ -1083,10 +1083,31 @@
 
                 updateAgyHUD(title, sub, "running");
 
-                self.executeStepList(recipeEvents, curWallet, curEmail, title, function(isSuccess) {
+                self.executeStepList(recipeEvents, curWallet, curEmail, title, function(isSuccess, stopTriggered) {
                     if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                     if (isSuccess) successCount++;
                     else failCount++;
+
+                    if (stopTriggered) {
+                        self.isRunning = false;
+                        self.clearAllTimers();
+                        try {
+                            if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
+                                window.GhostBridge.releaseWakeLock();
+                            }
+                        } catch(_) {}
+                        try {
+                            sessionStorage.removeItem("__agy_batch_queue_state__");
+                            sessionStorage.removeItem("__agy_active_recipe_run__");
+                            localStorage.removeItem("__agy_batch_queue_state__");
+                            localStorage.removeItem("__agy_active_recipe_run__");
+                            window.__AGY_BATCH_BACKUP__ = null;
+                        } catch(_) {}
+                        window.__AGY_RECIPE_STATUS__ = "COMPLETED";
+                        updateAgyHUD("Alur Selesai (Auto-Stop)", "Kondisi berhenti terpenuhi pada putaran " + (currentIdxInQueue + 1) + ". Eksekusi selesai!", "success");
+                        if (onComplete) onComplete({ success: successCount, failed: failCount, stoppedByCondition: true });
+                        return;
+                    }
 
                     currentIdxInQueue++;
                     persistBatchState();
@@ -1342,6 +1363,65 @@
                         return;
                     }
 
+                    if (ev.type === "stop_if" || ev.type === "stop_not") {
+                        var kw = (ev.text || ev.keyword || ev.value || "").trim();
+                        var condition = (ev.type === "stop_not" || ev.condition === "not_contains" || ev.condition === "not_found") ? "not_found" : "found";
+                        var labelAction = condition === "not_found" ? ("Berhenti jika Hilang: \"" + kw + "\"") : ("Berhenti jika Ada: \"" + kw + "\"");
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": " + labelAction, "running");
+
+                        var scanLimitMs = ev.timeout || 2500;
+                        var checkIntervalMs = 250;
+                        var elapsedScan = 0;
+
+                        function isMatchPresent() {
+                            if (!kw) return false;
+                            var needle = kw.toLowerCase();
+                            if (ev.selector) {
+                                try {
+                                    var el = document.querySelector(ev.selector);
+                                    if (el) {
+                                        var elTxt = (el.innerText || el.textContent || "").toLowerCase();
+                                        var elHtm = (el.innerHTML || "").toLowerCase();
+                                        return elTxt.indexOf(needle) !== -1 || elHtm.indexOf(needle) !== -1;
+                                    }
+                                } catch(_) {}
+                            }
+                            var bodyTxt = ((document.body && (document.body.innerText || document.body.textContent)) || "").toLowerCase();
+                            if (bodyTxt.indexOf(needle) !== -1) return true;
+                            var bodyHtm = ((document.body && document.body.innerHTML) || "").toLowerCase();
+                            return bodyHtm.indexOf(needle) !== -1;
+                        }
+
+                        var scanTimer = setInterval(function() {
+                            if (self.isAborted || window.__AGY_ABORT_RUN__) {
+                                clearInterval(scanTimer);
+                                return;
+                            }
+                            elapsedScan += checkIntervalMs;
+                            var foundNow = isMatchPresent();
+                            var stopSatisfied = (condition === "found" && foundNow) || (condition === "not_found" && !foundNow && elapsedScan >= 1000);
+
+                            if (stopSatisfied) {
+                                clearInterval(scanTimer);
+                                updateAgyHUD("🛑 Auto-Stop Terpicu", "Kondisi (\"" + kw + "\") terpenuhi. Mengakhiri alur...", "success");
+                                try {
+                                    sessionStorage.removeItem("__agy_active_recipe_run__");
+                                    localStorage.removeItem("__agy_active_recipe_run__");
+                                } catch(_) {}
+                                self.registerTimer(setTimeout(function() {
+                                    doneCallback(true, true);
+                                }, 400));
+                                return;
+                            }
+
+                            if (elapsedScan >= scanLimitMs) {
+                                clearInterval(scanTimer);
+                                self.registerTimer(setTimeout(runNextStep, 200));
+                            }
+                        }, checkIntervalMs);
+                        return;
+                    }
+
                     smartWaitForElementWithTimeout(ev, stepNum, eventsList.length, maxTimeout, function(targetEl) {
                         if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                         if (!targetEl) {
@@ -1481,7 +1561,32 @@
         AgyBatchRunner.registerTimer(pollTimer);
     }
 
-    // --- 3. MULTI-RECIPE STORAGE MANAGER ---
+    function getAgySitePrefix(rawUrl) {
+        try {
+            var host = "";
+            if (rawUrl) {
+                host = new URL(rawUrl).hostname;
+            } else if (typeof window !== "undefined" && window.location && window.location.hostname) {
+                host = window.location.hostname;
+            }
+            host = host.replace(/^www\./i, "").toLowerCase();
+            var parts = host.split(".");
+            if (parts.length >= 3 && ["app", "dapp", "m", "mobile", "claim", "web"].indexOf(parts[0]) !== -1) {
+                parts.shift();
+                host = parts.join(".");
+            }
+            if (parts.length >= 2) {
+                if (parts.length === 2 && ["com", "net", "org", "io", "xyz", "app", "me", "co"].indexOf(parts[1]) === -1) {
+                    return host.replace(/[^a-zA-Z0-9_-]/g, "_");
+                }
+                return parts[0].replace(/[^a-zA-Z0-9_-]/g, "_");
+            }
+            return host.replace(/[^a-zA-Z0-9_-]/g, "_");
+        } catch(_) {
+            return "web";
+        }
+    }
+
     // --- 3. MULTI-RECIPE STORAGE MANAGER (GLOBAL DISK + HYBRID SYNC) ---
     var RecipeStore = {
         _cache: null,
@@ -1533,11 +1638,6 @@
             return all;
         },
         save: function(name, events, targetUrl) {
-            if (!name || name.trim().length === 0) {
-                name = "Recipe_" + new Date().getHours() + "h" + new Date().getMinutes() + "m";
-            }
-            name = name.trim();
-            var all = this.getAll();
             var finalTargetUrl = targetUrl;
             if (!finalTargetUrl && typeof window !== "undefined" && window.location) {
                 try {
@@ -1547,8 +1647,18 @@
                     }
                 } catch(_) {}
             }
+            var sitePrefix = getAgySitePrefix(finalTargetUrl);
+            if (!name || name.trim().length === 0) {
+                name = (sitePrefix ? sitePrefix + "_" : "") + "makro_" + new Date().getHours() + "h" + new Date().getMinutes() + "m";
+            }
+            name = name.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+            if (sitePrefix && name.toLowerCase().indexOf(sitePrefix.toLowerCase()) !== 0) {
+                name = sitePrefix + "_" + name.replace(/^(resep_|makro_)/i, "");
+            }
+            var all = this.getAll();
             all[name] = {
                 name: name,
+                site: sitePrefix,
                 createdAt: (all[name] && all[name].createdAt) || Date.now(),
                 targetUrl: finalTargetUrl || (all[name] && all[name].targetUrl) || "",
                 events: events || []
@@ -2305,10 +2415,85 @@
                 detail = "Sentuh: (" + Math.round(ev.x) + ", " + Math.round(ev.y) + ")";
             } else if (ev.type === "swipe") {
                 detail = "Geser: " + (ev.direction || "arah");
+            } else if (ev.type === "stop_if" || ev.type === "stop_not") {
+                detail = "Auto-Stop jika " + (ev.type === "stop_not" ? "hilang: " : "ada: ") + (ev.text || "");
             } else {
                 detail = ev.type || "Aksi";
             }
             updateAgyHUD(title, detail, "recording_step");
+        },
+
+        promptStopCondition: function() {
+            var existing = document.getElementById("__agy_stop_modal__");
+            if (existing) existing.remove();
+
+            var modal = document.createElement("div");
+            modal.id = "__agy_stop_modal__";
+            modal.style.position = "fixed";
+            modal.style.top = "0";
+            modal.style.left = "0";
+            modal.style.width = "100%";
+            modal.style.height = "100%";
+            modal.style.background = "rgba(10, 10, 18, 0.75)";
+            modal.style.backdropFilter = "blur(6px)";
+            modal.style.webkitBackdropFilter = "blur(6px)";
+            modal.style.display = "flex";
+            modal.style.alignItems = "center";
+            modal.style.justifyContent = "center";
+            modal.style.zIndex = "99999999";
+            modal.style.padding = "16px";
+            modal.style.boxSizing = "border-box";
+
+            var card = document.createElement("div");
+            card.style.background = "#181825";
+            card.style.border = "1px solid #fab387";
+            card.style.borderRadius = "16px";
+            card.style.padding = "20px";
+            card.style.width = "100%";
+            card.style.maxWidth = "360px";
+            card.style.boxShadow = "0 10px 30px rgba(0,0,0,0.6)";
+            card.style.color = "#cdd6f4";
+            card.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+            card.innerHTML = "<div style='display:flex; align-items:center; gap:8px; margin-bottom:12px;'>" +
+                "<span style='font-size:20px;'>🛑</span>" +
+                "<div>" +
+                    "<div style='font-weight:bold; font-size:15px; color:#fab387;'>Sisipkan Auto-Stop Loop</div>" +
+                    "<div style='font-size:11px; color:#a6adc8;'>Hentikan putaran loop jika teks terdeteksi</div>" +
+                "</div>" +
+            "</div>" +
+            "<div style='font-size:11px; color:#bac2de; margin-bottom:8px;'>KATA KUNCI PEMICU (TEXT / HTML DOM):</div>" +
+            "<input id='__agy_stop_input__' type='text' placeholder='Misal: Sold out / Limit reached / Sukses' " +
+                "style='width:100%; box-sizing:border-box; background:#11111b; border:1px solid #45475a; border-radius:10px; color:#cdd6f4; padding:10px 12px; font-size:13px; margin-bottom:14px; outline:none;' />" +
+            "<div style='display:flex; gap:8px;'>" +
+                "<button id='__agy_stop_cancel__' style='flex:1; background:#313244; color:#bac2de; border:none; border-radius:10px; padding:10px; font-weight:600; font-size:12px; cursor:pointer;'>Batal</button>" +
+                "<button id='__agy_stop_ok__' style='flex:1; background:#fab387; color:#11111b; border:none; border-radius:10px; padding:10px; font-weight:bold; font-size:12px; cursor:pointer;'>Sisipkan Step</button>" +
+            "</div>";
+
+            modal.appendChild(card);
+            document.body.appendChild(modal);
+
+            var inp = card.querySelector("#__agy_stop_input__");
+            setTimeout(function() { try { inp.focus(); } catch(_) {} }, 150);
+
+            card.querySelector("#__agy_stop_cancel__").onclick = function() { modal.remove(); };
+            var self = this;
+            card.querySelector("#__agy_stop_ok__").onclick = function() {
+                var textVal = (inp.value || "").trim();
+                if (!textVal) {
+                    alert("Masukkan kata kunci terlebih dahulu!");
+                    return;
+                }
+                modal.remove();
+                self.recordEvent({
+                    type: "stop_if",
+                    text: textVal,
+                    condition: "contains",
+                    timestamp: Date.now(),
+                    desc: "Auto-Stop jika ada: " + textVal
+                });
+                updateAgyHUD("Auto-Stop Tersisip", "Loop berhenti jika ada: \"" + textVal + "\"", "success");
+            };
         },
 
         showRecordingHUD: function() {
@@ -3175,10 +3360,13 @@
         lbl.style.marginBottom = "6px";
         card.appendChild(lbl);
 
+        var sitePrefix = getAgySitePrefix();
+        var defaultGenerated = sitePrefix ? (sitePrefix + "_makro") : ("Resep_" + new Date().getHours() + "h" + new Date().getMinutes() + "m");
+
         // Input Box
         var inp = document.createElement("input");
         inp.type = "text";
-        inp.value = defaultName || ("Resep_" + new Date().getHours() + "h" + new Date().getMinutes() + "m");
+        inp.value = defaultName || defaultGenerated;
         inp.placeholder = "Masukkan nama resep...";
         inp.style.width = "100%";
         inp.style.boxSizing = "border-box";
@@ -3194,6 +3382,34 @@
         inp.onfocus = function() { inp.style.borderColor = "#cba6f7"; };
         inp.onblur = function() { inp.style.borderColor = "#45475a"; };
         card.appendChild(inp);
+
+        // Input Label Auto-Stop
+        var lblStop = document.createElement("div");
+        lblStop.innerText = "AUTO-STOP JIKA TERDETEKSI KATA (OPSIONAL):";
+        lblStop.style.fontSize = "10px";
+        lblStop.style.fontWeight = "700";
+        lblStop.style.color = "#fab387";
+        lblStop.style.letterSpacing = "0.6px";
+        lblStop.style.marginBottom = "6px";
+        card.appendChild(lblStop);
+
+        var inpStop = document.createElement("input");
+        inpStop.type = "text";
+        inpStop.placeholder = "Misal: Sold out / Limit reached / Sukses...";
+        inpStop.style.width = "100%";
+        inpStop.style.boxSizing = "border-box";
+        inpStop.style.background = "#11111b";
+        inpStop.style.border = "1px solid #45475a";
+        inpStop.style.borderRadius = "12px";
+        inpStop.style.color = "#cdd6f4";
+        inpStop.style.padding = "10px 14px";
+        inpStop.style.fontSize = "12px";
+        inpStop.style.fontWeight = "500";
+        inpStop.style.marginBottom = "14px";
+        inpStop.style.outline = "none";
+        inpStop.onfocus = function() { inpStop.style.borderColor = "#fab387"; };
+        inpStop.onblur = function() { inpStop.style.borderColor = "#45475a"; };
+        card.appendChild(inpStop);
 
         // Preview Steps Box (Mini summary of steps)
         var previewBox = document.createElement("div");
@@ -3269,10 +3485,27 @@
         saveBtn.style.boxShadow = "0 4px 14px rgba(203, 166, 247, 0.35)";
         saveBtn.style.cursor = "pointer";
         saveBtn.onclick = function() {
-            var rName = inp.value.trim() || defaultName;
+            var rName = (inp.value || "").trim() || defaultGenerated;
+            var clean = rName.replace(/[^a-zA-Z0-9_-]/g, "_");
+            if (sitePrefix && clean.toLowerCase().indexOf(sitePrefix.toLowerCase()) !== 0) {
+                clean = sitePrefix + "_" + clean.replace(/^(resep_|makro_)/i, "");
+            }
+            var stopKeyword = (inpStop.value || "").trim();
+            if (stopKeyword) {
+                var hasSame = events.some(function(e) { return (e.type === "stop_if" || e.type === "stop_not") && e.text === stopKeyword; });
+                if (!hasSame) {
+                    events.push({
+                        type: "stop_if",
+                        text: stopKeyword,
+                        condition: "contains",
+                        desc: "Auto-Stop jika ada: " + stopKeyword,
+                        timestamp: Date.now()
+                    });
+                }
+            }
             var curUrl = (window.location && window.location.href) ? window.location.href.split("#")[0] : "";
-            RecipeStore.save(rName, events, curUrl);
-            updateAgyHUD("Resep Tersimpan", rName + " (" + events.length + " langkah)", "success");
+            RecipeStore.save(clean, events, curUrl);
+            updateAgyHUD("Resep Tersimpan", clean + " (" + events.length + " langkah)", "success");
             modal.remove();
         };
         btnRow.appendChild(saveBtn);
@@ -6709,6 +6942,9 @@
                 } else if (ev.type === "fill" || ev.type === "input") {
                     typeBadge = "<span style='font-size:10px; background:#F57C00; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>ISI</span>";
                     desc = (ev.value || "") + " ➔ " + (ev.placeholder || ev.name || ev.id || ev.selector || "input");
+                } else if (ev.type === "stop_if" || ev.type === "stop_not") {
+                    typeBadge = "<span style='font-size:10px; background:#D32F2F; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>STOP-IF</span>";
+                    desc = "Berhenti jika " + (ev.type === "stop_not" ? "hilang: " : "ada: ") + "\"" + (ev.text || "teks") + "\"";
                 } else {
                     typeBadge = "<span style='font-size:10px; background:#1E88E5; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>KLIK</span>";
                     desc = ev.text || ev.ariaLabel || ev.name || ev.id || ev.selector || "elemen";
