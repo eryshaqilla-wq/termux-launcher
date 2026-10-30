@@ -13791,7 +13791,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public void toggleTopStatusBarExpanded() {
-        if (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+        if (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
                 .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode())) {
             return;
         }
@@ -13997,7 +13997,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (!com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)) {
             return true;
         }
-        if (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+        if (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
                 .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode())) {
             return true;
         }
@@ -14012,7 +14012,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public boolean isStatusBarSwipeExpansionAllowed() {
         return mPreferences != null
             && mPreferences.isStatusBarSwipeExpansionEnabled()
-            && !com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+            && !com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
                 .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode());
     }
 
@@ -24359,7 +24359,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // this coercion never lands on a preference write below — it only refuses the request.
         boolean collapsed = requestedCollapsed
             || !com.termux.app.statusbar.StatusBarGesturePolicy.expansionAllowed(mStatusBarEdge)
-            || (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
+            || (mPreferences != null && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.VALUE_STATUS_BAR_EXPANDED_MODE_NONE
                 .equalsIgnoreCase(mPreferences.getStatusBarExpandedMode()));
         View host = findViewById(R.id.terminal_window_bar_host);
         View topWidgets = findViewById(R.id.terminal_top_widget_area);
