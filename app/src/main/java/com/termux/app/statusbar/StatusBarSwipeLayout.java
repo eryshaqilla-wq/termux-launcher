@@ -386,7 +386,7 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
         StatusBarGesturePolicy.Down down = new StatusBarGesturePolicy.Down(
             event.getPointerId(0), event.getRawX(), event.getRawY(), event.getX(), event.getY(),
             event.getEventTime(), mState, inWindowBar, interactive, nestedChildOwned,
-            blocked, formEligible, mHorizontalSwipeEnabled && !blocked, mTouchSlop, mEdge);
+            blocked, formEligible, mHorizontalSwipeEnabled && !blocked && !childOwnsFoldAxis, mTouchSlop, mEdge);
         mGesture = new StatusBarGesturePolicy(down);
         if (mVelocityTracker == null) mVelocityTracker = android.view.VelocityTracker.obtain();
         mVelocityTracker.clear();
