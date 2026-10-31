@@ -739,18 +739,24 @@ public final class X11PaneFrame extends PaneContentFrame implements SurfacePage 
         View message = findViewById(R.id.x11_pane_empty_message);
         if (message instanceof android.widget.TextView) {
             ((android.widget.TextView) message).setText(state.messageRes);
+            message.setVisibility(state.resting() ? GONE : VISIBLE);
         }
         View start = findViewById(R.id.x11_pane_start);
         if (start instanceof android.widget.TextView) {
             ((android.widget.TextView) start).setText(mEnabled
                 ? R.string.termux_x11_start_display : R.string.termux_x11_turn_on);
         }
-        if (start != null) start.setVisibility(state.startVisible ? VISIBLE : GONE);
+        if (start != null) start.setVisibility((state.startVisible && !state.resting()) ? VISIBLE : GONE);
         View install = findViewById(R.id.x11_pane_install);
         if (install != null) install.setVisibility(state.installVisible() ? VISIBLE : GONE);
         View guide = findViewById(R.id.x11_pane_guide);
         if (guide != null) guide.setVisibility(state.guideVisible() ? VISIBLE : GONE);
-        applySetupOffer(state);
+        if (state.resting()) {
+            View setup = findViewById(R.id.x11_pane_setup);
+            if (setup != null) setup.setVisibility(GONE);
+        } else {
+            applySetupOffer(state);
+        }
     }
 
     /**

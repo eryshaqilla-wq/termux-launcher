@@ -23931,6 +23931,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void selectWindowFromStatusBar(int index) {
         if (!isSplitPanesEnabled()) return;
         if (isDisplayPageShowing()) {
+            if (!isEmbeddedDisplayRunning()) {
+                // Saat standby, tap chip "Mulai Desktop Env" langsung menyalakan display!
+                startEmbeddedDisplay();
+                return;
+            }
             boolean isStandalone = (mActiveStandaloneAppName != null && !mActiveStandaloneAppName.trim().isEmpty());
             if (isEmbeddedDisplayRunning()) {
                 if (!isStandalone || mDisplayWindows.isEmpty()) {
@@ -24827,6 +24832,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem(rootLabel, rootLabel)
                         .withIcon(rootIcon));
                 }
+            } else {
+                items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem("Mulai Desktop Env", "Mulai Desktop Env"));
             }
             // The display's apps, front one selected; the terminal's marks (busy, attention,
             // done) have no meaning for them.
@@ -24846,7 +24853,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     selected = mDisplayActiveWindow >= 0 ? mDisplayActiveWindow : 0;
                 }
             } else {
-                selected = mDisplayActiveWindow;
+                selected = 0;
             }
         } else if (isWidgetsPageShowing()) {
             // The Widgets place has no chips: the row is bare there and the widgets speak for
