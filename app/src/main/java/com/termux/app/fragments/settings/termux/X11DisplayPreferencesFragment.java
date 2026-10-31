@@ -323,14 +323,17 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                 case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_FULLSCREEN:
                     launcher.setX11FullscreenEnabled(value);
                     notifyDisplay(key);
+                    com.termux.app.x11.X11WallpaperSync.syncWallpaper(context, true);
                     break;
                 case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_SHOW_STATUS_BAR:
                     launcher.setX11ShowStatusBarEnabled(value);
                     notifyDisplay(key);
+                    com.termux.app.x11.X11WallpaperSync.syncWallpaper(context, true);
                     break;
                 case TermuxPreferenceConstants.TERMUX_APP.KEY_X11_SHOW_EXTRA_KEYS:
                     launcher.setX11ShowExtraKeysEnabled(value);
                     notifyDisplay(key);
+                    com.termux.app.x11.X11WallpaperSync.syncWallpaper(context, true);
                     break;
                 default:
                     break;

@@ -21605,6 +21605,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         applyFullscreenMode();
         applySeamlessStatusBackgroundModeIfNeeded();
         syncDisplayStatusKeys();
+        if (isEmbeddedDisplayRunning()) {
+            com.termux.x11.LorieView display = displayView();
+            if (display != null) {
+                display.post(() -> com.termux.app.x11.X11WallpaperSync.syncWallpaper(this, true));
+            } else {
+                com.termux.app.x11.X11WallpaperSync.syncWallpaper(this, true);
+            }
+        }
     }
 
     private boolean isDisplayKeyboardUp() {
@@ -21831,6 +21839,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
             // Status bar switch
             if (statusBarHost != null) statusBarHost.setVisibility(showBar ? View.VISIBLE : View.GONE);
+            if (isRunning) {
+                com.termux.x11.LorieView display = displayView();
+                if (display != null) {
+                    display.post(() -> com.termux.app.x11.X11WallpaperSync.syncWallpaper(this, true));
+                }
+            }
         }
 
         setTerminalToolbarHeight(true);
@@ -23116,6 +23130,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         });
         mX11Display.host().setLorieView(page.display());
+        com.termux.x11.LorieView lorieView = page.display();
+        if (lorieView != null) {
+            lorieView.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+                    if (isEmbeddedDisplayRunning()) {
+                        com.termux.app.x11.X11WallpaperSync.syncWallpaper(TermuxActivity.this, true);
+                    }
+                }
+            });
+        }
         mX11Display.setListener(running -> {
             // The display was switched off with a server running, and the user chose to stop
             // it: the server has gone now, so the page follows it.
@@ -23377,6 +23401,29 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         com.termux.app.x11.X11PaneFrame frame = mPaneWallController == null
             ? null : mPaneWallController.displayPage();
         return frame == null ? null : frame.display();
+    }
+
+    @NonNull
+    public Rect getX11DisplayViewportRect() {
+        com.termux.x11.LorieView display = displayView();
+        if (display != null && display.getWidth() > 0 && display.getHeight() > 0) {
+            int[] loc = new int[2];
+            display.getLocationOnScreen(loc);
+            if (loc[0] >= 0 && loc[1] >= 0) {
+                return new Rect(loc[0], loc[1], loc[0] + display.getWidth(), loc[1] + display.getHeight());
+            }
+        }
+        com.termux.app.x11.X11PaneFrame frame = mPaneWallController == null ? null : mPaneWallController.displayPage();
+        if (frame != null && frame.getWidth() > 0 && frame.getHeight() > 0) {
+            int[] loc = new int[2];
+            frame.getLocationOnScreen(loc);
+            if (loc[0] >= 0 && loc[1] >= 0) {
+                return new Rect(loc[0], loc[1], loc[0] + frame.getWidth(), loc[1] + frame.getHeight());
+            }
+        }
+        com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences prefs =
+            mPreferences != null ? mPreferences : com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(this, false);
+        return com.termux.app.x11.X11WallpaperSync.computeExpectedViewportRect(this, prefs);
     }
 
     /** Which keyboard a request lands on right now. */
