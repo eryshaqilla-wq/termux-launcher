@@ -1179,14 +1179,70 @@ else
 fi
 
 # ==============================================================================
-# TAHAP 6: KONFIGURASI PROPERTI & STATUS BAR TERMUX
+# TAHAP 6: PRESET TAMPILAN, FONT & PROPERTI TERMUX
 # ==============================================================================
-echo -e "\n${CYAN}● [6/8] Konfigurasi Properti & Status Bar${RESET}"
+echo -e "\n${CYAN}● [6/8] Preset Tampilan, Font & Properti${RESET}"
+echo -e "  Pilih Preset Tampilan & Persona:"
+echo -e "    1) Preset Tuan Eso (100% Identik - MesloLGS Nerd Font, Frosted Glass, Base16 Isotope, Dock Touchpad) [Default]"
+echo -e "    2) Default Bawaan Termux (Standar Monospace vanilla)"
+read -p "    Pilih [1/2, def: 1]: " PRESET_CHOICE
+[ -z "$PRESET_CHOICE" ] && PRESET_CHOICE="1"
+
 mkdir -p "$HOME/.termux"
-if [ -f "$FUSION_HOME/termux.properties" ]; then
-    cp -f "$FUSION_HOME/termux.properties" "$HOME/.termux/termux.properties"
-elif [ -f "$SCRIPT_DIR/termux.properties" ]; then
-    cp -f "$SCRIPT_DIR/termux.properties" "$HOME/.termux/termux.properties"
+ESO_PRESET_DIR=""
+for p_cand in "$FUSION_HOME/presets/eso" "$SCRIPT_DIR/presets/eso"; do
+    if [ -d "$p_cand" ]; then
+        ESO_PRESET_DIR="$p_cand"
+        break
+    fi
+done
+
+if [ "$PRESET_CHOICE" = "1" ]; then
+    echo -e "  ${GREEN}➔ Menerapkan Preset Tuan Eso (100% Identik)...${RESET}"
+    if [ -n "$ESO_PRESET_DIR" ]; then
+        # 1. Pasang Nerd Font
+        if [ -f "$ESO_PRESET_DIR/font.ttf" ]; then
+            cp -f "$ESO_PRESET_DIR/font.ttf" "$HOME/.termux/font.ttf"
+            echo -e "    ${GREEN}✔ MesloLGS Nerd Font terpasang di ~/.termux/font.ttf${RESET}"
+        fi
+        # 2. Pasang Colors & Properties
+        if [ -f "$ESO_PRESET_DIR/colors.properties" ]; then
+            cp -f "$ESO_PRESET_DIR/colors.properties" "$HOME/.termux/colors.properties"
+            echo -e "    ${GREEN}✔ Skema Base16 Isotope terpasang di ~/.termux/colors.properties${RESET}"
+        fi
+        if [ -f "$ESO_PRESET_DIR/termux.properties" ]; then
+            cp -f "$ESO_PRESET_DIR/termux.properties" "$HOME/.termux/termux.properties"
+            echo -e "    ${GREEN}✔ Termux properties kustom terpasang di ~/.termux/termux.properties${RESET}"
+        fi
+        if [ -f "$ESO_PRESET_DIR/termux-launcher-bindings.conf" ]; then
+            cp -f "$ESO_PRESET_DIR/termux-launcher-bindings.conf" "$HOME/.termux/termux-launcher-bindings.conf"
+        fi
+        if [ -f "$ESO_PRESET_DIR/fusion-ui.css" ]; then
+            cp -f "$ESO_PRESET_DIR/fusion-ui.css" "$HOME/.termux/fusion-ui.css"
+        fi
+
+        # 3. Injeksi SharedPreferences Android (Frosted Glass, Touchpad, Blur, Grain, Dock)
+        PREF_DIR="/data/data/com.termux/shared_prefs"
+        if [ -f "$ESO_PRESET_DIR/com.termux_preferences.xml" ] && [ -d "$PREF_DIR" ]; then
+            cp -f "$ESO_PRESET_DIR/com.termux_preferences.xml" "$PREF_DIR/com.termux_preferences.xml" 2>/dev/null || true
+            chmod 660 "$PREF_DIR/com.termux_preferences.xml" 2>/dev/null || true
+            echo -e "    ${GREEN}✔ Pengaturan Frosted Glass & Touchpad dock diinjeksikan${RESET}"
+        fi
+        if [ -f "$ESO_PRESET_DIR/termux_fonts.xml" ] && [ -d "$PREF_DIR" ]; then
+            cp -f "$ESO_PRESET_DIR/termux_fonts.xml" "$PREF_DIR/termux_fonts.xml" 2>/dev/null || true
+            chmod 660 "$PREF_DIR/termux_fonts.xml" 2>/dev/null || true
+            echo -e "    ${GREEN}✔ Registri Nerd Font diinjeksikan ke preferensi launcher${RESET}"
+        fi
+        touch "$HOME/.termux/use_eso_preset"
+    fi
+else
+    echo -e "  ${GREEN}➔ Menggunakan Preset Default Bawaan Termux${RESET}"
+    rm -f "$HOME/.termux/font.ttf" "$HOME/.termux/colors.properties" "$HOME/.termux/use_eso_preset" 2>/dev/null || true
+    if [ -f "$FUSION_HOME/termux.properties" ]; then
+        cp -f "$FUSION_HOME/termux.properties" "$HOME/.termux/termux.properties"
+    elif [ -f "$SCRIPT_DIR/termux.properties" ]; then
+        cp -f "$SCRIPT_DIR/termux.properties" "$HOME/.termux/termux.properties"
+    fi
 fi
 
 PREF_FILE="/data/data/com.termux/shared_prefs/com.termux_preferences.xml"
@@ -1199,6 +1255,9 @@ if [ -f "$PREF_FILE" ]; then
 fi
 
 am broadcast -a com.termux.app.reload_style >/dev/null 2>&1 || true
+if command -v termux-ipc >/dev/null 2>&1; then
+    termux-ipc toast "Pengaturan tampilan berhasil dimuat!" >/dev/null 2>&1 || true
+fi
 echo -e "  ${GREEN}✔ Properti & styling terminal aktif${RESET}"
 echo -e "  ${GREEN}✔ Sensor suhu baterai aktif di Status Bar${RESET}"
 

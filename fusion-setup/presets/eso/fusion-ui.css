@@ -1,0 +1,85 @@
+/* ========================================================================== */
+/*                PROJECT FUSION - TEMA & GAYA WEB UI (Tuan Eso)             */
+/* ========================================================================== */
+/* File ini dibaca langsung oleh WebView saat memuat halaman / membuka menu.  */
+/* Anda bisa mengedit file ini sesuka hati via terminal Termux:               */
+/*   nano ~/.termux/fusion-ui.css                                             */
+/* Sekali diedit dan simpan, cukup reload webview untuk melihat perubahannya! */
+/* ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/* 0. PERLINDUNGAN TOUCH BLEEDING & SCROLL ISOLATION                          */
+/* -------------------------------------------------------------------------- */
+[id^="__agy_"][id$="_modal__"],
+[id^="__agy_"][id$="_modal__"] > div,
+.fusion-wallet-item,
+.fusion-chain-item,
+.fusion-bot-item,
+.fusion-tab-item {
+    -webkit-tap-highlight-color: transparent !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+}
+
+/* Modal Backdrops: Blokir tembus sentuhan & scroll ke web di belakangnya */
+[id^="__agy_"][id$="_modal__"] {
+    touch-action: none !important;
+    overscroll-behavior: none !important;
+    pointer-events: auto !important;
+}
+
+/* Modal Drawers / Cards: Izinkan scroll vertikal internal tanpa bocor ke web */
+[id^="__agy_"][id$="_modal__"] > div {
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
+    -webkit-overflow-scrolling: touch !important;
+    pointer-events: auto !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 1. MODAL DRAWERS (Menu BOT, TAB, WALLET, CHAIN, WC, HUB, RECIPE)           */
+/* -------------------------------------------------------------------------- */
+/* Latar belakang & batas drawer 80% layar di sisi kiri */
+#__agy_bot_menu_modal__ > div,
+#__agy_tab_menu_modal__ > div,
+#__agy_wallet_modal__ > div,
+#__agy_chain_modal__ > div,
+#__agy_wc_modal__ > div,
+#__agy_hub_modal__ > div,
+#__agy_recipe_modal__ > div,
+#__agy_recipe_editor_modal__ > div,
+#__agy_run_config_modal__ > div,
+#__agy_rec_mode_modal__ > div,
+#__agy_save_modal__ > div,
+#__agy_dom_inspector_modal__ > div {
+    background: #1E1F22 !important;
+    border-right: 1px solid #36373D !important;
+    color: #FFFFFF !important;
+    font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+/* Item di dalam menu bot */
+.fusion-bot-item {
+    background: #28292E !important;
+    border: 1px solid #36373D !important;
+    border-radius: 4px !important;
+    touch-action: manipulation !important;
+}
+
+.fusion-bot-item:active {
+    background: #35373E !important;
+}
+
+/* Item di dalam daftar tab & dompet & jaringan */
+.fusion-tab-item, .fusion-wallet-item, .fusion-chain-item {
+    border-radius: 4px !important;
+    touch-action: manipulation !important;
+}
+
+/* Tombol utama di dalam modal */
+.fusion-btn-primary {
+    background: #2b5b84 !important;
+    color: #FFFFFF !important;
+    border-radius: 4px !important;
+    touch-action: manipulation !important;
+}

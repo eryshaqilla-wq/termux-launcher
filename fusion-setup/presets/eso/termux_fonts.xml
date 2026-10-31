@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="nerd_icons" value="true" />
+    <string name="active_family_id">meslo-lgs-nf</string>
+    <string name="ligatures">never</string>
+    <boolean name="recommended_features" value="true" />
+    <int name="weight" value="0" />
+    <boolean name="metered_warning_acknowledged" value="true" />
+</map>

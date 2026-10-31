@@ -1,0 +1,325 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="modules_auto_execute_toggle" value="true" />
+    <string name="wall_last_page">TERMINAL</string>
+    <string name="status_bar_expanded_mode">extra_keys</string>
+    <boolean name="x11_show_status_bar" value="true" />
+    <float name="layout.portrait.dock_height" value="2.45" />
+    <int name="first_boot_tour_completed_version" value="4" />
+    <int name="surface_base_tint" value="0" />
+    <boolean name="terminal_margin_adjustment" value="true" />
+    <boolean name="launcherctl_enabled" value="false" />
+    <boolean name="xradar_toggle_scraper" value="true" />
+    <boolean name="status_bar_show_session_indicator" value="false" />
+    <boolean name="x11_set_display_env" value="false" />
+    <int name="status_bar_blur_radius" value="4" />
+    <string name="top_pane_clock_alignment">left</string>
+    <boolean name="in_app_keyboard_key_popup" value="true" />
+    <boolean name="xradar_filter_code" value="true" />
+    <string name="layout.portrait.apps_row_restore_edge">top</string>
+    <string name="terminal_contrast_level">default</string>
+    <boolean name="surface_inherit_canvas_blur" value="true" />
+    <string name="displayResolutionExact">1280x1024</string>
+    <boolean name="app_launcher_most_used_page" value="true" />
+    <string name="touchMode">1</string>
+    <boolean name="first_boot_tour_skipped" value="true" />
+    <int name="status_bar_opacity" value="79" />
+    <int name="first_boot_tour_step" value="-1" />
+    <int name="in_app_keyboard_key_opacity" value="0" />
+    <int name="terminal_background_opacity" value="74" />
+    <boolean name="extra_keys_default_offered_1" value="true" />
+    <string name="left_canvas_start_url">http://127.0.0.1:3333</string>
+    <boolean name="surface_inherit_status_opacity" value="false" />
+    <string name="app_launcher_dock_rail_side">right</string>
+    <string name="app_launcher_dock_style">docked</string>
+    <boolean name="terminal_margin_adjustment_default_migration_done" value="true" />
+    <boolean name="surface_inherit_dock_grain" value="false" />
+    <boolean name="pref_9router_mitm_switch" value="false" />
+    <boolean name="surface_inherit_status_corner_radius" value="false" />
+    <string name="layout.landscape.extra_keys">hidden</string>
+    <boolean name="wallpaper_app_only" value="false" />
+    <string name="in_app_keyboard_theme">gboard_dark_borderless</string>
+    <float name="layout.landscape.keyboard_height" value="1.0830541" />
+    <int name="status_indicator_corner_radius" value="-1" />
+    <string name="wallet_ghost_identity">omni</string>
+    <boolean name="split_pane_controls" value="true" />
+    <boolean name="router_service_toggle" value="true" />
+    <boolean name="fancier_glass_motion_light" value="false" />
+    <boolean name="app_launcher_row_haptics" value="false" />
+    <int name="fancier_glass_dispersion" value="0" />
+    <string name="app_launcher_az_lock_method">off</string>
+    <boolean name="gui_apps_starter_browser" value="true" />
+    <string name="xradar_manage_sample_codes">GATE-</string>
+    <boolean name="first_run_permissions_card_seen" value="true" />
+    <string name="terminal_quick_extra_keys">[&quot;ESC&quot;,{&quot;key&quot;:&quot;tool:ipc.ai&quot;,&quot;display&quot;:&quot;AI&quot;},{&quot;key&quot;:&quot;DOWN&quot;,&quot;display&quot;:&quot;▼&quot;,&quot;popup&quot;:{&quot;key&quot;:&quot;UP&quot;,&quot;display&quot;:&quot;▲&quot;}},{&quot;key&quot;:&quot;RIGHT&quot;,&quot;display&quot;:&quot;▶&quot;,&quot;popup&quot;:{&quot;key&quot;:&quot;LEFT&quot;,&quot;display&quot;:&quot;◀&quot;}},{&quot;key&quot;:&quot;KEYBOARD&quot;,&quot;display&quot;:&quot;&quot;}]</string>
+    <float name="in_app_keyboard_key_margin_scale" value="2.96" />
+    <boolean name="use_system_wallpaper" value="true" />
+    <string name="displayResolutionCustom">1280x1024</string>
+    <boolean name="status_widget_ram" value="false" />
+    <int name="in_app_keyboard_tint_strength" value="0" />
+    <boolean name="wallpaper_read_permission_prompted" value="true" />
+    <string name="wallet_buy_amount">0.05</string>
+    <int name="in_app_keyboard_bottom_padding" value="0" />
+    <int name="first_boot_tour_step_stage" value="0" />
+    <string name="app_launcher_hidden_apps_v1">[&quot;x11:linux\/distro:kali-arm64:xfce4-about&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-accessibility-settings&quot;,&quot;x11:linux\/distro:kali-arm64:nm-connection-editor&quot;,&quot;x11:linux\/distro:kali-arm64:Alacritty&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-ui-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-appfinder&quot;,&quot;x11:linux\/distro:kali-arm64:atril&quot;,&quot;x11:linux\/distro:kali-arm64:thunar-bulk-rename&quot;,&quot;x11:linux\/distro:kali-arm64:kali-clang&quot;,&quot;x11:linux\/distro:kali-arm64:kali-clang++&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-clipman-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-clipman&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-color-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-mime-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-backdrop-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-display-settings&quot;,&quot;x11:linux\/distro:kali-arm64:exploit-database&quot;,&quot;x11:linux\/distro:kali-arm64:engrampa&quot;,&quot;x11:linux\/distro:kali-arm64:org.gtkhash.gtkhash&quot;,&quot;x11:linux\/distro:kali-arm64:kali-jadx-gui&quot;,&quot;x11:linux\/distro:kali-arm64:kali-bugs&quot;,&quot;x11:linux\/distro:kali-arm64:kali-docs&quot;,&quot;x11:linux\/distro:kali-arm64:kali-forums&quot;,&quot;x11:linux\/distro:kali-arm64:kali-hidpi-mode&quot;,&quot;x11:linux\/distro:kali-arm64:kali-www&quot;,&quot;x11:linux\/distro:kali-arm64:kali-tools&quot;,&quot;x11:linux\/kew&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-keyboard-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-mail-reader&quot;,&quot;x11:linux\/distro:kali-arm64:kali-maltego-installer&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-session-logout&quot;,&quot;x11:linux\/distro:kali-arm64:mate-calc&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-mouse-settings&quot;,&quot;x11:linux\/distro:kali-arm64:org.xfce.mousepad&quot;,&quot;x11:linux\/distro:kali-arm64:kali-nethunter&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-notifyd-config&quot;,&quot;x11:linux\/distro:kali-arm64:offsec-training&quot;,&quot;x11:linux\/session:openbox&quot;,&quot;x11:linux\/obconf-qt&quot;,&quot;x11:linux\/distro:kali-arm64:panel-preferences&quot;,&quot;x11:linux\/distro:kali-arm64:org.xfce.Parole&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-power-manager-settings&quot;,&quot;x11:linux\/distro:kali-arm64:kali-proxychains4&quot;,&quot;x11:linux\/distro:kali-arm64:qt5ct&quot;,&quot;x11:linux\/distro:kali-arm64:qt6ct&quot;,&quot;x11:linux\/distro:kali-arm64:qterminal&quot;,&quot;x11:linux\/distro:kali-arm64:qterminal-drop&quot;,&quot;x11:linux\/distro:kali-arm64:thunar-volman-settings&quot;,&quot;x11:linux\/distro:kali-arm64:org.xfce.ristretto&quot;,&quot;x11:linux\/distro:kali-arm64:rofi&quot;,&quot;x11:linux\/distro:kali-arm64:rofi-theme-selector&quot;,&quot;x11:linux\/distro:kali-arm64:root-terminal&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-run&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-screenshooter&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-sensors&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-session-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-settings-editor&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-settings-manager&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-taskmanager&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-terminal-emulator&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-text-editor&quot;,&quot;x11:linux\/distro:kali-arm64:thunar-settings&quot;,&quot;x11:linux\/distro:kali-arm64:time&quot;,&quot;x11:linux\/distro:kali-arm64:tint2&quot;,&quot;x11:linux\/distro:kali-arm64:tint2conf&quot;,&quot;x11:linux\/distro:kali-arm64:users&quot;,&quot;x11:linux\/distro:kali-arm64:debian-uxterm&quot;,&quot;x11:linux\/distro:kali-arm64:vim&quot;,&quot;x11:linux\/distro:kali-arm64:vulnhub&quot;,&quot;x11:linux\/distro:kali-arm64:default-browser&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-web-browser&quot;,&quot;x11:linux\/distro:kali-arm64:org.pulseaudio.pavucontrol&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-wm-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-wmtweaks-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce-workspaces-settings&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-screensaver-preferences&quot;,&quot;x11:linux\/distro:kali-arm64:debian-xterm&quot;,&quot;x11:linux\/distro:kali-arm64:xfce4-file-manager&quot;,&quot;x11:linux\/firefox&quot;,&quot;x11:linux\/distro:kali-arm64:session:bspwm&quot;,&quot;x11:linux\/distro:kali-arm64:session:lightdm-xsession&quot;,&quot;x11:linux\/distro:kali-arm64:kali-gemini-cli&quot;,&quot;x11:linux\/distro:kali-arm64:session:openbox&quot;,&quot;x11:linux\/distro:kali-arm64:session:xfce&quot;]</string>
+    <int name="surface_base_grain" value="6" />
+    <int name="terminal_glass_blur_radius" value="8" />
+    <string name="low_memory_preset_snapshot"></string>
+    <string name="left_canvas_quick_keys">BOT:BOT,REC:REC,DESKTOP,MENU:MENU</string>
+    <boolean name="pass_ctrl_space_to_android" value="false" />
+    <boolean name="xradar_filter_link" value="true" />
+    <string name="layout.portrait.keyboard_mode">overlay</string>
+    <boolean name="left_canvas_desktop_mode" value="false" />
+    <boolean name="extra_keys_text_all_caps" value="true" />
+    <boolean name="compatibility_mode" value="false" />
+    <boolean name="app_launcher_notification_history" value="false" />
+    <boolean name="tai_openai_auto_load" value="true" />
+    <float name="layout.landscape.dock_height" value="2.45" />
+    <int name="in_app_keyboard_blur_radius" value="0" />
+    <boolean name="app_launcher_drawer_search_android_keyboard" value="false" />
+    <boolean name="place.display.keyboard_open" value="false" />
+    <boolean name="enforceCharBasedInput" value="false" />
+    <string name="current_session">4c25a019-82c2-4bb7-a546-73cdcfc1a0ab</string>
+    <string name="layout.landscape.extra_keys_restore_edge">top</string>
+    <int name="app_bar_opacity" value="81" />
+    <boolean name="app_launcher_extra_keys_row_enabled" value="true" />
+    <boolean name="app_launcher_drawer_search_on_open" value="false" />
+    <boolean name="surface_inherit_dock_corner_radius" value="false" />
+    <boolean name="surface_inherit_status_tint" value="false" />
+    <string name="router_default_route_model">gemini-2.5-flash</string>
+    <boolean name="terminal_clipboard_cleanup" value="true" />
+    <string name="top_pane_clock_style">tape</string>
+    <int name="surface_base_blur" value="0" />
+    <boolean name="show_key_hints" value="true" />
+    <string name="fusion_webview_known_profiles">[&quot;default&quot;]</string>
+    <boolean name="terminal_cursor_trail" value="true" />
+    <boolean name="priv_lane_enabled" value="true" />
+    <int name="layout.portrait.keyboard_chin" value="0" />
+    <string name="fontsize_scratchpad">22</string>
+    <boolean name="place_keyboard_overlay_reset_done" value="true" />
+    <boolean name="x11_defaults_applied" value="true" />
+    <string name="app_launcher_button_count">7</string>
+    <int name="fancier_glass_bend" value="9" />
+    <int name="layout.portrait.apps_row_order" value="2" />
+    <boolean name="gui_apps_starter_files" value="false" />
+    <string name="wallet_master_select">0</string>
+    <boolean name="surface_inheritance_migrated" value="true" />
+    <int name="log_level" value="0" />
+    <boolean name="status_widget_battery" value="false" />
+    <string name="x11_display_command">termux-x11 :0</string>
+    <boolean name="in_app_keyboard_enabled" value="true" />
+    <boolean name="surface_inherit_keyboard_grain" value="false" />
+    <int name="layout.landscape.keyboard_chin" value="0" />
+    <boolean name="x11_display_autostart" value="false" />
+    <boolean name="v0239_effects_preset" value="false" />
+    <int name="managed_wallpaper_system_id" value="25" />
+    <string name="extra_key_glyph_recents">25B2 25BC 25C0 25B6 21B5 F11C 25C2 2794</string>
+    <boolean name="surface_inherit_dock_blur" value="false" />
+    <int name="last_notification_id" value="6" />
+    <boolean name="top_pane_clock_collapsed" value="true" />
+    <boolean name="terminal_dynamic_colors_enabled" value="false" />
+    <boolean name="fancier_glass" value="false" />
+    <boolean name="x11_fullscreen" value="true" />
+    <string name="surface_tuning_last_section">dock</string>
+    <boolean name="app_haptics_enabled" value="false" />
+    <string name="wallet_gas_bump_config">100</string>
+    <string name="keyboard_voice_pause_ms">600</string>
+    <string name="x11_no_sandbox_apps_v1">[&quot;distro:kali-arm64:chromium&quot;]</string>
+    <boolean name="surface_inherit_status_grain" value="false" />
+    <boolean name="surface_tuning_normalized" value="false" />
+    <int name="surface_base_opacity" value="50" />
+    <boolean name="keyboard_voice_sounds" value="true" />
+    <string name="command_palette_action_stats_v1">{&quot;pane.split_horizontal&quot;:{&quot;count&quot;:2,&quot;last&quot;:1791161405642},&quot;workspace.save_prompt&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791171079071},&quot;pane.split_vertical&quot;:{&quot;count&quot;:3,&quot;last&quot;:1791171353080},&quot;terminal.search_scrollback&quot;:{&quot;count&quot;:2,&quot;last&quot;:1791161322034}}</string>
+    <string name="gui_apps_selected_de">bspwm</string>
+    <boolean name="shipped_surface_defaults_adopted" value="true" />
+    <int name="status_bar_grain" value="2" />
+    <boolean name="pane_agent_api" value="false" />
+    <string name="router_listen_port">20128</string>
+    <boolean name="surface_looks_light_glass" value="false" />
+    <boolean name="surface_inherit_dock_opacity" value="false" />
+    <int name="extrakeys_blur_radius" value="4" />
+    <boolean name="clipboardEnable" value="true" />
+    <string name="gui_apps_chroot_custom_path">/data/local/nhsystem/kali-arm64</string>
+    <boolean name="telemon_auto_claim_toggle" value="true" />
+    <boolean name="pane_focus_grows" value="false" />
+    <float name="app_launcher_bar_height" value="2.45" />
+    <boolean name="x11_force_bgra" value="false" />
+    <string name="gui_apps_route">chroot</string>
+    <boolean name="app_launcher_two_finger_dock_swipe" value="false" />
+    <boolean name="wallpaper_blur_enabled" value="true" />
+    <string name="pref_9router_target_runtime">nh_kali-arm64</string>
+    <string name="linux_display_engine">wayland</string>
+    <boolean name="status_widget_weather_fahrenheit" value="false" />
+    <boolean name="surface_inherit_canvas_tint" value="true" />
+    <boolean name="app_launcher_apps_row_enabled" value="true" />
+    <boolean name="app_launcher_notification_dots" value="false" />
+    <int name="terminal_tint_strength" value="0" />
+    <int name="layout.portrait.extra_keys_order" value="0" />
+    <boolean name="first_run_chain_done" value="true" />
+    <int name="dock_tint_strength" value="0" />
+    <int name="place.migrated" value="8" />
+    <boolean name="is_accessory_stack_collapsed" value="false" />
+    <int name="surface_looks_generation" value="5" />
+    <int name="app_launcher_pinned_items_schema_version" value="5" />
+    <boolean name="surface_inherit_dock_tint" value="false" />
+    <boolean name="surface_inherit_status_blur" value="false" />
+    <string name="fontsize">22</string>
+    <boolean name="low_memory_preset" value="false" />
+    <boolean name="tai_lan_enabled" value="false" />
+    <int name="fancier_glass_edge_width" value="20" />
+    <string name="telemon_blacklist_keywords"></string>
+    <string name="wallet_sniper_mode">simulate</string>
+    <boolean name="telemon_filter_urls" value="true" />
+    <string name="modules_default_runner">auto</string>
+    <string name="left_canvas_lens_icon">compass</string>
+    <int name="terminal_pane_gap" value="0" />
+    <boolean name="pane_dwindle_default" value="false" />
+    <string name="terminal_retro_effect">none</string>
+    <string name="wallet_active_chain">base</string>
+    <int name="terminal_glass_grain" value="18" />
+    <string name="wallet_slippage_config">15</string>
+    <string name="layout.portrait.keyboard_form">docked</string>
+    <int name="wallpaper_backdrop_dim" value="0" />
+    <boolean name="router_auto_start_boot" value="false" />
+    <string name="terminal_cursor_trail_style">default</string>
+    <int name="app_shell_number_since_boot" value="0" />
+    <int name="surface_base_corner_radius" value="0" />
+    <boolean name="app_launcher_animation_safe_mode" value="true" />
+    <boolean name="in_app_keyboard_haptics_enabled" value="false" />
+    <int name="surface_glass_position_status" value="0" />
+    <boolean name="touch_wobble_effect" value="false" />
+    <boolean name="top_pane_clock_am_pm" value="false" />
+    <boolean name="layout.landscape.status_compact" value="true" />
+    <int name="surface_glass_controls_format" value="3" />
+    <int name="app_launcher_dock_corner_radius" value="0" />
+    <string name="tele_bind_xradar">bot_default</string>
+    <boolean name="terminal_border_enabled" value="false" />
+    <boolean name="fullscreen" value="false" />
+    <boolean name="priv_allow_shell_fallback" value="true" />
+    <int name="surface_glass_position" value="0" />
+    <string name="keyboard_voice_mic_sensitivity">normal</string>
+    <float name="in_app_keyboard_key_corner_radius_dp" value="0.0" />
+    <string name="app_launcher_builtin_widget_style">tonal</string>
+    <string name="tele_bind_telemon">bot_default</string>
+    <boolean name="crash_report_notifications_enabled" value="false" />
+    <boolean name="plugin_error_notifications_enabled" value="false" />
+    <string name="keyboard_voice_polish_level">polished</string>
+    <int name="surface_glass_position_keyboard" value="9" />
+    <int name="wallpaper_enabled_extrakeys_blur_radius" value="0" />
+    <string name="xradar_active_profile">shaqilla</string>
+    <string name="telemon_custom_regex">[A-Z0-9]{8}</string>
+    <boolean name="surface_inherit_canvas_opacity" value="false" />
+    <int name="surface_base_side_gap" value="0" />
+    <boolean name="soft_keyboard_enabled_only_if_no_hardware" value="false" />
+    <boolean name="nerd_icons" value="true" />
+    <boolean name="in_app_keyboard_tap_correction" value="false" />
+    <string name="left_canvas_active_profile">shaqilla</string>
+    <float name="layout.portrait.keyboard_height" value="1.0830541" />
+    <string name="telemon_bound_module">auto</string>
+    <int name="terminal_corner_radius" value="0" />
+    <string name="app_launcher_use_case_mode">display</string>
+    <string name="x11_window_manager">openbox</string>
+    <int name="terminal_session_number_since_boot" value="10" />
+    <boolean name="status_bar_expanded_shortcuts" value="true" />
+    <boolean name="xradar_filter_translate" value="true" />
+    <int name="surface_glass_position_dock" value="0" />
+    <float name="in_app_keyboard_height_scale" value="1.0830541" />
+    <boolean name="lazy_mode" value="true" />
+    <boolean name="telemon_filter_codes" value="true" />
+    <boolean name="x11_drawer_apps" value="true" />
+    <int name="fancier_glass_specular" value="0" />
+    <string name="kiosk_display_engine">wayland</string>
+    <int name="fancier_glass_edge_light" value="18" />
+    <boolean name="x11_keyboard_follows_text" value="true" />
+    <int name="fancier_glass_clarity" value="0" />
+    <string name="surface_glass_tint_hue">primary</string>
+    <string name="keyboard_voice_language">auto</string>
+    <boolean name="tai_api_auth_required" value="true" />
+    <string name="gui_apps_chroot_custom_runner">su -c 'chroot %ROOTFS% /bin/sh -c %COMMAND%'</string>
+    <string name="layout.portrait.apps_row">bottom</string>
+    <int name="in_app_keyboard_background_opacity" value="85" />
+    <int name="in_app_keyboard_grain" value="20" />
+    <boolean name="terminal_osc52_clipboard_read_enabled" value="true" />
+    <boolean name="telemon_toggle_service" value="false" />
+    <int name="surface_material_intensity" value="0" />
+    <string name="app_launcher_input_char">%</string>
+    <string name="x11_runtime_badge">termux</string>
+    <boolean name="software_wallpaper_backdrop" value="true" />
+    <int name="status_bar_corner_radius" value="0" />
+    <boolean name="x11_show_extra_keys" value="true" />
+    <boolean name="soft_keyboard_enabled" value="false" />
+    <boolean name="keyboard_voice_polish" value="true" />
+    <string name="x11_quick_extra_keys">FULLSCREEN,KEYBOARD,tool:mouse.toggle</string>
+    <boolean name="surface_inherit_keyboard_blur" value="false" />
+    <int name="layout.landscape.extra_keys_order" value="0" />
+    <string name="layout.landscape.apps_row">right</string>
+    <string name="appearance_return_state_v1">{&quot;page&quot;:&quot;OVERVIEW&quot;,&quot;left_at_epoch_ms&quot;:1793279013365,&quot;wallpaper_slot&quot;:&quot;HOME&quot;}</string>
+    <boolean name="xradar_telegram_polling" value="false" />
+    <int name="sessions_opacity" value="61" />
+    <int name="wallpaper_enabled_terminal_background_opacity" value="74" />
+    <boolean name="surface_inherit_canvas_grain" value="true" />
+    <string name="in_app_keyboard_color_scheme">{&quot;schemaVersion&quot;:2,&quot;base16Palette&quot;:false,&quot;importedThemeId&quot;:&quot;&quot;,&quot;swatches&quot;:[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],&quot;keys&quot;:{&quot;3:4&quot;:{&quot;bg&quot;:20,&quot;border&quot;:20,&quot;primary&quot;:3,&quot;secondary&quot;:4}}}</string>
+    <boolean name="app_launcher_widget_pane_enabled" value="true" />
+    <boolean name="app_launcher_drawer_enabled" value="false" />
+    <boolean name="first_boot_tour_legacy_onboarding_migrated" value="true" />
+    <string name="layout.portrait.status_bar">bottom</string>
+    <string name="surface_custom_preset">{&quot;format_version&quot;:6,&quot;surface_material&quot;:&quot;glass&quot;,&quot;surface_material_intensity&quot;:0,&quot;surface_base_blur&quot;:0,&quot;surface_base_opacity&quot;:50,&quot;surface_base_grain&quot;:6,&quot;surface_base_tint&quot;:0,&quot;surface_glass_tint&quot;:&quot;scheme&quot;,&quot;surface_glass_rim&quot;:&quot;hairline&quot;,&quot;surface_glass_motion&quot;:&quot;classic&quot;,&quot;surface_glass_tint_hue&quot;:&quot;primary&quot;,&quot;surface_glass_vibrancy&quot;:100,&quot;terminal_border_enabled&quot;:false,&quot;fancier_glass_bend&quot;:9,&quot;fancier_glass_edge_width&quot;:20,&quot;fancier_glass_edge_light&quot;:18,&quot;fancier_glass_specular&quot;:0,&quot;fancier_glass_dispersion&quot;:0,&quot;fancier_glass_clarity&quot;:0,&quot;in_app_keyboard_key_opacity&quot;:0,&quot;in_app_keyboard_key_corner_radius_dp&quot;:0,&quot;wallpaper_backdrop_dim&quot;:0,&quot;wallpaper_backdrop_soft&quot;:false,&quot;surface_glass_position&quot;:0,&quot;surface_glass_position_dock&quot;:0,&quot;surface_glass_position_keyboard&quot;:9,&quot;surface_glass_position_status&quot;:0,&quot;extrakeys_blur_radius&quot;:4,&quot;app_bar_opacity&quot;:81,&quot;dock_glass_grain&quot;:2,&quot;dock_tint_strength&quot;:0,&quot;in_app_keyboard_blur_radius&quot;:0,&quot;in_app_keyboard_grain&quot;:20,&quot;in_app_keyboard_background_opacity&quot;:85,&quot;in_app_keyboard_tint_strength&quot;:0,&quot;status_bar_blur_radius&quot;:4,&quot;status_bar_opacity&quot;:79,&quot;status_bar_grain&quot;:2,&quot;status_bar_tint_strength&quot;:0,&quot;terminal_background_opacity&quot;:74}</string>
+    <boolean name="x11_android_keyboard" value="false" />
+    <int name="layout.portrait.az_bar_order" value="1" />
+    <string name="keyboard_input_method">built_in</string>
+    <boolean name="place.terminal.keyboard_open" value="true" />
+    <string name="app_launcher_pinned_items_v2">{&quot;schemaVersion&quot;:5,&quot;items&quot;:[{&quot;type&quot;:&quot;app&quot;,&quot;packageName&quot;:&quot;org.telegram.messenger&quot;,&quot;activityName&quot;:&quot;org.telegram.messenger.TurboIcon&quot;},{&quot;type&quot;:&quot;app&quot;,&quot;packageName&quot;:&quot;com.google.android.apps.bard&quot;,&quot;activityName&quot;:&quot;com.google.android.apps.bard.shellapp.BardEntryPointActivity&quot;},{&quot;type&quot;:&quot;app&quot;,&quot;packageName&quot;:&quot;com.whatsapp&quot;,&quot;activityName&quot;:&quot;com.whatsapp.Main&quot;},{&quot;type&quot;:&quot;app&quot;,&quot;packageName&quot;:&quot;com.twitter.android&quot;,&quot;activityName&quot;:&quot;com.x.android.main.MainActivity&quot;},{&quot;type&quot;:&quot;app&quot;,&quot;packageName&quot;:&quot;com.lonelycatgames.Xplore&quot;,&quot;activityName&quot;:&quot;com.lonelycatgames.Xplore.Browser&quot;},{&quot;type&quot;:&quot;app&quot;,&quot;packageName&quot;:&quot;com.xunijun.app.gp&quot;,&quot;activityName&quot;:&quot;com.xunijun.app.gp.MainActivity&quot;},{&quot;type&quot;:&quot;app&quot;,&quot;packageName&quot;:&quot;com.bitkeep.wallet&quot;,&quot;activityName&quot;:&quot;com.bitkeep.wallet.MainActivity&quot;}],&quot;folders&quot;:[],&quot;appIconOverrides&quot;:[]}</string>
+    <boolean name="priv_master_enabled" value="true" />
+    <string name="telemon_auto_translate">GATE-</string>
+    <string name="surface_glass_rim">hairline</string>
+    <boolean name="app_launcher_az_row_enabled" value="true" />
+    <int name="managed_wallpaper_lock_id" value="-1" />
+    <boolean name="surface_inherit_keyboard_opacity" value="false" />
+    <boolean name="priv_prefer_shizuku" value="true" />
+    <string name="left_canvas_history_json">[{&quot;url&quot;:&quot;https:\/\/www.binance.com&quot;,&quot;title&quot;:&quot;https:\/\/www.binance.com&quot;,&quot;time&quot;:1793339311768},{&quot;url&quot;:&quot;https:\/\/x.com\/home&quot;,&quot;title&quot;:&quot;Beranda \/ X&quot;,&quot;time&quot;:1793339243088},{&quot;url&quot;:&quot;http:\/\/127.0.0.1:3333\/&quot;,&quot;title&quot;:&quot;Halaman web tidak tersedia&quot;,&quot;time&quot;:1793333050501},{&quot;url&quot;:&quot;http:\/\/127.0.0.1:3333&quot;,&quot;title&quot;:&quot;http:\/\/127.0.0.1:3333&quot;,&quot;time&quot;:1793333050414},{&quot;url&quot;:&quot;https:\/\/x.com\/&quot;,&quot;title&quot;:&quot;x.com\/home&quot;,&quot;time&quot;:1793332793714},{&quot;url&quot;:&quot;https:\/\/x.com&quot;,&quot;title&quot;:&quot;https:\/\/x.com&quot;,&quot;time&quot;:1793332790506},{&quot;url&quot;:&quot;https:\/\/google.com&quot;,&quot;title&quot;:&quot;Google&quot;,&quot;time&quot;:1793332701660}]</string>
+    <boolean name="film_grain_enabled" value="false" />
+    <int name="first_boot_tour_run_version" value="4" />
+    <boolean name="app_launcher_bw_icons" value="false" />
+    <int name="x11_display_dpi" value="272" />
+    <boolean name="layout.portrait.status_compact" value="true" />
+    <string name="layout.portrait.extra_keys_restore_edge">top</string>
+    <string name="wayland_touch_mode">direct</string>
+    <string name="surface_glass_tint">scheme</string>
+    <int name="wallpaper_enabled_app_bar_opacity" value="43" />
+    <boolean name="layout_style_migrated" value="true" />
+    <boolean name="show_in_recents_when_not_default" value="true" />
+    <string name="surface_material">glass</string>
+    <int name="status_bar_tint_strength" value="0" />
+    <boolean name="terminal_padding_fill" value="true" />
+    <string name="wallet_rpc_mode">free</string>
+    <boolean name="pref_9router_autostart" value="false" />
+    <boolean name="wallpaper_backdrop_soft" value="false" />
+    <boolean name="keyboard_show_nav_bar_button" value="true" />
+    <string name="app_launcher_az_usage_stats_v1">{&quot;com.android.chrome\/com.google.android.apps.chrome.Main&quot;:{&quot;count&quot;:40,&quot;last&quot;:1793326012509},&quot;pkvlsa.mneh\/ga.w.H6d&quot;:{&quot;count&quot;:4,&quot;last&quot;:1791027390095},&quot;zank.remote\/zank.remote.MainActivity&quot;:{&quot;count&quot;:38,&quot;last&quot;:1793315685588},&quot;x11:linux\/distro:kali-arm64:firefox-esr&quot;:{&quot;count&quot;:28,&quot;last&quot;:1792984041415},&quot;com.py.cloneapp.huawei\/com.py.cloneapp.huawei.activity.SplashActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1792834397400},&quot;com.gateio.gateio\/com.gateio.biz.main.splash.SplashActivity&quot;:{&quot;count&quot;:9,&quot;last&quot;:1793093243310},&quot;com.google.android.apps.youtube.music\/com.google.android.apps.youtube.music.activities.MusicActivity&quot;:{&quot;count&quot;:4,&quot;last&quot;:1792575994269},&quot;gg.nebula\/gg.nebula.MainActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791027433390},&quot;com.wallpapers.wallpaper4k.livewallpaper\/com.wp3.ui.MainActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1790781460648},&quot;com.github.android\/com.github.android.main.MainActivity&quot;:{&quot;count&quot;:19,&quot;last&quot;:1793084213726},&quot;com.android.vending\/com.android.vending.AssetBrowserActivity&quot;:{&quot;count&quot;:14,&quot;last&quot;:1793248236520},&quot;com.twitter.android\/com.x.android.main.MainActivity&quot;:{&quot;count&quot;:615,&quot;last&quot;:1793409850891},&quot;com.google.android.apps.bard\/com.google.android.apps.bard.shellapp.BardEntryPointActivity&quot;:{&quot;count&quot;:435,&quot;last&quot;:1793353221574},&quot;com.gmail.heagoo.apkeditor.pro\/com.rull.mod.SplashActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791195287332},&quot;ru.zdevs.zarchiver\/ru.zdevs.zarchiver.ZArchiver&quot;:{&quot;count&quot;:3,&quot;last&quot;:1791860967141},&quot;com.lonelycatgames.Xplore\/com.lonelycatgames.Xplore.Browser&quot;:{&quot;count&quot;:150,&quot;last&quot;:1793348802322},&quot;com.mantle\/com.mantle.MainActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791011657583},&quot;com.okinc.okex.gp\/com.okinc.core.ok_app.homepage.ui.welcome.WelcomeActivity&quot;:{&quot;count&quot;:3,&quot;last&quot;:1792810617794},&quot;x11:linux\/distro:kali-arm64:chromium&quot;:{&quot;count&quot;:2,&quot;last&quot;:1792756618866},&quot;com.coinw.win\/mage.bywop.byw.ui.activity.StartUpActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1792662921858},&quot;com.offsec.nethunter\/com.offsec.nethunter.AppNavHomeActivity&quot;:{&quot;count&quot;:7,&quot;last&quot;:1793356852304},&quot;com.okx.wallet\/com.okinc.core.ok_app.homepage.ui.welcome.WelcomeActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1792812808360},&quot;com.zeetaa.zeetaatweaks\/com.zeetaa.zeetaatweaks.SplashActivity&quot;:{&quot;count&quot;:30,&quot;last&quot;:1791514912524},&quot;com.reddit.frontpage\/launcher.default&quot;:{&quot;count&quot;:37,&quot;last&quot;:1793283510663},&quot;com.termux.x11\/com.termux.x11.MainActivity&quot;:{&quot;count&quot;:4,&quot;last&quot;:1792225888539},&quot;com.bitkeep.wallet\/com.bitkeep.wallet.MainActivity&quot;:{&quot;count&quot;:35,&quot;last&quot;:1793407859574},&quot;org.matrix.vector.manager\/org.matrix.vector.manager.ui.MainActivity&quot;:{&quot;count&quot;:4,&quot;last&quot;:1791241667834},&quot;org.swiftapps.swiftbackup\/org.swiftapps.swiftbackup.intro.IntroActivity&quot;:{&quot;count&quot;:4,&quot;last&quot;:1793138261904},&quot;com.jozein.xedgepro\/com.jozein.xedgepro.ui.ActivityMain&quot;:{&quot;count&quot;:2,&quot;last&quot;:1793353591254},&quot;github.tornaco.android.thanos\/now.fortuitous.thanos.main.NavActivity&quot;:{&quot;count&quot;:13,&quot;last&quot;:1792722387371},&quot;live.anime.wallpapers\/live.anime.wallpapers.ui.activities.SplashActivity&quot;:{&quot;count&quot;:2,&quot;last&quot;:1790827583148},&quot;com.google.android.gm\/com.google.android.gm.ConversationListActivityGmail&quot;:{&quot;count&quot;:15,&quot;last&quot;:1793186325970},&quot;app.phantom\/app.phantom.MainActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791473275178},&quot;com.kiwibrowser.browser\/com.google.android.apps.chrome.Main&quot;:{&quot;count&quot;:201,&quot;last&quot;:1793326091118},&quot;com.dergoogler.mmrl\/com.dergoogler.mmrl.ui.activity.MainActivity&quot;:{&quot;count&quot;:3,&quot;last&quot;:1793364280581},&quot;org.toshi\/org.toshi.MainActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1793142693372},&quot;juloo.keyboard2\/juloo.keyboard2.LauncherActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791205218829},&quot;io.github.huskydg.magisk\/com.topjohnwu.magisk.ui.MainActivity&quot;:{&quot;count&quot;:10,&quot;last&quot;:1792279589344},&quot;com.ery.ziggy\/com.myrefucek.FufuFu.MainActivity&quot;:{&quot;count&quot;:4,&quot;last&quot;:1792764505009},&quot;x11:linux\/firefox&quot;:{&quot;count&quot;:1,&quot;last&quot;:1792242562184},&quot;x11:linux\/distro:kali-arm64:antigravity&quot;:{&quot;count&quot;:3,&quot;last&quot;:1792844088355},&quot;org.telegram.messenger\/org.telegram.messenger.TurboIcon&quot;:{&quot;count&quot;:459,&quot;last&quot;:1793401489946},&quot;moe.shizuku.privileged.api\/moe.shizuku.manager.MainActivity&quot;:{&quot;count&quot;:2,&quot;last&quot;:1791009302377},&quot;com.iudesk.android.photo.editor\/app.activity.MainActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791165334545},&quot;com.activitymanager\/com.sdex.activityrunner.MainActivity&quot;:{&quot;count&quot;:2,&quot;last&quot;:1791520628460},&quot;io.vaj.tl\/com.termux.app.TermuxActivity&quot;:{&quot;count&quot;:4,&quot;last&quot;:1792073421299},&quot;com.pengyou.cloneapp\/com.pengyou.cloneapp.SplashActivity&quot;:{&quot;count&quot;:6,&quot;last&quot;:1792927409435},&quot;com.facebook.katana\/com.facebook.katana.LoginActivity&quot;:{&quot;count&quot;:11,&quot;last&quot;:1792279036053},&quot;com.google.android.googlequicksearchbox\/com.google.android.googlequicksearchbox.SearchActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1791980923830},&quot;com.gatei0.cn.gatei0\/androidx.test.core.app.InstrumentationActivityInvoker$BootstrapActivity&quot;:{&quot;count&quot;:4,&quot;last&quot;:1792811582687},&quot;com.franco.kernel\/com.franco.kernel.activities.SplashActivity&quot;:{&quot;count&quot;:17,&quot;last&quot;:1791287141767},&quot;com.transsion.calculator\/com.transsion.calculator.Calculator&quot;:{&quot;count&quot;:1,&quot;last&quot;:1792035662026},&quot;bin.mt.plus.canary\/bin.mt.plus.MainLightIcon&quot;:{&quot;count&quot;:566,&quot;last&quot;:1793350816456},&quot;com.whatsapp\/com.whatsapp.Main&quot;:{&quot;count&quot;:100,&quot;last&quot;:1793365207319},&quot;dev.omalauncher\/dev.omalauncher.MainActivity&quot;:{&quot;count&quot;:6,&quot;last&quot;:1792972790575},&quot;com.binance.dev\/com.eaas.launcher.activities.main.MainActivity&quot;:{&quot;count&quot;:16,&quot;last&quot;:1793229713303},&quot;com.expressvpn.vpn\/com.expressvpn.vpn.splash.GreyAlias&quot;:{&quot;count&quot;:2,&quot;last&quot;:1791455062834},&quot;com.gallery20\/com.gallery20.HomeActivity&quot;:{&quot;count&quot;:8,&quot;last&quot;:1793324350064},&quot;io.github.chsbuffer.revancedxposed\/io.github.nexalloy.activity.SettingsActivityAlias&quot;:{&quot;count&quot;:2,&quot;last&quot;:1791034356511},&quot;io.github.a13e300.ksuwebui\/io.github.a13e300.ksuwebui.MainActivity&quot;:{&quot;count&quot;:1,&quot;last&quot;:1792280136425},&quot;com.discord\/com.discord.main.MainDefault&quot;:{&quot;count&quot;:117,&quot;last&quot;:1793405359885},&quot;x11:linux\/distro:kali-arm64:default-browser&quot;:{&quot;count&quot;:1,&quot;last&quot;:1792225881867},&quot;com.xunijun.app.gp\/com.xunijun.app.gp.MainActivity&quot;:{&quot;count&quot;:23,&quot;last&quot;:1793146377939},&quot;com.offsec.nhterm\/com.offsec.nhterm.ui.term.NeoTermActivity&quot;:{&quot;count&quot;:17,&quot;last&quot;:1793346417708}}</string>
+    <string name="surface_glass_motion">classic</string>
+    <string name="tele_bind_wallet">bot_default</string>
+    <boolean name="x11_hold_for_right_click" value="true" />
+    <string name="left_canvas_mode">browser</string>
+    <boolean name="status_widget_cpu" value="false" />
+    <int name="layout.portrait.status_bar_order" value="0" />
+    <boolean name="x11_legacy_drawing" value="false" />
+    <string name="layout.portrait.extra_keys">hidden</string>
+    <string name="layout.portrait.az_bar">bottom</string>
+    <boolean name="status_bar_border_hold_page_enabled" value="false" />
+    <string name="status_bar_horizontal_swipe_action">none</string>
+    <boolean name="keyboard_glass_slot_folded" value="true" />
+    <boolean name="surface_inherit_keyboard_tint" value="false" />
+    <int name="surface_glass_vibrancy" value="100" />
+    <boolean name="place.home.keyboard_open" value="false" />
+    <boolean name="status_widget_weather" value="false" />
+    <boolean name="wallpaper_parallax" value="true" />
+    <string name="keyboard_voice_silence_timeout_ms">5000</string>
+    <boolean name="status_widget_media" value="true" />
+    <boolean name="x11_display_enabled" value="true" />
+    <boolean name="layout.portrait.az_row" value="true" />
+    <boolean name="keyboard_opacity_sentinel_healed" value="true" />
+    <string name="x11_distro_setup_dismissed_v1">|distro,user,fonts</string>
+    <string name="displayResolutionMode">native</string>
+    <int name="dock_glass_grain" value="2" />
+    <string name="gui_apps_chroot_selected">nethunter</string>
+</map>

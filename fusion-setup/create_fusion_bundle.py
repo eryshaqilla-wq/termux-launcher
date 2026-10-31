@@ -420,6 +420,15 @@ if os.path.exists(theme_src):
     copy_tree_clean(theme_src, os.path.join(BUNDLE_DIR, "theme"))
     print("✓ Added touch bspwm theme & wallpapers to bundle")
 
+print("--- 2e. Menyiapkan Preset Eso (Nerd Font, Colors, Properties, SharedPreferences) ke bundle ---")
+preset_eso_src = "/project/termux-launcher/fusion-setup/presets/eso"
+if os.path.exists(preset_eso_src):
+    dest_preset = os.path.join(BUNDLE_DIR, "presets/eso")
+    os.makedirs(dest_preset, exist_ok=True)
+    for p_item in os.listdir(preset_eso_src):
+        shutil.copy2(os.path.join(preset_eso_src, p_item), os.path.join(dest_preset, p_item))
+    print("✓ Added Tuan Eso preset (Nerd Font, Base16 Isotope, UI Preferences) to bundle")
+
 print("--- 3. Mengemas menjadi fusion_payload.tar.gz ---")
 with tarfile.open(OUTPUT_TAR, "w:gz") as tar:
     for item in os.listdir(BUNDLE_DIR):
