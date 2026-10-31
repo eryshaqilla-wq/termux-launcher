@@ -132,11 +132,21 @@ public final class TerminalWindowBar extends HorizontalScrollView {
          * draws its generic glyph.
          */
         @Nullable public final Bitmap icon;
+        /** Whether this chip can show a close (×) button when tapped while selected. */
+        public final boolean closable;
 
         public static final int NO_PERCENTAGE = -1;
 
         public WindowItem(@NonNull String label, @NonNull String spokenLabel) {
             this(label, spokenLabel, false, false);
+        }
+
+        public WindowItem(@NonNull String label, @NonNull String spokenLabel, boolean closable) {
+            this(label, spokenLabel, false, false, NO_PERCENTAGE, false, false, false, null, null, closable);
+        }
+
+        public WindowItem(@NonNull String label, @NonNull String spokenLabel, boolean busy, boolean closable) {
+            this(label, spokenLabel, busy, false, NO_PERCENTAGE, false, false, false, null, null, closable);
         }
 
         public WindowItem(@NonNull String label, @NonNull String spokenLabel, boolean busy) {
@@ -176,6 +186,14 @@ public final class TerminalWindowBar extends HorizontalScrollView {
                           boolean attention, int progress, boolean progressError, boolean done,
                           boolean doneFailed, @Nullable AgentStatus.State agentState,
                           @Nullable Bitmap icon) {
+            this(label, spokenLabel, busy, attention, progress, progressError, done, doneFailed,
+                agentState, icon, true);
+        }
+
+        public WindowItem(@NonNull String label, @NonNull String spokenLabel, boolean busy,
+                          boolean attention, int progress, boolean progressError, boolean done,
+                          boolean doneFailed, @Nullable AgentStatus.State agentState,
+                          @Nullable Bitmap icon, boolean closable) {
             this.label = label;
             this.spokenLabel = spokenLabel;
             this.busy = busy;
@@ -186,6 +204,7 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             this.doneFailed = doneFailed;
             this.agentState = agentState;
             this.icon = icon;
+            this.closable = closable;
         }
 
         /**
@@ -197,14 +216,14 @@ public final class TerminalWindowBar extends HorizontalScrollView {
         public WindowItem withBusy(boolean busy) {
             return busy == this.busy ? this
                 : new WindowItem(label, spokenLabel, busy, attention, progress, progressError, done,
-                    doneFailed, agentState, icon);
+                    doneFailed, agentState, icon, closable);
         }
 
         @NonNull
         public WindowItem withAttention(boolean attention) {
             return attention == this.attention ? this
                 : new WindowItem(label, spokenLabel, busy, attention, progress, progressError, done,
-                    doneFailed, agentState, icon);
+                    doneFailed, agentState, icon, closable);
         }
 
         @NonNull
@@ -217,7 +236,7 @@ public final class TerminalWindowBar extends HorizontalScrollView {
         public WindowItem withDone(boolean done, boolean failed) {
             return done == this.done && failed == this.doneFailed ? this
                 : new WindowItem(label, spokenLabel, busy, attention, progress, progressError, done,
-                    failed, agentState, icon);
+                    failed, agentState, icon, closable);
         }
 
         /** The shell's own progress report; {@link #NO_PERCENTAGE} for indeterminate. */
@@ -225,7 +244,7 @@ public final class TerminalWindowBar extends HorizontalScrollView {
         public WindowItem withProgress(int progress, boolean progressError) {
             return progress == this.progress && progressError == this.progressError ? this
                 : new WindowItem(label, spokenLabel, busy, attention, progress, progressError, done,
-                    doneFailed, agentState, icon);
+                    doneFailed, agentState, icon, closable);
         }
 
         /** The rolled-up agent reading for this window's panes; null leaves it to the shell. */
@@ -233,7 +252,7 @@ public final class TerminalWindowBar extends HorizontalScrollView {
         public WindowItem withAgentState(@Nullable AgentStatus.State agentState) {
             return agentState == this.agentState ? this
                 : new WindowItem(label, spokenLabel, busy, attention, progress, progressError, done,
-                    doneFailed, agentState, icon);
+                    doneFailed, agentState, icon, closable);
         }
 
         /**
@@ -245,7 +264,14 @@ public final class TerminalWindowBar extends HorizontalScrollView {
         public WindowItem withIcon(@Nullable Bitmap icon) {
             return icon == this.icon ? this
                 : new WindowItem(label, spokenLabel, busy, attention, progress, progressError, done,
-                    doneFailed, agentState, icon);
+                    doneFailed, agentState, icon, closable);
+        }
+
+        @NonNull
+        public WindowItem withClosable(boolean closable) {
+            return closable == this.closable ? this
+                : new WindowItem(label, spokenLabel, busy, attention, progress, progressError, done,
+                    doneFailed, agentState, icon, closable);
         }
 
         /** Whether the two would draw the same marks. Labels are compared separately. */
@@ -253,7 +279,7 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             return busy == other.busy && attention == other.attention && done == other.done
                 && doneFailed == other.doneFailed
                 && progress == other.progress && progressError == other.progressError
-                && agentState == other.agentState && icon == other.icon;
+                && agentState == other.agentState && icon == other.icon && closable == other.closable;
         }
 
         /**
@@ -289,6 +315,7 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             hash = 31 * hash + progress;
             hash = 31 * hash + (progressError ? 1 : 0);
             hash = 31 * hash + (agentState == null ? 0 : agentState.hashCode());
+            hash = 31 * hash + (closable ? 1 : 0);
             return hash;
         }
     }
@@ -642,8 +669,14 @@ public final class TerminalWindowBar extends HorizontalScrollView {
      */
     private void onChipTapped(int index) {
         if (mChipTapListener != null) mChipTapListener.onWindowChipTapped(index);
-        boolean spentOnTheClose =
-            mReveal.onChipTap(index, mSelectedIndex, SystemClock.uptimeMillis());
+        WindowItem item = (index >= 0 && index < mItems.size()) ? mItems.get(index) : null;
+        boolean canRevealClose = item == null || item.closable;
+        boolean spentOnTheClose = false;
+        if (canRevealClose) {
+            spentOnTheClose = mReveal.onChipTap(index, mSelectedIndex, SystemClock.uptimeMillis());
+        } else {
+            mReveal.hide();
+        }
         applyReveal();
         if (spentOnTheClose) return;
         if (mSelectionListener != null) mSelectionListener.onWindowSelected(index);
@@ -669,7 +702,7 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             mRevealTimeout = null;
         }
         int index = mReveal.revealedIndex();
-        if (index < 0 || index >= mItems.size()) {
+        if (index < 0 || index >= mItems.size() || !mItems.get(index).closable) {
             if (mTabs.closeTarget() != ChipRevealPolicy.NONE
                 || (mCloseButton != null && mCloseButton.getVisibility() != GONE)) {
                 cancelCloseReveal();

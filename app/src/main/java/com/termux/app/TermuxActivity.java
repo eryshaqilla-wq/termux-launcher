@@ -656,6 +656,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         java.util.Collections.emptyList();
     private int mDisplayActiveWindow = -1;
     @Nullable private String mActiveStandaloneAppName;
+    private long mLastDisplayStartTime = 0L;
     /** Turns a display window's {@code WM_CLASS} into the app icon its chip wears. */
     @Nullable private com.termux.app.x11.X11WindowIconResolver mDisplayWindowIcons;
     /** Closes the display's apps before the server is killed; built the first time Stop is used. */
@@ -23929,13 +23930,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** A window chip was tapped, in the row's pills or the column's stack. */
     private void selectWindowFromStatusBar(int index) {
-        if (!isSplitPanesEnabled()) return;
         if (isDisplayPageShowing()) {
             if (!isEmbeddedDisplayRunning()) {
-                // Saat standby, tap chip "Mulai Desktop Env" langsung menyalakan display!
-                startEmbeddedDisplay();
+                // Saat standby, tap chip "Mulai Desktop" langsung menyalakan display!
+                long now = android.os.SystemClock.uptimeMillis();
+                if (now - mLastDisplayStartTime >= 1200L) {
+                    mLastDisplayStartTime = now;
+                    startEmbeddedDisplay();
+                }
                 return;
             }
+            if (!isSplitPanesEnabled()) return;
             boolean isStandalone = (mActiveStandaloneAppName != null && !mActiveStandaloneAppName.trim().isEmpty());
             if (isEmbeddedDisplayRunning()) {
                 if (!isStandalone || mDisplayWindows.isEmpty()) {
@@ -24833,7 +24838,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         .withIcon(rootIcon));
                 }
             } else {
-                items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem("Mulai Desktop Env", "Mulai Desktop Env"));
+                items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem("Mulai Desktop", "Mulai Desktop", false));
             }
             // The display's apps, front one selected; the terminal's marks (busy, attention,
             // done) have no meaning for them.
