@@ -212,7 +212,15 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
         @Override
         public void putStringSet(String key, @Nullable Set<String> values) {
             if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
-                launcher.setX11QuickExtraKeys(values == null ? "" : String.join(",", values));
+                if (values != null) {
+                    java.util.List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list = new java.util.ArrayList<>();
+                    for (String v : values) {
+                        list.add(new com.termux.app.terminal.io.ExtraKeysLayoutModel.Key(v));
+                    }
+                    launcher.setX11QuickExtraKeys(com.termux.app.terminal.io.ExtraKeysLayoutModel.serializeKeyList(list));
+                } else {
+                    launcher.setX11QuickExtraKeys(TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS);
+                }
                 notifyDisplay(key);
             }
         }
@@ -222,10 +230,13 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
         public Set<String> getStringSet(String key, @Nullable Set<String> defValues) {
             if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
                 String stored = launcher.getX11QuickExtraKeys();
-                if (stored == null || stored.trim().isEmpty()) {
-                    stored = TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS;
+                java.util.List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list =
+                    com.termux.app.fragments.settings.termux.DisplayQuickKeysEditorSheet.parseDisplayKeys(stored);
+                Set<String> set = new java.util.LinkedHashSet<>();
+                for (com.termux.app.terminal.io.ExtraKeysLayoutModel.Key k : list) {
+                    set.add(k.key);
                 }
-                return new java.util.LinkedHashSet<>(java.util.Arrays.asList(stored.split("[,;]")));
+                return set;
             }
             return defValues;
         }

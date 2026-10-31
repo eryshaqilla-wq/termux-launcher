@@ -21672,6 +21672,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if ("tool:mouse.toggle".equalsIgnoreCase(key) || "MOUSE".equalsIgnoreCase(key)) {
             return "\uDB80\uDF7D";
         }
+        if ("MOUSE_LEFT".equalsIgnoreCase(key) || "L_CLICK".equalsIgnoreCase(key) || "CLICK_LEFT".equalsIgnoreCase(key)) {
+            return "\uDB80\uDF7D";
+        }
+        if ("MOUSE_RIGHT".equalsIgnoreCase(key) || "R_CLICK".equalsIgnoreCase(key) || "CLICK_RIGHT".equalsIgnoreCase(key)) {
+            return "\uDB80\uDF7E";
+        }
+        if ("MOUSE_MIDDLE".equalsIgnoreCase(key) || "M_CLICK".equalsIgnoreCase(key) || "CLICK_MIDDLE".equalsIgnoreCase(key)) {
+            return "\uDB80\uDF7F";
+        }
+        if ("MOUSE_DOUBLE".equalsIgnoreCase(key) || "DBL_CLICK".equalsIgnoreCase(key) || "DOUBLE_CLICK".equalsIgnoreCase(key)) {
+            return "2x";
+        }
+        if ("SCROLL_UP".equalsIgnoreCase(key) || "WHEEL_UP".equalsIgnoreCase(key)) {
+            return "\uf062";
+        }
+        if ("SCROLL_DOWN".equalsIgnoreCase(key) || "SCROLL_DN".equalsIgnoreCase(key) || "WHEEL_DOWN".equalsIgnoreCase(key)) {
+            return "\uf063";
+        }
         if ("BOOST".equalsIgnoreCase(key)) {
             return "\uf0e7";
         }
@@ -21821,43 +21839,134 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    @NonNull
+    private List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> getDisplayQuickKeysList() {
+        String raw = mPreferences != null ? mPreferences.getX11QuickExtraKeys() : null;
+        return com.termux.app.fragments.settings.termux.DisplayQuickKeysEditorSheet.parseDisplayKeys(raw);
+    }
+
+    private void saveDisplayQuickKeysList(@NonNull List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list) {
+        String json = com.termux.app.terminal.io.ExtraKeysLayoutModel.serializeKeyList(list);
+        if (mPreferences != null) {
+            mPreferences.setX11QuickExtraKeys(json);
+        }
+    }
+
+    private void openDisplayQuickKeyEditor() {
+        com.termux.app.fragments.settings.termux.DisplayQuickKeysEditorSheet.show(this, () -> {
+            ViewGroup quickCluster = findViewById(R.id.display_quick_keys_cluster);
+            if (quickCluster != null) {
+                populateDisplayQuickKeys(quickCluster);
+            }
+        });
+    }
+
+    @Nullable
+    private com.termux.x11.LorieView getActiveLorieView() {
+        com.termux.app.x11.X11PaneFrame frame = findViewById(R.id.x11_pane_frame);
+        return (frame != null && isEmbeddedDisplayRunning()) ? frame.display() : null;
+    }
+
+    private void sendDisplayMouseClick(int button) {
+        com.termux.x11.LorieView display = getActiveLorieView();
+        if (display != null) {
+            display.sendMouseEvent(0f, 0f, button, true, true);
+            display.sendMouseEvent(0f, 0f, button, false, true);
+        }
+    }
+
+    private void sendDisplayMouseDoubleClick() {
+        com.termux.x11.LorieView display = getActiveLorieView();
+        if (display != null) {
+            display.sendMouseEvent(0f, 0f, com.termux.x11.input.InputStub.BUTTON_LEFT, true, true);
+            display.sendMouseEvent(0f, 0f, com.termux.x11.input.InputStub.BUTTON_LEFT, false, true);
+            display.postDelayed(() -> {
+                display.sendMouseEvent(0f, 0f, com.termux.x11.input.InputStub.BUTTON_LEFT, true, true);
+                display.sendMouseEvent(0f, 0f, com.termux.x11.input.InputStub.BUTTON_LEFT, false, true);
+            }, 60L);
+        }
+    }
+
+    private void sendDisplayMouseWheel(float deltaX, float deltaY) {
+        com.termux.x11.LorieView display = getActiveLorieView();
+        if (display != null) {
+            display.sendMouseWheelEvent(deltaX, deltaY);
+        }
+    }
+
+    private void executeDisplayQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
+        getWindow().getDecorView().performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
+        String actionKey = key.key;
+        if ("FULLSCREEN".equalsIgnoreCase(actionKey)) {
+            toggleDisplayFullscreen();
+        } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
+            toggleDisplayKeyboard();
+        } else if ("tool:mouse.toggle".equalsIgnoreCase(actionKey) || "MOUSE".equalsIgnoreCase(actionKey)) {
+            toggleMouseMode();
+        } else if ("MOUSE_LEFT".equalsIgnoreCase(actionKey) || "L_CLICK".equalsIgnoreCase(actionKey) || "CLICK_LEFT".equalsIgnoreCase(actionKey)) {
+            sendDisplayMouseClick(com.termux.x11.input.InputStub.BUTTON_LEFT);
+        } else if ("MOUSE_RIGHT".equalsIgnoreCase(actionKey) || "R_CLICK".equalsIgnoreCase(actionKey) || "CLICK_RIGHT".equalsIgnoreCase(actionKey)) {
+            sendDisplayMouseClick(com.termux.x11.input.InputStub.BUTTON_RIGHT);
+        } else if ("MOUSE_MIDDLE".equalsIgnoreCase(actionKey) || "M_CLICK".equalsIgnoreCase(actionKey) || "CLICK_MIDDLE".equalsIgnoreCase(actionKey)) {
+            sendDisplayMouseClick(com.termux.x11.input.InputStub.BUTTON_MIDDLE);
+        } else if ("MOUSE_DOUBLE".equalsIgnoreCase(actionKey) || "DBL_CLICK".equalsIgnoreCase(actionKey) || "DOUBLE_CLICK".equalsIgnoreCase(actionKey)) {
+            sendDisplayMouseDoubleClick();
+        } else if ("SCROLL_UP".equalsIgnoreCase(actionKey) || "WHEEL_UP".equalsIgnoreCase(actionKey)) {
+            sendDisplayMouseWheel(0f, -120f);
+        } else if ("SCROLL_DOWN".equalsIgnoreCase(actionKey) || "SCROLL_DN".equalsIgnoreCase(actionKey) || "WHEEL_DOWN".equalsIgnoreCase(actionKey)) {
+            sendDisplayMouseWheel(0f, 120f);
+        } else if ("BOOST".equalsIgnoreCase(actionKey)) {
+            new Thread(() -> {
+                try {
+                    Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
+                } catch (Exception ignored) {}
+                runOnUiThread(() -> android.widget.Toast.makeText(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!", android.widget.Toast.LENGTH_SHORT).show());
+            }).start();
+        } else if ("PASTE".equalsIgnoreCase(actionKey)) {
+            com.termux.x11.LorieView display = getActiveLorieView();
+            if (display != null) {
+                android.content.ClipboardManager cb = (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                if (cb != null && cb.hasPrimaryClip()) {
+                    android.content.ClipData clip = cb.getPrimaryClip();
+                    if (clip != null && clip.getItemCount() > 0) {
+                        CharSequence text = clip.getItemAt(0).getText();
+                        if (text != null && text.length() > 0) {
+                            display.sendTextEvent(text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        }
+                    }
+                }
+            }
+        } else if (mTermuxTerminalExtraKeys != null) {
+            View dummyView = new View(this);
+            mTermuxTerminalExtraKeys.onTerminalExtraKeyButtonClick(dummyView, actionKey, false, false, false, false);
+        }
+    }
+
     private void populateDisplayQuickKeys(@NonNull ViewGroup quickCluster) {
         boolean isRunning = isEmbeddedDisplayRunning();
-        String config = mPreferences != null ? mPreferences.getX11QuickExtraKeys() : null;
-        if (config == null || config.trim().isEmpty()) {
-            config = com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS;
-        }
-        String[] rawKeys = config.split("[,;]");
-        java.util.List<String> keys = new java.util.ArrayList<>();
-        for (String raw : rawKeys) {
-            String trimmed = raw.trim();
-            if (!trimmed.isEmpty()) {
-                keys.add(trimmed);
-                if (keys.size() >= 5) break;
-            }
-        }
+        List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getDisplayQuickKeysList();
 
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
         int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
         int muted = mDisplayQuickKeysMutedInk != 0 ? mDisplayQuickKeysMutedInk : 0xFF6C7086;
 
-        int strokeColor;
-        int bgFill;
-        int activeInk;
+        int defaultStroke;
+        int defaultBg;
+        int defaultInk;
         if (isRunning) {
-            strokeColor = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+            defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
                 ? windowBar.getSelectedStrokeColor()
                 : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
-            bgFill = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+            defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
                 ? windowBar.getSelectedFillColor()
                 : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
-            activeInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
+            defaultInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
                 ? windowBar.getSelectedTextColor()
                 : primary;
         } else {
-            strokeColor = androidx.core.graphics.ColorUtils.setAlphaComponent(muted, 40);
-            bgFill = android.graphics.Color.TRANSPARENT;
-            activeInk = muted;
+            defaultStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(muted, 40);
+            defaultBg = android.graphics.Color.TRANSPARENT;
+            defaultInk = muted;
         }
 
         int btnHeight = Math.round(dpToPx(20));
@@ -21868,51 +21977,34 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int strokeWidth = Math.round(dpToPx(1));
         int marginE = Math.round(dpToPx(3));
 
-        boolean canReuse = quickCluster.getChildCount() == keys.size();
-        if (canReuse) {
-            for (int i = 0; i < keys.size(); i++) {
-                View child = quickCluster.getChildAt(i);
-                if (!(child instanceof TextView) || !keys.get(i).equals(child.getTag())) {
-                    canReuse = false;
-                    break;
-                }
-            }
-        }
-
-        if (canReuse) {
-            for (int i = 0; i < keys.size(); i++) {
-                TextView btn = (TextView) quickCluster.getChildAt(i);
-                String key = keys.get(i);
-                String glyph = resolveDisplayKeyGlyph(key);
-                if (!glyph.equals(btn.getText().toString())) {
-                    btn.setText(glyph);
-                }
-                btn.setTextColor(activeInk);
-                btn.setEnabled(isRunning);
-                btn.setAlpha(isRunning ? 1.0f : 0.45f);
-                android.graphics.drawable.Drawable bg = btn.getBackground();
-                if (bg instanceof android.graphics.drawable.GradientDrawable) {
-                    android.graphics.drawable.GradientDrawable gd = (android.graphics.drawable.GradientDrawable) bg;
-                    gd.setColor(bgFill);
-                    gd.setStroke(strokeWidth, strokeColor);
-                    gd.setCornerRadius(cornerRadius);
-                }
-            }
-            return;
-        }
-
         quickCluster.removeAllViews();
         android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
 
-        for (String key : keys) {
+        for (int i = 0; i < keys.size(); i++) {
+            final com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key = keys.get(i);
             TextView btn = new TextView(this);
-            btn.setTag(key);
-            String glyph = resolveDisplayKeyGlyph(key);
-            btn.setText(glyph);
+            btn.setTag(key.key);
+
+            String label = key.display;
+            if (label == null || label.isEmpty()) {
+                label = resolveDisplayKeyGlyph(key.key);
+            }
+            btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
             if (nerdFont != null) btn.setTypeface(nerdFont);
             btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f);
             btn.setIncludeFontPadding(false);
-            btn.setTextColor(activeInk);
+
+            int btnStroke = defaultStroke;
+            int btnBg = defaultBg;
+            int btnInk = defaultInk;
+            if (isRunning && key.color != null) {
+                int roleBg = key.color.background(this);
+                int roleLabel = key.color.label(this);
+                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 180);
+                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 80);
+                btnInk = roleLabel;
+            }
+            btn.setTextColor(btnInk);
             btn.setGravity(android.view.Gravity.CENTER);
             btn.setEnabled(isRunning);
             btn.setAlpha(isRunning ? 1.0f : 0.45f);
@@ -21920,32 +22012,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
             gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
             gd.setCornerRadius(cornerRadius);
-            gd.setColor(bgFill);
-            gd.setStroke(strokeWidth, strokeColor);
+            gd.setColor(btnBg);
+            gd.setStroke(strokeWidth, btnStroke);
             btn.setBackground(gd);
 
-            final String actionKey = key;
-            btn.setOnClickListener(v -> {
-                v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
-                if ("FULLSCREEN".equalsIgnoreCase(actionKey)) {
-                    toggleDisplayFullscreen();
-                } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
-                    toggleDisplayKeyboard();
-                } else if ("tool:mouse.toggle".equalsIgnoreCase(actionKey) || "MOUSE".equalsIgnoreCase(actionKey)) {
-                    toggleMouseMode();
-                } else if ("BOOST".equalsIgnoreCase(actionKey)) {
-                    new Thread(() -> {
-                        try {
-                            Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
-                        } catch (Exception ignored) {}
-                        runOnUiThread(() -> android.widget.Toast.makeText(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!", android.widget.Toast.LENGTH_SHORT).show());
-                    }).start();
-                } else if (mTermuxTerminalExtraKeys != null) {
-                    mTermuxTerminalExtraKeys.onTerminalExtraKeyButtonClick(v, actionKey, false, false, false, false);
-                }
+            btn.setOnClickListener(v -> executeDisplayQuickKey(key));
+            btn.setOnLongClickListener(v -> {
+                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                openDisplayQuickKeyEditor();
+                return true;
             });
 
-            boolean isTextKey = glyph != null && glyph.length() > 2;
+            boolean isTextKey = label != null && label.length() > 2;
             int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
             if (isTextKey) {
                 btn.setMinWidth(btnSquareW);

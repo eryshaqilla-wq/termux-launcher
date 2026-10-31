@@ -278,6 +278,12 @@
         <item>mnn-llm</item>
     </string-array>
     <string-array name="x11_quick_extra_keys_entries">
+        <item>Klik Kiri (Left Click)</item>
+        <item>Klik Kanan (Right Click / Context Menu)</item>
+        <item>Klik Tengah (Middle Click)</item>
+        <item>Klik Ganda (Double Click)</item>
+        <item>Scroll Atas (Wheel Up)</item>
+        <item>Scroll Bawah (Wheel Down)</item>
         <item>Fullscreen (Toggle Fullscreen / Windowed)</item>
         <item>Keyboard (Toggle Soft Keyboard)</item>
         <item>Mouse / Touchpad (Toggle Touchpad Mode)</item>
@@ -300,6 +306,12 @@
         <item>Page Down</item>
     </string-array>
     <string-array name="x11_quick_extra_keys_values">
+        <item>MOUSE_LEFT</item>
+        <item>MOUSE_RIGHT</item>
+        <item>MOUSE_MIDDLE</item>
+        <item>MOUSE_DOUBLE</item>
+        <item>SCROLL_UP</item>
+        <item>SCROLL_DOWN</item>
         <item>FULLSCREEN</item>
         <item>KEYBOARD</item>
         <item>tool:mouse.toggle</item>
@@ -324,7 +336,9 @@
     <string-array name="x11_quick_extra_keys_default_values">
         <item>FULLSCREEN</item>
         <item>KEYBOARD</item>
-        <item>tool:mouse.toggle</item>
+        <item>MOUSE_LEFT</item>
+        <item>MOUSE_RIGHT</item>
+        <item>BOOST</item>
     </string-array>
     <string-array name="x11_runtime_badge_entries">
         <item>Termux X11</item>

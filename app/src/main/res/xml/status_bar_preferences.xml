@@ -39,6 +39,11 @@
             app:persistent="false"
             app:title="@string/settings_terminal_quick_keys_title"
             app:summary="@string/settings_terminal_quick_keys_summary" />
+        <Preference
+            app:key="edit_display_quick_extra_keys"
+            app:persistent="false"
+            app:title="Kustomisasi Tombol Statbar Display (Kanvas Kanan)"
+            app:summary="Atur tombol aksi mouse (klik kanan, klik kiri, scroll), fullscreen, keyboard, dan shortcut status bar kanan" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_status_gestures_header">

@@ -56,6 +56,17 @@ public final class StatusBarPreferencesFragment extends MaterialPreferenceFragme
                 return true;
             });
         }
+
+        Preference editDisplayKeys = findPreference("edit_display_quick_extra_keys");
+        if (editDisplayKeys != null) {
+            editDisplayKeys.setOnPreferenceClickListener(preference -> {
+                Context ctx = getContext();
+                if (ctx != null) {
+                    DisplayQuickKeysEditorSheet.show(ctx, null);
+                }
+                return true;
+            });
+        }
     }
 
     /**

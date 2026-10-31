@@ -313,10 +313,11 @@ public final class TermuxPreferenceConstants {
 
         public static final boolean DEFAULT_X11_SHOW_EXTRA_KEYS = true;
 
-        /** Comma-separated list of up to 5 quick extra keys for the Display status bar. */
+        /** Quick extra keys for the Display (right canvas) status bar. */
         public static final String KEY_X11_QUICK_EXTRA_KEYS = "x11_quick_extra_keys";
 
-        public static final String DEFAULT_X11_QUICK_EXTRA_KEYS = "FULLSCREEN,KEYBOARD,tool:mouse.toggle";
+        public static final String DEFAULT_X11_QUICK_EXTRA_KEYS =
+            "[{\"key\":\"FULLSCREEN\"},{\"key\":\"KEYBOARD\"},{\"key\":\"MOUSE_LEFT\"},{\"key\":\"MOUSE_RIGHT\"},{\"key\":\"BOOST\"}]";
 
         /** Quick extra keys for the Terminal (center canvas) status bar. */
         public static final String KEY_TERMINAL_QUICK_EXTRA_KEYS = "terminal_quick_extra_keys";
