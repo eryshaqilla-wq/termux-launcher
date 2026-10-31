@@ -102,6 +102,11 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                 return String.join(", ", selected);
             });
         }
+        ListPreference wallpaperPref = findPreference(
+            TermuxPreferenceConstants.TERMUX_APP.KEY_X11_WALLPAPER_MODE);
+        if (wallpaperPref != null) {
+            wallpaperPref.setSummaryProvider(ListPreference.SimpleSummaryProvider.getInstance());
+        }
     }
 
     /** Only the size row that the chosen resolution mode reads is shown. */
@@ -171,6 +176,9 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
             } else if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
                 launcher.setX11QuickExtraKeys(value);
                 notifyDisplay(key);
+            } else if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_WALLPAPER_MODE.equals(key)) {
+                launcher.setX11WallpaperMode(value);
+                com.termux.app.x11.X11WallpaperSync.syncWallpaper(context, true);
             } else if (com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE.equals(key)) {
                 android.content.SharedPreferences defaultPrefs = context.getSharedPreferences(
                     com.termux.shared.termux.TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
@@ -199,6 +207,9 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
             }
             if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_QUICK_EXTRA_KEYS.equals(key)) {
                 return launcher.getX11QuickExtraKeys();
+            }
+            if (TermuxPreferenceConstants.TERMUX_APP.KEY_X11_WALLPAPER_MODE.equals(key)) {
+                return launcher.getX11WallpaperMode();
             }
             if (com.termux.app.x11.ChrootDistro.KEY_SELECTED_DE.equals(key)) {
                 android.content.SharedPreferences defaultPrefs = context.getSharedPreferences(

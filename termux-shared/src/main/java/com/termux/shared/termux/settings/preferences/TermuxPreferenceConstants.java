@@ -319,6 +319,12 @@ public final class TermuxPreferenceConstants {
         public static final String DEFAULT_X11_QUICK_EXTRA_KEYS =
             "[{\"key\":\"FULLSCREEN\"},{\"key\":\"KEYBOARD\"},{\"key\":\"MOUSE_LEFT\"},{\"key\":\"MOUSE_RIGHT\"},{\"key\":\"BOOST\"}]";
 
+        /** Wallpaper mode for the Display (right canvas) desktop: sync with Android or DE default. */
+        public static final String KEY_X11_WALLPAPER_MODE = "x11_wallpaper_mode";
+        public static final String DEFAULT_X11_WALLPAPER_MODE = "sync";
+        public static final String X11_WALLPAPER_MODE_SYNC = "sync";
+        public static final String X11_WALLPAPER_MODE_DEFAULT = "default";
+
         /** Quick extra keys for the Terminal (center canvas) status bar. */
         public static final String KEY_TERMINAL_QUICK_EXTRA_KEYS = "terminal_quick_extra_keys";
 

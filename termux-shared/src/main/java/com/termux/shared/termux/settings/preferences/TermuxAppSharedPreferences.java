@@ -1448,6 +1448,21 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             value == null ? TERMUX_APP.DEFAULT_X11_QUICK_EXTRA_KEYS : value.trim(), false);
     }
 
+    public String getX11WallpaperMode() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_X11_WALLPAPER_MODE, TERMUX_APP.DEFAULT_X11_WALLPAPER_MODE, false);
+    }
+
+    public void setX11WallpaperMode(@Nullable String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_X11_WALLPAPER_MODE,
+            value == null ? TERMUX_APP.DEFAULT_X11_WALLPAPER_MODE : value.trim(), false);
+    }
+
+    public boolean isX11WallpaperSyncEnabled() {
+        return TERMUX_APP.X11_WALLPAPER_MODE_SYNC.equals(getX11WallpaperMode());
+    }
+
     public String getTerminalQuickExtraKeys() {
         return SharedPreferenceUtils.getString(mSharedPreferences,
             TERMUX_APP.KEY_TERMINAL_QUICK_EXTRA_KEYS, TERMUX_APP.DEFAULT_TERMINAL_QUICK_EXTRA_KEYS, false);

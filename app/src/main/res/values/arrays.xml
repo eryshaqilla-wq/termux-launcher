@@ -340,6 +340,14 @@
         <item>MOUSE_RIGHT</item>
         <item>BOOST</item>
     </string-array>
+    <string-array name="x11_wallpaper_mode_entries">
+        <item>@string/x11_wallpaper_mode_sync</item>
+        <item>@string/x11_wallpaper_mode_default</item>
+    </string-array>
+    <string-array name="x11_wallpaper_mode_values">
+        <item>sync</item>
+        <item>default</item>
+    </string-array>
     <string-array name="x11_runtime_badge_entries">
         <item>Termux X11</item>
         <item>Arch Linux</item>

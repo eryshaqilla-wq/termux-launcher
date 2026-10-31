@@ -4352,6 +4352,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 if (mInAppKeyboard != null) {
                     mInAppKeyboard.refreshMaterialPalette();
                 }
+                com.termux.app.x11.X11WallpaperSync.syncWallpaper(this, isEmbeddedDisplayRunning());
                 mChrome.requestSync(ChromeRenderer.SCOPE_BACKDROPS | ChromeRenderer.SCOPE_ACCESSORY_RENDER);
             };
             wallpaperManager.addOnColorsChangedListener(mWallpaperColorsChangedListener, mAccessoryRenderHandler);
@@ -23180,6 +23181,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void startEmbeddedDisplayNow(boolean standalone) {
         if (mTermuxService == null || mPreferences == null || !isX11DisplayEnabled()) return;
+        com.termux.app.x11.X11WallpaperSync.syncWallpaper(this, false);
         com.termux.app.x11.ChrootDistro.startAudioAndGraphicsServices(this);
         String wm;
         if (standalone) {

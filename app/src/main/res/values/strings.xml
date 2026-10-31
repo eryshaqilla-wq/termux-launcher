@@ -3394,4 +3394,8 @@
     <string name="settings_x11_show_extra_keys_summary">Tampilkan bilah tombol bawah dan touchpad di kanvas Display.</string>
     <string name="settings_x11_quick_extra_keys_title">Display Quick Extra Keys</string>
     <string name="settings_x11_quick_extra_keys_summary">Tombol aksi cepat di bar status kanvas Display (maksimal 5 tombol, pisahkan dengan koma).</string>
+    <string name="settings_x11_wallpaper_mode_title">Wallpaper Desktop</string>
+    <string name="settings_x11_wallpaper_mode_summary">Pilih wallpaper desktop X11: ikuti wallpaper Android atau bawaan DE.</string>
+    <string name="x11_wallpaper_mode_sync">Ikuti Wallpaper Android (Serasi &amp; Presisi)</string>
+    <string name="x11_wallpaper_mode_default">Wallpaper Bawaan DE</string>
 </resources>

@@ -31,6 +31,13 @@
             app:entries="@array/x11_quick_extra_keys_entries"
             app:entryValues="@array/x11_quick_extra_keys_values"
             android:defaultValue="@array/x11_quick_extra_keys_default_values" />
+        <ListPreference
+            app:key="x11_wallpaper_mode"
+            app:title="@string/settings_x11_wallpaper_mode_title"
+            app:summary="%s"
+            app:entries="@array/x11_wallpaper_mode_entries"
+            app:entryValues="@array/x11_wallpaper_mode_values"
+            android:defaultValue="sync" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_x11_group_configure">
