@@ -141,14 +141,6 @@ public final class TerminalWindowBar extends HorizontalScrollView {
             this(label, spokenLabel, false, false);
         }
 
-        public WindowItem(@NonNull String label, @NonNull String spokenLabel, boolean closable) {
-            this(label, spokenLabel, false, false, NO_PERCENTAGE, false, false, false, null, null, closable);
-        }
-
-        public WindowItem(@NonNull String label, @NonNull String spokenLabel, boolean busy, boolean closable) {
-            this(label, spokenLabel, busy, false, NO_PERCENTAGE, false, false, false, null, null, closable);
-        }
-
         public WindowItem(@NonNull String label, @NonNull String spokenLabel, boolean busy) {
             this(label, spokenLabel, busy, false);
         }

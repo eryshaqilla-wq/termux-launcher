@@ -24838,7 +24838,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         .withIcon(rootIcon));
                 }
             } else {
-                items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem("Mulai Desktop", "Mulai Desktop", false));
+                items.add(new com.termux.app.terminal.TerminalWindowBar.WindowItem("Mulai Desktop", "Mulai Desktop")
+                    .withClosable(false));
             }
             // The display's apps, front one selected; the terminal's marks (busy, attention,
             // done) have no meaning for them.
