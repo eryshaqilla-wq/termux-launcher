@@ -1712,3 +1712,9 @@ echo -e "Ketik ${CYAN}x${RESET} untuk menjalankan X Radar WebView."
 echo -e "Ketik ${CYAN}login${RESET} untuk menu startup."
 echo -e "Ketik ${CYAN}bashnh${RESET} untuk langsung masuk ke container Linux aktif."
 echo -e "Ketik ${CYAN}bspwm${RESET} untuk menjalankan Touch BSPWM Desktop di Termux."
+
+# Selipkan peluncuran Zsh seketika agar tidak perlu restart sesi shell manual
+if [ "$USE_ZSH" = "1" ] && command -v zsh >/dev/null 2>&1; then
+    echo -e "\n${CYAN}🚀 Meluncurkan Zsh seketika...${RESET}\n"
+    exec zsh -l
+fi
