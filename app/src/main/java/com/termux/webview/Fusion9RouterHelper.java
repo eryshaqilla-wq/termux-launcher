@@ -428,11 +428,11 @@ public class Fusion9RouterHelper {
                     if (finalTarget.type == RunnerType.DROIDSPACES) {
                         String dsName = finalTarget.id.replace("ds_", "");
                         p = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                            "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " + cmd});
+                            "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh -c " + com.termux.app.x11.ProotDistro.singleQuote(cmd)});
                     } else {
                         p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
                             "chroot " + finalTarget.rootfsPath + " /usr/bin/env -i HOME=/root USER=root " +
-                            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin " + cmd});
+                            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/sh -c " + com.termux.app.x11.ProotDistro.singleQuote(cmd)});
                     }
                 } else {
                     p = Runtime.getRuntime().exec(new String[]{

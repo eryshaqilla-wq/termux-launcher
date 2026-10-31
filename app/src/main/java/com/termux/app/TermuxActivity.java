@@ -23133,6 +23133,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             syncDisplayTouchpad();
             syncDisplayEnvironment();
             if (mLinuxApps != null) mLinuxApps.onDisplayRunningChanged(running);
+            if (running) {
+                com.termux.app.x11.X11WallpaperSync.syncWallpaper(TermuxActivity.this, true);
+            }
             syncDisplayWindowList(running);
             // A display that stopped has nothing left to type into.
             if (!running) {

@@ -30,6 +30,9 @@ public final class X11WallpaperSync {
     public static final String SYNC_WALLPAPER_TMP_PATH = "/data/data/com.termux/files/home/.termux/.android_wallpaper.png.tmp";
     public static final String WALLPAPER_MODE_FILE_PATH = "/data/data/com.termux/files/home/.termux/x11_wallpaper_mode";
 
+    public static final String SYNC_WALLPAPER_TMPDIR_PATH = "/data/data/com.termux/files/usr/tmp/.X11-unix/android_wallpaper.png";
+    public static final String WALLPAPER_MODE_TMPDIR_PATH = "/data/data/com.termux/files/usr/tmp/.X11-unix/x11_wallpaper_mode";
+
     private X11WallpaperSync() {}
 
     /**
@@ -46,7 +49,7 @@ public final class X11WallpaperSync {
         saveWallpaperMode(mode);
 
         if (TermuxPreferenceConstants.TERMUX_APP.X11_WALLPAPER_MODE_DEFAULT.equals(mode)) {
-            if (forceRefresh && X11DisplayServerState.isRunning()) {
+            if (forceRefresh || X11DisplayServerState.isRunning()) {
                 refreshX11Wallpaper(context);
             }
             return;
@@ -56,7 +59,7 @@ public final class X11WallpaperSync {
         new Thread(() -> {
             try {
                 exportAndroidWallpaper(context);
-                if (forceRefresh && X11DisplayServerState.isRunning()) {
+                if (forceRefresh || X11DisplayServerState.isRunning()) {
                     refreshX11Wallpaper(context);
                 }
             } catch (Exception e) {
@@ -66,8 +69,14 @@ public final class X11WallpaperSync {
     }
 
     private static void saveWallpaperMode(String mode) {
+        String val = mode != null ? mode : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_WALLPAPER_MODE;
+        writeStringToFile(WALLPAPER_MODE_FILE_PATH, val);
+        writeStringToFile(WALLPAPER_MODE_TMPDIR_PATH, val);
+    }
+
+    private static void writeStringToFile(String path, String content) {
         try {
-            File modeFile = new File(WALLPAPER_MODE_FILE_PATH);
+            File modeFile = new File(path);
             File parent = modeFile.getParentFile();
             if (parent != null && !parent.exists()) {
                 parent.mkdirs();
@@ -75,25 +84,36 @@ public final class X11WallpaperSync {
                 parent.setExecutable(true, false);
             }
             try (FileWriter writer = new FileWriter(modeFile, false)) {
-                writer.write(mode != null ? mode : TermuxPreferenceConstants.TERMUX_APP.DEFAULT_X11_WALLPAPER_MODE);
+                writer.write(content);
             }
             modeFile.setReadable(true, false);
         } catch (Exception e) {
-            Logger.logWarn(LOG_TAG, "Failed to write wallpaper mode file: " + e.getMessage());
+            Logger.logWarn(LOG_TAG, "Failed to write wallpaper mode file " + path + ": " + e.getMessage());
         }
     }
 
     private static void exportAndroidWallpaper(@NonNull Context context) {
         WallpaperManager wallpaperManager = WallpaperManager.getInstance(context);
-        Drawable wallpaper;
+        Drawable wallpaper = null;
         try {
             wallpaper = wallpaperManager.getDrawable();
         } catch (SecurityException e) {
             Logger.logWarn(LOG_TAG, "Wallpaper read permission denied: " + e.getMessage());
-            return;
         } catch (Exception e) {
             Logger.logWarn(LOG_TAG, "Failed to get wallpaper drawable: " + e.getMessage());
-            return;
+        }
+        if (wallpaper == null) {
+            try {
+                wallpaper = wallpaperManager.peekDrawable();
+            } catch (Exception ignored) {}
+        }
+        if (wallpaper == null) {
+            try {
+                File managedFile = com.termux.app.chrome.WallpaperPictureReader.managedWallpaperExactFile(context);
+                if (managedFile.isFile()) {
+                    wallpaper = Drawable.createFromPath(managedFile.getAbsolutePath());
+                }
+            } catch (Exception ignored) {}
         }
         if (wallpaper == null) return;
 
@@ -134,6 +154,7 @@ public final class X11WallpaperSync {
 
         File tmpFile = new File(SYNC_WALLPAPER_TMP_PATH);
         File targetFile = new File(SYNC_WALLPAPER_PATH);
+        File altTargetFile = new File(SYNC_WALLPAPER_TMPDIR_PATH);
         try {
             File parent = targetFile.getParentFile();
             if (parent != null && !parent.exists()) {
@@ -148,6 +169,15 @@ public final class X11WallpaperSync {
             if (tmpFile.renameTo(targetFile)) {
                 targetFile.setReadable(true, false);
             }
+            try {
+                File altParent = altTargetFile.getParentFile();
+                if (altParent != null && !altParent.exists()) {
+                    altParent.mkdirs();
+                }
+                java.nio.file.Files.copy(targetFile.toPath(), altTargetFile.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                altTargetFile.setReadable(true, false);
+            } catch (Exception ignored) {}
         } catch (Exception e) {
             Logger.logStackTraceWithMessage(LOG_TAG, "Failed to save exported wallpaper PNG", e);
         } finally {
@@ -159,7 +189,7 @@ public final class X11WallpaperSync {
      * Refreshes the active desktop wallpaper in X11 using wallpaper-render.sh or feh.
      */
     public static void refreshX11Wallpaper(@NonNull Context context) {
-        String cmd = "DISPLAY=:0 [ -x \"$HOME/.config/bspwm/wallpaper-render.sh\" ] && \"$HOME/.config/bspwm/wallpaper-render.sh\" >/dev/null 2>&1 || DISPLAY=:0 feh --no-fehbg --bg-fill \"/data/data/com.termux/files/home/.termux/android_wallpaper.png\" >/dev/null 2>&1 || true";
+        String cmd = "DISPLAY=:0 [ -x \"$HOME/.config/bspwm/wallpaper-render.sh\" ] && \"$HOME/.config/bspwm/wallpaper-render.sh\" >/dev/null 2>&1 || DISPLAY=:0 [ -x /root/.config/bspwm/wallpaper-render.sh ] && /root/.config/bspwm/wallpaper-render.sh >/dev/null 2>&1 || DISPLAY=:0 feh --no-fehbg --bg-fill \"/data/data/com.termux/files/home/.termux/android_wallpaper.png\" >/dev/null 2>&1 || DISPLAY=:0 feh --no-fehbg --bg-fill \"/tmp/.X11-unix/android_wallpaper.png\" >/dev/null 2>&1 || true";
         Fusion9RouterHelper.runAsyncCommand(context, null, cmd, null);
     }
 }
