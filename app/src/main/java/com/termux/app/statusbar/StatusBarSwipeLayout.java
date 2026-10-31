@@ -161,7 +161,10 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
      * Whether the bar standing on this edge may rest expanded. A bar down a side stays compact
      * regardless: this only vetoes the expand swipe, it never folds a bar already open elsewhere.
      */
-    public void setExpansionAllowed(boolean allowed) { mExpansionAllowed = allowed; }
+    public void setExpansionAllowed(boolean allowed) {
+        mExpansionAllowed = allowed;
+        if (!allowed) cancelPullHint();
+    }
 
     /**
      * A tap on the bar's own chrome answers with the direction the bar does not show at rest:
@@ -170,6 +173,7 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
      * the sessions chip) never reach here, so switching windows or opening a card stays silent.
      */
     private void showPullHint() {
+        if (!mExpansionAllowed) return;
         mPullHintCount++;
         if (mHintAnimator != null) mHintAnimator.cancel();
         ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
@@ -202,7 +206,7 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
     }
 
     private void drawPullHint(@NonNull android.graphics.Canvas canvas) {
-        if (mHintProgress <= 0f) return;
+        if (!mExpansionAllowed || mHintProgress <= 0f) return;
         // One rise-and-fall envelope over the whole animation, so the chevron never snaps off.
         float envelope = (float) Math.sin(Math.PI * mHintProgress);
         if (envelope <= 0.01f) return;
@@ -415,7 +419,7 @@ public final class StatusBarSwipeLayout extends FrameLayout implements NestedScr
             // eligible() is the "this touch was the bar's own, not a child's" test — the
             // form drag alone keeps a chip's stream PENDING too, and a chip tap must not
             // answer with a hint.
-            if (gesture.down().eligible()) showPullHint();
+            if (gesture.down().eligible() && mExpansionAllowed) showPullHint();
             performClick();
         }
         requestStructuralReset();

@@ -21896,7 +21896,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void executeDisplayQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
-        getWindow().getDecorView().performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
         String actionKey = key.key;
         if ("FULLSCREEN".equalsIgnoreCase(actionKey)) {
             toggleDisplayFullscreen();
@@ -22017,12 +22016,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             gd.setStroke(strokeWidth, btnStroke);
             btn.setBackground(gd);
 
-            btn.setOnClickListener(v -> executeDisplayQuickKey(key));
-            btn.setOnLongClickListener(v -> {
-                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
-                openDisplayQuickKeyEditor();
-                return true;
-            });
+            setupQuickKeyTouchListener(btn, key,
+                () -> executeDisplayQuickKey(key),
+                key.popup != null ? () -> executeDisplayQuickKey(key.popup) : null,
+                this::openDisplayQuickKeyEditor);
 
             boolean isTextKey = label != null && label.length() > 2;
             int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
@@ -22040,6 +22037,80 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             lp.gravity = android.view.Gravity.CENTER_VERTICAL;
             quickCluster.addView(btn, lp);
         }
+    }
+
+    private void setupQuickKeyTouchListener(@NonNull View btn,
+                                            @NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key,
+                                            @NonNull Runnable onClick,
+                                            @Nullable Runnable onSwipeUp,
+                                            @NonNull Runnable onLongClick) {
+        final float swipeThresholdPx = dpToPx(10);
+        final float[] downX = new float[1];
+        final float[] downY = new float[1];
+        final boolean[] isSwipedUp = new boolean[1];
+        final boolean[] isLongPressed = new boolean[1];
+        final boolean[] isMovedBeyondTap = new boolean[1];
+        final float[] baseAlpha = new float[]{btn.getAlpha()};
+
+        final Runnable longPressRunnable = () -> {
+            if (!isSwipedUp[0] && !isMovedBeyondTap[0]) {
+                isLongPressed[0] = true;
+                onLongClick.run();
+            }
+        };
+
+        btn.setOnTouchListener((v, event) -> {
+            if (!v.isEnabled()) return false;
+            switch (event.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    downX[0] = event.getRawX();
+                    downY[0] = event.getRawY();
+                    isSwipedUp[0] = false;
+                    isLongPressed[0] = false;
+                    isMovedBeyondTap[0] = false;
+                    baseAlpha[0] = v.getAlpha();
+                    v.setAlpha(baseAlpha[0] * 0.6f);
+                    v.postDelayed(longPressRunnable, android.view.ViewConfiguration.getLongPressTimeout());
+                    return true;
+
+                case MotionEvent.ACTION_MOVE:
+                    float deltaY = downY[0] - event.getRawY();
+                    float deltaX = Math.abs(event.getRawX() - downX[0]);
+                    float dist = (float) Math.hypot(deltaX, downY[0] - event.getRawY());
+                    if (dist > swipeThresholdPx / 2f) {
+                        isMovedBeyondTap[0] = true;
+                    }
+                    if (deltaY >= swipeThresholdPx && deltaY > deltaX) {
+                        if (!isSwipedUp[0]) {
+                            isSwipedUp[0] = true;
+                            v.removeCallbacks(longPressRunnable);
+                        }
+                    } else if (dist > swipeThresholdPx) {
+                        v.removeCallbacks(longPressRunnable);
+                    }
+                    return true;
+
+                case MotionEvent.ACTION_UP:
+                    v.removeCallbacks(longPressRunnable);
+                    v.setAlpha(baseAlpha[0]);
+                    if (isSwipedUp[0]) {
+                        if (onSwipeUp != null) {
+                            onSwipeUp.run();
+                        } else {
+                            onClick.run();
+                        }
+                    } else if (!isLongPressed[0] && !isMovedBeyondTap[0]) {
+                        onClick.run();
+                    }
+                    return true;
+
+                case MotionEvent.ACTION_CANCEL:
+                    v.removeCallbacks(longPressRunnable);
+                    v.setAlpha(baseAlpha[0]);
+                    return true;
+            }
+            return false;
+        });
     }
 
     @NonNull
@@ -22127,12 +22198,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             gd.setStroke(strokeWidth, btnStroke);
             btn.setBackground(gd);
 
-            btn.setOnClickListener(v -> executeTerminalQuickKey(key));
-            btn.setOnLongClickListener(v -> {
-                v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
-                openTerminalQuickKeyEditor(keyIndex, keys, cluster);
-                return true;
-            });
+            setupQuickKeyTouchListener(btn, key,
+                () -> executeTerminalQuickKey(key),
+                key.popup != null ? () -> executeTerminalQuickKey(key.popup) : null,
+                () -> openTerminalQuickKeyEditor(keyIndex, keys, cluster));
 
             boolean isTextKey = label != null && label.length() > 2;
             int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
@@ -22153,7 +22222,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void executeTerminalQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
-        getWindow().getDecorView().performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);
         String actionKey = key.key;
         if ("BOOST".equalsIgnoreCase(actionKey)) {
             new Thread(() -> {
