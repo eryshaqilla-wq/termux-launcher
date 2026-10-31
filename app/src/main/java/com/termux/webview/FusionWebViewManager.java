@@ -426,11 +426,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (motionEvent == null || motionEvent.getAction() != 0) {
                 return false;
             }
-            view.requestFocus();
-            view.requestFocusFromTouch();
-            FusionWebViewManager mgr = FusionWebViewManager.sInstance;
-            if (mgr != null && mgr.mActivity != null) {
-                mgr.mActivity.beginWebViewExternalTextInput();
+            if (!view.hasFocus()) {
+                view.requestFocus();
+                FusionWebViewManager mgr = FusionWebViewManager.sInstance;
+                if (mgr != null && mgr.mActivity != null) {
+                    mgr.mActivity.beginWebViewExternalTextInput();
+                }
             }
             return false;
         }
