@@ -21864,8 +21864,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     @Nullable
     private com.termux.x11.LorieView getActiveLorieView() {
-        com.termux.app.x11.X11PaneFrame frame = findViewById(R.id.x11_pane_frame);
-        return (frame != null && isEmbeddedDisplayRunning()) ? frame.display() : null;
+        return isEmbeddedDisplayRunning() ? displayView() : null;
     }
 
     private void sendDisplayMouseClick(int button) {
