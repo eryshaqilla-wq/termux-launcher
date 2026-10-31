@@ -422,7 +422,6 @@ public class TermuxInputMethodService extends InputMethodService {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd);
         mSelectionStart = newSelStart;
         mSelectionEnd = newSelEnd;
-        updateEditorAction(getCurrentInputEditorInfo());
     }
 
     @Override

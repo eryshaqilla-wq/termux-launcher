@@ -234,15 +234,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
 
     private boolean hasActiveSelection(InputConnection ic) {
         if (ic == null) return false;
-        if (mService != null && mService.hasActiveSelection()) {
-            return true;
-        }
-        try {
-            CharSequence selected = ic.getSelectedText(0);
-            return selected != null && selected.length() > 0;
-        } catch (Exception ignored) {
-            return false;
-        }
+        return mService != null && mService.hasActiveSelection();
     }
 
     private void handleBackspace(InputConnection ic) {
