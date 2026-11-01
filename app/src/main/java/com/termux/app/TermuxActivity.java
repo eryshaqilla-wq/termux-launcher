@@ -21296,7 +21296,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 && (mPreferences == null || mPreferences.isStatusBarShowSessionIndicatorEnabled());
             sessions.setVisibility(showSession ? View.VISIBLE : View.GONE);
         }
-        boolean windowsShown = page != com.termux.app.wall.PaneWallPage.WIDGETS;
+        boolean isWidgets = (page == com.termux.app.wall.PaneWallPage.WIDGETS);
+        boolean customLeft = isWidgets && mPreferences != null && mPreferences.isLeftCanvasCustomEngine();
+        boolean windowsShown = !isWidgets;
         com.termux.app.terminal.TerminalWindowBar bar = findViewById(R.id.terminal_window_bar);
         if (bar != null) {
             // The chips are drawn on glass, so they ask the chrome what they are standing on
@@ -21306,6 +21308,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             bar.setVisibility(windowsShown && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
             // The plus opens a terminal window; the display's apps come from the drawer.
             bar.setCreateButtonShown(page == com.termux.app.wall.PaneWallPage.TERMINAL);
+        }
+        ViewGroup leftTabBar = findViewById(R.id.left_canvas_tab_bar);
+        if (leftTabBar != null) {
+            leftTabBar.setVisibility(customLeft && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
+            if (customLeft) {
+                updateLeftCanvasTabBar();
+            }
         }
         com.termux.app.statusbar.StatusBarWindowColumn windowColumn =
             findViewById(R.id.terminal_status_window_column);
@@ -21827,6 +21836,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     populateLeftCanvasQuickKeys(leftQuickCluster);
                 }
             }
+            ViewGroup leftTabBar = findViewById(R.id.left_canvas_tab_bar);
+            if (leftTabBar != null) {
+                leftTabBar.setVisibility(customLeft && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
+                if (customLeft) {
+                    updateLeftCanvasTabBar();
+                }
+            }
             if (statsCluster != null) {
                 statsCluster.setVisibility(customLeft ? View.GONE : View.VISIBLE);
                 statsCluster.setAlpha(1.0f);
@@ -21849,6 +21865,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // On Display canvas (canvas kanan):
         if (termQuickCluster != null) termQuickCluster.setVisibility(View.GONE);
         if (leftQuickCluster != null) leftQuickCluster.setVisibility(View.GONE);
+        ViewGroup leftTabBar = findViewById(R.id.left_canvas_tab_bar);
+        if (leftTabBar != null) leftTabBar.setVisibility(View.GONE);
         if (statsCluster != null) statsCluster.setVisibility(View.GONE);
         if (quickCluster != null) {
             quickCluster.setVisibility(View.VISIBLE);
@@ -22297,8 +22315,45 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    public static boolean isIpcToolKey(@Nullable String key) {
+        if (key == null) return false;
+        String clean = key.trim();
+        if (clean.endsWith("\n")) clean = clean.substring(0, clean.length() - 1).trim();
+        return clean.equals("tool:ipc.ai") || clean.equals("ipc.ai")
+            || clean.equals("tool:ipc.wallet") || clean.equals("ipc.wallet")
+            || clean.equals("tool:ipc.web") || clean.equals("ipc.web")
+            || clean.equals("tool:ipc.telegram") || clean.equals("ipc.telegram")
+            || clean.startsWith("tool:ipc.run") || clean.startsWith("ipc.run");
+    }
+
+    public static String resolveIpcToolCommand(@NonNull String key) {
+        String clean = key.trim();
+        if (clean.endsWith("\n")) clean = clean.substring(0, clean.length() - 1).trim();
+        if (clean.startsWith("tool:")) clean = clean.substring("tool:".length()).trim();
+        if ("ipc.ai".equalsIgnoreCase(clean)) return "ai";
+        if ("ipc.wallet".equalsIgnoreCase(clean)) return com.termux.webview.FusionWalletHelper.getStartWalletDaemonCommand();
+        if ("ipc.web".equalsIgnoreCase(clean)) return "browser";
+        if ("ipc.telegram".equalsIgnoreCase(clean)) return "pmt";
+        if (clean.startsWith("ipc.run")) {
+            int colon = clean.indexOf(':');
+            if (colon > 0) {
+                String args = clean.substring(colon + 1);
+                for (String pair : args.split(",")) {
+                    int eq = pair.indexOf('=');
+                    if (eq > 0) {
+                        String k = pair.substring(0, eq).trim();
+                        String v = pair.substring(eq + 1).trim();
+                        if ("cmd".equalsIgnoreCase(k) || "command".equalsIgnoreCase(k)) return v;
+                    }
+                }
+            }
+            return "sh";
+        }
+        return clean;
+    }
+
     private void executeTerminalQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
-        String actionKey = key.key;
+        String actionKey = key.key != null ? key.key.trim() : "";
         if ("BOOST".equalsIgnoreCase(actionKey)) {
             new Thread(() -> {
                 try {
@@ -22310,14 +22365,28 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mTermuxTerminalViewClient != null) {
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
             }
+        } else if (isIpcToolKey(actionKey)) {
+            String command = resolveIpcToolCommand(actionKey);
+            if (key.isNewTab()) {
+                String title = (key.display != null && !key.display.trim().isEmpty())
+                    ? key.display.trim() : extractProgramName(command);
+                launchProgramInNewTabString(command, title, key.getResolvedEnv());
+            } else {
+                com.termux.app.TermuxIpcServer.injectCommand(this, command, true);
+            }
+        } else if (actionKey.startsWith("tool:")) {
+            if (mTermuxTerminalExtraKeys != null) {
+                View dummyView = new View(this);
+                mTermuxTerminalExtraKeys.onTerminalExtraKeyButtonClick(dummyView, actionKey, false, false, false, false);
+            }
         } else if (key.isNewTab()) {
             launchProgramInNewTab(key);
-        } else if (actionKey != null && actionKey.endsWith("\n")) {
+        } else if (actionKey.endsWith("\n")) {
             TerminalSession session = getCurrentSession();
             if (session != null) {
                 session.write(actionKey);
             }
-        } else if (mTermuxTerminalExtraKeys != null && actionKey != null) {
+        } else if (mTermuxTerminalExtraKeys != null) {
             View dummyView = new View(this);
             mTermuxTerminalExtraKeys.onTerminalExtraKeyButtonClick(dummyView, actionKey, false, false, false, false);
         }
@@ -22325,7 +22394,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public void launchProgramInNewTab(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
         String raw = key.key != null ? key.key : "";
-        String cleanCmd = raw.endsWith("\n") ? raw.substring(0, raw.length() - 1).trim() : raw.trim();
+        String cleanCmd = isIpcToolKey(raw)
+            ? resolveIpcToolCommand(raw)
+            : (raw.endsWith("\n") ? raw.substring(0, raw.length() - 1).trim() : raw.trim());
         if (cleanCmd.isEmpty()) return;
 
         String tabTitle = (key.display != null && !key.display.trim().isEmpty())
@@ -22468,11 +22539,91 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             R.string.settings_destination_left_canvas));
     }
 
+    public void updateLeftCanvasTabBar() {
+        ViewGroup tabBar = findViewById(R.id.left_canvas_tab_bar);
+        if (tabBar == null) return;
+        boolean isWidgets = currentWallPage() == com.termux.app.wall.PaneWallPage.WIDGETS;
+        boolean customLeft = isWidgets && mPreferences != null && mPreferences.isLeftCanvasCustomEngine();
+        if (!customLeft || isStatusBarVertical()) {
+            tabBar.setVisibility(View.GONE);
+            return;
+        }
+        tabBar.setVisibility(View.VISIBLE);
+
+        TextView tabHome = findViewById(R.id.left_canvas_tab_home);
+        TextView tabWidgets = findViewById(R.id.left_canvas_tab_widgets);
+        TextView tabAdd = findViewById(R.id.left_canvas_tab_add);
+
+        int curPage = mWidgetPaneController != null ? mWidgetPaneController.currentPage() : 0;
+        int primary = com.google.android.material.color.MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary, 0xFF8AB4F8);
+        int onPrimary = com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnPrimary, Color.WHITE);
+
+        float density = getResources().getDisplayMetrics().density;
+        float radius = 10 * density;
+
+        int activeBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 200);
+        int inactiveBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 35);
+        int inactiveStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 80);
+
+        if (tabHome != null) {
+            GradientDrawable gd = new GradientDrawable();
+            gd.setCornerRadius(radius);
+            if (curPage == 0) {
+                gd.setColor(activeBg);
+                tabHome.setTextColor(onPrimary);
+            } else {
+                gd.setColor(inactiveBg);
+                gd.setStroke(Math.round(1 * density), inactiveStroke);
+                tabHome.setTextColor(primary);
+            }
+            tabHome.setBackground(gd);
+            tabHome.setOnClickListener(v -> {
+                if (mWidgetPaneController != null) {
+                    mWidgetPaneController.setCurrentPage(0);
+                    updateLeftCanvasTabBar();
+                }
+            });
+        }
+
+        if (tabWidgets != null) {
+            GradientDrawable gd = new GradientDrawable();
+            gd.setCornerRadius(radius);
+            if (curPage > 0) {
+                gd.setColor(activeBg);
+                tabWidgets.setTextColor(onPrimary);
+            } else {
+                gd.setColor(inactiveBg);
+                gd.setStroke(Math.round(1 * density), inactiveStroke);
+                tabWidgets.setTextColor(primary);
+            }
+            tabWidgets.setBackground(gd);
+            tabWidgets.setOnClickListener(v -> {
+                if (mWidgetPaneController != null) {
+                    mWidgetPaneController.setCurrentPage(1);
+                    updateLeftCanvasTabBar();
+                }
+            });
+        }
+
+        if (tabAdd != null) {
+            GradientDrawable gd = new GradientDrawable();
+            gd.setCornerRadius(radius);
+            gd.setColor(inactiveBg);
+            gd.setStroke(Math.round(1 * density), inactiveStroke);
+            tabAdd.setBackground(gd);
+            tabAdd.setOnClickListener(v -> {
+                if (mWidgetPaneController != null) {
+                    mWidgetPaneController.openPicker();
+                }
+            });
+        }
+    }
+
     public void openAppDrawerFromLeftCanvas(boolean focusSearch) {
-        if (mPreferences == null || !mPreferences.isAppLauncherDrawerEnabled()) return;
-        PlaceLayout.Edge edge = PlaceChromePolicy.appsEdge(currentPlaceLayout());
-        getAppDrawerController().open(com.termux.app.launcher.drawer.AppDrawerPullGeometry.pullFor(edge),
-            com.termux.app.launcher.drawer.AppDrawerPullGeometry.seedFor(edge));
+        if (mPreferences == null) return;
+        getAppDrawerController().open(
+            com.termux.app.launcher.drawer.AppDrawerGestureArbiter.Pull.UP,
+            com.termux.app.launcher.drawer.AppDrawerPullGeometry.Seed.DOCK);
         if (focusSearch) {
             View decor = getWindow().getDecorView();
             if (decor != null) {
@@ -22625,6 +22776,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             com.termux.app.statusbar.TopPaneFeed.skipNext();
         } else if ("SETTINGS".equalsIgnoreCase(actionKey) || "SETTING".equalsIgnoreCase(actionKey) || "PREFS".equalsIgnoreCase(actionKey)) {
             openLeftCanvasSettings();
+        } else if (isIpcToolKey(actionKey)) {
+            String command = resolveIpcToolCommand(actionKey);
+            launchProgramInNewTabString(command, key.display, key.getResolvedEnv());
+        } else if (actionKey != null && !actionKey.trim().isEmpty()) {
+            launchProgramInNewTabString(actionKey, key.display, key.getResolvedEnv());
         }
     }
 
@@ -24350,6 +24506,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             new com.termux.app.launcher.widget.WidgetPaneController.Host() {
                 @Override public void openAppDrawerFromLeftCanvas(boolean focusSearch) {
                     TermuxActivity.this.openAppDrawerFromLeftCanvas(focusSearch);
+                }
+                @Override public void onLeftCanvasPageChanged(int page) {
+                    runOnUiThread(TermuxActivity.this::updateLeftCanvasTabBar);
                 }
                 @Override public boolean reducedMotion() { return isReducedMotionEnabled(); }
                 // The widget grid lives on the wall's Widgets page, and nowhere else.

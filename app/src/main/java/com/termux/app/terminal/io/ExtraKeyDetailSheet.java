@@ -362,7 +362,12 @@ public final class ExtraKeyDetailSheet {
 
         String raw = target.key;
         boolean hasEnter = raw != null && raw.endsWith("\n");
-        String displayCommand = (hasEnter && raw.length() > 1) ? raw.substring(0, raw.length() - 1) : (raw == null ? "" : raw);
+        String displayCommand;
+        if (com.termux.app.TermuxActivity.isIpcToolKey(raw)) {
+            displayCommand = com.termux.app.TermuxActivity.resolveIpcToolCommand(raw);
+        } else {
+            displayCommand = (hasEnter && raw.length() > 1) ? raw.substring(0, raw.length() - 1) : (raw == null ? "" : raw);
+        }
         field.setText(displayCommand);
 
         field.addTextChangedListener(new TextWatcher() {
@@ -371,7 +376,9 @@ public final class ExtraKeyDetailSheet {
             @Override public void afterTextChanged(Editable s) {
                 String val = s.toString().trim();
                 if (!val.isEmpty()) {
-                    if (hasEnter || (!ExtraKeyActionLabels.isNamedKey(val) && !val.startsWith("tool:"))) {
+                    if (com.termux.app.TermuxActivity.isIpcToolKey(val)) {
+                        target.key = val;
+                    } else if (hasEnter || (!ExtraKeyActionLabels.isNamedKey(val) && !val.startsWith("tool:"))) {
                         target.key = val.endsWith("\n") ? val : (val + "\n");
                     } else {
                         target.key = val;

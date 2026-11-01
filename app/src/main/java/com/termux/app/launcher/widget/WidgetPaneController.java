@@ -61,6 +61,8 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         @Nullable default BuiltinWidgetServices.Host builtinWidgetHost() { return null; }
         /** Open app drawer from Left Canvas. */
         default void openAppDrawerFromLeftCanvas(boolean focusSearch) { }
+        /** Left canvas page changed. */
+        default void onLeftCanvasPageChanged(int page) { }
     }
 
     private final WidgetPaneView pane;
@@ -318,13 +320,18 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         widgets.setListener(null); catalog.cancel(); dismissPaneMenu();
     }
 
-    int currentPage() { return currentPage; }
+    public int currentPage() { return currentPage; }
 
-    void setCurrentPage(int page) {
+    public void setCurrentPage(int page) {
+        if (page >= widgets.repository().pageCount()) {
+            menuAddPage();
+            return;
+        }
         int clamped = Math.max(0, Math.min(widgets.repository().pageCount() - 1, page));
         if (clamped == currentPage) return;
         currentPage = clamped;
         render();
+        if (host != null) host.onLeftCanvasPageChanged(currentPage);
     }
 
     /** A trim can take pages away from under the page on screen; it follows what is left. */
@@ -395,6 +402,7 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         }
         currentPage = appended;
         render();
+        if (host != null) host.onLeftCanvasPageChanged(currentPage);
     }
 
     void menuRemovePage() {

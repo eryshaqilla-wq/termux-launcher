@@ -280,6 +280,60 @@
                             android:layout_marginTop="6dp"
                             android:visibility="gone"
                             android:contentDescription="@string/termux_window_bar_content_description" />
+
+                        <!-- Left Canvas Tab Bar (Home / Widgets / Add [+]) -->
+                        <LinearLayout
+                            android:id="@+id/left_canvas_tab_bar"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:layout_marginStart="6dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:id="@+id/left_canvas_tab_home"
+                                android:layout_width="wrap_content"
+                                android:layout_height="22dp"
+                                android:maxLines="1"
+                                android:ellipsize="end"
+                                android:paddingStart="8dp"
+                                android:paddingEnd="8dp"
+                                android:gravity="center"
+                                android:text="🏠 Beranda"
+                                android:textSize="11sp"
+                                android:fontFamily="sans-serif-medium"
+                                android:clickable="true"
+                                android:focusable="true" />
+
+                            <TextView
+                                android:id="@+id/left_canvas_tab_widgets"
+                                android:layout_width="wrap_content"
+                                android:layout_height="22dp"
+                                android:layout_marginStart="6dp"
+                                android:maxLines="1"
+                                android:ellipsize="end"
+                                android:paddingStart="8dp"
+                                android:paddingEnd="8dp"
+                                android:gravity="center"
+                                android:text="🧩 Widget"
+                                android:textSize="11sp"
+                                android:fontFamily="sans-serif-medium"
+                                android:clickable="true"
+                                android:focusable="true" />
+
+                            <TextView
+                                android:id="@+id/left_canvas_tab_add"
+                                android:layout_width="22dp"
+                                android:layout_height="22dp"
+                                android:layout_marginStart="6dp"
+                                android:gravity="center"
+                                android:text="➕"
+                                android:textSize="10.5sp"
+                                android:clickable="true"
+                                android:focusable="true" />
+                        </LinearLayout>
                     </com.termux.app.statusbar.PlaceContentStrip>
 
                     <!-- The CPU/RAM/weather cluster: CPU · RAM · Weather at the row's end

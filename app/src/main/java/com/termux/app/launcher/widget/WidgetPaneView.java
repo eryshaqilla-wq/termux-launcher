@@ -368,10 +368,10 @@ public final class WidgetPaneView extends FrameLayout {
                 if (swipeUpTracking) {
                     float dx = event.getX() - swipeUpDownX;
                     float dy = event.getY() - swipeUpDownY;
-                    if (dy < -touchSlop * 2 && Math.abs(dy) > Math.abs(dx) * 1.5f) {
+                    if (dy < -touchSlop && Math.abs(dy) > Math.abs(dx)) {
                         swipeUpTracking = false;
                         if (listener != null) listener.onSwipeUpDrawer();
-                        return false;
+                        return true;
                     }
                 }
                 if (!pagingTracking || pagingDragging) break;
@@ -408,16 +408,20 @@ public final class WidgetPaneView extends FrameLayout {
     }
 
     @Override public boolean onTouchEvent(@NonNull MotionEvent event) {
-        if (swipeUpTracking && event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+        int action = event.getActionMasked();
+        if (action == MotionEvent.ACTION_DOWN) {
+            return swipeUpTracking || pagingTracking || super.onTouchEvent(event);
+        }
+        if (swipeUpTracking && action == MotionEvent.ACTION_MOVE) {
             float dx = event.getX() - swipeUpDownX;
             float dy = event.getY() - swipeUpDownY;
-            if (dy < -touchSlop * 2 && Math.abs(dy) > Math.abs(dx) * 1.5f) {
+            if (dy < -touchSlop && Math.abs(dy) > Math.abs(dx)) {
                 swipeUpTracking = false;
                 if (listener != null) listener.onSwipeUpDrawer();
                 return true;
             }
         }
-        if (!pagingDragging) return false;
+        if (!pagingDragging) return super.onTouchEvent(event);
         if (pagingVelocity != null) pagingVelocity.addMovement(event);
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_MOVE:
