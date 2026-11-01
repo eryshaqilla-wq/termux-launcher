@@ -1,8 +1,10 @@
 package com.termux.app.launcher.drawer;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.provider.Settings;
 import android.view.Choreographer;
@@ -1349,7 +1351,7 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
         if (host == null || glass == null || plane == null) return;
         TermuxAppSharedPreferences preferences = mHost.preferences();
         // Use user's dock opacity with a high-opacity floor to prevent wallpaper bleeding through.
-        float opacity = preferences == null ? 0.88f : Math.max(0.80f, preferences.getAppBarOpacity() / 100f);
+        float opacity = preferences == null ? 0.98f : Math.max(0.98f, preferences.getAppBarOpacity() / 100f);
         int grain = preferences == null
             ? TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN
             : preferences.getDockGlassGrain();
@@ -1524,6 +1526,16 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
         ImageView frost = mHost.findView(R.id.app_drawer_wallpaper_backdrop);
         View blur = mHost.findView(R.id.app_drawer_blur);
         boolean frosted = frost != null && mHost.applyWallpaperFrost(frost);
+        if (frost != null) {
+            if (frosted) {
+                // Apply a deep dark scrim filter over the pre-blurred wallpaper so bright wallpaper colors never bleed through
+                frost.setColorFilter(Color.argb(0xDE, 0, 0, 0), PorterDuff.Mode.SRC_ATOP);
+                frost.setVisibility(View.VISIBLE);
+            } else {
+                frost.clearColorFilter();
+                frost.setVisibility(View.GONE);
+            }
+        }
         if (blur == null) return;
         mLiveBlur = blur instanceof com.github.mmin18.widget.RealtimeBlurView
             ? (com.github.mmin18.widget.RealtimeBlurView) blur : null;
@@ -1775,6 +1787,7 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
             if (mGlass != null) mGlass.setVisibility(View.INVISIBLE);
             ImageView frost = mHost.findView(R.id.app_drawer_wallpaper_backdrop);
             if (frost != null) {
+                frost.clearColorFilter();
                 frost.setImageDrawable(null);
                 frost.setVisibility(View.GONE);
             }
