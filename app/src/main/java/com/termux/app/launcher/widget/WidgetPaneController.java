@@ -409,6 +409,7 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         if (!widgets.repository().removePage(currentPage)) return;
         currentPage = Math.max(0, Math.min(widgets.repository().pageCount() - 1, currentPage));
         render();
+        if (host != null) host.onLeftCanvasPageChanged(currentPage);
     }
 
     private void relayEditorFocus(@Nullable View editor) {

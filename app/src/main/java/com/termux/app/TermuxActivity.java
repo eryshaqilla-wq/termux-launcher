@@ -22367,13 +22367,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         } else if (isIpcToolKey(actionKey)) {
             String command = resolveIpcToolCommand(actionKey);
-            if (key.isNewTab()) {
-                String title = (key.display != null && !key.display.trim().isEmpty())
-                    ? key.display.trim() : extractProgramName(command);
-                launchProgramInNewTabString(command, title, key.getResolvedEnv());
-            } else {
-                com.termux.app.TermuxIpcServer.injectCommand(this, command, true);
-            }
+            String title = (key.display != null && !key.display.trim().isEmpty())
+                ? key.display.trim() : extractProgramName(command);
+            launchProgramInNewTabString(command, title, key.getResolvedEnv());
         } else if (actionKey.startsWith("tool:")) {
             if (mTermuxTerminalExtraKeys != null) {
                 View dummyView = new View(this);
@@ -22621,17 +22617,18 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     public void openAppDrawerFromLeftCanvas(boolean focusSearch) {
         if (mPreferences == null) return;
+        PlaceLayout.Edge edge = PlaceChromePolicy.appsEdge(currentPlaceLayout());
         getAppDrawerController().open(
-            com.termux.app.launcher.drawer.AppDrawerGestureArbiter.Pull.UP,
-            com.termux.app.launcher.drawer.AppDrawerPullGeometry.Seed.DOCK);
+            AppDrawerPullGeometry.pullFor(edge),
+            AppDrawerPullGeometry.seedFor(edge));
         if (focusSearch) {
             View decor = getWindow().getDecorView();
             if (decor != null) {
                 decor.postDelayed(() -> {
-                    if (mAppDrawerController != null && isAppDrawerOpen()) {
+                    if (mAppDrawerController != null && (mAppDrawerController.isOpen() || mAppDrawerController.isEngaged())) {
                         requestAppDrawerSearchKeyboard();
                     }
-                }, 150L);
+                }, 200L);
             }
         }
     }
