@@ -646,6 +646,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         WebView webView = this.mActiveWebView;
         if (webView != null) {
+            try {
+                android.webkit.CookieManager.getInstance().flush();
+            } catch (Exception ignored) {}
             webView.setVisibility(8);
             FrameLayout frameLayout = this.mPaneHost;
             if (frameLayout != null) {
@@ -855,6 +858,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         WebView webView = this.mActiveWebView;
         if (webView != null) {
+            try {
+                android.webkit.CookieManager.getInstance().flush();
+            } catch (Exception ignored) {}
             webView.setVisibility(8);
         }
     }
