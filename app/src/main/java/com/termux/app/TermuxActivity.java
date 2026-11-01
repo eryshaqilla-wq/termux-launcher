@@ -22563,28 +22563,46 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int onSurface = com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0xFFEEEEEE);
         int secondary = com.google.android.material.color.MaterialColors.getColor(this, com.termux.shared.R.attr.termuxColorSecondary, 0xFF9E9E9E);
 
-        float density = getResources().getDisplayMetrics().density;
-        float radius = 11 * density;
+        com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
+        int btnHeight = Math.round(dpToPx(20));
+        float cornerRadius = (windowBar != null && windowBar.getStatusBarRadiusPx() >= 0)
+            ? windowBar.getStatusBarRadiusPx()
+            : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
 
-        int selectedFill = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
-        int selectedStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
-        int unselectedFill = androidx.core.graphics.ColorUtils.setAlphaComponent(secondary, 16);
-        int unselectedStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(secondary, 34);
+        int strokeWidth = Math.round(dpToPx(1));
 
-        int selectedText = onSurface;
-        int unselectedText = androidx.core.graphics.ColorUtils.setAlphaComponent(onSurface, 160);
+        int selectedStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+            ? windowBar.getSelectedStrokeColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
+        int selectedFill = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+            ? windowBar.getSelectedFillColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
+        int selectedText = (windowBar != null && windowBar.getSelectedTextColor() != 0)
+            ? windowBar.getSelectedTextColor()
+            : onSurface;
+
+        int unselectedStroke = (windowBar != null && windowBar.getUnselectedStrokeColor() != 0)
+            ? windowBar.getUnselectedStrokeColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(secondary, 34);
+        int unselectedFill = (windowBar != null && windowBar.getUnselectedFillColor() != 0)
+            ? windowBar.getUnselectedFillColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(secondary, 16);
+        int unselectedText = (windowBar != null && windowBar.getUnselectedTextColor() != 0)
+            ? windowBar.getUnselectedTextColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(onSurface, 148);
 
         if (tabHome != null) {
             GradientDrawable gd = new GradientDrawable();
-            gd.setCornerRadius(radius);
+            gd.setShape(GradientDrawable.RECTANGLE);
+            gd.setCornerRadius(cornerRadius);
             if (curPage == 0) {
                 gd.setColor(selectedFill);
-                gd.setStroke(Math.round(1 * density), selectedStroke);
+                gd.setStroke(strokeWidth, selectedStroke);
                 tabHome.setTextColor(selectedText);
                 tabHome.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             } else {
                 gd.setColor(unselectedFill);
-                gd.setStroke(Math.round(1 * density), unselectedStroke);
+                gd.setStroke(strokeWidth, unselectedStroke);
                 tabHome.setTextColor(unselectedText);
                 tabHome.setTypeface(android.graphics.Typeface.DEFAULT);
             }
@@ -22599,15 +22617,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (tabWidgets != null) {
             GradientDrawable gd = new GradientDrawable();
-            gd.setCornerRadius(radius);
+            gd.setShape(GradientDrawable.RECTANGLE);
+            gd.setCornerRadius(cornerRadius);
             if (curPage > 0) {
                 gd.setColor(selectedFill);
-                gd.setStroke(Math.round(1 * density), selectedStroke);
+                gd.setStroke(strokeWidth, selectedStroke);
                 tabWidgets.setTextColor(selectedText);
                 tabWidgets.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             } else {
                 gd.setColor(unselectedFill);
-                gd.setStroke(Math.round(1 * density), unselectedStroke);
+                gd.setStroke(strokeWidth, unselectedStroke);
                 tabWidgets.setTextColor(unselectedText);
                 tabWidgets.setTypeface(android.graphics.Typeface.DEFAULT);
             }
@@ -22622,9 +22641,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (tabAdd != null) {
             tabAdd.setBackground(null);
+            int addTint = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+                ? windowBar.getSelectedStrokeColor()
+                : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 200);
             if (tabAdd instanceof androidx.appcompat.widget.AppCompatImageButton) {
                 androidx.core.widget.ImageViewCompat.setImageTintList((androidx.appcompat.widget.AppCompatImageButton) tabAdd,
-                    android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 200)));
+                    android.content.res.ColorStateList.valueOf(addTint));
             }
             tabAdd.setOnClickListener(v -> {
                 if (mWidgetPaneController != null) {

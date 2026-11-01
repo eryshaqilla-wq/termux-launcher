@@ -594,6 +594,9 @@ public final class TerminalWindowBar extends HorizontalScrollView {
     public int getSelectedStrokeColor() { return mSelectedStrokeColor; }
     public int getSelectedFillColor() { return mSelectedFillColor; }
     public int getSelectedTextColor() { return mSelectedTextColor; }
+    public int getUnselectedStrokeColor() { return mUnselectedStrokeColor; }
+    public int getUnselectedFillColor() { return mUnselectedFillColor; }
+    public int getUnselectedTextColor() { return mUnselectedTextColor; }
     public float getStatusBarRadiusPx() { return mStatusBarRadiusPx; }
 
     public void setWindows(@NonNull List<WindowItem> items, int selectedIndex) {
