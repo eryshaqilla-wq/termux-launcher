@@ -16572,19 +16572,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         @Override public void beginTextFieldSearch(@NonNull EditText field) {
-            // The toolbar text input's seam, less the relayout: the built-in keyboard yields its
-            // window flags but stays put under the plane, then the field takes focus and the IME.
-            if (mInAppKeyboard != null && mInAppKeyboard.isEnabled()) {
-                mInAppKeyboard.beginExternalTextInput(true);
-            }
-            onSystemImeRequested();
-            field.post(() -> {
-                if (!isAppDrawerOpen() && (mAppDrawerController == null || !mAppDrawerController.isEngaged())) return;
-                field.setFocusable(true);
-                field.setFocusableInTouchMode(true);
-                field.requestFocus();
-                KeyboardUtils.showSoftKeyboard(TermuxActivity.this, field);
-            });
+            beginAppDrawerTextFieldSearch(field);
         }
 
         @Override public void endTextFieldSearch(@NonNull EditText field) {
@@ -17475,8 +17463,22 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } else if (mAppDrawerController != null && mAppDrawerController.getContent() != null) {
             com.termux.app.launcher.drawer.AppDrawerContentView drawerContent = mAppDrawerController.getContent();
             drawerContent.setTextFieldSearch(true);
-            beginTextFieldSearch(drawerContent.searchInput());
+            beginAppDrawerTextFieldSearch(drawerContent.searchInput());
         }
+    }
+
+    public void beginAppDrawerTextFieldSearch(@NonNull EditText field) {
+        if (mInAppKeyboard != null && mInAppKeyboard.isEnabled()) {
+            mInAppKeyboard.beginExternalTextInput(true);
+        }
+        onSystemImeRequested();
+        field.post(() -> {
+            if (!isAppDrawerOpen() && (mAppDrawerController == null || !mAppDrawerController.isEngaged())) return;
+            field.setFocusable(true);
+            field.setFocusableInTouchMode(true);
+            field.requestFocus();
+            KeyboardUtils.showSoftKeyboard(TermuxActivity.this, field);
+        });
     }
 
     /** Hardware and external-keyboard strokes claimed by the open palette. */
@@ -22646,7 +22648,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         com.termux.app.launcher.drawer.AppDrawerContentView content = mAppDrawerController.getContent();
                         if (content != null) {
                             content.setTextFieldSearch(true);
-                            beginTextFieldSearch(content.searchInput());
+                            beginAppDrawerTextFieldSearch(content.searchInput());
                         } else {
                             mAppDrawerController.onSearchKeyboardRequested();
                         }
