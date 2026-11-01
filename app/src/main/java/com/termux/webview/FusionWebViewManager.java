@@ -667,6 +667,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mWorkerWebView = null;
         }
         this.mActiveTab = 0;
+        FusionProfileManager.writeActiveProfileState("default");
         System.gc();
         LinearLayout linearLayout2 = this.mControlPill;
         if (linearLayout2 != null) {

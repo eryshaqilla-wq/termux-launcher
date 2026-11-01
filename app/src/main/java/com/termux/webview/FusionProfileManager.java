@@ -134,8 +134,46 @@ public class FusionProfileManager {
     }
 
     public static File getSessionFile(String profile) {
+        String[] candidates = new String[] {
+            System.getenv("FUSION_WALLET_DIR") != null ? System.getenv("FUSION_WALLET_DIR") + "/sessions" : null,
+            "/data/data/com.termux/files/home/wallet/sessions",
+            "/data/local/nhsystem/kali-arm64/root/wallet/sessions",
+            "/root/wallet/sessions",
+            "/wallet/sessions"
+        };
+        for (String path : candidates) {
+            if (path != null) {
+                File f = new File(path, profile + ".json");
+                if (f.exists() && f.length() > 0) {
+                    return f;
+                }
+            }
+        }
         File dir = getSessionsDir();
         return new File(dir, profile + ".json");
+    }
+
+    public static void writeActiveProfileState(String profile) {
+        if (profile == null) return;
+        String[] paths = new String[] {
+            "/data/data/com.termux/files/home/wallet/.active_profile",
+            "/root/wallet/.active_profile",
+            "/wallet/.active_profile"
+        };
+        for (String p : paths) {
+            try {
+                File f = new File(p);
+                File parent = f.getParentFile();
+                if (parent != null && !parent.exists()) {
+                    parent.mkdirs();
+                }
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+                fos.write(profile.trim().getBytes(StandardCharsets.UTF_8));
+                fos.close();
+                f.setReadable(true, false);
+                f.setWritable(true, false);
+            } catch (Exception ignored) {}
+        }
     }
 
     /**
@@ -160,6 +198,7 @@ public class FusionProfileManager {
 
         if (profileChanged || targetProfile.startsWith("fresh_")) {
             Log.i(TAG, "Switching profile from " + sCurrentActiveProfile + " -> " + targetProfile + " (Device: " + device.name + ")");
+            writeActiveProfileState(targetProfile);
             
             if (webView != null) {
                 // Segera kosongkan layar ke about:blank agar UI akun lama tidak muncul sekilas
