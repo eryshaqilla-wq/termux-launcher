@@ -1975,15 +1975,19 @@ public class Keyboard2View extends View
   protected void onLayout(boolean changed, int left, int top, int right, int bottom)
   {
     super.onLayout(changed, left, top, right, bottom);
-    if (Build.VERSION.SDK_INT < 29 || !changed)
+    if (!changed)
       return;
-    // Unlike an IME window, an activity-embedded keyboard gets no automatic
-    // system-gesture exclusion, so edge-column swipes would be recognized as
-    // Back gestures and cancelled. Upstream had an equivalent SDK-29 block; it
-    // used parent-relative coordinates, which only worked because the IME view
-    // sat at (0,0) — exclusion rects are in view-local coordinates.
-    _exclusion_rect.set(0, 0, right - left, bottom - top);
-    setSystemGestureExclusionRects(_exclusion_rects);
+    // Since SDK 30, this is done automatically by the framework:
+    // https://android.googlesource.com/platform/frameworks/base/+/android11-release/core/java/android/inputmethodservice/InputMethodService.java#852
+    if (Build.VERSION.SDK_INT == 29)
+    {
+      _exclusion_rect.set(
+          left + (int)_marginLeft,
+          top + (int)_config.marginTopPx,
+          right - (int)_marginRight,
+          bottom - (int)_marginBottom);
+      setSystemGestureExclusionRects(_exclusion_rects);
+    }
   }
 
   @Override
@@ -2330,6 +2334,10 @@ public class Keyboard2View extends View
     }
     resetInputStateInternal(true);
     requestDisallowIntercept(false);
+    if (Build.VERSION.SDK_INT >= 29)
+    {
+      setSystemGestureExclusionRects(java.util.Collections.emptyList());
+    }
     super.onDetachedFromWindow();
   }
 
