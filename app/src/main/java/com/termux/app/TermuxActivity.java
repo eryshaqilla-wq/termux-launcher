@@ -2282,7 +2282,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         registerWallpaperColorsChangedListener();
         refreshCalendarIconsIfDayChanged();
         refreshSuggestionBarIfLauncherCatalogChanged();
-        getWindow().getDecorView().post(() -> LauncherCtlApiServer.getInstance().ensureStartedAsync(getApplicationContext()));
+        // LauncherCtl is strictly manual on-demand; autostart on activity startup is permanently disabled.
         // An editor left open under another activity (the Keyboard theme page it opened) is the
         // same session on the way back: restated, never closed or reverted.
         mSurfaceEditor.onActivityStarted();

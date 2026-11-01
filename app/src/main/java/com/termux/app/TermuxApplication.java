@@ -85,6 +85,10 @@ public class TermuxApplication extends Application {
             Logger.logInfo(LOG_TAG, "Starting TAI runtime process");
             return;
         }
+        if (isImeProcess(context)) {
+            Logger.logInfo(LOG_TAG, "Starting IME process (:ime)");
+            return;
+        }
         Logger.logDebug("Starting Application");
         // Every transient message in the app — including the ones raised from termux-shared, which
         // cannot see the app module — lands in the in-app notice chip rather than a stock toast.
@@ -257,5 +261,13 @@ public class TermuxApplication extends Application {
         if (processName == null)
             processName = ProcessUtils.getAppProcessNameForPid(context, android.os.Process.myPid());
         return processName != null && processName.endsWith(":tai_runtime");
+    }
+
+    private boolean isImeProcess(Context context) {
+        String processName = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+            ? Application.getProcessName() : null;
+        if (processName == null)
+            processName = ProcessUtils.getAppProcessNameForPid(context, android.os.Process.myPid());
+        return processName != null && processName.endsWith(":ime");
     }
 }

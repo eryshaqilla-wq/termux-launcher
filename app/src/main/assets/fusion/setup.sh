@@ -1259,6 +1259,11 @@ if [ -f "$PREF_FILE" ]; then
     fi
 fi
 
+AI_PREF_FILE="/data/data/com.termux/shared_prefs/termux_ai.xml"
+if [ -f "$AI_PREF_FILE" ]; then
+    sed -i 's/name="launcherctl_enabled" value="true"/name="launcherctl_enabled" value="false"/' "$AI_PREF_FILE" 2>/dev/null || true
+fi
+
 am broadcast -a com.termux.app.reload_style >/dev/null 2>&1 || true
 if command -v termux-ipc >/dev/null 2>&1; then
     termux-ipc toast "Pengaturan tampilan berhasil dimuat!" >/dev/null 2>&1 || true

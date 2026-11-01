@@ -120,7 +120,7 @@ public class LauncherCtlApiServer {
     private volatile long lanSessionDeadlineMs;
     private volatile boolean lanSessionExpiring;
     private volatile int port;
-    private ServerSocket serverSocket;
+    private volatile ServerSocket serverSocket;
     private Future<?> acceptLoop;
     private Context appContext;
 
@@ -245,23 +245,8 @@ public class LauncherCtlApiServer {
     }
 
     public synchronized void ensureStartedAsync(Context context) {
-        if (context == null) return;
-        TaiSettings settings = new TaiSettings(context.getApplicationContext());
-        if (!settings.isLauncherCtlEnabled()) {
-            Logger.logInfo(LOG_TAG, "LauncherCtl API server is disabled by switch (default: off)");
-            return;
-        }
-        if (running || starting) {
-            return;
-        }
-
-        starting = true;
-        Context appContext = context.getApplicationContext();
-        try {
-            controlExecutor.execute(() -> start(appContext));
-        } catch (RejectedExecutionException stopped) {
-            starting = false;
-        }
+        // LauncherCtl is strictly manual on-demand. Autostart on activity/boot startup is permanently disabled.
+        // It can ONLY start if explicitly triggered by the user via setEnabled() (termux-ipc launcherctl on or Settings switch).
     }
 
     public synchronized void setEnabled(Context context, boolean enabled) {
@@ -350,17 +335,33 @@ public class LauncherCtlApiServer {
 
     private void startAcceptLoop(Context context) {
         acceptLoop = controlExecutor.submit(() -> {
-            while (running && serverSocket != null && !serverSocket.isClosed()) {
+            int consecutiveFailures = 0;
+            while (running && serverSocket != null && !serverSocket.isClosed()
+                    && !Thread.currentThread().isInterrupted()) {
                 try {
                     Socket client = serverSocket.accept();
+                    consecutiveFailures = 0;
                     try {
                         clientExecutor.submit(() -> handleClient(client, context));
                     } catch (RejectedExecutionException rejected) {
                         closeQuietly(client);
                     }
                 } catch (IOException e) {
-                    if (running) {
-                        Logger.logErrorExtended(LOG_TAG, "Accept failed: " + e.getMessage());
+                    if (!running || Thread.currentThread().isInterrupted()) {
+                        break;
+                    }
+                    consecutiveFailures++;
+                    Logger.logErrorExtended(LOG_TAG, "Accept failed (" + consecutiveFailures + "): " + e.getMessage());
+                    if (consecutiveFailures >= 10) {
+                        Logger.logErrorExtended(LOG_TAG, "Too many consecutive accept failures, stopping LauncherCtl listener");
+                        stopListening();
+                        break;
+                    }
+                    try {
+                        Thread.sleep(Math.min(50L * consecutiveFailures, 1000L));
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
                     }
                 }
             }
