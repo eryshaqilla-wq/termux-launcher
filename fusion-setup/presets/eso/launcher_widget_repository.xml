@@ -1,0 +1,4 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="state">{&quot;version&quot;:5,&quot;revision&quot;:446,&quot;grid&quot;:{&quot;rows&quot;:5,&quot;columns&quot;:4},&quot;pages&quot;:2,&quot;freshPages&quot;:[1],&quot;orientation&quot;:&quot;portrait&quot;,&quot;layouts&quot;:{&quot;landscape&quot;:{&quot;grid&quot;:{&quot;rows&quot;:5,&quot;columns&quot;:4},&quot;pages&quot;:1,&quot;cells&quot;:[{&quot;id&quot;:-1,&quot;cell&quot;:{&quot;left&quot;:0,&quot;top&quot;:0,&quot;right&quot;:4,&quot;bottom&quot;:1},&quot;page&quot;:0}]}},&quot;records&quot;:[{&quot;id&quot;:-1,&quot;provider&quot;:&quot;com.termux.launcher.builtin\/media&quot;,&quot;builtin&quot;:&quot;media&quot;,&quot;profile&quot;:0,&quot;state&quot;:&quot;ACTIVE&quot;,&quot;cell&quot;:{&quot;left&quot;:0,&quot;top&quot;:0,&quot;right&quot;:4,&quot;bottom&quot;:1},&quot;page&quot;:0,&quot;options&quot;:{}}]}</string>
+</map>
