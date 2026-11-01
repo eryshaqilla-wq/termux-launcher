@@ -176,6 +176,49 @@ public final class ExtraKeyDetailSheet {
         body.addView(labelField(context.getString(R.string.settings_extra_keys_sheet_label),
             context.getString(R.string.settings_extra_keys_sheet_label_hint), key));
 
+        body.addView(sectionLabel("Target Eksekusi & Lingkungan OS"));
+        String targetDesc = key.isNewTab() ? "⚡ Tab Baru (IPC + Auto-Detect)" : "🖥️ Tab Aktif (Inline)";
+        body.addView(selectorRow("Target: " + targetDesc, null, () -> {
+            boolean currentNewTab = key.isNewTab();
+            key.target = currentNewTab ? "inline" : "new_tab";
+            changed(true);
+        }));
+
+        if (key.isNewTab()) {
+            String envDesc;
+            String curEnv = key.getResolvedEnv();
+            if ("chroot".equalsIgnoreCase(curEnv)) envDesc = "🐉 Kali NetHunter Chroot";
+            else if ("droidspaces".equalsIgnoreCase(curEnv)) envDesc = "📦 Droidspaces Container (Ubuntu)";
+            else if ("proot".equalsIgnoreCase(curEnv)) envDesc = "🐧 PRoot Distro";
+            else if ("native".equalsIgnoreCase(curEnv)) envDesc = "💻 Native Termux";
+            else envDesc = "⚡ Auto-Detect (Chroot / PRoot / Native)";
+
+            body.addView(selectorRow("Lingkungan: " + envDesc, null, () -> {
+                final String[] envNames = new String[]{
+                    "⚡ Auto-Detect (Chroot / PRoot / Native) [Default]",
+                    "🐉 Kali NetHunter Chroot",
+                    "📦 Droidspaces Container (Ubuntu)",
+                    "🐧 PRoot Distro",
+                    "💻 Native Termux"
+                };
+                final String[] envKeys = new String[]{
+                    "auto",
+                    "chroot",
+                    "droidspaces",
+                    "proot",
+                    "native"
+                };
+                new com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+                    .setTitle("Pilih Lingkungan Eksekusi")
+                    .setItems(envNames, (d, which) -> {
+                        key.env = envKeys[which];
+                        changed(true);
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            }));
+        }
+
         body.addView(sectionLabel(context.getString(R.string.settings_extra_keys_color)));
         body.addView(ExtraKeyColorSwatches.build(context, key.color, role -> {
             key.color = role;

@@ -55,6 +55,7 @@ handle_tab() {
             echo "Usage: termux-ipc tab <sub-command> [args...]"
             echo ""
             echo "Manajemen Tab Terminal (0% CPU IPC):"
+            echo "  run <command>              Jalankan program/script langsung di tab baru (Auto-detect OS)"
             echo "  new <name> [options] [cmd] Buka tab baru dengan nama khusus"
             echo "                             Pilihan: --chroot, --proot, --native, --env <target>"
             echo "  close [target]             Tutup tab berdasarkan nama, ID, nomor index, atau 'current'"
@@ -130,6 +131,15 @@ handle_tab() {
             else
                 echo "Active System: Linux Environment"
             fi
+            ;;
+        run)
+            local CMD="$*"
+            if [ -z "$CMD" ]; then
+                echo "Error: Command wajib disertakan. Contoh: termux-ipc tab run \"htop\""
+                return 1
+            fi
+            send_cmd "TAB_RUN $CMD"
+            echo "Command '$CMD' diluncurkan di tab baru dengan auto-detect OS."
             ;;
         close|kill)
             local TARGET="${1:-current}"
@@ -836,6 +846,9 @@ sys.exit(res.returncode)
         ;;
     tab)
         handle_tab "$@"
+        ;;
+    tab-run)
+        handle_tab "run" "$@"
         ;;
     tab-new|tab-open)
         handle_tab "new" "$@"

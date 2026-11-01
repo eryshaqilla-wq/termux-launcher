@@ -22310,15 +22310,91 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mTermuxTerminalViewClient != null) {
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
             }
-        } else if (actionKey.endsWith("\n")) {
+        } else if (key.isNewTab()) {
+            launchProgramInNewTab(key);
+        } else if (actionKey != null && actionKey.endsWith("\n")) {
             TerminalSession session = getCurrentSession();
             if (session != null) {
                 session.write(actionKey);
             }
-        } else if (mTermuxTerminalExtraKeys != null) {
+        } else if (mTermuxTerminalExtraKeys != null && actionKey != null) {
             View dummyView = new View(this);
             mTermuxTerminalExtraKeys.onTerminalExtraKeyButtonClick(dummyView, actionKey, false, false, false, false);
         }
+    }
+
+    public void launchProgramInNewTab(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
+        String raw = key.key != null ? key.key : "";
+        String cleanCmd = raw.endsWith("\n") ? raw.substring(0, raw.length() - 1).trim() : raw.trim();
+        if (cleanCmd.isEmpty()) return;
+
+        String tabTitle = (key.display != null && !key.display.trim().isEmpty())
+            ? key.display.trim()
+            : extractProgramName(cleanCmd);
+
+        launchProgramInNewTabString(cleanCmd, tabTitle, key.getResolvedEnv());
+    }
+
+    public void launchProgramInNewTabString(@NonNull String command, @Nullable String title, @Nullable String targetEnv) {
+        String cleanCmd = command.endsWith("\n") ? command.substring(0, command.length() - 1).trim() : command.trim();
+        if (cleanCmd.isEmpty()) return;
+
+        String tabTitle = (title != null && !title.trim().isEmpty())
+            ? title.trim()
+            : extractProgramName(cleanCmd);
+
+        String env = (targetEnv != null && !targetEnv.trim().isEmpty()) ? targetEnv.trim().toLowerCase(java.util.Locale.ROOT) : "auto";
+        List<String> cmdList = new ArrayList<>();
+        if ("native".equalsIgnoreCase(env) || "termux".equalsIgnoreCase(env)) {
+            cmdList.add("sh");
+            cmdList.add("-c");
+            cmdList.add(cleanCmd);
+        } else if ("chroot".equalsIgnoreCase(env) || "nethunter".equalsIgnoreCase(env)) {
+            cmdList.add("bashnh");
+            cmdList.add("chroot");
+            cmdList.add(cleanCmd);
+        } else if ("droidspaces".equalsIgnoreCase(env) || "ubuntu".equalsIgnoreCase(env)) {
+            cmdList.add("bashnh");
+            cmdList.add("droidspaces");
+            cmdList.add(cleanCmd);
+        } else if ("proot".equalsIgnoreCase(env)) {
+            cmdList.add("bashnh");
+            cmdList.add("proot");
+            cmdList.add(cleanCmd);
+        } else {
+            // "auto" (Universal Auto-Detect)
+            boolean hasBashnh = new java.io.File("/data/data/com.termux/files/usr/bin/bashnh").exists()
+                || new java.io.File(getFilesDir(), "usr/bin/bashnh").exists();
+            if (hasBashnh) {
+                cmdList.add("bashnh");
+                cmdList.add(cleanCmd);
+            } else {
+                cmdList.add("sh");
+                cmdList.add("-c");
+                cmdList.add(cleanCmd);
+            }
+        }
+
+        com.termux.app.terminal.TerminalPaneController.Window w =
+            openNamedWindow(tabTitle, cmdList, null, true, true);
+        if (w != null) {
+            showToast("⚡ Tab Baru (" + env.toUpperCase(java.util.Locale.ROOT) + "): " + tabTitle, false);
+        } else {
+            TerminalSession session = getCurrentSession();
+            if (session != null) {
+                session.write(cleanCmd + "\n");
+            }
+        }
+    }
+
+    @NonNull
+    private static String extractProgramName(@NonNull String cmd) {
+        String firstWord = cmd.trim().split("\\s+")[0];
+        int lastSlash = firstWord.lastIndexOf('/');
+        if (lastSlash >= 0 && lastSlash < firstWord.length() - 1) {
+            firstWord = firstWord.substring(lastSlash + 1);
+        }
+        return firstWord.isEmpty() ? "Tab" : firstWord;
     }
 
     private void openTerminalQuickKeyEditor(int index, @NonNull List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list, @NonNull ViewGroup cluster) {

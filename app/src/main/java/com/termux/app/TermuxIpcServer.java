@@ -115,6 +115,12 @@ public class TermuxIpcServer {
                                 TermuxIpcServer.showToast(strTrim.substring(6));
                             } else if (strTrim.equalsIgnoreCase("VIBRATE")) {
                                 TermuxIpcServer.vibrate(50);
+                            } else if (strTrim.startsWith("TAB_RUN ")) {
+                                String cmd = strTrim.substring(8).trim();
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act != null && !cmd.isEmpty()) {
+                                    act.runOnUiThread(() -> act.launchProgramInNewTabString(cmd, null, "auto"));
+                                }
                             } else if (strTrim.startsWith("RUN ")) {
                                 String strSubstring = strTrim.substring(4);
                                 TermuxActivity activity2 = TermuxIpcServer.getActivity();
@@ -294,10 +300,17 @@ public class TermuxIpcServer {
                                         cmdList.add(cmdStr.trim());
                                     }
                                 } else {
-                                    // "auto" (Default): Jika ada perintah spesifik, jalankan lewat bashnh;
-                                    // jika tanpa perintah, biarkan cmdList kosong agar openNamedWindow menggunakan createShellForCwd
-                                    if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                    // "auto" (Default): Auto-detect OS & container via bashnh
+                                    boolean hasBashnh = new java.io.File("/data/data/com.termux/files/usr/bin/bashnh").exists()
+                                        || new java.io.File(act.getFilesDir(), "usr/bin/bashnh").exists();
+                                    if (hasBashnh) {
                                         cmdList.add("bashnh");
+                                        if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                            cmdList.add(cmdStr.trim());
+                                        }
+                                    } else if (cmdStr != null && !cmdStr.trim().isEmpty()) {
+                                        cmdList.add("sh");
+                                        cmdList.add("-c");
                                         cmdList.add(cmdStr.trim());
                                     }
                                 }

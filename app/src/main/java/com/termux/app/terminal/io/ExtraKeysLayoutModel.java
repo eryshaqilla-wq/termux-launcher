@@ -36,6 +36,10 @@ public final class ExtraKeysLayoutModel {
         @Nullable public Key popup;
         /** The cap's colour role, or null to leave the key with the row's own styling. */
         @Nullable public ExtraKeyColorRole color;
+        /** Target execution mode: "new_tab", "inline", or null for automatic heuristic. */
+        @Nullable public String target;
+        /** Target environment: "auto", "chroot", "droidspaces", "proot", "native", or null. */
+        @Nullable public String env;
 
         public Key(@NonNull String key) {
             this.key = key;
@@ -43,21 +47,52 @@ public final class ExtraKeysLayoutModel {
 
         public Key(@NonNull String key, boolean macro, @Nullable String display,
                    @Nullable Key popup) {
-            this(key, macro, display, popup, null);
+            this(key, macro, display, popup, null, null, null);
         }
 
         public Key(@NonNull String key, boolean macro, @Nullable String display,
                    @Nullable Key popup, @Nullable ExtraKeyColorRole color) {
+            this(key, macro, display, popup, color, null, null);
+        }
+
+        public Key(@NonNull String key, boolean macro, @Nullable String display,
+                   @Nullable Key popup, @Nullable ExtraKeyColorRole color,
+                   @Nullable String target, @Nullable String env) {
             this.key = key;
             this.macro = macro;
             this.display = display;
             this.popup = popup;
             this.color = color;
+            this.target = target;
+            this.env = env;
         }
 
         @NonNull
         public Key copy() {
-            return new Key(key, macro, display, popup == null ? null : popup.copy(), color);
+            return new Key(key, macro, display, popup == null ? null : popup.copy(), color, target, env);
+        }
+
+        /**
+         * Whether this key executes in a new tab (IPC) rather than injecting into the active session.
+         */
+        public boolean isNewTab() {
+            if ("new_tab".equalsIgnoreCase(target)) return true;
+            if ("inline".equalsIgnoreCase(target)) return false;
+            // Default heuristic: commands/scripts ending with newline that are not simple screen clears
+            if (key != null && key.endsWith("\n")) {
+                String cmd = key.trim().toLowerCase(java.util.Locale.ROOT);
+                return !cmd.equals("clear") && !cmd.equals("reset") && !cmd.equals("exit")
+                    && !cmd.equals("history -c");
+            }
+            return false;
+        }
+
+        /**
+         * Returns resolved execution environment ("auto", "chroot", "droidspaces", "proot", "native").
+         */
+        @NonNull
+        public String getResolvedEnv() {
+            return (env != null && !env.trim().isEmpty()) ? env.trim().toLowerCase(java.util.Locale.ROOT) : "auto";
         }
 
         /** What the editor shows for this key when no explicit display is set. */
@@ -111,13 +146,15 @@ public final class ExtraKeysLayoutModel {
             String macro = object.optString("macro", null);
             String key = object.optString("key", null);
             ExtraKeyColorRole color = ExtraKeyColorRole.fromToken(object.optString("color", null));
+            String target = emptyToNull(object.optString("target", null));
+            String env = emptyToNull(object.optString("env", null));
             if (macro != null && !macro.isEmpty()) {
                 return new Key(macro, true, emptyToNull(object.optString("display", null)),
-                    parseKey(object.opt("popup")), color);
+                    parseKey(object.opt("popup")), color, target, env);
             }
             if (key == null || key.isEmpty()) return null;
             return new Key(key, false, emptyToNull(object.optString("display", null)),
-                parseKey(object.opt("popup")), color);
+                parseKey(object.opt("popup")), color, target, env);
         }
         String literal = String.valueOf(element);
         return literal.isEmpty() ? null : new Key(literal);
@@ -227,16 +264,18 @@ public final class ExtraKeysLayoutModel {
 
     @NonNull
     private static Object serializeKey(@NonNull Key key) {
-        // A plain key with no display override, no popup and no colour is written as the bare
-        // string the hand-written files use — the editor should not turn a readable row into
-        // object soup.
-        if (!key.macro && key.display == null && key.popup == null && key.color == null)
+        // A plain key with no display override, no popup, no colour, no target and no env
+        // is written as the bare string the hand-written files use.
+        if (!key.macro && key.display == null && key.popup == null && key.color == null
+                && key.target == null && key.env == null)
             return key.key;
         JSONObject object = new JSONObject();
         try {
             object.put(key.macro ? "macro" : "key", key.key);
             if (key.display != null) object.put("display", key.display);
             if (key.color != null) object.put("color", key.color.token);
+            if (key.target != null) object.put("target", key.target);
+            if (key.env != null) object.put("env", key.env);
             if (key.popup != null) object.put("popup", serializeKey(key.popup));
         } catch (JSONException ignored) {
             return key.key;
