@@ -1502,12 +1502,12 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
     }
 
     public int getLeftCanvasGridColumns() {
-        return SharedPreferenceUtils.getIntFromString(mSharedPreferences,
+        return SharedPreferenceUtils.getIntStoredAsString(mSharedPreferences,
             TERMUX_APP.KEY_LEFT_CANVAS_GRID_COLUMNS, Integer.parseInt(TERMUX_APP.DEFAULT_LEFT_CANVAS_GRID_COLUMNS));
     }
 
     public int getLeftCanvasGridRows() {
-        return SharedPreferenceUtils.getIntFromString(mSharedPreferences,
+        return SharedPreferenceUtils.getIntStoredAsString(mSharedPreferences,
             TERMUX_APP.KEY_LEFT_CANVAS_GRID_ROWS, Integer.parseInt(TERMUX_APP.DEFAULT_LEFT_CANVAS_GRID_ROWS));
     }
 
