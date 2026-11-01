@@ -22463,10 +22463,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     private void openLeftCanvasSettings() {
-        com.termux.shared.android.ActivityUtils.startActivity(this,
-            com.termux.app.activities.SettingsActivity.createFragmentIntent(this,
-                com.termux.app.fragments.settings.termux.LeftCanvasPreferencesFragment.class,
-                R.string.settings_destination_left_canvas));
+        startActivity(com.termux.app.activities.SettingsActivity.createFragmentIntent(this,
+            com.termux.app.fragments.settings.termux.LeftCanvasPreferencesFragment.class,
+            R.string.settings_destination_left_canvas));
     }
 
     public void openAppDrawerFromLeftCanvas(boolean focusSearch) {

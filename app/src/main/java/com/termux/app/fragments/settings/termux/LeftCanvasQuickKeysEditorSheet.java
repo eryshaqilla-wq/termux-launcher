@@ -25,7 +25,6 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
-import com.termux.app.material.M3;
 import com.termux.app.terminal.io.ExtraKeyDetailSheet;
 import com.termux.app.terminal.io.ExtraKeysLayoutModel;
 import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
@@ -142,14 +141,14 @@ public final class LeftCanvasQuickKeysEditorSheet {
         actionsRow.setGravity(Gravity.END);
         actionsRow.setPadding(0, Math.round(12 * density), 0, 0);
 
-        MaterialButton resetBtn = new MaterialButton(context, null, com.google.android.material.R.attr.borderlessButtonStyle);
+        MaterialButton resetBtn = new MaterialButton(context, null, androidx.appcompat.R.attr.borderlessButtonStyle);
         resetBtn.setText("Reset Default");
         LinearLayout.LayoutParams resetParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         resetParams.setMarginEnd(Math.round(8 * density));
         actionsRow.addView(resetBtn, resetParams);
 
-        MaterialButton addBtn = new MaterialButton(context, null, com.google.android.material.R.attr.materialButtonStyle);
+        MaterialButton addBtn = new MaterialButton(context);
         addBtn.setText("+ Tambah Tombol");
         actionsRow.addView(addBtn);
 
@@ -206,21 +205,10 @@ public final class LeftCanvasQuickKeysEditorSheet {
                 lp.setMarginEnd(Math.round(8 * density));
 
                 btn.setOnClickListener(v -> {
-                    ExtraKeyDetailSheet.show(context, key, new ExtraKeyDetailSheet.Host() {
-                        @Override public void onSave(@NonNull ExtraKeysLayoutModel.Key updated) {
-                            currentKeys.set(index, updated);
-                            saveLeftCanvasKeys(preferences, currentKeys);
-                            renderRowHolder[0].run();
-                            if (onUpdated != null) onUpdated.run();
-                        }
-
-                        @Override public void onDelete() {
-                            currentKeys.remove(index);
-                            saveLeftCanvasKeys(preferences, currentKeys);
-                            renderRowHolder[0].run();
-                            if (onUpdated != null) onUpdated.run();
-                        }
-                    }, ExtraKeysConstants.EXTRA_KEY_DISPLAY_STYLE_LIGHT);
+                    openKeySheet(context, key, currentKeys, preferences, () -> {
+                        renderRowHolder[0].run();
+                        if (onUpdated != null) onUpdated.run();
+                    });
                 });
 
                 rowContainer.addView(btn, lp);
@@ -280,7 +268,7 @@ public final class LeftCanvasQuickKeysEditorSheet {
 
                     String pickedKey = actionKeys[which];
                     String pickedDisplay = actionDisplays[which];
-                    keys.add(new ExtraKeysLayoutModel.Key(pickedKey, pickedDisplay));
+                    keys.add(new ExtraKeysLayoutModel.Key(pickedKey, false, pickedDisplay, null));
                     saveLeftCanvasKeys(preferences, keys);
                     renderRowHolder[0].run();
                     if (onUpdated != null) onUpdated.run();
@@ -290,9 +278,37 @@ public final class LeftCanvasQuickKeysEditorSheet {
         });
 
         sheet.show();
-        M3.applyStandardMotion(sheet);
         BottomSheetBehavior<?> b = sheet.getBehavior();
         if (b != null) b.setState(BottomSheetBehavior.STATE_EXPANDED);
+    }
+
+    private static void openKeySheet(@NonNull Context context,
+                                     @NonNull ExtraKeysLayoutModel.Key key,
+                                     @NonNull List<ExtraKeysLayoutModel.Key> allKeys,
+                                     @NonNull TermuxAppSharedPreferences preferences,
+                                     @NonNull Runnable onDone) {
+        ExtraKeysConstants.ExtraKeyDisplayMap displayMap =
+            ExtraKeysConstants.EXTRA_KEY_DISPLAY_MAPS.DEFAULT_CHAR_DISPLAY;
+
+        ExtraKeyDetailSheet detailSheet = new ExtraKeyDetailSheet(context, key, displayMap,
+            new ExtraKeyDetailSheet.Host() {
+                @Override
+                public void onKeyChanged() {
+                    saveLeftCanvasKeys(preferences, allKeys);
+                }
+
+                @Override
+                public void onRemoveKey() {
+                    allKeys.remove(key);
+                    saveLeftCanvasKeys(preferences, allKeys);
+                }
+            });
+
+        detailSheet.setOnDismissListener(() -> {
+            saveLeftCanvasKeys(preferences, allKeys);
+            onDone.run();
+        });
+        detailSheet.show();
     }
 
     private static void promptCustomKey(@NonNull Context context, @NonNull ValueCallback<String> onDone) {

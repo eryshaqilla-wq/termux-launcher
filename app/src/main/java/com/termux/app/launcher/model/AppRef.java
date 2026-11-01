@@ -14,6 +14,10 @@ public final class AppRef {
         this(packageName, activityName, -1, -1L, false, "");
     }
 
+    public AppRef(@NonNull String packageName, @NonNull String activityName, int userId) {
+        this(packageName, activityName, userId, -1L, false, "");
+    }
+
     public AppRef(@NonNull String packageName, @NonNull String activityName,
                   int userId, long userSerialNumber, boolean clonedProfile,
                   @NonNull String profileLabel) {

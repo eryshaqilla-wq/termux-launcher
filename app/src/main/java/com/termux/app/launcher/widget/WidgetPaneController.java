@@ -1549,7 +1549,8 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         String pkg = opts.getString("package_name");
         String act = opts.getString("activity_name");
         long userId = opts.getLong("user_id", 0L);
-        com.termux.app.launcher.model.AppRef ref = new com.termux.app.launcher.model.AppRef(pkg, act, userId);
+        com.termux.app.launcher.model.AppRef ref =
+            new com.termux.app.launcher.model.AppRef(pkg, act != null ? act : "", (int) userId);
         com.termux.app.launcher.data.LauncherAppDataProvider provider =
             com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(pane.getContext());
         com.termux.app.launcher.model.LauncherAppEntry entry = provider.findByRef(ref);
@@ -1655,8 +1656,7 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
     }
 
     private void removeWidgetRecord(int appWidgetId) {
-        widgets.repository().remove(appWidgetId);
-        widgets.repository().save();
+        widgets.removeWidget(appWidgetId);
         render();
     }
 

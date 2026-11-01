@@ -63,7 +63,7 @@ public class AppShortcutWidgetView extends BuiltinWidgetView {
         if (pkg == null || pkg.isEmpty()) return;
 
         LauncherAppDataProvider provider = LauncherAppDataProvider.getInstance(getContext());
-        AppRef ref = new AppRef(pkg, act, userId);
+        AppRef ref = new AppRef(pkg, act != null ? act : "", (int) userId);
         entry = provider.findByRef(ref);
         if (entry == null) {
             entry = provider.findFirstByPackage(pkg);
@@ -124,15 +124,15 @@ public class AppShortcutWidgetView extends BuiltinWidgetView {
 
         if (entry != null) {
             LauncherAppDataProvider provider = LauncherAppDataProvider.getInstance(getContext());
-            Drawable direct = provider.icons().artwork(entry);
-            if (direct != null) {
-                iconView.setImageDrawable(direct);
-            }
-            provider.icons().artworkDetailed(entry, artwork -> {
-                if (artwork != null && artwork.drawable != null && iconView != null) {
-                    iconView.setImageDrawable(artwork.drawable);
+            com.termux.app.launcher.icon.LauncherIconStore.Artwork artwork = provider.icons().artworkDetailed(entry);
+            if (artwork != null && artwork.drawable != null) {
+                iconView.setImageDrawable(artwork.drawable);
+            } else {
+                Drawable direct = provider.icons().artwork(entry);
+                if (direct != null) {
+                    iconView.setImageDrawable(direct);
                 }
-            });
+            }
         }
     }
 
