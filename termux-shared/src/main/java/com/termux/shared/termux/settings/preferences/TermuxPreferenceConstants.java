@@ -347,6 +347,28 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_TERMINAL_BACK_KEY_ACTION = "terminal_back_key_action";
         public static final String DEFAULT_TERMINAL_BACK_KEY_ACTION = "sessions";
 
+        /** Left Canvas (Kanvas Kiri) Preferences */
+        public static final String KEY_LEFT_CANVAS_ENGINE_MODE = "left_canvas_engine_mode";
+        public static final String LEFT_CANVAS_ENGINE_MODE_CUSTOM = "custom";
+        public static final String LEFT_CANVAS_ENGINE_MODE_UPSTREAM = "upstream";
+        public static final String DEFAULT_LEFT_CANVAS_ENGINE_MODE = LEFT_CANVAS_ENGINE_MODE_CUSTOM;
+
+        public static final String KEY_LEFT_CANVAS_QUICK_EXTRA_KEYS = "left_canvas_quick_extra_keys";
+        public static final String DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS =
+            "[{\"key\":\"SEARCH\",\"display\":\"🔍\"},{\"key\":\"PREV\",\"display\":\"⏮\"},{\"key\":\"PLAY\",\"display\":\"⏯\"},{\"key\":\"NEXT\",\"display\":\"⏭\"},{\"key\":\"SETTINGS\",\"display\":\"⚙\"}]";
+
+        public static final String KEY_LEFT_CANVAS_GRID_COLUMNS = "left_canvas_grid_columns";
+        public static final String DEFAULT_LEFT_CANVAS_GRID_COLUMNS = "4";
+
+        public static final String KEY_LEFT_CANVAS_GRID_ROWS = "left_canvas_grid_rows";
+        public static final String DEFAULT_LEFT_CANVAS_GRID_ROWS = "5";
+
+        public static final String KEY_LEFT_CANVAS_SWIPE_UP_DRAWER = "left_canvas_swipe_up_drawer";
+        public static final boolean DEFAULT_LEFT_CANVAS_SWIPE_UP_DRAWER = true;
+
+        public static final String KEY_LEFT_CANVAS_ENABLE_CUSTOM_TAB = "left_canvas_enable_custom_tab";
+        public static final boolean DEFAULT_LEFT_CANVAS_ENABLE_CUSTOM_TAB = false;
+
         /** The place the pane wall last rested on; the home screen comes back to it. */
         public static final String KEY_WALL_LAST_PAGE = "wall_last_page";
 

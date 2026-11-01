@@ -1,170 +1,173 @@
-# Cetak Biru Arsitektur Kanvas Kiri Fusion (Dual-Mode: Widget vs Browser)
+# Cetak Biru Arsitektur Kanvas Kiri Fusion (Full Android Launcher & Media Cockpit)
 
-## 📌 1. Latar Belakang & Visi
-Kanvas Kiri pada Termux-Launcher bawaan dialokasikan untuk `WidgetPaneFrame` (Android AppWidget). Agar sistem semakin bertenaga, hemat sumber daya, dan relevan dengan ekosistem **Project Fusion, Tri-Engine AI, dan Dual Binance Agentic Wallet**, Kanvas Kiri dirombak menjadi **Dual-Mode Fleksibel**:
-- Pengguna dapat memilih mode kanvas: **Widget** (bawaan) atau **Browser / Web3 Hub**.
-- Seluruh pengaturan dipusatkan pada menu pengaturan baru: **"Kanvas Kiri"**.
-- Mengadopsi prinsip **On-Demand Start (Preservasi RAM)**: saat tidak digunakan, mesin Chromium/WebView mati total (0 MB RAM).
-- Sisi kanan status bar mengadopsi aksi dari *Floating Pill* (`MENU`, `BOT/AGY`, `REC`, `NEW`, `STOP`) sehingga tampilan halaman web di Kanvas Kiri menjadi **100% Super Clean** tanpa *floating overlay* yang menghalangi konten.
+## 📌 1. Latar Belakang & Visi Baru
+Kanvas Kiri pada Termux-Launcher berevolusi menjadi **"Full Android Hybrid Launcher & Media Cockpit"**:
+- **Menu Pengaturan Khusus ("Kanvas Kiri")**: Seluruh konfigurasi Kanvas Kiri dipusatkan pada satu menu baru di Settings tanpa menyentuh pengaturan kanvas lain.
+- **Dukungan Dual-Engine (Upstream vs Kustom Fusion)**:
+  - Pengguna dapat memilih mode operasional dengan bebas:
+    1. **Bawaan Upstream**: Menjalankan Widget Pane murni bawaan upstream Termux-Launcher (100% original AppWidgetHost).
+    2. **Kustom Fusion**: Menjalankan arsitektur kustom (Homescreen hybrid 1x1 shortcut + widget, Lawnchair swipe-up drawer, 5 extra keys media & search, popup paritas dock).
+- **Paritas Visual Ikon 100% Identik dengan Dock**:
+  - Ikon shortcut aplikasi di grid Homescreen menggunakan mesin rendering, resolusi, masking squircle, label teks, dan artwork binder yang **100% identik dengan ikon di dock terminal** (`SuggestionBarView.bindRenderedIcon` & `LauncherIconStore.artworkDetailed`).
+  - Menu popup context saat ditekan lama menggunakan **asset ikon bawaan yang sama persis** (`R.drawable.ic_dock_menu_*`).
+- **Lawnchair-Grade App Drawer via Swipe-Up**: Membuka daftar seluruh aplikasi cukup dengan gestur **Swipe Up (geser ke atas)** dari area mana saja di Homescreen, dengan animasi fisika pegas (*physics Spring animation*) yang halus. **100% tanpa perlu fork repo Lawnchair**, karena mesin `com.termux.app.launcher.drawer` bawaan launcher kita sudah mengadopsi arsitektur Lawnchair 16 & AOSP Launcher3.
+- **Extra Keys Statbar Kanvas Kiri (5 Tombol Khusus)**: Dilengkapi kontrol media terpadu dan navigasi cepat: `[ 🔍 SEARCH ]`, `[ ⏮ PREV ]`, `[ ⏯ PLAY ]`, `[ ⏭ NEXT ]`, dan `[ ⚙️ SETTING ]`.
 
 ---
 
 ## 🛡️ 2. Batas Isolasi Mutlak (Zero-Impact Guarantee)
-- **Kanvas Tengah (Terminal Linux CLI)**: 100% terkunci, tidak disentuh sama sekali.
-- **Kanvas Kanan (X11 Display / Kiosk)**: 100% terkunci, tidak disentuh sama sekali.
-- Seluruh logika baru hanya beroperasi di dalam domain Kanvas Kiri (`PaneWallPage.WIDGETS`) dan preferensi khusus Kanvas Kiri.
+- **Kanvas Tengah (Terminal Linux CLI / AGY / Zsh)**: 100% terkunci, zero disruption.
+- **Kanvas Kanan (X11 Display / Kiosk)**: 100% terkunci, zero disruption.
+- **Menu Settings**: Penambahan fragment `LeftCanvasPreferencesFragment` hanya beroperasi pada preferensi `left_canvas_*`. Pengaturan Terminal, Display, Keyboard, dan Status Bar lainnya tetap 100% steril.
+- **Efisiensi RAM**: Berjalan murni di domain native Android Views (0 MB Chromium RAM).
 
 ---
 
-## ⚙️ 3. Arsitektur Preferensi Baru ("Kanvas Kiri")
+## ⚙️ 3. Arsitektur Menu Pengaturan Baru: "Kanvas Kiri"
 
-Menu baru ditambahkan pada preferensi Termux (misal di Settings > Kanvas Kiri atau Appearance/Wall):
+Menu baru ditambahkan pada Settings root di bawah kategori **Workspace** (bersanding dengan Terminal, Keyboard, dan Display):
 
-| Kunci Preferensi (`SharedPreferences`) | Tipe | Nilai Default | Keterangan |
+```
+Settings > Workspace
+├── Terminal (Kanvas Tengah)
+├── Keyboard & Input
+├── Display (Kanvas Kanan)
+└── Kanvas Kiri (Left Canvas Preferences)  <-- [BARU]
+```
+
+### Halaman Pengaturan `LeftCanvasPreferencesFragment`:
+
+| Kunci Preferensi (`SharedPreferences`) | Tipe UI | Pilihan / Nilai | Keterangan |
 | :--- | :--- | :--- | :--- |
-| `left_canvas_mode` | String | `"browser"` (atau `"widget"`) | Pemilih mode: `widget` (tampilan widget lama) atau `browser` (Fusion Web3 Hub). |
-| `left_canvas_start_url` | String | `"http://127.0.0.1:3333"` | URL default yang dibuka saat tombol *Start Browser* ditekan. |
-| `left_canvas_quick_keys` | String | `"BOT,REC,MENU,NEW,STOP"` | Daftar tombol aksi yang tampil di sisi kanan status bar saat mode browser aktif. |
-| `left_canvas_hide_floating_pill` | Boolean | `true` | Otomatis sembunyikan floating pill saat browser aktif di Kanvas Kiri agar tampilan super clean. |
+| `left_canvas_engine_mode` | `ListPreference` | `custom` (Default) \| `upstream` | **Pemilih Engine Utama**: Beralih antara mode kustom Fusion atau widget bawaan upstream murni. |
+| `left_canvas_quick_extra_keys` | `Preference` | `"SEARCH,PREV,PLAY,NEXT,SETTINGS"` | Membuka bottom sheet editor untuk kustomisasi 5 tombol statbar kanan kanvas kiri. |
+| `left_canvas_grid_columns` | `ListPreference` | `4` (Default), `5`, `6` | Jumlah kolom grid Homescreen pada mode kustom. |
+| `left_canvas_grid_rows` | `ListPreference` | `5` (Default), `6`, `7` | Jumlah baris grid Homescreen pada mode kustom. |
+| `left_canvas_swipe_up_drawer` | `SwitchPreference`| `true` (Default) | Mengaktifkan/menonaktifkan gestur swipe-up untuk membuka App Drawer ala Lawnchair. |
+| `left_canvas_enable_custom_tab` | `SwitchPreference`| `false` (Default) | Mengaktifkan tab tambahan ke-3 di statbar kiri (Web Portal, Notes, atau Monitor). |
+
+> [!NOTE]
+> Jika `left_canvas_engine_mode` diubah ke **`upstream`**, Kanvas Kiri seketika kembali ke perilaku widget pane asli bawaan repo upstream tanpa merusak shortcut atau konfigurasi mode kustom yang tersimpan.
 
 ---
 
-## 🔄 4. Siklus Hidup & Manajemen RAM (State Lifecycle)
+## 📐 4. Tata Letak Antarmuka & Kontrol
 
-```mermaid
-stateDiagram-v2
-    [*] --> Standby: Boot / Launch Termux
-    
-    state Standby {
-        [*] --> OfflineCard
-        OfflineCard: RAM 0 MB (No WebView)
-        OfflineCard: Kartu Frosted Glass [Start Browser]
-        OfflineCard: Status Bar Muted / [Standby]
-    }
-
-    Standby --> Running: Tap [Start Browser] atau Tap URL Shortcut
-    
-    state Running {
-        [*] --> ActiveWebView
-        ActiveWebView: WebView dimuat & dirender di Kanvas
-        ActiveWebView: Tab Web muncul di Status Bar Kiri
-        ActiveWebView: Quick Keys (BOT, REC, MENU, STOP) aktif menyala
-        ActiveWebView: Floating Pill disembunyikan (Super Clean)
-    }
-
-    Running --> Standby: Tap [STOP] di Status Bar Kanan
-    note right of Standby: webView.destroy() dipanggil, cache & proses render dibersihkan seketika
 ```
-
-### Tahapan State:
-1. **State Standby (Offline):**
-   - Tidak ada instance `android.webkit.WebView` yang dibuat.
-   - Kanvas menampilkan antarmuka kartu *Frosted Glass Standby*:
-     - Indikator Status: `Offline / Standby (0 MB RAM)`
-     - Tombol Aksi Utama: **`[ Start Browser ]`**
-     - Pintasan Cepat: `[ 💼 Ghost Wallet ]`, `[ 🤖 9Router ]`, `[ 🐦 X / Twitter ]`, `[ 🌐 Custom URL ]`
-2. **State Running (Aktif):**
-   - Instance `WebView` diinisialisasi dan ditempelkan ke `left_canvas_container`.
-   - Mengambil URL dari preferensi atau URL pintasan yang dipilih.
-3. **State Terminate / Stop:**
-   - Dipicu oleh tombol `[ ⏹ STOP ]` di status bar kanan.
-   - Menjalankan pembersihan menyeluruh:
-     ```java
-     if (mActiveWebView != null) {
-         mActiveWebView.stopLoading();
-         mActiveWebView.loadUrl("about:blank");
-         mActiveWebView.clearHistory();
-         mActiveWebView.removeAllViews();
-         mActiveWebView.destroy();
-         mActiveWebView = null;
-     }
-     System.gc();
-     ```
-   - Tampilan kembali ke kartu *Standby*, RAM 100% pulih.
++-----------------------------------------------------------------------------------+
+| [ 🏠 Home ]   [ 🧩 Widgets ]   ...   [ 🔍 SEARCH ] [ ⏮ ] [ ⏯ ] [ ⏭ ] [ ⚙️ SETTING ] |
++-----------------------------------------------------------------------------------+
+|                                                                                   |
+|  [ WIDGET CLOCK / WEATHER (4x2) ]                                                 |
+|                                                                                   |
+|  [ 🪙 BINANCE ]   [ 💬 TELEGRAM ]   [ 🐦 X ]   [ 📷 CAMERA ]   (Shortcut 1x1)     |
+|                                                                                   |
+|  [ WIDGET BATTERY / GHOST WALLET (4x2) ]                                          |
+|                                                                                   |
+|  [ 🌐 CHROME ]    [ ⚙️ SETTINGS ]    [ 📁 FILES ]  [ 🎵 SPOTIFY ] (Shortcut 1x1)     |
+|                                                                                   |
+|                                        ▲                                          |
+|                             [ SWIPE UP UNTUK ALL APPS ]                           |
++-----------------------------------------------------------------------------------+
+```
 
 ---
 
-## 🔌 5. Mekanisme Start/Stop Wallet via IPC (Sesuai Standar Project Fusion)
+## 🎛️ 5. Spesifikasi 5 Tombol Extra Key Kanvas Kiri
 
-Ketika Tuan menekan tombol **`[ Start Wallet ]`** atau saat browser di Kanvas Kiri membutuhkan Ghost Wallet daemon, sistem memanfaatkan protokol IPC bawaan Project Fusion:
+Dipasang pada bilah status Kanvas Kiri dengan fungsi presisi:
 
-1. **Auto-Spawn Tab Mandiri via IPC:**
-   - Kanvas Kiri memanggil IPC internal:
-     ```
-     tab new "Ghost Wallet" "wallet --auto --ghostwallet 3333"
-     ```
-   - Protokol ini otomatis:
-     - Membuka tab terminal mandiri baru bernama **`Ghost Wallet`**.
-     - Mendeteksi environment aktif (Kali NetHunter chroot di Infinix / Droidspaces di Poco M3 / Native) dan otomatis membypass login selector.
-     - Mode `focus: false` / `stayBehind: true` agar Kanvas Kiri tetap menjadi tampilan utama tanpa memaksa layar meloncat ke terminal.
-     - **Tab kerja utama Tuan di Kanvas Tengah (sesi AGY/zsh) sama sekali TIDAK TERSENTUH**.
-
-2. **Cek Koneksi Instan (Smart RPC Check):**
-   - Sebelum spawn tab baru, Kanvas Kiri melakukan probe TCP ke `127.0.0.1:3333`. Jika daemon sudah hidup di background, tab baru tidak perlu dibuat lagi dan status langsung `RPC: ONLINE`.
-
-3. **Stop & Cleanup via IPC:**
-   - Saat tombol **`[ ⏹ STOP ]`** ditekan di Kanvas Kiri:
-     ```
-     tab close "Ghost Wallet"
-     ```
-   - Tab background wallet ditutup rapi, daemon mati, dan RAM kembali 0 MB.
-
-```
-+---------------------------------------------------------------------------------------------------+
-| [🌐 Wallet: 3333] [🪙 BscScan] [➕]          ...          [🤖 BOT] [🔴 REC] [☰ MENU] [➕] [⏹ STOP] |
-+---------------------------------------------------------------------------------------------------+
-|                                                                                                   |
-|                                    KONTEN WEBVIEW / dAPP                                          |
-|                                 (Super Clean - Tanpa Floating Pill)                                |
-|                                                                                                   |
-+---------------------------------------------------------------------------------------------------+
-|                                      FROSTED GLASS DOCK                                           |
-+---------------------------------------------------------------------------------------------------+
-```
-
-### A. Sisi Kiri Bar (Web Tabs):
-- Di-drive oleh `mTabList` dari `FusionWebViewManager`.
-- Setiap tab adalah chip tombol interaktif (tap untuk beralih tab, long-press untuk tutup).
-- Tombol `[ ➕ ]` di ujung baris tab untuk membuka tab baru.
-
-### B. Sisi Kanan Bar (Pill Actions - Paritas Style Kanvas Kanan & Bebas Kustom Hingga 10 Tombol):
-- Menggunakan formula visual yang identik dengan Kanvas Kanan (`populateDisplayQuickKeys`):
-  - Tinggi: `20dp`, Lebar: `20dp-24dp` per tombol, Margin: `3dp`, Stroke: `1dp`, Corner Radius: `resolveStatusIndicatorCornerRadiusPx()`.
-  - Mendukung hingga **maksimal 10 tombol** sekaligus di sisi kanan bar, sementara sisi kiri bar (tab) tetap dapat di-scroll (*horizontal scrollview*).
-  - Warna ink & fill mengikuti palet tema Terminal/Display (`activeInk`, `bgFill`, `strokeColor`).
-
-- **Katalog Lengkap Aksi Tombol yang Bebas Dipilih & Diurutkan (Max 10):**
-  1. **`WALLET` / `NEXT_WALLET`** $\rightarrow$ `[ 👛 WALLET > ]`: Memanggil `fusionWebViewManager.switchToNextWallet()`, merotasi akun dompet EVM multi-account di `wallet.cjs` (`wallets_db.json`), mengirim sinyal `fusion_switchWallet` ke daemon port 3333, dan trigger event `accountsChanged` ke dApp secara instan.
-  2. **`EMAIL`** $\rightarrow$ `[ 📧 EMAIL > ]`: Rotasi smart email otomatis (`nextEmail()`) untuk airdrop / form registrasi dApp.
-  3. **`AUTOSIGN`** $\rightarrow$ `[ ⚡ SIGN ]`: Toggle auto-sign transaksi Web3 EVM di Ghost Wallet daemon tanpa pop-up konfirmasi berulang.
-  4. **`BOT` / `AGY`** $\rightarrow$ `[ 🤖 BOT ]`: AI Assistant dialog, eksekusi natural prompt, atau otomasi DOM.
-  5. **`REC`** $\rightarrow$ `[ 🔴 REC ]`: Macro / Recipe recorder toggle (dengan dot merah saat recording aktif).
-  6. **`MENU`** $\rightarrow$ `[ ☰ MENU ]`: Membuka Fusion Drawer / Quick Action Sheet (Daftar Profil, dApp Favorites, Clear Cache, Cookies).
-  7. **`NEW`** $\rightarrow$ `[ ➕ ]`: Buka tab baru / prompt input URL baru.
-  8. **`URL`** $\rightarrow$ `[ 🌐 ]`: Dialog cepat ubah / ketik URL aktif.
-  9. **`RELOAD`** $\rightarrow$ `[ ⟳ ]`: Refresh halaman aktif.
-  10. **`CLOSE`** $\rightarrow$ `[ ✕ ]`: Tutup tab yang sedang aktif.
-  11. **`DESKTOP`** $\rightarrow$ `[ 🖥️ ]`: Toggle User-Agent antara Desktop Mode dan Mobile Mode.
-  12. **`BACK`** $\rightarrow$ `[ ◀ ]`: Navigasi mundur riwayat web.
-  13. **`FWD`** $\rightarrow$ `[ ▶ ]`: Navigasi maju riwayat web.
-  14. **`STOP`** $\rightarrow$ `[ ⏹ STOP ]`: Hentikan WebView seketika dan sterilkan RAM ke 0 MB.
-
-- **Contoh Konfigurasi String (di Settings "Kanvas Kiri"):**
-  `WALLET,AUTOSIGN,BOT,REC,MENU,NEW,URL,RELOAD,CLOSE,STOP` (Genap 10 Tombol!)
+1. **`[ 🔍 SEARCH ]` (Quick App Finder)**:
+   * **Aksi Otomatis**: Sekali tap, langsung **membuka App Drawer meluncur naik (slide-up)** dan **otomatis memfokuskan kursor ke Search Pill** sekaligus **memunculkan in-app keyboard**. Tuan bisa langsung mengetik nama aplikasi tanpa tap layar dua kali.
+2. **`[ ⏮ PREV ]` (Media Previous)**:
+   * Memanggil `com.termux.app.statusbar.TopPaneFeed.skipPrevious()`.
+   * Mengembalikan lagu/track ke track sebelumnya pada pemutar media aktif (Spotify, YouTube Music, SoundCloud, dll.).
+3. **`[ ⏯ PLAY / PAUSE ]` (Media Playback Toggle)**:
+   * Memanggil `com.termux.app.statusbar.TopPaneFeed.togglePlayPause(isPlaying)`.
+   * Ikon bersifat dinamis: berubah menjadi `⏸` saat lagu sedang berputar, dan `▶` saat dijeda.
+4. **`[ ⏭ NEXT ]` (Media Next)**:
+   * Memanggil `com.termux.app.statusbar.TopPaneFeed.skipNext()`.
+   * Melompat ke lagu/track berikutnya secara instan.
+5. **`[ ⚙️ SETTING ]` (Launcher & Canvas Preferences)**:
+   * Membuka langsung menu preferensi Kanvas Kiri (`LeftCanvasPreferencesFragment`).
 
 ---
 
-## 🚀 6. Rencana Implementasi Bertahap (Roadmap)
+## 📲 6. Mekanisme Menambahkan Aplikasi dari Drawer ke Home
 
-1. **Fase 1: Settings & Storage Keys**
-   - Menambahkan string preferensi `left_canvas_mode`, `left_canvas_quick_keys`, dll. ke `TermuxPreferenceConstants`.
-   - Membuat menu pengaturan "Kanvas Kiri" di fragment settings.
-2. **Fase 2: Standby Card & Lifecycle Controller**
-   - Menyiapkan layout kartu standby elegan di `WidgetPaneFrame` (saat mode browser aktif).
-   - Menyiapkan logika `startBrowser()` dan `stopBrowser()` yang ramah memori.
-3. **Fase 3: Status Bar Tab Sync & Pill Quick Cluster**
-   - Mengintegrasikan `mTabList` ke `syncWindowBarItems()` saat Kanvas Kiri tampil dalam mode browser.
-   - Mengimplementasikan `populateLeftCanvasQuickKeys()` untuk render tombol `BOT`, `REC`, `MENU`, `STOP` di sisi kanan bar.
-4. **Fase 4: Verifikasi & Polish Visual**
-   - Pengujian isolasi: Memastikan Kanvas Tengah dan Kanan tetap 100% normal.
-   - Pengujian RAM: Verifikasi alokasi memori turun kembali saat tombol `STOP` ditekan.
+Mengadopsi 2 metode teruji:
+
+### Metode 1: Long-Press & Drag to Home (Standar Android / Lawnchair)
+1. Di dalam App Drawer, Tuan **tekan & tahan (long-press)** ikon aplikasi (disertai getaran haptik *tick*).
+2. Begitu jari mulai bergerak (*drag*), App Drawer otomatis **meluncur turun (*slide down*)**, memperlihatkan grid Homescreen di baliknya.
+3. Ikon melayang (*floating preview*) mengikuti posisi jari di atas kisi-kisi grid Homescreen.
+4. Kotak grid kosong yang dilewati akan menyala (*drop highlight* 1x1).
+5. Lepas jari $\rightarrow$ Ikon jatuh (*spring drop*) ke koordinat kotak yang dipilih.
+
+### Metode 2: Context Menu Popup "Tambah ke Beranda" (One-Tap Instant)
+1. Di dalam App Drawer, Tuan **tekan & tahan** ikon aplikasi tanpa menggeser jari.
+2. Muncul menu popup mini *Frosted Glass* di dekat ikon:
+   * **`[ ➕ Tambah ke Beranda ]`**
+   * **`[ ℹ️ Info Aplikasi ]`**
+3. Tap **`[ ➕ Tambah ke Beranda ]`**:
+   * App Drawer otomatis menutup secara mulus.
+   * Ikon aplikasi langsung dipasang pada slot grid kosong pertama di Homescreen dengan animasi jatuh (*drop bounce*).
+
+---
+
+## 📱 7. Interaksi Shortcut Aplikasi di Homescreen (Tekan-Lama)
+
+### A. Jika Ditekan-Tahan lalu Digeser (Drag to Move)
+* Ikon terangkat (*lift up*) dan mengikuti ujung jari.
+* Tuan bebas memindahkan posisi shortcut ke sel kotak grid mana saja di Homescreen.
+
+### B. Jika Ditekan-Tahan Diam (100% Paritas Visual & Aset Ikon dengan Popup Dock)
+Menggunakan mesin komponen popup bawaan yang sama: `com.termux.app.launcher.popup.AnchoredMenu` & `MenuRowFactory` (seperti pada `SuggestionBarView.showAppContextPopup`), dengan tampilan Frosted Glass, typography 12sp bold, dan **resource drawable asli**:
+
+**Kecuali fitur Pin/Unpin (karena di Home tidak dibutuhkan), digantikan dengan aksi "Hapus dari Home"**.
+
+Susunan baris popup menu 100% identik dengan dock terminal:
+1. **Header**: Ikon asli aplikasi (`resolveMenuHeaderIcon`) + Nama Aplikasi (`context.entry.label`).
+2. **`Uninstall`** $\rightarrow$ Icon: `R.drawable.ic_dock_menu_uninstall` (Minta uninstall ke sistem Android).
+3. **`App info`** $\rightarrow$ Icon: `R.drawable.ic_dock_menu_info` (Buka halaman Android App Info).
+4. **`Hapus dari Home`** $\rightarrow$ Icon: `R.drawable.ic_dock_menu_uninstall` / `ic_symbol_delete` (Mencopot shortcut dari grid Homescreen).
+5. **`Notifications`** $\rightarrow$ Icon: `R.drawable.ic_dock_menu_info` (Muncul otomatis jika ada badge notifikasi aktif).
+6. **`Change icon`** $\rightarrow$ Icon: `R.drawable.ic_dock_menu_change_icon` (Buka picker icon pack kustom).
+7. **`Reset icon`** $\rightarrow$ Icon: `R.drawable.ic_dock_menu_reset` (Muncul jika ikon sedang di-kustom untuk reset ke default).
+8. **Divider Line** $\rightarrow$ `menuRows.addDivider(shell)`.
+9. **`Shortcuts`** $\rightarrow$ Icon: `R.drawable.ic_dock_menu_shortcuts` + panah `R.drawable.ic_dock_menu_chevron` (Membuka sub-menu samping Android Dynamic App Shortcuts).
+
+---
+
+## 🎨 8. Paritas Visual Ikon Shortcut di Grid Homescreen
+Agar pengalaman visual benar-benar seragam dan menyatu:
+- **Ukuran & Proporsi Ikon**: Mengikuti ukuran ikon dock terminal (`SuggestionBarView.dp(48)` / `ICON_SIZE`).
+- **Rendering Pipeline**: Memakai `LauncherIconStore.Artwork` dan cache bawaan (`LauncherAppDataProvider.getInstance(context).icons().artworkDetailed(entry)`).
+- **Label Teks**: Font, warna (`resolveLauncherTextColor()`), dan bayangan teks mengikuti preset tampilan dock terminal.
+
+---
+
+## 🔍 9. Diagnosa & Perbaikan Bug Search & Built-in Keyboard
+
+### Akar Masalah yang Ditemukan:
+1. **Routing Keyboard Keliru (`DisplayKeyboardRoute.java:48`)**:
+   `requestAppDrawerSearchKeyboard()` mengembalikan `DrawerSearch.SYSTEM_ASK` karena Kanvas Kiri bukan `onDisplayPlace`. Akibatnya, launcher memanggil system IME Android yang diarahkan ke terminal non-aktif, sementara built-in keyboard (`mInAppKeyboard`) tidak pernah dinaikkan.
+2. **Perebutan Sentuhan (*Touch Claiming*) pada Search Pill (`AppDrawerContentView:1458`)**:
+   Search Pill dianggap sebagai `CHROME`. Kontainer luar `AppDrawerPlaneView` menganggap sentuhan jari pada pill sebagai tarikan penutup drawer (`DRAWER_DRAG`). Sedikit saja pergeseran mikro pada jari langsung membatalkan event tap (`ACTION_CANCEL`).
+
+### Rencana Solusi:
+1. **Routing Cerdas**: Jika built-in keyboard aktif (`mInAppKeyboard.isEnabled()`), drawer search wajib langsung menaikkan `mInAppKeyboard` dan mengikat inputnya ke `AppDrawerSearchController`.
+2. **Proteksi Sentuhan**: Daftarkan Search Pill sebagai wilayah konten (`AppDrawerTouchRegions.Region.PILL`) agar `ownsPoint()` bernilai `true` dan `AppDrawerPlaneView` tidak membajak event tap.
+
+---
+
+## 📊 10. Status Rencana
+- [x] Cetak biru diperbarui & disimpan.
+- [x] Menu baru "Settings > Kanvas Kiri" terdefinisi lengkap dengan switcher Default Upstream vs Kustom Fusion.
+- [x] Batasan isolasi mutlak ditegaskan (hanya mengatur Kanvas Kiri, zero-impact ke kanvas lain).
+- [x] Metode penambahan app (1 & 2) diformalkan.
+- [x] 5 Tombol Extra Key (Search auto-focus, Media Prev, Play/Pause dinamis, Next, Setting) dipetakan.
+- [x] Long-press shortcut di Home: Pindah posisi (geser) & Popup Menu 100% PARITAS DOCK DENGAN ASSET DRAWABLE ASLI.
+- [x] Ikon shortcut di grid Homescreen 100% identik dengan dock (artwork detailed & ukuran).
+- [x] Diagnosa bug tap search & built-in keyboard selesai 100%.
+- [x] **Status Eksekusi Kode: SELESAI (Implementasi Kanvas Kiri siap, menunggu konfirmasi Tuan Eso sebelum push/build CI).**

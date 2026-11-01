@@ -682,6 +682,7 @@ public class SettingsActivity extends AppCompatActivity implements PreferenceFra
             CHILD_XML_PAGES.put(R.xml.tai_api_preferences, TERMUX_PAGES + "TaiApiPreferencesFragment");
             CHILD_XML_PAGES.put(R.xml.tai_advanced_preferences, TERMUX_PAGES + "TaiAdvancedPreferencesFragment");
             CHILD_XML_PAGES.put(R.xml.tai_remote_preferences, TERMUX_PAGES + "TaiRemotePreferencesFragment");
+            CHILD_XML_PAGES.put(R.xml.left_canvas_preferences, TERMUX_PAGES + "LeftCanvasPreferencesFragment");
         }
 
         /** One indexed child preference: its display title, lowercase searchable text and page. */

@@ -5495,6 +5495,19 @@ public final class SuggestionBarView extends GridLayout
                 }, false));
             }
 
+            TextView addToHomeRow = menuRows.addActionRow(shell, "Tambah ke Beranda", R.drawable.ic_dock_menu_move, false, tintBase, () -> {
+                dismissAppContextPopup();
+                if (getContext() instanceof TermuxActivity) {
+                    ((TermuxActivity) getContext()).addAppShortcutToHome(context.entry);
+                }
+            });
+            pendingMenuRows.add(new MenuRow(addToHomeRow, () -> {
+                dismissAppContextPopup();
+                if (getContext() instanceof TermuxActivity) {
+                    ((TermuxActivity) getContext()).addAppShortcutToHome(context.entry);
+                }
+            }, false));
+
             TextView changeIconRow = menuRows.addActionRow(shell, "Change app icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
                 dismissAppContextPopup();
                 changeAppIconForEntry(context.entry);

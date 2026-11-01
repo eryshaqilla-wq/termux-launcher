@@ -1467,14 +1467,14 @@ public final class AppDrawerContentView extends FrameLayout
         switch (mViewType) {
             case VERTICAL:
                 return AppDrawerTouchRegions.resolve(localX, localY, boundsOf(mGrid),
-                    boundsOf(mColumn), mInteractive, isColumnActive());
+                    boundsOf(mColumn), boundsOf(mPill), mInteractive, isColumnActive());
             case HORIZONTAL:
                 return AppDrawerTouchRegions.resolve(localX, localY, boundsOf(mHorizontalPager),
-                    null, mInteractive, false);
+                    null, boundsOf(mPill), mInteractive, false);
             case CATEGORIES:
                 if (hasQuery())
                     return AppDrawerTouchRegions.resolve(localX, localY, boundsOf(mGrid), null,
-                        mInteractive, false);
+                        boundsOf(mPill), mInteractive, false);
                 float x = localX - mCategoryView.getLeft();
                 float y = localY - mCategoryView.getTop();
                 return AppDrawerCategoryTouchRegions.isContentOwned(mCategoryView.touchPart(x, y))

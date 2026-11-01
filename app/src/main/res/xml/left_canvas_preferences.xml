@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="Engine Kanvas Kiri">
+        <ListPreference
+            app:key="left_canvas_engine_mode"
+            app:title="@string/settings_left_canvas_engine_mode_title"
+            app:summary="@string/settings_left_canvas_engine_mode_summary"
+            app:entries="@array/settings_left_canvas_engine_mode_entries"
+            app:entryValues="@array/settings_left_canvas_engine_mode_values"
+            app:useSimpleSummaryProvider="true"
+            android:defaultValue="custom" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Pengaturan Mode Kustom Fusion">
+        <Preference
+            app:key="edit_left_canvas_quick_extra_keys"
+            app:title="@string/settings_left_canvas_quick_extra_keys_title"
+            app:summary="@string/settings_left_canvas_quick_extra_keys_summary" />
+
+        <ListPreference
+            app:key="left_canvas_grid_columns"
+            app:title="Jumlah Kolom Grid Homescreen"
+            app:summary="Tentukan jumlah kolom sel shortcut dan widget di Homescreen"
+            app:entries="@array/settings_left_canvas_grid_columns_entries"
+            app:entryValues="@array/settings_left_canvas_grid_columns_values"
+            app:useSimpleSummaryProvider="true"
+            android:defaultValue="4" />
+
+        <ListPreference
+            app:key="left_canvas_grid_rows"
+            app:title="Jumlah Baris Grid Homescreen"
+            app:summary="Tentukan jumlah baris sel shortcut dan widget di Homescreen"
+            app:entries="@array/settings_left_canvas_grid_rows_entries"
+            app:entryValues="@array/settings_left_canvas_grid_rows_values"
+            app:useSimpleSummaryProvider="true"
+            android:defaultValue="5" />
+
+        <SwitchPreferenceCompat
+            app:key="left_canvas_swipe_up_drawer"
+            app:title="@string/settings_left_canvas_swipe_up_drawer_title"
+            app:summary="@string/settings_left_canvas_swipe_up_drawer_summary"
+            android:defaultValue="true" />
+
+        <SwitchPreferenceCompat
+            app:key="left_canvas_enable_custom_tab"
+            app:title="Aktifkan Tab Kustom Tambahan"
+            app:summary="Tampilkan tab ke-3 di bilah status kiri (Web3 Portal, Notes, atau Monitor)"
+            android:defaultValue="false" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

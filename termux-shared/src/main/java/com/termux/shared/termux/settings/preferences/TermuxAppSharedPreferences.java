@@ -1474,6 +1474,63 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             value == null ? TERMUX_APP.DEFAULT_TERMINAL_QUICK_EXTRA_KEYS : value.trim(), false);
     }
 
+    // Left Canvas Preferences
+    public String getLeftCanvasEngineMode() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_ENGINE_MODE, TERMUX_APP.DEFAULT_LEFT_CANVAS_ENGINE_MODE, false);
+    }
+
+    public void setLeftCanvasEngineMode(@Nullable String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_ENGINE_MODE,
+            value == null ? TERMUX_APP.DEFAULT_LEFT_CANVAS_ENGINE_MODE : value.trim(), false);
+    }
+
+    public boolean isLeftCanvasCustomEngine() {
+        return TERMUX_APP.LEFT_CANVAS_ENGINE_MODE_CUSTOM.equals(getLeftCanvasEngineMode());
+    }
+
+    public String getLeftCanvasQuickExtraKeys() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_QUICK_EXTRA_KEYS, TERMUX_APP.DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS, false);
+    }
+
+    public void setLeftCanvasQuickExtraKeys(@Nullable String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_QUICK_EXTRA_KEYS,
+            value == null ? TERMUX_APP.DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS : value.trim(), false);
+    }
+
+    public int getLeftCanvasGridColumns() {
+        return SharedPreferenceUtils.getIntFromString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_GRID_COLUMNS, Integer.parseInt(TERMUX_APP.DEFAULT_LEFT_CANVAS_GRID_COLUMNS));
+    }
+
+    public int getLeftCanvasGridRows() {
+        return SharedPreferenceUtils.getIntFromString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_GRID_ROWS, Integer.parseInt(TERMUX_APP.DEFAULT_LEFT_CANVAS_GRID_ROWS));
+    }
+
+    public boolean isLeftCanvasSwipeUpDrawerEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_SWIPE_UP_DRAWER, TERMUX_APP.DEFAULT_LEFT_CANVAS_SWIPE_UP_DRAWER);
+    }
+
+    public void setLeftCanvasSwipeUpDrawerEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_SWIPE_UP_DRAWER, value, false);
+    }
+
+    public boolean isLeftCanvasCustomTabEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_ENABLE_CUSTOM_TAB, TERMUX_APP.DEFAULT_LEFT_CANVAS_ENABLE_CUSTOM_TAB);
+    }
+
+    public void setLeftCanvasCustomTabEnabled(boolean value) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_ENABLE_CUSTOM_TAB, value, false);
+    }
+
     public boolean isStatusBarShowSessionIndicatorEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,
             TERMUX_APP.KEY_STATUS_BAR_SHOW_SESSION_INDICATOR,

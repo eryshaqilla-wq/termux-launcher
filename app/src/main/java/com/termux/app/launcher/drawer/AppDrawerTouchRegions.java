@@ -25,8 +25,8 @@ import com.termux.app.launcher.drawer.AppDrawerTransitionGeometry.Frame;
  */
 public final class AppDrawerTouchRegions {
 
-    /** The three touch categories. Exactly one applies to any point. */
-    public enum Region { GRID, COLUMN, CHROME }
+    /** The touch categories. Exactly one applies to any point. */
+    public enum Region { GRID, COLUMN, PILL, CHROME }
 
     private AppDrawerTouchRegions() {}
 
@@ -43,8 +43,18 @@ public final class AppDrawerTouchRegions {
     @NonNull
     public static Region resolve(float x, float y, @Nullable Frame grid, @Nullable Frame column,
                                  boolean interactive, boolean columnActive) {
+        return resolve(x, y, grid, column, null, interactive, columnActive);
+    }
+
+    /**
+     * Resolves region with search pill included so taps on the search bar defer close-drag.
+     */
+    @NonNull
+    public static Region resolve(float x, float y, @Nullable Frame grid, @Nullable Frame column,
+                                 @Nullable Frame pill, boolean interactive, boolean columnActive) {
         // Nothing inside the plane takes a stream until the plane has finished arriving.
         if (!interactive) return Region.CHROME;
+        if (contains(pill, x, y)) return Region.PILL;
         if (columnActive && contains(column, x, y)) return Region.COLUMN;
         if (contains(grid, x, y)) return Region.GRID;
         return Region.CHROME;

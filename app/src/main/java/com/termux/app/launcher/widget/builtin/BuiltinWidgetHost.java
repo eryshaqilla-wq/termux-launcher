@@ -129,6 +129,7 @@ public final class BuiltinWidgetHost implements WidgetGridView.BuiltinFactory,
         WidgetGridMetrics.Span minimum = metrics.spanForPixels(
             Math.round(smallest.widthDp * density), Math.round(smallest.heightDp * density));
         for (BuiltinWidgetKind kind : BuiltinWidgetKind.values()) {
+            if (kind == BuiltinWidgetKind.APP_SHORTCUT) continue;
             BuiltinWidgetSpan designed = defaultSpan(kind);
             WidgetGridMetrics.Span span = metrics.spanForPixels(
                 Math.round(designed.widthDp * density), Math.round(designed.heightDp * density));

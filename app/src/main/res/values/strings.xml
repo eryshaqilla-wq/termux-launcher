@@ -146,6 +146,45 @@
     <string name="settings_destination_keyboard_input_summary">Layouts, typing and voice input</string>
     <string name="settings_destination_display">Display</string>
     <string name="settings_destination_display_summary">Desktop apps and touch controls</string>
+    <string name="settings_destination_left_canvas">Kanvas Kiri</string>
+    <string name="settings_destination_left_canvas_summary">Homescreen hybrid, extra keys, dan app drawer</string>
+    <string name="settings_left_canvas_engine_mode_title">Mode Engine Kanvas Kiri</string>
+    <string name="settings_left_canvas_engine_mode_summary">Pilih antara mode Kustom Fusion atau Widget bawaan Upstream murni</string>
+    <string name="settings_left_canvas_quick_extra_keys_title">Tombol Cepat Statbar Kiri</string>
+    <string name="settings_left_canvas_quick_extra_keys_summary">Atur 5 tombol aksi cepat di bilah status Kanvas Kiri</string>
+    <string name="settings_left_canvas_swipe_up_drawer_title">Swipe Up untuk Buka App Drawer</string>
+    <string name="settings_left_canvas_swipe_up_drawer_summary">Buka seluruh aplikasi dengan gestur geser ke atas ala Lawnchair</string>
+
+    <string-array name="settings_left_canvas_engine_mode_entries">
+        <item>Kustom Fusion (Homescreen + Media Cockpit)</item>
+        <item>Bawaan Upstream (Original Widget Pane)</item>
+    </string-array>
+    <string-array name="settings_left_canvas_engine_mode_values">
+        <item>custom</item>
+        <item>upstream</item>
+    </string-array>
+
+    <string-array name="settings_left_canvas_grid_columns_entries">
+        <item>4 Kolom</item>
+        <item>5 Kolom</item>
+        <item>6 Kolom</item>
+    </string-array>
+    <string-array name="settings_left_canvas_grid_columns_values">
+        <item>4</item>
+        <item>5</item>
+        <item>6</item>
+    </string-array>
+
+    <string-array name="settings_left_canvas_grid_rows_entries">
+        <item>5 Baris</item>
+        <item>6 Baris</item>
+        <item>7 Baris</item>
+    </string-array>
+    <string-array name="settings_left_canvas_grid_rows_values">
+        <item>5</item>
+        <item>6</item>
+        <item>7</item>
+    </string-array>
     <string name="settings_root_9router_header">9Router &amp; AI Routing</string>
     <string name="settings_destination_9router">9Router Multi-Account</string>
     <string name="settings_destination_9router_summary">Background proxy, rotasi multi-akun &amp; dashboard</string>

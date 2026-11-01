@@ -40,6 +40,8 @@ public final class WidgetPaneView extends FrameLayout {
         default void onWidgetEditDiscard() { }
         /** The + on the page's border tab: another page, and the pane turns to it. */
         default void onWidgetAddPage() { }
+        /** Swipe up gesture from anywhere on Left Canvas to open App Drawer. */
+        default void onSwipeUpDrawer() { }
     }
 
     /**
@@ -77,6 +79,8 @@ public final class WidgetPaneView extends FrameLayout {
     private boolean pagingTracking;
     private boolean pagingDragging;
     private float pagingDownX, pagingDownY;
+    private boolean swipeUpTracking;
+    private float swipeUpDownX, swipeUpDownY;
     private boolean pageCommitPending;
     private int pageCommitDirection;
     private float pageCommitDragX;
@@ -332,6 +336,13 @@ public final class WidgetPaneView extends FrameLayout {
         notice.removeCallbacks(hideNotice); notice.postDelayed(hideNotice, 3500);
     }
 
+    private boolean isSwipeUpDrawerEligible() {
+        com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
+            com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(getContext(), false);
+        return preferences != null && preferences.isLeftCanvasCustomEngine()
+            && preferences.isLeftCanvasSwipeUpDrawerEnabled();
+    }
+
     // ---- Horizontal page swipe -------------------------------------------------------------
     // The wall's own sideways drag is arbitrated above this page, from the status bar. This
     // intercept claims a stream only when horizontal travel wins the slop race inside the grid,
@@ -349,13 +360,26 @@ public final class WidgetPaneView extends FrameLayout {
                     pagingVelocity.clear();
                     pagingVelocity.addMovement(event);
                 }
+                swipeUpTracking = isSwipeUpDrawerEligible() && !picker.isOpen() && !widgetEditActive()
+                    && !insideNestedScrollingChild(this, event);
+                swipeUpDownX = event.getX(); swipeUpDownY = event.getY();
                 break;
             case MotionEvent.ACTION_MOVE:
+                if (swipeUpTracking) {
+                    float dx = event.getX() - swipeUpDownX;
+                    float dy = event.getY() - swipeUpDownY;
+                    if (dy < -touchSlop * 2 && Math.abs(dy) > Math.abs(dx) * 1.5f) {
+                        swipeUpTracking = false;
+                        if (listener != null) listener.onSwipeUpDrawer();
+                        return false;
+                    }
+                }
                 if (!pagingTracking || pagingDragging) break;
                 if (widgetEditActive()) {
                     // A hold turned this press into a widget drag after the page had started
                     // watching it; the drag owns the rest of the gesture, sideways included.
                     pagingTracking = false;
+                    swipeUpTracking = false;
                     break;
                 }
                 if (pagingVelocity != null) pagingVelocity.addMovement(event);
@@ -370,10 +394,12 @@ public final class WidgetPaneView extends FrameLayout {
                 break;
             case MotionEvent.ACTION_POINTER_DOWN:
                 pagingTracking = false;
+                swipeUpTracking = false;
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 pagingTracking = false;
+                swipeUpTracking = false;
                 break;
             default:
                 break;
@@ -382,6 +408,15 @@ public final class WidgetPaneView extends FrameLayout {
     }
 
     @Override public boolean onTouchEvent(@NonNull MotionEvent event) {
+        if (swipeUpTracking && event.getActionMasked() == MotionEvent.ACTION_MOVE) {
+            float dx = event.getX() - swipeUpDownX;
+            float dy = event.getY() - swipeUpDownY;
+            if (dy < -touchSlop * 2 && Math.abs(dy) > Math.abs(dx) * 1.5f) {
+                swipeUpTracking = false;
+                if (listener != null) listener.onSwipeUpDrawer();
+                return true;
+            }
+        }
         if (!pagingDragging) return false;
         if (pagingVelocity != null) pagingVelocity.addMovement(event);
         switch (event.getActionMasked()) {

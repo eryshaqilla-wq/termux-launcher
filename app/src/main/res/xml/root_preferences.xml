@@ -61,6 +61,13 @@
     <PreferenceCategory app:key="root_workspace" app:title="@string/settings_root_workspace_header">
 
         <Preference
+            app:key="left_canvas"
+            app:icon="@drawable/ic_symbol_stacks"
+            app:title="@string/settings_destination_left_canvas"
+            app:summary="@string/settings_destination_left_canvas_summary"
+            app:fragment="com.termux.app.fragments.settings.termux.LeftCanvasPreferencesFragment" />
+
+        <Preference
             app:key="terminal"
             app:icon="@drawable/ic_symbol_terminal"
             app:title="@string/settings_destination_terminal"

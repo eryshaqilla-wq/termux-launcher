@@ -59,6 +59,8 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         default boolean isWidgetSurfaceGlass() { return false; }
         /** The activity-side services the built-in widgets need; null keeps them inert. */
         @Nullable default BuiltinWidgetServices.Host builtinWidgetHost() { return null; }
+        /** Open app drawer from Left Canvas. */
+        default void openAppDrawerFromLeftCanvas(boolean focusSearch) { }
     }
 
     private final WidgetPaneView pane;
@@ -71,6 +73,13 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
     private int currentPage;
     private boolean editorFocusActive;
     @Nullable private PopupWindow paneMenu;
+
+    @Nullable private com.termux.app.launcher.popup.AnchoredMenu activeShortcutMenu;
+    private float shortcutDownRawX, shortcutDownRawY;
+    private int shortcutDownWidgetId;
+    private final float touchSlop;
+    private final com.termux.app.launcher.popup.AnchoredMenuTheme shortcutMenuTheme;
+    private final com.termux.app.launcher.popup.MenuRowFactory shortcutMenuRows;
 
     public WidgetPaneController(@NonNull WidgetPaneView pane,
                                 @NonNull LauncherWidgetHostController widgets,
@@ -92,6 +101,20 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
                 }
                 @Override public boolean glass() { return host.isWidgetSurfaceGlass(); }
             });
+        touchSlop = android.view.ViewConfiguration.get(pane.getContext()).getScaledTouchSlop();
+        shortcutMenuTheme = new com.termux.app.launcher.popup.AnchoredMenuTheme() {
+            @Override public int textColor() { return 0xFFEEEEEE; }
+            @Override public int selectedTextColor() { return 0xFFFFFFFF; }
+            @Override public int opacityPercent() { return 92; }
+            @Override public boolean blurEnabled() { return true; }
+            @Override public int blurRadiusDp() { return 25; }
+            @Override public int grainPercent() {
+                com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
+                    com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(pane.getContext(), false);
+                return preferences == null ? 0 : preferences.getDockGlassGrain();
+            }
+        };
+        shortcutMenuRows = new com.termux.app.launcher.popup.MenuRowFactory(pane.getContext(), shortcutMenuTheme);
         pane.grid().setBuiltinFactory(builtins);
         catalog.setBuiltinSource(builtins);
         pane.grid().addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> onWallLayout());
@@ -104,15 +127,36 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         pane.picker().setSearchFocusListener(this::relayEditorFocus);
         pane.grid().setListener(new WidgetGridView.Listener() {
             @Override public void onWidgetLongPressed(int appWidgetId, float rawX, float rawY) {
-                enterEditMode(appWidgetId, rawX, rawY);
+                LauncherWidgetRecord record = widgets.repository().get(appWidgetId);
+                if (record != null && record.isBuiltin()
+                    && BuiltinWidgetKind.APP_SHORTCUT.id.equals(record.builtinKind)) {
+                    shortcutDownRawX = rawX;
+                    shortcutDownRawY = rawY;
+                    shortcutDownWidgetId = appWidgetId;
+                    showShortcutContextPopup(record, rawX, rawY);
+                } else {
+                    enterEditMode(appWidgetId, rawX, rawY);
+                }
             }
             @Override public void onWidgetEditDragMove(int appWidgetId, float rawX, float rawY) {
+                if (activeShortcutMenu != null && appWidgetId == shortcutDownWidgetId) {
+                    float dist = (float) Math.hypot(rawX - shortcutDownRawX, rawY - shortcutDownRawY);
+                    if (dist > touchSlop) {
+                        dismissShortcutMenu();
+                        enterEditMode(appWidgetId, rawX, rawY);
+                        return;
+                    }
+                }
                 if (edit != null && edit.appWidgetId == appWidgetId) moveDrag(rawX, rawY);
             }
             @Override public void onWidgetEditDragEnd(int appWidgetId, boolean canceled) {
+                if (activeShortcutMenu != null) {
+                    return;
+                }
                 if (edit != null && edit.appWidgetId == appWidgetId) endMoveDrag(canceled);
             }
             @Override public void onEmptySpaceLongPressed(float rawX, float rawY) {
+                dismissShortcutMenu();
                 showPaneMenu(rawX, rawY);
             }
             @Override public void onWidgetEditorFocusChanged(View editor) {
@@ -124,6 +168,9 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
             @Override public void onWidgetEditCommit() { commitEditSession(); }
             @Override public void onWidgetEditDiscard() { discardEditSession(); }
             @Override public void onWidgetAddPage() { menuAddPage(); }
+            @Override public void onSwipeUpDrawer() {
+                if (host != null) host.openAppDrawerFromLeftCanvas(false);
+            }
         }, new WidgetPickerAdapter.Listener() {
             @Override public void onProviderSelected(@NonNull WidgetProviderItem item) {
                 selectProvider(item);
@@ -1484,6 +1531,231 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
             case WALL_RESET: return pane.getContext().getString(R.string.widget_wall_reset);
             default: return pane.getContext().getString(R.string.widget_add_failed);
         }
+    }
+
+    public void dismissShortcutMenu() {
+        if (activeShortcutMenu != null) {
+            activeShortcutMenu.dismiss();
+            activeShortcutMenu = null;
+        }
+    }
+
+    private void showShortcutContextPopup(@NonNull LauncherWidgetRecord record, float rawX, float rawY) {
+        dismissShortcutMenu();
+        WidgetCellView cell = pane.grid().cellForId(record.appWidgetId);
+        if (cell == null) return;
+
+        Bundle opts = record.sizeOptions();
+        String pkg = opts.getString("package_name");
+        String act = opts.getString("activity_name");
+        long userId = opts.getLong("user_id", 0L);
+        com.termux.app.launcher.model.AppRef ref = new com.termux.app.launcher.model.AppRef(pkg, act, userId);
+        com.termux.app.launcher.data.LauncherAppDataProvider provider =
+            com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(pane.getContext());
+        com.termux.app.launcher.model.LauncherAppEntry entry = provider.findByRef(ref);
+        if (entry == null && pkg != null) {
+            entry = provider.findFirstByPackage(pkg);
+        }
+
+        final int widgetId = record.appWidgetId;
+        if (entry == null) {
+            removeWidgetRecord(widgetId);
+            return;
+        }
+
+        final com.termux.app.launcher.model.LauncherAppEntry finalEntry = entry;
+        android.widget.LinearLayout shell = shortcutMenuRows.newShell();
+        java.util.List<com.termux.app.launcher.popup.MenuRow> pendingMenuRows = new java.util.ArrayList<>();
+        int tintBase = 0x00FFFFFF;
+
+        android.widget.TextView header = new android.widget.TextView(pane.getContext());
+        header.setText(entry.label);
+        header.setTextColor(0xFFFFFFFF);
+        header.setTextSize(12f);
+        header.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        header.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);
+        int dp8 = Math.round(8f * pane.getResources().getDisplayMetrics().density);
+        int dp6 = Math.round(6f * pane.getResources().getDisplayMetrics().density);
+        int dp7 = Math.round(7f * pane.getResources().getDisplayMetrics().density);
+        int dp22 = Math.round(22f * pane.getResources().getDisplayMetrics().density);
+        int dp10 = Math.round(10f * pane.getResources().getDisplayMetrics().density);
+        header.setPadding(dp8, dp6, dp8, dp7);
+        android.graphics.drawable.Drawable icon = provider.icons().artwork(entry);
+        if (icon != null) {
+            icon.setBounds(0, 0, dp22, dp22);
+            header.setCompoundDrawablesRelative(icon, null, null, null);
+            header.setCompoundDrawablePadding(dp10);
+        }
+        shell.addView(header, new android.widget.LinearLayout.LayoutParams(
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        android.widget.TextView uninstallRow = shortcutMenuRows.addActionRow(
+            shell, "Uninstall", R.drawable.ic_dock_menu_uninstall, false, tintBase, () -> {
+                dismissShortcutMenu();
+                requestUninstall(finalEntry);
+            });
+        pendingMenuRows.add(new com.termux.app.launcher.popup.MenuRow(uninstallRow, () -> {
+            dismissShortcutMenu();
+            requestUninstall(finalEntry);
+        }, false));
+
+        android.widget.TextView appInfoRow = shortcutMenuRows.addActionRow(
+            shell, "App info", R.drawable.ic_dock_menu_info, false, tintBase, () -> {
+                dismissShortcutMenu();
+                openAppInfo(finalEntry);
+            });
+        pendingMenuRows.add(new com.termux.app.launcher.popup.MenuRow(appInfoRow, () -> {
+            dismissShortcutMenu();
+            openAppInfo(finalEntry);
+        }, false));
+
+        android.widget.TextView removeRow = shortcutMenuRows.addActionRow(
+            shell, "Hapus dari Home", R.drawable.ic_dock_menu_uninstall, false, tintBase, () -> {
+                dismissShortcutMenu();
+                removeWidgetRecord(widgetId);
+            });
+        pendingMenuRows.add(new com.termux.app.launcher.popup.MenuRow(removeRow, () -> {
+            dismissShortcutMenu();
+            removeWidgetRecord(widgetId);
+        }, false));
+
+        if (com.termux.app.launcher.notifications.LauncherNotificationBadgeStore.hasBadge(finalEntry.appRef.packageName)) {
+            android.widget.TextView notifRow = shortcutMenuRows.addActionRow(
+                shell, "Notifications", R.drawable.ic_dock_menu_info, false, tintBase, () -> {
+                    dismissShortcutMenu();
+                });
+            pendingMenuRows.add(new com.termux.app.launcher.popup.MenuRow(notifRow, () -> {
+                dismissShortcutMenu();
+            }, false));
+        }
+
+        android.widget.TextView changeIconRow = shortcutMenuRows.addActionRow(
+            shell, "Change icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
+                dismissShortcutMenu();
+            });
+        pendingMenuRows.add(new com.termux.app.launcher.popup.MenuRow(changeIconRow, () -> {
+            dismissShortcutMenu();
+        }, false));
+
+        java.util.List<android.content.pm.ShortcutInfo> shortcuts = queryEntryShortcuts(finalEntry);
+        if (!shortcuts.isEmpty()) {
+            shortcutMenuRows.addDivider(shell);
+            android.widget.TextView shortcutsRow = shortcutMenuRows.addActionRow(
+                shell, "Shortcuts", R.drawable.ic_dock_menu_shortcuts, true, tintBase, () -> {
+                });
+            pendingMenuRows.add(new com.termux.app.launcher.popup.MenuRow(shortcutsRow, () -> {}, false));
+        }
+
+        int rowWidth = com.termux.app.launcher.popup.MenuRowWidths.normalize(pendingMenuRows);
+        int contentWidth = com.termux.app.launcher.popup.MenuRowWidths.constrainHeader(header, rowWidth);
+        com.termux.app.launcher.popup.MenuRowWidths.constrainRows(pendingMenuRows, contentWidth);
+
+        activeShortcutMenu = new com.termux.app.launcher.popup.AnchoredMenu(pane, shortcutMenuTheme);
+        activeShortcutMenu.show(com.termux.app.launcher.popup.MenuSpec.of(shell, tintBase).rows(pendingMenuRows).build(), cell);
+    }
+
+    private void removeWidgetRecord(int appWidgetId) {
+        widgets.repository().remove(appWidgetId);
+        widgets.repository().save();
+        render();
+    }
+
+    private void requestUninstall(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry) {
+        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_UNINSTALL_PACKAGE);
+        intent.setData(android.net.Uri.parse("package:" + entry.appRef.packageName));
+        intent.putExtra(android.content.Intent.EXTRA_RETURN_RESULT, true);
+        if (!(pane.getContext() instanceof android.app.Activity)) {
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        pane.getContext().startActivity(intent);
+    }
+
+    private void openAppInfo(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry) {
+        android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(android.net.Uri.parse("package:" + entry.appRef.packageName));
+        if (!(pane.getContext() instanceof android.app.Activity)) {
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        pane.getContext().startActivity(intent);
+    }
+
+    @NonNull
+    private java.util.List<android.content.pm.ShortcutInfo> queryEntryShortcuts(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry) {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.N_MR1) {
+            return java.util.Collections.emptyList();
+        }
+        try {
+            android.content.pm.LauncherApps launcherApps =
+                (android.content.pm.LauncherApps) pane.getContext().getSystemService(android.content.Context.LAUNCHER_APPS_SERVICE);
+            if (launcherApps == null || !launcherApps.hasShortcutHostPermission()) {
+                return java.util.Collections.emptyList();
+            }
+            android.content.pm.LauncherApps.ShortcutQuery query = new android.content.pm.LauncherApps.ShortcutQuery();
+            query.setPackage(entry.appRef.packageName);
+            if (!android.text.TextUtils.isEmpty(entry.appRef.activityName)) {
+                String activityName = entry.appRef.activityName;
+                if (activityName.startsWith(".")) {
+                    activityName = entry.appRef.packageName + activityName;
+                }
+                query.setActivity(new android.content.ComponentName(entry.appRef.packageName, activityName));
+            }
+            query.setQueryFlags(android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC
+                | android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST
+                | android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED);
+            java.util.List<android.content.pm.ShortcutInfo> list = launcherApps.getShortcuts(query, android.os.Process.myUserHandle());
+            return list == null ? java.util.Collections.emptyList() : list;
+        } catch (Throwable ignored) {
+            return java.util.Collections.emptyList();
+        }
+    }
+
+    public boolean addAppShortcut(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry) {
+        LauncherWidgetRepository repository = widgets.repository();
+        long revision = repository.revision();
+        int targetPage = currentPage;
+        WidgetGridPlacementPolicy.Result placement = WidgetGridPlacementPolicy.findPlacement(
+            repository.gridDefinition(), repository.recordsOnPage(targetPage), 1, 1);
+        if (placement.outcome != WidgetGridPlacementPolicy.Outcome.PLACED) {
+            if (targetPage != 0) {
+                targetPage = 0;
+                placement = WidgetGridPlacementPolicy.findPlacement(
+                    repository.gridDefinition(), repository.recordsOnPage(targetPage), 1, 1);
+            }
+        }
+        if (placement.outcome != WidgetGridPlacementPolicy.Outcome.PLACED) {
+            for (int p = 0; p < repository.pageCount(); p++) {
+                if (p == targetPage) continue;
+                placement = WidgetGridPlacementPolicy.findPlacement(
+                    repository.gridDefinition(), repository.recordsOnPage(p), 1, 1);
+                if (placement.outcome == WidgetGridPlacementPolicy.Outcome.PLACED) {
+                    targetPage = p;
+                    break;
+                }
+            }
+        }
+        if (placement.outcome != WidgetGridPlacementPolicy.Outcome.PLACED) {
+            targetPage = repository.pageCount();
+            placement = WidgetGridPlacementPolicy.findPlacement(
+                repository.gridDefinition(), java.util.Collections.emptyList(), 1, 1);
+        }
+        if (placement.outcome != WidgetGridPlacementPolicy.Outcome.PLACED) {
+            return false;
+        }
+
+        android.os.Bundle config = new android.os.Bundle();
+        config.putString("package_name", entry.appRef.packageName);
+        config.putString("activity_name", entry.appRef.activityName);
+        config.putString("label", entry.label);
+        config.putLong("user_id", entry.appRef.userId);
+
+        LauncherWidgetHostController.AddResult result = widgets.addBuiltin(
+            BuiltinWidgetKind.APP_SHORTCUT.id, placement.rect, targetPage, revision, config);
+        if (result == LauncherWidgetHostController.AddResult.READY) {
+            setCurrentPage(targetPage);
+            render();
+            return true;
+        }
+        return false;
     }
 
     /** What the built-ins get when the host offers nothing: no permission, no window, no face. */
