@@ -16,6 +16,7 @@ import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
@@ -69,6 +70,7 @@ public class TermuxInputMethodService extends InputMethodService {
     private boolean mIsListeningVoice;
     private int mSelectionStart = -1;
     private int mSelectionEnd = -1;
+    private Object mBackCallback;
 
     public boolean isListeningVoice() {
         return mIsListeningVoice;
@@ -110,7 +112,13 @@ public class TermuxInputMethodService extends InputMethodService {
 
     @Override
     public boolean onEvaluateInputViewShown() {
-        return super.onEvaluateInputViewShown();
+        super.onEvaluateInputViewShown();
+        return true;
+    }
+
+    @Override
+    public boolean onShowInputRequested(int flags, boolean configChange) {
+        return true;
     }
 
     @Override
@@ -128,12 +136,15 @@ public class TermuxInputMethodService extends InputMethodService {
     @Override
     public void onWindowShown() {
         super.onWindowShown();
+        updateBackDisposition();
         applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
+        registerBackCallback();
     }
 
     @Override
     public void onWindowHidden() {
         super.onWindowHidden();
+        unregisterBackCallback();
         stopVoiceTyping();
         if (mKeyPopup != null) {
             mKeyPopup.onKeyPopupHideAll();
@@ -144,83 +155,61 @@ public class TermuxInputMethodService extends InputMethodService {
         }
     }
 
+    private void registerBackCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && mBackCallback == null) {
+            Window win = getWindow() != null ? getWindow().getWindow() : null;
+            if (win != null) {
+                android.window.OnBackInvokedCallback callback = () -> {
+                    if (mKeyPopup != null) {
+                        mKeyPopup.onKeyPopupHideAll();
+                    }
+                    requestHideSelf(0);
+                };
+                try {
+                    win.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback);
+                    mBackCallback = callback;
+                } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private void unregisterBackCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && mBackCallback != null) {
+            Window win = getWindow() != null ? getWindow().getWindow() : null;
+            if (win != null) {
+                try {
+                    win.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+                        (android.window.OnBackInvokedCallback) mBackCallback);
+                } catch (Exception ignored) {}
+            }
+            mBackCallback = null;
+        }
+    }
+
     @Override
-    public void setInputView(View v) {
-        if (v != null) {
-            ViewParent parent = v.getParent();
-            if (parent instanceof ViewGroup) {
-                ((ViewGroup) parent).removeView(v);
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (isInputViewShown()) {
+                event.startTracking();
+                return true;
             }
         }
-        super.setInputView(v);
-        updateSoftInputWindowLayoutParams();
-        if (v != null) {
-            v.requestApplyInsets();
-        }
+        return super.onKeyDown(keyCode, event);
     }
 
     @Override
-    public void updateFullscreenMode() {
-        super.updateFullscreenMode();
-        updateSoftInputWindowLayoutParams();
-    }
-
-    private void updateSoftInputWindowLayoutParams() {
-        final Window window = getWindow() != null ? getWindow().getWindow() : null;
-        if (window == null) return;
-        if (Build.VERSION.SDK_INT >= 35) {
-            WindowManager.LayoutParams wattrs = window.getAttributes();
-            if (wattrs != null) {
-                wattrs.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
-                wattrs.setFitInsetsTypes(0);
-                window.setDecorFitsSystemWindows(false);
+    public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (mKeyPopup != null) {
+                mKeyPopup.onKeyPopupHideAll();
+            }
+            if (event.isTracking() && !event.isCanceled() && isInputViewShown()) {
+                requestHideSelf(0);
+                return true;
             }
         }
-        updateLayoutHeightOf(window, ViewGroup.LayoutParams.MATCH_PARENT);
-        final View inputArea = window.findViewById(android.R.id.inputArea);
-        if (inputArea != null && inputArea.getParent() instanceof View) {
-            View parent = (View) inputArea.getParent();
-            updateLayoutHeightOf(
-                parent,
-                isFullscreenMode()
-                    ? ViewGroup.LayoutParams.MATCH_PARENT
-                    : ViewGroup.LayoutParams.WRAP_CONTENT);
-            updateLayoutGravityOf(parent, Gravity.BOTTOM);
-        }
-    }
-
-    private static void updateLayoutHeightOf(final Window window, final int layoutHeight) {
-        final WindowManager.LayoutParams params = window.getAttributes();
-        if (params != null && params.height != layoutHeight) {
-            params.height = layoutHeight;
-            window.setAttributes(params);
-        }
-    }
-
-    private static void updateLayoutHeightOf(final View view, final int layoutHeight) {
-        final ViewGroup.LayoutParams params = view.getLayoutParams();
-        if (params != null && params.height != layoutHeight) {
-            params.height = layoutHeight;
-            view.setLayoutParams(params);
-        }
-    }
-
-    private static void updateLayoutGravityOf(final View view, final int layoutGravity) {
-        final ViewGroup.LayoutParams lp = view.getLayoutParams();
-        if (lp instanceof LinearLayout.LayoutParams) {
-            final LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) lp;
-            if (params.gravity != layoutGravity) {
-                params.gravity = layoutGravity;
-                view.setLayoutParams(params);
-            }
-        } else if (lp instanceof FrameLayout.LayoutParams) {
-            final FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) lp;
-            if (params.gravity != layoutGravity) {
-                params.gravity = layoutGravity;
-                view.setLayoutParams(params);
-            }
-        }
+        return super.onKeyUp(keyCode, event);
     }
 
     @Override
@@ -237,6 +226,7 @@ public class TermuxInputMethodService extends InputMethodService {
         mInputContainer.setClipToPadding(false);
 
         rebuildKeyboardView();
+        updateBackDisposition();
         return mInputContainer;
     }
 
@@ -366,7 +356,31 @@ public class TermuxInputMethodService extends InputMethodService {
 
         // Synchronize window navigation bar and background
         applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
+        updateBackDisposition();
         updateEditorAction(getCurrentInputEditorInfo());
+    }
+
+    private void updateBackDisposition() {
+        boolean showButton = mPreferences != null
+            ? mPreferences.isNavBarKeyboardButtonEnabled()
+            : SystemNavBarHelper.isNavBarKeyboardButtonEnabled(this);
+        setBackDisposition(showButton
+            ? InputMethodService.BACK_DISPOSITION_DEFAULT
+            : InputMethodService.BACK_DISPOSITION_ADJUST_NOTHING);
+    }
+
+    @Override
+    public void onComputeInsets(InputMethodService.Insets outInsets) {
+        super.onComputeInsets(outInsets);
+        if (mKeyboardWrapper != null && mKeyboardWrapper.getVisibility() == View.VISIBLE && mKeyboardWrapper.getHeight() > 0) {
+            int[] loc = new int[2];
+            mKeyboardWrapper.getLocationInWindow(loc);
+            if (loc[1] >= 0) {
+                outInsets.contentTopInsets = loc[1];
+                outInsets.visibleTopInsets = loc[1];
+                outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_CONTENT;
+            }
+        }
     }
 
     private void applyWindowStyling(@Nullable Window win) {
@@ -471,6 +485,7 @@ public class TermuxInputMethodService extends InputMethodService {
 
         mPreferences = TermuxAppSharedPreferences.build(this);
         TermuxThemeManager.applyThemeOverlays(this);
+        updateBackDisposition();
 
         // Refresh keyboard view if any keyboard preferences changed in Settings
         String currentSignature = computeSettingsSignature();
@@ -479,7 +494,6 @@ public class TermuxInputMethodService extends InputMethodService {
         } else {
             applyWindowStyling(getWindow() != null ? getWindow().getWindow() : null);
         }
-        setInputView(mInputContainer);
         updateEditorAction(info);
     }
 
