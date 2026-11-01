@@ -1813,12 +1813,14 @@ public final class ChrootDistro {
                     } catch (Exception ignored) {}
                 }
             }
-            // Root-level cleanup of termux-x11, virgl, and lingering socket/pid
+            // Root-level cleanup of termux-x11, virgl, pulseaudio, and lingering socket/pid
             try {
                 Runtime.getRuntime().exec(new String[]{"su", "-c",
                     "killall -9 termux-x11 2>/dev/null || pkill -9 -f termux-x11 2>/dev/null; "
                     + "killall -9 virgl_test_server_android 2>/dev/null || pkill -9 -f virgl_test_server_android 2>/dev/null; "
+                    + "killall -9 pulseaudio 2>/dev/null || pkill -9 -f pulseaudio 2>/dev/null; "
                     + "rm -f /data/data/com.termux/files/usr/tmp/termux-x11-wm.pid 2>/dev/null; "
+                    + "rm -f /data/data/com.termux/files/usr/tmp/.pulse-socket 2>/dev/null; "
                     + "umount -l /data/local/nhsystem/kali-arm64/tmp/.X11-unix 2>/dev/null || true; "
                     + "umount -l /data/local/Droidspaces/Containers/*/rootfs/tmp/.X11-unix 2>/dev/null || true; "
                     + "umount -l /data/local/nhsystem/kali-arm64/tmp/.virgl 2>/dev/null || true; "
@@ -1828,14 +1830,17 @@ public final class ChrootDistro {
             } catch (Exception ignored) {}
         }
 
-        // Host-level cleanup (VirGL, PRoot / native termux x11 - PulseAudio stays running for continuous audio)
+        // Host-level cleanup (VirGL, PulseAudio, PRoot / native termux x11)
         try {
             Runtime.getRuntime().exec(new String[]{
-                TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pkill", "-9", "-f", "virgl_test_server_android|" + DE_PROCESS_PATTERN + "|termux-x11"
+                TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/pkill", "-9", "-f", "virgl_test_server_android|pulseaudio|" + DE_PROCESS_PATTERN + "|termux-x11"
             }).waitFor();
         } catch (Exception ignored) {}
         try {
-            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", "virgl_test_server_android|" + DE_PROCESS_PATTERN + "|termux-x11"}).waitFor();
+            Runtime.getRuntime().exec(new String[]{"pkill", "-9", "-f", "virgl_test_server_android|pulseaudio|" + DE_PROCESS_PATTERN + "|termux-x11"}).waitFor();
+        } catch (Exception ignored) {}
+        try {
+            new File(TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH, ".pulse-socket").delete();
         } catch (Exception ignored) {}
     }
 

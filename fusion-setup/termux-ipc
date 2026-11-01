@@ -46,6 +46,46 @@ if resp:
     fi
 }
 
+handle_left_canvas() {
+    local SUB="$1"
+    shift 2>/dev/null || true
+    case "$SUB" in
+        ""|help|--help|-h)
+            echo "Usage: termux-ipc left-canvas <open|stop|profile|eval|tab> [args...]"
+            echo ""
+            echo "Kontrol Kanvas Kiri (Eso Browser - 0 MB RAM Standby):"
+            echo "  open <url> [--json]       Buka URL di Kanvas Kiri on-demand"
+            echo "  stop [--json]             Hentikan mesin WebView & kembali ke Standby 0 MB"
+            echo "  profile <nama> [--json]   Ganti profil aktif Kanvas Kiri"
+            echo "  eval \"<js>\" [--json]      Jalankan kode JavaScript di tab aktif"
+            echo "  tab new [--json]          Buka tab baru (diarahkan ke beranda standby)"
+            echo "  tab close [--json]        Tutup tab aktif"
+            return 0
+            ;;
+        open)
+            send_cmd "LEFT_CANVAS open $*"
+            ;;
+        stop)
+            send_cmd "LEFT_CANVAS stop $*"
+            ;;
+        profile)
+            send_cmd "LEFT_CANVAS profile $*"
+            ;;
+        eval)
+            send_cmd "LEFT_CANVAS eval $*"
+            ;;
+        left-canvas|canvas-left|canvas-kiri|eso-browser)
+        handle_left_canvas "$@"
+        ;;
+    tab)
+            send_cmd "LEFT_CANVAS tab $*"
+            ;;
+        *)
+            send_cmd "LEFT_CANVAS $SUB $*"
+            ;;
+    esac
+}
+
 handle_tab() {
     local SUB_CMD="$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
     shift 2>/dev/null || true
@@ -285,6 +325,12 @@ handle_webview() {
         kill-tab|--kill-tab)
             shift
             local IDX="$1"
+            local PROF=""
+            [ -f /root/wallet/.active_profile ] && PROF="$(cat /root/wallet/.active_profile 2>/dev/null | tr -d ' \n\r')"
+            [ -z "$PROF" ] && [ -f /data/data/com.termux/files/home/wallet/.active_profile ] && PROF="$(cat /data/data/com.termux/files/home/wallet/.active_profile 2>/dev/null | tr -d ' \n\r')"
+            if [ -n "$PROF" ] && [ "$PROF" != "default" ]; then
+                agent-web save "$PROF" >/dev/null 2>&1 || true
+            fi
             if [ -n "$IDX" ]; then
                 send_cmd "WEBVIEW_KILL_TAB $IDX"
             else
@@ -293,6 +339,12 @@ handle_webview() {
             return 0
             ;;
         kill-worker|--kill-worker)
+            local PROF=""
+            [ -f /root/wallet/.active_profile ] && PROF="$(cat /root/wallet/.active_profile 2>/dev/null | tr -d ' \n\r')"
+            [ -z "$PROF" ] && [ -f /data/data/com.termux/files/home/wallet/.active_profile ] && PROF="$(cat /data/data/com.termux/files/home/wallet/.active_profile 2>/dev/null | tr -d ' \n\r')"
+            if [ -n "$PROF" ] && [ "$PROF" != "default" ]; then
+                agent-web save "$PROF" >/dev/null 2>&1 || true
+            fi
             send_cmd "WEBVIEW_KILL_WORKER"
             return 0
             ;;
@@ -307,6 +359,12 @@ handle_webview() {
             return 0
             ;;
         close|--close|hide|--hide)
+            local PROF=""
+            [ -f /root/wallet/.active_profile ] && PROF="$(cat /root/wallet/.active_profile 2>/dev/null | tr -d ' \n\r')"
+            [ -z "$PROF" ] && [ -f /data/data/com.termux/files/home/wallet/.active_profile ] && PROF="$(cat /data/data/com.termux/files/home/wallet/.active_profile 2>/dev/null | tr -d ' \n\r')"
+            if [ -n "$PROF" ] && [ "$PROF" != "default" ]; then
+                agent-web save "$PROF" >/dev/null 2>&1 || true
+            fi
             send_cmd "WEBVIEW_CLOSE"
             return 0
             ;;
@@ -833,6 +891,9 @@ sys.exit(res.returncode)
         ;;
     agy-stop|stop)
         handle_webview "agy-stop" "$@"
+        ;;
+    left-canvas|canvas-left|canvas-kiri|eso-browser)
+        handle_left_canvas "$@"
         ;;
     tab)
         handle_tab "$@"

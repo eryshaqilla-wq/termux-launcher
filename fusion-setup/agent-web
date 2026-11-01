@@ -6,32 +6,391 @@
  * Mendukung navigasi, multi-step NLP, DOM snapshot, multi-profile cookie vault, dan X automation.
  */
 
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 
 const GREEN = '\x1b[32m';
 const CYAN = '\x1b[36m';
 const YELLOW = '\x1b[33m';
 const RED = '\x1b[31m';
 const BOLD = '\x1b[1m';
+const GRAY = '\x1b[90m';
 const RESET = '\x1b[0m';
 
-function getSessionsDir() {
+function decodeRecipePayloadCli(rawInput) {
+    if (!rawInput) return null;
+    let code = rawInput.trim();
+
+    // 1. Cek jika berupa URL dengan hash #agy_code= atau #agy_recipe= atau ?agy_code=
+    const urlMatch = code.match(/[#\?&]agy_(?:code|recipe)=([^&\s]+)/i);
+    if (urlMatch && urlMatch[1]) {
+        code = urlMatch[1];
+    } else if (code.startsWith('AGY-RECIPE:')) {
+        // AGY-RECIPE:v1:<base64> atau AGY-RECIPE:<base64>
+        const parts = code.split(':');
+        code = parts[parts.length - 1].trim();
+    }
+
+    // 2. Decode base64 URL-safe / standard
+    try {
+        const decodedStr = Buffer.from(decodeURIComponent(code), 'base64').toString('utf8');
+        const parsed = JSON.parse(decodedStr);
+        if (parsed && (parsed.name || parsed.events)) {
+            return parsed;
+        }
+    } catch (_) {}
+
+    // Coba langsung JSON decode jika raw JSON di-paste
+    try {
+        const parsed = JSON.parse(rawInput);
+        if (parsed && (parsed.name || parsed.events)) {
+            return parsed;
+        }
+    } catch (_) {}
+
+    return null;
+}
+
+function getSitePrefix(rawUrl) {
+    if (!rawUrl) return '';
+    try {
+        const u = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? rawUrl : `https://${rawUrl}`;
+        let host = new URL(u).hostname.replace(/^www\./i, '').toLowerCase();
+        let parts = host.split('.');
+        if (parts.length >= 3 && ['app', 'dapp', 'm', 'mobile', 'claim', 'web'].includes(parts[0])) {
+            parts.shift();
+            host = parts.join('.');
+        }
+        if (parts.length >= 2) {
+            if (parts.length === 2 && !['com', 'net', 'org', 'io', 'xyz', 'app', 'me', 'co'].includes(parts[1])) {
+                return host.replace(/[^a-zA-Z0-9_-]/g, '_');
+            }
+            return parts[0].replace(/[^a-zA-Z0-9_-]/g, '_');
+        }
+        return host.replace(/[^a-zA-Z0-9_-]/g, '_');
+    } catch (_) {
+        return '';
+    }
+}
+
+function saveRecipeToDisk(recipe) {
+    const candidates = [
+        '/root/wallet/recipes_db.json',
+        '/data/data/com.termux/files/home/wallet/recipes_db.json'
+    ];
+    let targetFile = candidates[0];
+    for (const f of candidates) {
+        if (fs.existsSync(path.dirname(f))) {
+            targetFile = f;
+            break;
+        }
+    }
+
+    let db = {};
+    if (fs.existsSync(targetFile)) {
+        try {
+            db = JSON.parse(fs.readFileSync(targetFile, 'utf8')) || {};
+        } catch (_) { db = {}; }
+    }
+
+    const targetUrl = recipe.targetUrl || recipe.url || '';
+    const sitePrefix = getSitePrefix(targetUrl);
+    let rName = (recipe.name || `makro_${Date.now()}`).trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+
+    if (sitePrefix && !rName.toLowerCase().startsWith(sitePrefix.toLowerCase())) {
+        rName = `${sitePrefix}_${rName.replace(/^(resep_|makro_)/i, '')}`;
+    }
+
+    db[rName] = {
+        name: rName,
+        site: sitePrefix || 'web',
+        createdAt: Date.now(),
+        targetUrl: targetUrl,
+        events: Array.isArray(recipe.events) ? recipe.events : []
+    };
+
+    try {
+        fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+        fs.writeFileSync(targetFile, JSON.stringify(db, null, 2), 'utf8');
+        return { ok: true, file: targetFile, name: rName, count: db[rName].events.length, url: db[rName].targetUrl };
+    } catch (e) {
+        return { ok: false, error: e.message };
+    }
+}
+
+function loadRecipe(recipeQuery) {
+    if (!recipeQuery) return null;
+    const query = String(recipeQuery).trim();
+
+    // 1. Cek jika query berupa file path langsung (.makro / .json)
+    if (fs.existsSync(query)) {
+        try {
+            const content = fs.readFileSync(query, 'utf8');
+            const parsed = JSON.parse(content);
+            if (parsed && (parsed.events || Array.isArray(parsed))) {
+                const events = Array.isArray(parsed) ? parsed : parsed.events;
+                const name = parsed.name || path.basename(query, path.extname(query));
+                return { name, events, targetUrl: parsed.targetUrl || parsed.url || '' };
+            }
+        } catch (_) {}
+    }
+
+    // 2. Baca dari recipes_db.json
+    const candidates = [
+        '/root/wallet/recipes_db.json',
+        '/data/data/com.termux/files/home/wallet/recipes_db.json'
+    ];
+    let db = {};
+    for (const f of candidates) {
+        if (fs.existsSync(f)) {
+            try {
+                db = JSON.parse(fs.readFileSync(f, 'utf8')) || {};
+                break;
+            } catch (_) {}
+        }
+    }
+
+    // A. Direct key match
+    if (db[query]) {
+        return db[query];
+    }
+
+    // B. Normalized query (contoh: "web3.claim.makro" -> "web3_claim")
+    const cleanQuery = query.replace(/\.(makro|json)$/i, '').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    if (db[cleanQuery]) {
+        return db[cleanQuery];
+    }
+
+    // C. Prefix / Suffix / Substring match
+    for (const [key, val] of Object.entries(db)) {
+        const kLower = key.toLowerCase();
+        if (kLower === cleanQuery || kLower.endsWith(`_${cleanQuery}`) || kLower.includes(cleanQuery)) {
+            return val;
+        }
+    }
+
+    return null;
+}
+
+function isPortOpen(port, host = '127.0.0.1') {
+    return new Promise((resolve) => {
+        const socket = new net.Socket();
+        socket.setTimeout(400);
+        socket.once('connect', () => {
+            socket.destroy();
+            resolve(true);
+        });
+        socket.once('timeout', () => {
+            socket.destroy();
+            resolve(false);
+        });
+        socket.once('error', () => {
+            socket.destroy();
+            resolve(false);
+        });
+        socket.connect(port, host);
+    });
+}
+
+function runIpcTab(action, args = []) {
+    const ipcBin = fs.existsSync('/usr/local/bin/termux-ipc') 
+        ? '/usr/local/bin/termux-ipc' 
+        : (fs.existsSync('/usr/local/termux-shims/termux-ipc') ? '/usr/local/termux-shims/termux-ipc' : 'termux-ipc');
+    try {
+        const cmdStr = `${ipcBin} tab ${action} ${args.map(a => `"${String(a).replace(/"/g, '\\"')}"`).join(' ')}`;
+        return execSync(cmdStr, { encoding: 'utf8' }).trim();
+    } catch (e) {
+        return e.stdout ? e.stdout.trim() : `Error: ${e.message}`;
+    }
+}
+
+async function ensureGhostWalletRunning(preferTab = true) {
+    const running = await isPortOpen(3333);
+    if (running) {
+        console.log(`[GhostWallet] Daemon sudah aktif di port 3333.`);
+        return { running: true, spawnedTab: null };
+    }
+
+    const tabName = `ghostwallet_${Date.now().toString().slice(-4)}`;
+    console.log(`[GhostWallet] Daemon belum aktif. Membuka tab baru "${tabName}" via IPC...`);
+
+    const walletCmd = 'if command -v wallet >/dev/null 2>&1; then wallet --auto --ghostwallet 3333; else for d in "$FUSION_WALLET_DIR" "$HOME/wallet" /wallet /root/wallet; do if [ -n "$d" ] && [ -d "$d" ]; then cd "$d" && { if [ -f wallet.cjs ]; then node wallet.cjs --auto --ghostwallet 3333; elif [ -f wallet.js ]; then node wallet.js --auto --ghostwallet 3333; fi; } && break; fi; done; fi';
+
+    if (preferTab) {
+        runIpcTab('new', [tabName, walletCmd]);
+    } else {
+        spawn('bash', ['-c', walletCmd], { detached: true, stdio: 'ignore' }).unref();
+    }
+
+    for (let i = 0; i < 20; i++) {
+        await sleep(250);
+        if (await isPortOpen(3333)) {
+            console.log(`[GhostWallet] Daemon sukses aktif di port 3333 (Tab: ${tabName}).`);
+            return { running: true, spawnedTab: preferTab ? tabName : null };
+        }
+    }
+
+    console.error(`[GhostWallet] Timeout menunggu port 3333.`);
+    return { running: false, spawnedTab: null };
+}
+
+async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1) {
+    const safeName = recipeName.replace(/[^a-zA-Z0-9_-]/g, '_');
+    console.log(`[Modul Makro] Menyiapkan auto-play resep "${safeName}" (Loop: ${loopCount}x murni, tanpa switch wallet)...`);
+
+    const triggerJs = `(function() {
+        if (window.__AGY_RECIPE_TRIGGERED__) return 'ALREADY_RUNNING';
+        if (!window.AgyBatchRunner || typeof window.AgyBatchRunner.run !== 'function') return 'NOT_READY';
+        var events = ${JSON.stringify(recipeEvents)};
+        window.__AGY_RECIPE_TRIGGERED__ = true;
+        window.__AGY_RECIPE_STATUS__ = 'RUNNING';
+        window.AgyBatchRunner.run(events, '${safeName}', '1', false, function(result) {
+            window.__AGY_RECIPE_STATUS__ = 'COMPLETED';
+            window.__AGY_RECIPE_RESULT__ = result;
+        }, 'raw', ${loopCount});
+        return 'STARTED';
+    })()`;
+
+    for (let attempt = 1; attempt <= 15; attempt++) {
+        await sleep(1500);
+        try {
+            const res = runIpc(`eval "${triggerJs.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`);
+            if (res && res.includes('STARTED')) {
+                console.log(`[Modul Makro] Resep "${safeName}" sukses diputar di WebView!`);
+                return true;
+            } else if (res && res.includes('ALREADY_RUNNING')) {
+                return true;
+            }
+        } catch (_) {}
+    }
+    console.log(`[Modul Makro] Peringatan: Timeout menunggu kesiapan DOM / WebView.`);
+    return false;
+}
+
+async function waitForRecipeCompletion(timeoutMs = 180000) {
+    const start = Date.now();
+    const checkJs = `(function() {
+        if (window.__AGY_RECIPE_STATUS__ === 'COMPLETED') return 'COMPLETED';
+        if (!window.AgyBatchRunner || !window.AgyBatchRunner.isRunning) return 'STOPPED';
+        return 'RUNNING';
+    })()`;
+
+    while (Date.now() - start < timeoutMs) {
+        await sleep(1500);
+        try {
+            const res = runIpc(`eval "${checkJs.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`);
+            if (res && res.includes('COMPLETED')) {
+                console.log(`[Modul Makro] Seluruh alur makro telah selesai (COMPLETED)!`);
+                return true;
+            } else if (res && res.includes('STOPPED')) {
+                console.log(`[Modul Makro] Alur makro selesai / berhenti.`);
+                return true;
+            }
+        } catch (_) {}
+    }
+    console.log(`[Modul Makro] Batas waktu pemantauan (${timeoutMs / 1000}s) tercapai.`);
+    return false;
+}
+
+function getAllSessionDirs() {
     const candidates = [
         process.env.FUSION_WALLET_DIR ? path.join(process.env.FUSION_WALLET_DIR, 'sessions') : null,
         process.env.HOME ? path.join(process.env.HOME, 'wallet', 'sessions') : null,
-        '/wallet/sessions',
+        '/data/data/com.termux/files/home/wallet/sessions',
+        '/data/local/nhsystem/kali-arm64/root/wallet/sessions',
         '/root/wallet/sessions',
-        '/data/data/com.termux/files/home/wallet/sessions'
+        '/wallet/sessions'
     ].filter(Boolean);
 
+    const dirs = [];
     for (const dir of candidates) {
+        try {
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            const real = fs.realpathSync(dir);
+            if (!dirs.includes(real)) dirs.push(real);
+            if (!dirs.includes(dir)) dirs.push(dir);
+        } catch (_) {}
+    }
+    return dirs.length > 0 ? dirs : ['/root/wallet/sessions'];
+}
+
+function getSessionsDir() {
+    const dirs = getAllSessionDirs();
+    for (const dir of dirs) {
         if (fs.existsSync(dir)) return dir;
     }
     const def = '/root/wallet/sessions';
     try { fs.mkdirSync(def, { recursive: true }); } catch(_) {}
     return def;
+}
+
+function getActiveProfile() {
+    const candidates = [
+        '/root/wallet/.active_profile',
+        '/data/data/com.termux/files/home/wallet/.active_profile',
+        '/wallet/.active_profile'
+    ];
+    for (const p of candidates) {
+        try {
+            if (fs.existsSync(p)) {
+                const val = fs.readFileSync(p, 'utf8').trim();
+                if (val) return val;
+            }
+        } catch (_) {}
+    }
+    return 'default';
+}
+
+function setActiveProfile(profile) {
+    if (!profile) return;
+    const paths = [
+        '/root/wallet/.active_profile',
+        '/data/data/com.termux/files/home/wallet/.active_profile',
+        '/wallet/.active_profile'
+    ];
+    for (const p of paths) {
+        try {
+            const dir = path.dirname(p);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(p, profile.trim(), 'utf8');
+            try { fs.chmodSync(p, 0o666); } catch (_) {}
+        } catch (_) {}
+    }
+}
+
+function registerProfile(profile) {
+    if (!profile || profile === 'default' || profile.startsWith('fresh_')) return;
+    const paths = [
+        '/root/wallet/webview_profiles.json',
+        '/data/data/com.termux/files/home/wallet/webview_profiles.json',
+        '/wallet/webview_profiles.json'
+    ];
+    for (const p of paths) {
+        try {
+            let list = [];
+            if (fs.existsSync(p)) {
+                try { list = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) {}
+            }
+            if (!Array.isArray(list)) list = [];
+            if (!list.includes(profile)) {
+                list.push(profile);
+                const dir = path.dirname(p);
+                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+                fs.writeFileSync(p, JSON.stringify(list, null, 2), 'utf8');
+                try { fs.chmodSync(p, 0o666); } catch (_) {}
+            }
+        } catch (_) {}
+    }
+}
+
+function spawnSessionWatcher(profile) {
+    // No-op: polling background watcher dimatikan permanen agar tidak memicu flicker tema/CDP di WebView
+}
+
+async function runSessionWatcher(profile) {
+    // No-op
 }
 
 function sleep(ms) {
@@ -80,44 +439,74 @@ async function clearCdpCookies() {
     }
 }
 
-async function saveSessionCookies(profile) {
+async function saveSessionCookies(profile, silent = false) {
     if (!profile || profile === 'default' || profile.startsWith('fresh_')) return false;
-    const dir = getSessionsDir();
-    const sessionFile = path.join(dir, `${profile}.json`);
     try {
         await ensurePortForward();
         const { chromium } = require('playwright-core');
-        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 3000 });
         const contexts = browser.contexts();
         if (contexts.length > 0) {
-            // Simpan seluruh cookies dan storageState dari SELURUH domain website
-            await contexts[0].storageState({ path: sessionFile });
-            console.log(` ${GREEN}💾 [SESSION SAVED] Seluruh sesi & cookies web untuk profil [${profile}] berhasil disimpan!${RESET}`);
+            const state = await contexts[0].storageState();
+            if (state && state.cookies && state.cookies.length > 0) {
+                const jsonStr = JSON.stringify(state, null, 2);
+                const dirs = getAllSessionDirs();
+                for (const d of dirs) {
+                    try {
+                        const targetFile = path.join(d, `${profile}.json`);
+                        fs.writeFileSync(targetFile, jsonStr, 'utf8');
+                        try { fs.chmodSync(targetFile, 0o666); } catch (_) {}
+                    } catch (_) {}
+                }
+                registerProfile(profile);
+                if (!silent) console.log(`Sesi web untuk profil [${profile}] berhasil disimpan (${state.cookies.length} cookies).`);
+                await browser.close();
+                return true;
+            }
         }
         await browser.close();
-        return true;
+        return false;
     } catch (e) {
         return false;
     }
 }
 
-async function injectSessionCookies(profile) {
-    const dir = getSessionsDir();
-    const sessionFile = path.join(dir, `${profile}.json`);
-    if (!fs.existsSync(sessionFile)) return false;
+async function injectSessionCookies(profile, silent = false) {
+    if (!profile || profile === 'default' || profile.startsWith('fresh_')) return false;
+    const dirs = getAllSessionDirs();
+    let sessionFile = null;
+    for (const d of dirs) {
+        const candidate = path.join(d, `${profile}.json`);
+        if (fs.existsSync(candidate) && fs.statSync(candidate).size > 0) {
+            sessionFile = candidate;
+            break;
+        }
+    }
+    if (!sessionFile) return false;
 
     try {
         const raw = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
         if (!raw.cookies || raw.cookies.length === 0) return false;
 
+        // Pastikan berkas sesi juga tersalin ke seluruh kandidat direktori sesi (termasuk folder home Termux)
+        for (const d of dirs) {
+            const target = path.join(d, `${profile}.json`);
+            if (target !== sessionFile && (!fs.existsSync(target) || fs.statSync(target).size === 0)) {
+                try {
+                    fs.writeFileSync(target, JSON.stringify(raw, null, 2), 'utf8');
+                    fs.chmodSync(target, 0o666);
+                } catch (_) {}
+            }
+        }
+
         await ensurePortForward();
         const { chromium } = require('playwright-core');
-        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 3000 });
         const contexts = browser.contexts();
         if (contexts.length > 0) {
             await contexts[0].clearCookies();
             await contexts[0].addCookies(raw.cookies);
-            console.log(` ${GREEN}🔑 [COOKIE VAULT] Sesi login [${profile}] berhasil diinjeksi ke browser!${RESET}`);
+            if (!silent) console.log(`Sesi profil [${profile}] dipulihkan (${raw.cookies.length} cookies).`);
         }
         await browser.close();
         return true;
@@ -128,14 +517,13 @@ async function injectSessionCookies(profile) {
 
 async function handleXPost(text, profile) {
     const targetProfile = profile || 'shaqilla';
-    console.log(`${CYAN}🐦 [X-POST] Memulai posting ke X menggunakan profil: ${BOLD}${targetProfile}${RESET}`);
+    console.log(`Mengirim tweet via profil: ${targetProfile}...`);
     
     // Pastikan cookies profil diinjeksi jika ada
-    await injectSessionCookies(targetProfile);
+    await injectSessionCookies(targetProfile, true);
 
     // 1. Buka komposer tweet X dengan profil yang diminta
     runIpc(`--profile ${targetProfile} https://x.com/compose/post`);
-    console.log(`⏳ Menunggu halaman editor X siap...`);
     await sleep(3500);
 
     // 2. Skrip injeksi teks ke contenteditable Twitter / X
@@ -175,12 +563,12 @@ async function handleXPost(text, profile) {
     `;
 
     const res = evalJs(postScript);
-    console.log(`${GREEN}✔ Perintah kirim tweet telah dieksekusi.${RESET}`);
+    console.log(`Tweet terkirim.`);
     return { success: true, profile: targetProfile, text };
 }
 
 async function handleSnapshot() {
-    console.log(`${CYAN}📸 [DOM SNAPSHOT] Mengambil ringkasan elemen aktif di WebView...${RESET}`);
+    console.log(`Mengambil snapshot DOM WebView...`);
     const dumpFile = '/root/wallet/dom_dump.json';
     try { if (fs.existsSync(dumpFile)) fs.unlinkSync(dumpFile); } catch(_) {}
     
@@ -202,27 +590,125 @@ async function handleSnapshot() {
 async function handleOpenUrl(url, extraFlags = []) {
     let targetProfile = 'default';
     let flagsWithoutProfile = [];
+    let modulQuery = null;
+    let loopCount = 1;
+    let targetWallet = null;
+    let needWallet = false;
+    let stopIfWord = null;
+    let stopNotWord = null;
 
     for (let i = 0; i < extraFlags.length; i++) {
-        if (extraFlags[i] === '--profile' && extraFlags[i + 1]) {
+        const flag = extraFlags[i];
+        if (flag === '--profile' && extraFlags[i + 1]) {
             targetProfile = extraFlags[i + 1];
             i++;
+        } else if (flag.startsWith('--profile=')) {
+            targetProfile = flag.split('=')[1] || 'default';
+        } else if (flag === '--modul' || flag === '--macro' || flag === '--recipe') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                modulQuery = extraFlags[i + 1];
+                i++;
+            }
+        } else if (flag.startsWith('--modul=') || flag.startsWith('--macro=') || flag.startsWith('--recipe=')) {
+            modulQuery = flag.split('=')[1];
+        } else if (flag === '--loop' || flag === '-l') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                loopCount = parseInt(extraFlags[i + 1], 10) || 1;
+                i++;
+            }
+        } else if (flag.startsWith('--loop=')) {
+            loopCount = parseInt(flag.split('=')[1], 10) || 1;
+        } else if (flag === '--wallet') {
+            needWallet = true;
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--') && !extraFlags[i + 1].startsWith('http://') && !extraFlags[i + 1].startsWith('https://')) {
+                targetWallet = extraFlags[i + 1];
+                i++;
+            } else {
+                targetWallet = null;
+            }
+        } else if (flag.startsWith('--wallet=')) {
+            needWallet = true;
+            targetWallet = flag.split('=')[1] || null;
+        } else if (flag === '--stop-if' || flag === '--stopif' || flag === '--stop-when') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                stopIfWord = extraFlags[i + 1];
+                i++;
+            }
+        } else if (flag.startsWith('--stop-if=') || flag.startsWith('--stopif=')) {
+            stopIfWord = flag.split('=')[1] || null;
+        } else if (flag === '--stop-not') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                stopNotWord = extraFlags[i + 1];
+                i++;
+            }
+        } else if (flag.startsWith('--stop-not=')) {
+            stopNotWord = flag.split('=')[1] || null;
         } else {
-            flagsWithoutProfile.push(extraFlags[i]);
+            flagsWithoutProfile.push(flag);
         }
     }
 
-    const dir = getSessionsDir();
-    const sessionFile = path.join(dir, `${targetProfile}.json`);
-    const hasSession = fs.existsSync(sessionFile);
+    const isWorkerTab = extraFlags.includes('--in-worker-tab');
+    let workerTabName = '';
+    const wIdx = extraFlags.indexOf('--tab-name');
+    if (wIdx !== -1 && extraFlags[wIdx + 1]) {
+        workerTabName = extraFlags[wIdx + 1];
+    }
 
-    console.log(`${CYAN}🌐 [AGENT-WEB] Membuka: ${BOLD}${url}${RESET} ${CYAN}(Profil: ${BOLD}${targetProfile}${RESET}${CYAN})${RESET}`);
+    let spawnedWalletTab = null;
+    if (needWallet) {
+        const wRes = await ensureGhostWalletRunning(true);
+        spawnedWalletTab = wRes.spawnedTab;
+        if (!flagsWithoutProfile.includes('--ghost')) {
+            flagsWithoutProfile.push('--ghost');
+        }
+        if (targetWallet && !flagsWithoutProfile.some(f => f.startsWith('--wallet'))) {
+            flagsWithoutProfile.push(`--wallet "${targetWallet}"`);
+        }
+    }
+
+    let recipe = null;
+    if (modulQuery) {
+        recipe = loadRecipe(modulQuery);
+        if (!recipe) {
+            console.error(`${RED}[Modul Makro] Resep/modul "${modulQuery}" tidak ditemukan!${RESET}`);
+            console.error(`Periksa nama resep di /root/wallet/recipes_db.json atau pastikan path file valid.`);
+            process.exit(1);
+        }
+        if (!url && recipe.targetUrl) {
+            url = recipe.targetUrl;
+        }
+    }
+
+    if (!url) {
+        console.error(`${RED}Error: URL target wajib ditentukan!${RESET}`);
+        process.exit(1);
+    }
+
+    // Auto-save profil lama jika aktif profil berbeda
+    const prevProfile = getActiveProfile();
+    if (prevProfile && prevProfile !== 'default' && prevProfile !== targetProfile) {
+        await saveSessionCookies(prevProfile, true);
+    }
+
+    if (targetProfile && targetProfile !== 'default') {
+        setActiveProfile(targetProfile);
+        registerProfile(targetProfile);
+    }
+
+    const dirs = getAllSessionDirs();
+    let hasSession = false;
+    for (const d of dirs) {
+        const f = path.join(d, `${targetProfile}.json`);
+        if (fs.existsSync(f) && fs.statSync(f).size > 0) {
+            hasSession = true;
+            break;
+        }
+    }
 
     if (hasSession) {
-        console.log(` ${GREEN}🔑 Sesi profil [${targetProfile}] ditemukan. Memulihkan cookies akun...${RESET}`);
-        await injectSessionCookies(targetProfile);
+        await injectSessionCookies(targetProfile, true);
     } else if (targetProfile !== 'default') {
-        console.log(` ${YELLOW}⚡ Profil baru [${targetProfile}] belum ada sesi. Membersihkan cookies agar 100% FRESH...${RESET}`);
         await clearCdpCookies();
     }
 
@@ -232,47 +718,162 @@ async function handleOpenUrl(url, extraFlags = []) {
     }
 
     const res = runIpc(`${fullFlags} ${url}`);
-    if (res) console.log(res);
+
+    // Print 1x bersih dan ringkas tanpa icon alay
+    const displayUrl = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) ? url : `https://${url}`;
+    let statusMsg = `Membuka ${displayUrl}`;
+    if (targetProfile && targetProfile !== 'default') statusMsg += ` (profil: ${targetProfile}) [Auto-Session: Aktif]`;
+    if (needWallet) statusMsg += ` [GhostWallet: ${targetWallet ? targetWallet : 'Auto-Daemon'}]`;
+    console.log(statusMsg);
+
+    // Hanya tampilkan jika ada output error tidak terduga
+    if (res && !res.toLowerCase().includes('meluncurkan') && res !== 'OK') {
+        console.log(res);
+    }
+
+    if (recipe) {
+        let eventsToRun = (recipe.events || []).slice();
+        if (stopIfWord) {
+            eventsToRun.push({
+                type: 'stop_if',
+                text: stopIfWord,
+                condition: 'contains',
+                desc: 'Auto-Stop jika ada: ' + stopIfWord,
+                timestamp: Date.now()
+            });
+            console.log(`[Modul Makro] Disisipkan Auto-Stop jika terdeteksi: "${stopIfWord}"`);
+        }
+        if (stopNotWord) {
+            eventsToRun.push({
+                type: 'stop_not',
+                text: stopNotWord,
+                condition: 'not_found',
+                desc: 'Auto-Stop jika hilang: ' + stopNotWord,
+                timestamp: Date.now()
+            });
+            console.log(`[Modul Makro] Disisipkan Auto-Stop jika hilang: "${stopNotWord}"`);
+        }
+        const triggered = await triggerRecipeInWebView(recipe.name, eventsToRun, loopCount);
+        if (triggered) {
+            await waitForRecipeCompletion();
+        }
+    }
+
+    // Cleanup: Jika wallet dinyalakan khusus untuk sesi ini, hentikan dan tutup tabnya
+    if (spawnedWalletTab) {
+        console.log(`[GhostWallet] Makro selesai. Menghentikan daemon & menutup tab "${spawnedWalletTab}"...`);
+        try {
+            execSync("fuser -k 3333/tcp 2>/dev/null || pkill -f 'ghostwallet 3333' 2>/dev/null || true");
+            runIpcTab('close', [spawnedWalletTab]);
+        } catch (_) {}
+    }
+
+    // Cleanup: Jika sesi berjalan di dalam tab worker terisolasi, tutup webview & tab worker
+    if (isWorkerTab && workerTabName) {
+        console.log(`[WebView Worker] Makro selesai. Menutup tab worker "${workerTabName}"...`);
+        await sleep(1000);
+        runIpc('close');
+        runIpcTab('close', [workerTabName]);
+    }
 }
 
 async function main() {
     const args = process.argv.slice(2);
     const cmd = args[0] ? args[0].toLowerCase() : '';
 
+    // 🔥 AUTO-DETECT & IMPORT CODE REKAMAN VIA CLI (web <coderekaman> atau web import <code/url>)
+    const fullInput = args.join(' ').trim();
+    const recipeData = decodeRecipePayloadCli(fullInput) || (args[1] ? decodeRecipePayloadCli(args.slice(1).join(' ')) : null);
+
+    if (recipeData) {
+        const result = saveRecipeToDisk(recipeData);
+        if (result.ok) {
+            console.log(`[Resep AGY Diimpor]`);
+            console.log(`  Resep    : ${result.name}`);
+            console.log(`  Langkah  : ${result.count}`);
+            console.log(`  Target   : ${result.url || '(Tidak ditentukan)'}`);
+            console.log(`  Database : ${result.file}\n`);
+
+            if (result.url && (result.url.startsWith('http://') || result.url.startsWith('https://'))) {
+                await handleOpenUrl(result.url, args.filter(a => a.startsWith('--')));
+            } else {
+                console.log(`Resep siap diputar di WebView. Buka: web <url> lalu tekan tombol REC.`);
+            }
+            process.exit(0);
+        } else {
+            console.log(`Gagal menyimpan resep: ${result.error}`);
+            process.exit(1);
+        }
+    }
+
     if (!cmd || cmd === '--help' || cmd === 'help') {
-        console.log(`\n${CYAN}${BOLD}🤖 AGENT-WEB CONTROLLER (Universal Web Automation for AI Agents)${RESET}`);
+        console.log(`\nAGENT-WEB CONTROLLER (Universal Web Automation)`);
         console.log(`Pengendali browser otonom untuk Antigravity, Subagents, dan CLI.\n`);
         console.log(`Usage:`);
-        console.log(`  ${GREEN}web open <url> [--profile <nama>] [--wallet <name>]${RESET}`);
-        console.log(`  ${GREEN}web <url> [--profile <nama>]${RESET}  (Shortcut instan membuka URL)`);
-        console.log(`  ${GREEN}web save-session [nama_profile]${RESET} (Simpan sesi semua situs web ke profil)`);
-        console.log(`  ${GREEN}web x-post "teks tweet" [--profile <nama>]${RESET}`);
-        console.log(`  ${GREEN}web prompt "instruksi cerdas / multi-step"${RESET}`);
-        console.log(`  ${GREEN}web click "Nama Tombol"${RESET}`);
-        console.log(`  ${GREEN}web type "Kolom" "Nilai yang diisi"${RESET}`);
-        console.log(`  ${GREEN}web snapshot${RESET} (Ekstrak DOM aktif)`);
-        console.log(`  ${GREEN}web clear-cookies${RESET} (Bersihkan cookies aktif agar 100% fresh)`);
-        console.log(`  ${GREEN}web eval "kode JavaScript"${RESET}`);
-        console.log(`  ${GREEN}web close${RESET}\n`);
+        console.log(`  web <url> [options]           (Buka URL di WebView)`);
+        console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
+        console.log(`  web --wallet [nama] <url>     (Auto-start GhostWallet port 3333 & connect)`);
+        console.log(`  web --loop <n>                (Jumlah putaran murni, tanpa switch wallet)`);
+        console.log(`  web --stop-if "kata"          (Auto-stop loop seketika jika teks terdeteksi di DOM)`);
+        console.log(`  web --stop-not "kata"         (Auto-stop loop jika teks hilang dari DOM)`);
+        console.log(`  web <coderekaman>             (Import resep otomatis)`);
+        console.log(`  web save-session [nama]       (Simpan sesi website ke profil)`);
+        console.log(`  web x-post "teks" [--profile] (Post tweet ke X)`);
+        console.log(`  web prompt "instruksi"        (Eksekusi automasi via NLP)`);
+        console.log(`  web click "Nama Tombol"       (Klik elemen)`);
+        console.log(`  web type "Kolom" "Nilai"      (Input teks)`);
+        console.log(`  web snapshot                  (Ambil DOM dump aktif)`);
+        console.log(`  web clear-cookies             (Bersihkan cookies & cache aktif)`);
+        console.log(`  web eval "kode JS"            (Eksekusi JavaScript di WebView)`);
+        console.log(`  web close                     (Tutup WebView)\n`);
+        console.log(`Contoh Integrasi Telegram / Sniper:`);
+        console.log(`  web --wallet Master --modul web3_claim "https://web3.claim/gift/gsisbsi"`);
+        console.log(`  web --modul giftedstock_claim --loop 5 "https://giftedstock.com/gift"`);
+        console.log(`  web --wallet --modul gacha_box --stop-if "Out of stock" --loop 20 "https://dapp.xyz/box"\n`);
+        process.exit(0);
+    }
+
+    if (cmd === '--watch-session' || cmd === 'watch-session') {
+        const prof = args[1];
+        if (prof) {
+            await runSessionWatcher(prof);
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'profile' || cmd === 'profiles') {
+        const active = getActiveProfile();
+        const dirs = getAllSessionDirs();
+        const profiles = new Set();
+        for (const d of dirs) {
+            try {
+                const files = fs.readdirSync(d);
+                for (const f of files) {
+                    if (f.endsWith('.json')) profiles.add(f.replace('.json', ''));
+                }
+            } catch (_) {}
+        }
+        console.log(`Profil aktif saat ini : ${active}`);
+        console.log(`Sesi tersimpan di vault: ${Array.from(profiles).join(', ') || '(belum ada)'}`);
         process.exit(0);
     }
 
     if (cmd === 'clear-cookies' || cmd === 'clearcookies' || cmd === 'clean') {
-        console.log(`${CYAN}🧹 Membersihkan seluruh cookies & storage aktif...${RESET}`);
+        console.log(`Membersihkan seluruh cookies & storage aktif...`);
         await clearCdpCookies();
         runIpc('clear-cache');
-        console.log(`${GREEN}✔ Selesai! Browser aktif kini 100% FRESH.${RESET}`);
+        console.log(`Cookies dan storage aktif telah dibersihkan.`);
         process.exit(0);
     }
 
     if (cmd === 'save' || cmd === 'save-session' || cmd === 'save-profile') {
-        const prof = args[1] || 'eryziggy';
-        console.log(`${CYAN}💾 Menyimpan seluruh cookies & sesi website untuk profil [${prof}]...${RESET}`);
+        const prof = args[1] || getActiveProfile() || '0xjamrud';
+        console.log(`Menyimpan sesi website untuk profil [${prof}]...`);
         const ok = await saveSessionCookies(prof);
         if (ok) {
-            console.log(`${GREEN}✔ Berhasil menyimpan sesi semua situs web ke brankas [${prof}].${RESET}`);
+            console.log(`Sesi website berhasil disimpan ke profil [${prof}].`);
         } else {
-            console.log(`${RED}Gagal menyimpan sesi. Pastikan browser WebView sedang aktif terbuka.${RESET}`);
+            console.log(`Gagal menyimpan sesi. Pastikan WebView sedang aktif.`);
         }
         process.exit(0);
     }
@@ -298,6 +899,17 @@ async function main() {
         process.exit(0);
     }
 
+    // Deteksi otomatis: Jika dipanggil dari Telegram/skrip background (!isTTY) atau flag --new-tab
+    const isTelegramCaller = Boolean(
+        !process.stdin.isTTY ||
+        process.env.TELEGRAM || 
+        process.env.AI_AGENT || 
+        process.env.AGENT_MODE || 
+        args.includes('--telegram') || 
+        args.includes('--new-tab')
+    );
+    const inWorkerTab = args.includes('--in-worker-tab');
+
     if (cmd === 'open') {
         const url = args[1];
         if (!url) {
@@ -309,11 +921,47 @@ async function main() {
         process.exit(0);
     }
 
-    // Shortcut: jika perintah berupa URL (contoh: web x.com --profile eryziggy)
-    if (cmd.startsWith('http://') || cmd.startsWith('https://') || cmd.includes('.')) {
-        const url = args[0];
-        const extraFlags = args.slice(1);
-        await handleOpenUrl(url, extraFlags);
+    // Jika dipanggil oleh Telegram / skrip background dan belum di dalam worker tab: delegasikan ke tab baru via IPC!
+    if (isTelegramCaller && !inWorkerTab && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close'].includes(cmd)) {
+        const workerTab = 'web_worker_' + Date.now().toString().slice(-4);
+        const cleanArgs = args.filter(a => a !== '--telegram' && a !== '--new-tab');
+        const delegatedCmd = `web --in-worker-tab --tab-name ${workerTab} ${cleanArgs.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}`;
+        console.log(`[Agent-Web] Panggilan background/Telegram terdeteksi. Membuka tab baru "${workerTab}" via IPC...`);
+        runIpcTab('new', [workerTab, delegatedCmd]);
+        process.exit(0);
+    }
+
+    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if)
+    const isUrlOrAutomation = args.some(a => 
+        a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
+        a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
+        a.startsWith('http://') || a.startsWith('https://') ||
+        (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json'))
+    );
+
+    if (isUrlOrAutomation && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close'].includes(cmd)) {
+        let targetUrl = '';
+        let passFlags = [];
+        for (let i = 0; i < args.length; i++) {
+            const item = args[i];
+            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name') {
+                passFlags.push(item);
+                if (args[i + 1] && !args[i + 1].startsWith('--')) {
+                    // Cek jika item adalah option yang mengambil value
+                    passFlags.push(args[i + 1]);
+                    i++;
+                }
+            } else if (item === '--in-worker-tab') {
+                passFlags.push(item);
+            } else if (item.startsWith('--')) {
+                passFlags.push(item);
+            } else if (!targetUrl && (item.startsWith('http://') || item.startsWith('https://') || item.includes('.'))) {
+                targetUrl = item;
+            } else {
+                passFlags.push(item);
+            }
+        }
+        await handleOpenUrl(targetUrl, passFlags);
         process.exit(0);
     }
 
@@ -353,8 +1001,13 @@ async function main() {
     }
 
     if (cmd === 'close') {
+        const prof = getActiveProfile();
+        if (prof && prof !== 'default') {
+            console.log(`Menyimpan sesi profil [${prof}] ke vault sebelum menutup...`);
+            await saveSessionCookies(prof, true);
+        }
         runIpc('close');
-        console.log(`${GREEN}✔ WebView ditutup.${RESET}`);
+        console.log(`WebView ditutup.`);
         process.exit(0);
     }
 

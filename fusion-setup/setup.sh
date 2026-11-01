@@ -158,7 +158,7 @@ if [ -n "$PAYLOAD_ENC" ] && [ -f "$PAYLOAD_ENC" ]; then
 
     while [ $DECRYPT_SUCCESS -eq 0 ] && [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
         echo -ne "  ${CYAN}🔑 Masukkan PIN Akses (percobaan $ATTEMPT/$MAX_ATTEMPTS): ${RESET}"
-        read -s ENTERED_PIN
+        read -r ENTERED_PIN
         echo ""
 
         if [ -z "$ENTERED_PIN" ]; then
@@ -1232,6 +1232,11 @@ if [ "$PRESET_CHOICE" = "1" ]; then
             cp -f "$ESO_PRESET_DIR/termux_fonts.xml" "$PREF_DIR/termux_fonts.xml" 2>/dev/null || true
             chmod 660 "$PREF_DIR/termux_fonts.xml" 2>/dev/null || true
             echo -e "    ${GREEN}✔ Registri Nerd Font diinjeksikan ke preferensi launcher${RESET}"
+        fi
+        if [ -f "$ESO_PRESET_DIR/launcher_widget_repository.xml" ] && [ -d "$PREF_DIR" ]; then
+            cp -f "$ESO_PRESET_DIR/launcher_widget_repository.xml" "$PREF_DIR/launcher_widget_repository.xml" 2>/dev/null || true
+            chmod 660 "$PREF_DIR/launcher_widget_repository.xml" 2>/dev/null || true
+            echo -e "    ${GREEN}✔ Pengaturan Widget Launcher diinjeksikan${RESET}"
         fi
         touch "$HOME/.termux/use_eso_preset"
     fi

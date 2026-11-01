@@ -299,6 +299,56 @@ echo "telegram.cjs tidak ditemukan di $TARGET_DIR"
 exit 1
 """)
 
+# Wrapper ai (Tri-Engine Autonomous Controller)
+with open(os.path.join(BUNDLE_DIR, "bin/ai"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/auto_engine.cjs" ]; then
+    exec node "$TARGET_DIR/auto_engine.cjs" "$@"
+fi
+echo "auto_engine.cjs tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+
+with open(os.path.join(BUNDLE_DIR, "bin/auto-engine"), "w") as f:
+    f.write("#!/usr/bin/env bash\nexec ai \"$@\"\n")
+
+# Wrapper poa-draw
+with open(os.path.join(BUNDLE_DIR, "bin/poa-draw"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/poa_draw.py" ]; then
+    exec python3 "$TARGET_DIR/poa_draw.py" "$@"
+fi
+echo "poa_draw.py tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+
+with open(os.path.join(BUNDLE_DIR, "bin/poa"), "w") as f:
+    f.write("#!/usr/bin/env bash\nexec poa-draw \"$@\"\n")
+
 if os.path.exists("/usr/local/bin/agy-copilot"):
     shutil.copy2("/usr/local/bin/agy-copilot", os.path.join(BUNDLE_DIR, "bin/agy-copilot"))
 
@@ -306,23 +356,75 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
     os.chmod(os.path.join(BUNDLE_DIR, "bin", b), 0o755)
 
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
-# 1. Salin Standalone CJS Suite (dari /root/wallet/ atau /project/node2cjs/)
+# 1. Salin Standalone CJS & Script Suite (Murni Engine & Schemas, TANPA database/credentials/cookies)
 for f_cjs in [
-    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs", "tele_session_string.txt",
-    "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
-    "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
-    "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
-    "modules.json", "queries.json", "watchlist.json", "tg_config.json", "x_accounts.json",
-    "x_session.json", "scankomen_trigger.json", "loop_state.json", "filter_config.json",
-    "tg_cache.json", "button_query_db.json", "email.txt", "ref.txt", "claim_gift.cjs",
-    "ptah_poa_cards.json", "leadloop_cards.json", "ka_agents_cards.json"
+    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs",
+    "query_db.json", "module_db.json", "pantau.json",
+    "tele_filter_config.json",
+    "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
+    "modules.json", "queries.json", "watchlist.json",
+    "filter_config.json",
+    "button_query_db.json", "claim_gift.cjs",
+    "ptah_poa_cards.json", "leadloop_cards.json", "ka_agents_cards.json",
+    "auto_engine.cjs", "agy_ganti.cjs", "poa_draw.py", "iao_claim.py"
 ]:
     for src_dir in ["/root/wallet", "/project/node2cjs"]:
         src_path = os.path.join(src_dir, f_cjs)
         if os.path.exists(src_path):
             shutil.copy2(src_path, os.path.join(BUNDLE_DIR, "wallet", f_cjs))
             break
-print("✓ Added CJS suite (wallet.cjs, x_webview.cjs, pemantau.cjs, telegram.cjs, 9router.cjs) to bundle")
+print("✓ Added CJS engine suite (wallet.cjs, x_webview.cjs, auto_engine.cjs, pemantau.cjs, telegram.cjs, 9router.cjs, poa_draw.py) to bundle")
+
+# 2. Template Bersih (Sanitized Dummies: TANPA Akun Pribadi, TANPA Database, TANPA Cookies/Sesi)
+# A. Template Wallets (Kosong)
+with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
+    json.dump({"master_index": None, "wallets": []}, f, indent=2)
+
+# B. Template Recipes (Kosong)
+with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
+    f.write("{}\n")
+
+# C. Template X Accounts & Sessions (Kosong)
+with open(os.path.join(BUNDLE_DIR, "wallet/x_accounts.json"), "w") as f:
+    f.write("[]\n")
+with open(os.path.join(BUNDLE_DIR, "wallet/x_session.json"), "w") as f:
+    f.write("{}\n")
+
+# D. Template WebView Profiles (Standar profil kosong, tanpa session cookies)
+with open(os.path.join(BUNDLE_DIR, "wallet/webview_profiles.json"), "w") as f:
+    json.dump(["default", "shaqilla", "eryziggy", "0xjamrud"], f, indent=2)
+
+# E. Template Sanitized AI Config (Tanpa API Key pribadi)
+with open(os.path.join(BUNDLE_DIR, "wallet/ai_config.json"), "w") as f:
+    json.dump({
+        "baseUrl": "https://api.deepseek.com",
+        "apiKey": "",
+        "model": "deepseek-flash",
+        "browser_mode": "720p",
+        "headless_mode": "auto"
+    }, f, indent=4)
+
+# F. Template Sanitized Telegram Config (Tanpa API Hash / Bot Token / Nomor HP pribadi)
+with open(os.path.join(BUNDLE_DIR, "wallet/config_telegram.json"), "w") as f:
+    json.dump({
+        "api_id": 0,
+        "api_hash": "",
+        "bot_token": "",
+        "target_chat_id": [],
+        "whitelist": [],
+        "account_name": "",
+        "phone": "",
+        "bot_name": "Assistant",
+        "last_sync_time": 0
+    }, f, indent=2)
+
+# G. Template Tele Session String (Kosong)
+with open(os.path.join(BUNDLE_DIR, "wallet/tele_session_string.txt"), "w") as f:
+    f.write("")
+
+# H. Pastikan direktori sessions kosong siap pakai tanpa cookies
+os.makedirs(os.path.join(BUNDLE_DIR, "wallet/sessions"), exist_ok=True)
+print("✓ Added 100% sanitized templates (Zero database, Zero cookies, Zero private keys/passwords)")
 
 # Salin Web UI assets jika ada (web/index.html, dll)
 for w_dir in ["/root/wallet/web", "/project/node2cjs/web"]:
@@ -346,16 +448,6 @@ for rpc in glob.glob("/root/wallet/config_rpc*.json") + glob.glob("/project/node
 
 for g_conf in glob.glob("/project/node2cjs/gate*.json") + glob.glob("/root/wallet/gate*.json") + glob.glob("/project/node2cjs/www.gate*.json"):
     shutil.copy2(g_conf, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(g_conf)))
-
-# Dummy template wallets_db.json dan recipes_db.json jika belum ada
-dummy_wallet = {"master_index": None, "wallets": []}
-if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json")):
-    with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
-        json.dump(dummy_wallet, f, indent=2)
-
-if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
-    with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
-        f.write("{}\n")
 
 # Copy login.template, termux.properties, dan setup.sh
 login_tmpl = "/project/termux-launcher/fusion-setup/login.template"
@@ -447,8 +539,7 @@ if not PIN and os.path.exists("/root/.fusion_pin"):
         pass
 
 if not PIN:
-    import getpass
-    PIN = getpass.getpass("Masukkan PIN untuk mengenkripsi payload: ")
+    PIN = input("Masukkan PIN untuk mengenkripsi payload: ").strip()
 
 if not PIN:
     print("Error: PIN enkripsi tidak boleh kosong!")
@@ -535,6 +626,18 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/telegram-relogin")):
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/9router")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(ASSETS_DIR, "9router"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(FUSION_SETUP_DIR, "9router"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/ai")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/ai"), os.path.join(ASSETS_DIR, "ai"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/ai"), os.path.join(FUSION_SETUP_DIR, "ai"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/auto-engine")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/auto-engine"), os.path.join(ASSETS_DIR, "auto-engine"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/auto-engine"), os.path.join(FUSION_SETUP_DIR, "auto-engine"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/poa-draw")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/poa-draw"), os.path.join(ASSETS_DIR, "poa-draw"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/poa-draw"), os.path.join(FUSION_SETUP_DIR, "poa-draw"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/poa")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/poa"), os.path.join(ASSETS_DIR, "poa"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/poa"), os.path.join(FUSION_SETUP_DIR, "poa"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "termux.properties")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "termux.properties"), os.path.join(ASSETS_DIR, "termux.properties"))
 
