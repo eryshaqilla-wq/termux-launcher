@@ -16579,8 +16579,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             onSystemImeRequested();
             field.post(() -> {
-                if (!isAppDrawerOpen()) return;
-                if (!field.hasFocus()) field.requestFocus();
+                if (!isAppDrawerOpen() && (mAppDrawerController == null || !mAppDrawerController.isEngaged())) return;
+                field.setFocusable(true);
+                field.setFocusableInTouchMode(true);
+                field.requestFocus();
                 KeyboardUtils.showSoftKeyboard(TermuxActivity.this, field);
             });
         }
@@ -22444,9 +22446,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         com.termux.app.terminal.TerminalPaneController.Window w =
             openNamedWindow(tabTitle, cmdList, null, true, true);
-        if (w != null) {
-            showToast("⚡ Tab Baru (" + env.toUpperCase(java.util.Locale.ROOT) + "): " + tabTitle, false);
-        } else {
+        if (w == null) {
             TerminalSession session = getCurrentSession();
             if (session != null) {
                 session.write(cleanCmd + "\n");
@@ -22548,29 +22548,37 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         TextView tabHome = findViewById(R.id.left_canvas_tab_home);
         TextView tabWidgets = findViewById(R.id.left_canvas_tab_widgets);
-        TextView tabAdd = findViewById(R.id.left_canvas_tab_add);
+        View tabAdd = findViewById(R.id.left_canvas_tab_add);
 
         int curPage = mWidgetPaneController != null ? mWidgetPaneController.currentPage() : 0;
         int primary = com.google.android.material.color.MaterialColors.getColor(this, androidx.appcompat.R.attr.colorPrimary, 0xFF8AB4F8);
-        int onPrimary = com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnPrimary, Color.WHITE);
+        int onSurface = com.google.android.material.color.MaterialColors.getColor(this, com.google.android.material.R.attr.colorOnSurface, 0xFFEEEEEE);
+        int secondary = com.google.android.material.color.MaterialColors.getColor(this, com.termux.shared.R.attr.termuxColorSecondary, 0xFF9E9E9E);
 
         float density = getResources().getDisplayMetrics().density;
-        float radius = 10 * density;
+        float radius = 11 * density;
 
-        int activeBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 200);
-        int inactiveBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 35);
-        int inactiveStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 80);
+        int selectedFill = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
+        int selectedStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
+        int unselectedFill = androidx.core.graphics.ColorUtils.setAlphaComponent(secondary, 16);
+        int unselectedStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(secondary, 34);
+
+        int selectedText = onSurface;
+        int unselectedText = androidx.core.graphics.ColorUtils.setAlphaComponent(onSurface, 160);
 
         if (tabHome != null) {
             GradientDrawable gd = new GradientDrawable();
             gd.setCornerRadius(radius);
             if (curPage == 0) {
-                gd.setColor(activeBg);
-                tabHome.setTextColor(onPrimary);
+                gd.setColor(selectedFill);
+                gd.setStroke(Math.round(1 * density), selectedStroke);
+                tabHome.setTextColor(selectedText);
+                tabHome.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             } else {
-                gd.setColor(inactiveBg);
-                gd.setStroke(Math.round(1 * density), inactiveStroke);
-                tabHome.setTextColor(primary);
+                gd.setColor(unselectedFill);
+                gd.setStroke(Math.round(1 * density), unselectedStroke);
+                tabHome.setTextColor(unselectedText);
+                tabHome.setTypeface(android.graphics.Typeface.DEFAULT);
             }
             tabHome.setBackground(gd);
             tabHome.setOnClickListener(v -> {
@@ -22585,12 +22593,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             GradientDrawable gd = new GradientDrawable();
             gd.setCornerRadius(radius);
             if (curPage > 0) {
-                gd.setColor(activeBg);
-                tabWidgets.setTextColor(onPrimary);
+                gd.setColor(selectedFill);
+                gd.setStroke(Math.round(1 * density), selectedStroke);
+                tabWidgets.setTextColor(selectedText);
+                tabWidgets.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             } else {
-                gd.setColor(inactiveBg);
-                gd.setStroke(Math.round(1 * density), inactiveStroke);
-                tabWidgets.setTextColor(primary);
+                gd.setColor(unselectedFill);
+                gd.setStroke(Math.round(1 * density), unselectedStroke);
+                tabWidgets.setTextColor(unselectedText);
+                tabWidgets.setTypeface(android.graphics.Typeface.DEFAULT);
             }
             tabWidgets.setBackground(gd);
             tabWidgets.setOnClickListener(v -> {
@@ -22602,11 +22613,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         if (tabAdd != null) {
-            GradientDrawable gd = new GradientDrawable();
-            gd.setCornerRadius(radius);
-            gd.setColor(inactiveBg);
-            gd.setStroke(Math.round(1 * density), inactiveStroke);
-            tabAdd.setBackground(gd);
+            tabAdd.setBackground(null);
+            if (tabAdd instanceof androidx.appcompat.widget.AppCompatImageButton) {
+                androidx.core.widget.ImageViewCompat.setImageTintList((androidx.appcompat.widget.AppCompatImageButton) tabAdd,
+                    android.content.res.ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 200)));
+            }
             tabAdd.setOnClickListener(v -> {
                 if (mWidgetPaneController != null) {
                     mWidgetPaneController.openPicker();
@@ -22625,8 +22636,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             View decor = getWindow().getDecorView();
             if (decor != null) {
                 decor.postDelayed(() -> {
-                    if (mAppDrawerController != null && (mAppDrawerController.isOpen() || mAppDrawerController.isEngaged())) {
-                        requestAppDrawerSearchKeyboard();
+                    if (mAppDrawerController != null) {
+                        mAppDrawerController.onSearchKeyboardRequested();
                     }
                 }, 200L);
             }

@@ -105,11 +105,29 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
             });
         touchSlop = android.view.ViewConfiguration.get(pane.getContext()).getScaledTouchSlop();
         shortcutMenuTheme = new com.termux.app.launcher.popup.AnchoredMenuTheme() {
-            @Override public int textColor() { return 0xFFEEEEEE; }
-            @Override public int selectedTextColor() { return 0xFFFFFFFF; }
-            @Override public int opacityPercent() { return 92; }
-            @Override public boolean blurEnabled() { return true; }
-            @Override public int blurRadiusDp() { return 25; }
+            @Override public int textColor() {
+                return com.google.android.material.color.MaterialColors.getColor(pane.getContext(),
+                    com.google.android.material.R.attr.colorOnSurface, 0xFFEEEEEE);
+            }
+            @Override public int selectedTextColor() {
+                return com.google.android.material.color.MaterialColors.getColor(pane.getContext(),
+                    com.google.android.material.R.attr.colorOnSecondaryContainer, 0xFFFFFFFF);
+            }
+            @Override public int opacityPercent() {
+                com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
+                    com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(pane.getContext(), false);
+                return preferences == null ? 92 : Math.max(80, preferences.getAppBarOpacity());
+            }
+            @Override public boolean blurEnabled() {
+                com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
+                    com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(pane.getContext(), false);
+                return preferences == null || preferences.isDockBlurEnabled();
+            }
+            @Override public int blurRadiusDp() {
+                com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
+                    com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(pane.getContext(), false);
+                return preferences == null ? 25 : preferences.getDockBlurRadius();
+            }
             @Override public int grainPercent() {
                 com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
                     com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(pane.getContext(), false);
@@ -1576,11 +1594,13 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         final com.termux.app.launcher.model.LauncherAppEntry finalEntry = entry;
         android.widget.LinearLayout shell = shortcutMenuRows.newShell();
         java.util.List<com.termux.app.launcher.popup.MenuRow> pendingMenuRows = new java.util.ArrayList<>();
-        int tintBase = 0x00FFFFFF;
+        int surfaceColor = com.google.android.material.color.MaterialColors.getColor(pane.getContext(),
+            com.google.android.material.R.attr.colorSurfaceContainerHigh, 0xFF1C1B1F);
+        int tintBase = surfaceColor & 0x00FFFFFF;
 
         android.widget.TextView header = new android.widget.TextView(pane.getContext());
         header.setText(entry.label);
-        header.setTextColor(0xFFFFFFFF);
+        header.setTextColor(shortcutMenuTheme.textColor());
         header.setTextSize(12f);
         header.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         header.setGravity(android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL);

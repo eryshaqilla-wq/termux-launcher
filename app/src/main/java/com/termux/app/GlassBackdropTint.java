@@ -6,8 +6,8 @@ package com.termux.app;
  * the same spring that moves the surface — never a hard cut.
  */
 public final class GlassBackdropTint {
-    /** Dim strength with the surface fully open: ~33% black over the glass stack. */
-    private static final int MAX_ALPHA = 0x54;
+    /** Dim strength with the surface fully open: ~63% black over the glass stack to prevent bleed-through. */
+    private static final int MAX_ALPHA = 0xA0;
 
     private GlassBackdropTint() {}
 

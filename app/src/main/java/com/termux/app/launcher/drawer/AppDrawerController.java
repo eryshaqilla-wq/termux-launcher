@@ -833,7 +833,9 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
     @VisibleForTesting
     void onSearchKeyboardRequested() {
         AppDrawerContentView content = mContent;
-        if (mTextFieldSearch && content != null) {
+        if (content != null) {
+            content.setTextFieldSearch(true);
+            mTextFieldSearch = true;
             mTextFieldSearchBegun = true;
             // A committed fling can settle with the content still faded out, and a view that is not
             // shown refuses focus. The frame loop pays the focus the first frame it can.
@@ -1343,10 +1345,8 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
         AppDrawerPlaneView plane = mPlane;
         if (host == null || glass == null || plane == null) return;
         TermuxAppSharedPreferences preferences = mHost.preferences();
-        // Capped below the user's dock opacity so the drawer glass always stays see-through:
-        // the terminal keeps running visibly behind the open drawer.
-        float opacity = Math.min(0.45f,
-            preferences == null ? 0.5f : preferences.getAppBarOpacity() / 100f);
+        // Use user's dock opacity with a high-opacity floor to prevent wallpaper bleeding through.
+        float opacity = preferences == null ? 0.88f : Math.max(0.80f, preferences.getAppBarOpacity() / 100f);
         int grain = preferences == null
             ? TermuxPreferenceConstants.TERMUX_APP.DEFAULT_VALUE_DOCK_GLASS_GRAIN
             : preferences.getDockGlassGrain();
@@ -1379,13 +1379,10 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
         plane.setContentInsets(contentRect);
         mContentRect = contentRect;
         content.setSurfaceRadiusPx(mOpenRadiusPx);
-        // Which keyboard the search will ask for is decided here, once per open, so a switch flipped
-        // in Settings takes effect on the next pull and never mid-search.
-        TermuxAppSharedPreferences preferences = mHost.preferences();
-        mTextFieldSearch = preferences != null
-            && preferences.isAppLauncherDrawerSearchAndroidKeyboardEnabled();
-        mSearch.setTextFieldOwnsInput(mTextFieldSearch);
-        content.setTextFieldSearch(mTextFieldSearch);
+        // Always activate text field search so tapping the search pill or search icon always raises keyboard and inputs text.
+        mTextFieldSearch = true;
+        mSearch.setTextFieldOwnsInput(true);
+        content.setTextFieldSearch(true);
         content.setViewType(mLayoutConfig.viewType);
         applyContentMetrics(content, contentRect, false);
         content.bind(LauncherAppDataProvider.getInstance(mHost.context()), mSearch);
