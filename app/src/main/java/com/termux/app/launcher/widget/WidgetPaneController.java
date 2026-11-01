@@ -121,12 +121,12 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
             @Override public boolean blurEnabled() {
                 com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
                     com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(pane.getContext(), false);
-                return preferences == null || preferences.isDockBlurEnabled();
+                return preferences == null || preferences.isExtraKeysBlurEnabled();
             }
             @Override public int blurRadiusDp() {
                 com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =
                     com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences.build(pane.getContext(), false);
-                return preferences == null ? 25 : preferences.getDockBlurRadius();
+                return preferences == null ? 25 : Math.max(15, preferences.getExtraKeysBlurRadius());
             }
             @Override public int grainPercent() {
                 com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences preferences =

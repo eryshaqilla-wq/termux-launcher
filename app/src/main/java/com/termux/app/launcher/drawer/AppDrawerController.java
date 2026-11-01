@@ -831,7 +831,7 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
      * otherwise it is the terminal-owned request the host has always answered.
      */
     @VisibleForTesting
-    void onSearchKeyboardRequested() {
+    public void onSearchKeyboardRequested() {
         AppDrawerContentView content = mContent;
         if (content != null) {
             content.setTextFieldSearch(true);
