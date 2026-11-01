@@ -616,6 +616,8 @@ public class SettingsActivity extends AppCompatActivity implements PreferenceFra
                 R.xml.fusion_9router_preferences});
             CHILD_XML_RESOURCES.put("wallpaper_style", new int[]{
                 R.xml.termux_style_preferences, R.xml.termux_fonts_preferences});
+            CHILD_XML_RESOURCES.put("left_canvas", new int[]{
+                R.xml.left_canvas_preferences});
             CHILD_XML_RESOURCES.put("terminal", new int[]{
                 R.xml.terminal_preferences});
             CHILD_XML_RESOURCES.put("status_bar", new int[]{
