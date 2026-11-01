@@ -156,12 +156,7 @@ public final class LeftCanvasQuickKeysEditorSheet {
 
         sheet.setContentView(root);
 
-        Typeface nerdFont;
-        try {
-            nerdFont = Typeface.createFromAsset(context.getAssets(), "fonts/NerdFont.ttf");
-        } catch (Throwable t) {
-            nerdFont = null;
-        }
+        Typeface nerdFont = NerdFontSpans.typeface(context);
 
         int primary = MaterialColors.getColor(context, androidx.appcompat.R.attr.colorPrimary, Color.CYAN);
 
@@ -169,7 +164,7 @@ public final class LeftCanvasQuickKeysEditorSheet {
         renderRowHolder[0] = () -> {
             rowContainer.removeAllViews();
             String raw = preferences.getLeftCanvasQuickExtraKeys();
-            List<ExtraKeysLayoutModel.Key> keys = parseLeftCanvasKeys(raw);
+            final List<ExtraKeysLayoutModel.Key> keys = parseLeftCanvasKeys(raw);
 
             final List<ExtraKeysLayoutModel.Key> currentKeys = keys;
             addBtn.setEnabled(currentKeys.size() < 5);
@@ -225,7 +220,7 @@ public final class LeftCanvasQuickKeysEditorSheet {
 
         addBtn.setOnClickListener(v -> {
             String raw = preferences.getLeftCanvasQuickExtraKeys();
-            List<ExtraKeysLayoutModel.Key> keys = parseLeftCanvasKeys(raw);
+            final List<ExtraKeysLayoutModel.Key> keys = parseLeftCanvasKeys(raw);
             if (keys.size() >= 5) return;
 
             final String[] actionNames = new String[]{
