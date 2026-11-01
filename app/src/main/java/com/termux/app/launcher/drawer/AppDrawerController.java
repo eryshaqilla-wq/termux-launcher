@@ -830,12 +830,15 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
      * Android-keyboard search on, that is the drawer's own text field and the system keyboard;
      * otherwise it is the terminal-owned request the host has always answered.
      */
+    @Nullable
+    public AppDrawerContentView getContent() {
+        return mContent;
+    }
+
     @VisibleForTesting
     public void onSearchKeyboardRequested() {
         AppDrawerContentView content = mContent;
-        if (content != null) {
-            content.setTextFieldSearch(true);
-            mTextFieldSearch = true;
+        if (mTextFieldSearch && content != null) {
             mTextFieldSearchBegun = true;
             // A committed fling can settle with the content still faded out, and a view that is not
             // shown refuses focus. The frame loop pays the focus the first frame it can.
@@ -1379,10 +1382,13 @@ public final class AppDrawerController implements Choreographer.FrameCallback,
         plane.setContentInsets(contentRect);
         mContentRect = contentRect;
         content.setSurfaceRadiusPx(mOpenRadiusPx);
-        // Always activate text field search so tapping the search pill or search icon always raises keyboard and inputs text.
-        mTextFieldSearch = true;
-        mSearch.setTextFieldOwnsInput(true);
-        content.setTextFieldSearch(true);
+        // Which keyboard the search will ask for is decided here, once per open, so a switch flipped
+        // in Settings takes effect on the next pull and never mid-search.
+        TermuxAppSharedPreferences preferences = mHost.preferences();
+        mTextFieldSearch = preferences != null
+            && preferences.isAppLauncherDrawerSearchAndroidKeyboardEnabled();
+        mSearch.setTextFieldOwnsInput(mTextFieldSearch);
+        content.setTextFieldSearch(mTextFieldSearch);
         content.setViewType(mLayoutConfig.viewType);
         applyContentMetrics(content, contentRect, false);
         content.bind(LauncherAppDataProvider.getInstance(mHost.context()), mSearch);

@@ -17470,7 +17470,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
         onSystemImeRequested();
-        KeyboardUtils.showSoftKeyboard(this, mTerminalView);
+        if (mTerminalView != null && mTerminalView.isShown()) {
+            KeyboardUtils.showSoftKeyboard(this, mTerminalView);
+        } else if (mAppDrawerController != null && mAppDrawerController.getContent() != null) {
+            com.termux.app.launcher.drawer.AppDrawerContentView drawerContent = mAppDrawerController.getContent();
+            drawerContent.setTextFieldSearch(true);
+            beginTextFieldSearch(drawerContent.searchInput());
+        }
     }
 
     /** Hardware and external-keyboard strokes claimed by the open palette. */
@@ -22637,7 +22643,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (decor != null) {
                 decor.postDelayed(() -> {
                     if (mAppDrawerController != null) {
-                        mAppDrawerController.onSearchKeyboardRequested();
+                        com.termux.app.launcher.drawer.AppDrawerContentView content = mAppDrawerController.getContent();
+                        if (content != null) {
+                            content.setTextFieldSearch(true);
+                            beginTextFieldSearch(content.searchInput());
+                        } else {
+                            mAppDrawerController.onSearchKeyboardRequested();
+                        }
                     }
                 }, 200L);
             }
