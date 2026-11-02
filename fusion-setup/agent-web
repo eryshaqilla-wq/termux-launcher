@@ -650,6 +650,87 @@ async function handleSnapshot() {
 }
 
 async function handleOpenUrl(url, extraFlags = []) {
+    // 1. Deteksi Multi-Profile Flags (--all-profiles / --profiles / --parallel)
+    let multiProfiles = null;
+    const isAllProfiles = extraFlags.includes('--all-profiles') || extraFlags.includes('--allprofiles');
+    const isParallel = extraFlags.includes('--parallel');
+
+    if (isAllProfiles) {
+        multiProfiles = ['shaqilla', 'eryziggy', '0xjamrud'];
+    } else {
+        const pIdx = extraFlags.indexOf('--profiles');
+        if (pIdx !== -1 && extraFlags[pIdx + 1] && !extraFlags[pIdx + 1].startsWith('--')) {
+            multiProfiles = extraFlags[pIdx + 1].split(',').map(s => s.trim()).filter(Boolean);
+        } else {
+            const pEqual = extraFlags.find(f => f.startsWith('--profiles='));
+            if (pEqual) {
+                multiProfiles = pEqual.split('=')[1].split(',').map(s => s.trim()).filter(Boolean);
+            }
+        }
+    }
+
+    if (multiProfiles && multiProfiles.length > 0) {
+        const cleanFlags = [];
+        for (let i = 0; i < extraFlags.length; i++) {
+            const f = extraFlags[i];
+            if (f === '--all-profiles' || f === '--allprofiles' || f === '--parallel') {
+                continue;
+            } else if (f === '--profiles') {
+                i++;
+                continue;
+            } else if (f.startsWith('--profiles=')) {
+                continue;
+            } else {
+                cleanFlags.push(f);
+            }
+        }
+
+        if (isParallel) {
+            console.log(`\n[MULTI-PROFILE RUNNER] Meluncurkan Makro untuk ${multiProfiles.length} Profil (Mode: PARALEL BERSAMAAN)...`);
+            for (let i = 0; i < multiProfiles.length; i++) {
+                const currentProfile = multiProfiles[i];
+                const workerTab = `worker_${currentProfile}_${Date.now().toString().slice(-4)}`;
+                const profileFlags = ['--profile', currentProfile, '--in-worker-tab', '--tab-name', workerTab, ...cleanFlags.filter(f => !f.startsWith('--profile'))];
+                const launchCmd = `web ${profileFlags.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')} ${url || ''}`.trim();
+                console.log(`  🚀 Meluncurkan Tab [${currentProfile}] -> ${workerTab}`);
+                runIpcTab('new', [workerTab, launchCmd]);
+                await sleep(1000);
+            }
+            console.log(`\n[MULTI-PROFILE RUNNER] Seluruh ${multiProfiles.length} tab profil berhasil diluncurkan secara paralel di background!`);
+            console.log(`Tuan dapat memantau progresnya di laci tab WebView atau terminal tabs.\n`);
+            return;
+        } else {
+            console.log(`\n[MULTI-PROFILE RUNNER] Memulai Makro untuk ${multiProfiles.length} Profil (Mode: Sekuensial 1/1)...`);
+            const summary = [];
+            for (let i = 0; i < multiProfiles.length; i++) {
+                const currentProfile = multiProfiles[i];
+                console.log(`\n=============================================================`);
+                console.log(`▶ [${i + 1}/${multiProfiles.length}] Menjalankan Profil: ${currentProfile}`);
+                console.log(`=============================================================`);
+                const profileFlags = ['--profile', currentProfile, ...cleanFlags.filter(f => !f.startsWith('--profile'))];
+                const startTime = Date.now();
+                try {
+                    await executeSingleProfile(url, profileFlags);
+                    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                    summary.push({ profile: currentProfile, status: 'OK', time: `${elapsed}s` });
+                } catch (err) {
+                    summary.push({ profile: currentProfile, status: 'FAILED', error: err.message });
+                }
+            }
+            console.log(`\n=============================================================`);
+            console.log(`[MULTI-PROFILE RUNNER] Ringkasan Eksekusi Selesai:`);
+            summary.forEach(s => {
+                console.log(`  - ${s.profile.padEnd(12)}: [${s.status}] (${s.time || s.error})`);
+            });
+            console.log(`=============================================================\n`);
+            return;
+        }
+    }
+
+    await executeSingleProfile(url, extraFlags);
+}
+
+async function executeSingleProfile(url, extraFlags = []) {
     let targetProfile = 'default';
     let flagsWithoutProfile = [];
     let modulQuery = null;
@@ -878,6 +959,8 @@ async function main() {
         console.log(`Usage:`);
         console.log(`  web <url> [options]           (Buka URL di WebView)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
+        console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);
+        console.log(`  web --modul <m> --profiles a,b [--parallel] (Putar makro untuk daftar profil tertentu)`);
         console.log(`  web --wallet [nama] <url>     (Auto-start GhostWallet port 3333 & connect)`);
         console.log(`  web --loop <n>                (Jumlah putaran murni, tanpa switch wallet)`);
         console.log(`  web --stop-if "kata"          (Auto-stop loop seketika jika teks terdeteksi di DOM)`);
@@ -1001,10 +1084,11 @@ async function main() {
         process.exit(0);
     }
 
-    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if)
+    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles)
     const isUrlOrAutomation = args.some(a => 
         a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
         a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
+        a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
         a.startsWith('http://') || a.startsWith('https://') ||
         (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json'))
     );
@@ -1014,14 +1098,14 @@ async function main() {
         let passFlags = [];
         for (let i = 0; i < args.length; i++) {
             const item = args[i];
-            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name') {
+            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles') {
                 passFlags.push(item);
                 if (args[i + 1] && !args[i + 1].startsWith('--')) {
                     // Cek jika item adalah option yang mengambil value
                     passFlags.push(args[i + 1]);
                     i++;
                 }
-            } else if (item === '--in-worker-tab') {
+            } else if (item === '--in-worker-tab' || item === '--all-profiles' || item === '--allprofiles' || item === '--parallel') {
                 passFlags.push(item);
             } else if (item.startsWith('--')) {
                 passFlags.push(item);
