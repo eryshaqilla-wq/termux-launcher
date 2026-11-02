@@ -696,7 +696,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+    public WebView createNewConfiguredWebView(String profileName, boolean isDesktop) {
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity == null) {
             return null;
@@ -712,16 +712,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
-        if (z2) {
+        if (isDesktop) {
             settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
             settings.setSupportZoom(true);
             settings.setBuiltInZoomControls(true);
             settings.setDisplayZoomControls(false);
-        } else {
-            FusionProfileManager.applyProfile(str2, webView, false);
         }
+        FusionProfileManager.setupProfileForWebView(webView, profileName, isDesktop);
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
         webView.setClickable(true);
@@ -730,6 +729,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.setWebChromeClient(new FusionWebChromeClient());
         webView.setWebViewClient(new FusionWebViewClient(this));
         webView.addJavascriptInterface(new GhostBridgeInterface(), "GhostBridge");
+        return webView;
+    }
+
+    public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+        AppCompatActivity appCompatActivity = this.mActivity;
+        if (appCompatActivity == null) {
+            return null;
+        }
+        WebView webView = createNewConfiguredWebView(str2, z2);
+        if (webView == null) {
+            return null;
+        }
         FrameLayout frameLayout = this.mPaneHost;
         if (frameLayout != null) {
             frameLayout.addView(webView, new FrameLayout.LayoutParams(-1, -1));
@@ -1877,15 +1888,30 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (i >= 0) {
             FusionTab fusionTab2 = (FusionTab) this.mTabList.get(i);
             fusionTab2.mUrl = str;
+            boolean profileChanged = str2 != null && !str2.equals(fusionTab2.mProfile);
             fusionTab2.mProfile = str2;
+            if (profileChanged) {
+                if (this.mPaneHost != null && fusionTab2.mWebView != null) {
+                    this.mPaneHost.removeView(fusionTab2.mWebView);
+                    try { fusionTab2.mWebView.destroy(); } catch (Exception ignored) {}
+                }
+                WebView newWv = createNewConfiguredWebView(str2, z2);
+                fusionTab2.mWebView = newWv;
+                if (this.mPaneHost != null && newWv != null) {
+                    this.mPaneHost.addView(newWv, new FrameLayout.LayoutParams(-1, -1));
+                }
+            }
             switchTab(i);
             FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
-            fusionTab2.mWebView.loadUrl(str);
+            if (fusionTab2.mWebView != null) {
+                fusionTab2.mWebView.loadUrl(str);
+            }
         } else {
             FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5);
             switchTab(this.mTabList.size() - 1);
-            FusionProfileManager.applyProfile(str2, fusionTabCreateTabInternal.mWebView, z2);
-            fusionTabCreateTabInternal.mWebView.loadUrl(str);
+            if (fusionTabCreateTabInternal != null && fusionTabCreateTabInternal.mWebView != null) {
+                fusionTabCreateTabInternal.mWebView.loadUrl(str);
+            }
         }
         syncVisibility();
         updateContextUi();

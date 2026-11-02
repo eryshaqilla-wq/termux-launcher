@@ -199,6 +199,8 @@ dependencies {
     implementation "androidx.recyclerview:recyclerview:1.1.0"
     implementation "androidx.viewpager:viewpager:1.1.0-alpha01"
     implementation "com.google.android.material:material:1.14.0"
+    // Native Multi-Profile & Document Start Script support for WebView
+    implementation "androidx.webkit:webkit:1.12.0"
     // The editor's bottom area (appearance_editor_panel). Material 1.14.0 already resolves 2.2.1;
     // declared here because the app's own layouts use it directly.
     implementation "androidx.constraintlayout:constraintlayout:2.2.1"
