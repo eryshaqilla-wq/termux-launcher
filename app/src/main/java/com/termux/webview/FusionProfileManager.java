@@ -682,6 +682,21 @@ public class FusionProfileManager {
 
             String msg = "Sesi web untuk profil [" + profileName + "] berhasil disimpan (" + cookiesArray.length() + " cookies via Native IPC).";
             Log.i(TAG, msg);
+
+            final String toastMsg = "💾 Sesi profil [" + profileName + "] tersimpan (" + cookiesArray.length() + " cookies)";
+            if (context instanceof android.app.Activity) {
+                ((android.app.Activity) context).runOnUiThread(() -> {
+                    android.widget.Toast.makeText(context, toastMsg, android.widget.Toast.LENGTH_SHORT).show();
+                });
+            } else {
+                com.termux.app.TermuxActivity act = com.termux.app.TermuxIpcServer.getActivity();
+                if (act != null) {
+                    act.runOnUiThread(() -> {
+                        android.widget.Toast.makeText(act, toastMsg, android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                }
+            }
+
             return msg;
         } catch (Throwable e) {
             Log.e(TAG, "Gagal export cookies SQLite ke JSON untuk profil " + profileName + ": " + e.getMessage(), e);
