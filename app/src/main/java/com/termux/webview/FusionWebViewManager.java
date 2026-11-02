@@ -1968,8 +1968,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             for (int i2 = 0; i2 < size; i2++) {
                 FusionTab fusionTab = (FusionTab) this.mTabList.get(i2);
                 if (fusionTab != null && fusionTab.mBoundSession == currentSession) {
-                    i = i2;
-                    break;
+                    String tabProf = (fusionTab.mProfile == null || fusionTab.mProfile.isEmpty()) ? "default" : fusionTab.mProfile;
+                    if (str2.equals(tabProf)) {
+                        i = i2;
+                        break;
+                    }
                 }
             }
         }
@@ -1977,19 +1980,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab2 = (FusionTab) this.mTabList.get(i);
             fusionTab2.mUrl = str;
             fusionTab2.mIsMinimized = false;
-            boolean profileChanged = str2 != null && !str2.equals(fusionTab2.mProfile);
-            fusionTab2.mProfile = str2;
-            if (profileChanged) {
-                if (this.mPaneHost != null && fusionTab2.mWebView != null) {
-                    this.mPaneHost.removeView(fusionTab2.mWebView);
-                    try { fusionTab2.mWebView.destroy(); } catch (Exception ignored) {}
-                }
-                WebView newWv = createNewConfiguredWebView(str2, z2);
-                fusionTab2.mWebView = newWv;
-                if (this.mPaneHost != null && newWv != null) {
-                    this.mPaneHost.addView(newWv, new FrameLayout.LayoutParams(-1, -1));
-                }
-            }
             switchTab(i);
             FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
             if (fusionTab2.mWebView != null) {

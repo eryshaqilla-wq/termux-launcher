@@ -37,9 +37,9 @@ if os.path.exists(bashnh_src):
     print("✓ Added universal bashnh to bundle/bin")
 
 # Wrapper browser & web (Universal Autonomous Web Controller)
-agent_web_src = "/project/termux-launcher/fusion-setup/agent-web"
+agent_web_src = "/usr/local/bin/agent-web"
 if not os.path.exists(agent_web_src):
-    agent_web_src = "/usr/local/bin/agent-web"
+    agent_web_src = "/project/termux-launcher/fusion-setup/agent-web"
 if os.path.exists(agent_web_src):
     shutil.copy2(agent_web_src, os.path.join(BUNDLE_DIR, "bin/agent-web"))
     os.chmod(os.path.join(BUNDLE_DIR, "bin/agent-web"), 0o755)
@@ -301,6 +301,8 @@ exit 1
 
 if os.path.exists("/usr/local/bin/agy-copilot"):
     shutil.copy2("/usr/local/bin/agy-copilot", os.path.join(BUNDLE_DIR, "bin/agy-copilot"))
+if os.path.exists("/usr/local/bin/pwd-vault"):
+    shutil.copy2("/usr/local/bin/pwd-vault", os.path.join(BUNDLE_DIR, "bin/pwd-vault"))
 
 for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
     os.chmod(os.path.join(BUNDLE_DIR, "bin", b), 0o755)
@@ -309,6 +311,7 @@ print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS Suite (dari /root/wallet/ atau /project/node2cjs/)
 for f_cjs in [
     "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs", "tele_session_string.txt",
+    "password_resolver.cjs", "passwords_db.json", "passwords.txt", "recipes_db.json",
     "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
     "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",

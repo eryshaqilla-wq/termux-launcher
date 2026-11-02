@@ -238,13 +238,45 @@ async function ensureGhostWalletRunning(preferTab = true) {
     return { running: false, spawnedTab: null };
 }
 
-async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1) {
+function getPasswordsDbPath() {
+    const candidates = [
+        '/root/wallet/passwords_db.json',
+        '/data/data/com.termux/files/home/wallet/passwords_db.json',
+        '/wallet/passwords_db.json'
+    ];
+    for (const p of candidates) {
+        if (fs.existsSync(p)) return p;
+        if (fs.existsSync(path.dirname(p))) return p;
+    }
+    return '/root/wallet/passwords_db.json';
+}
+
+function getCachedPassword(url) {
+    try {
+        const pwdResolver = require('/root/wallet/password_resolver.cjs');
+        return pwdResolver.getCachedPassword(url);
+    } catch (_) {}
+    return null;
+}
+
+function saveCachedPassword(url, password, source = 'cli') {
+    try {
+        const pwdResolver = require('/root/wallet/password_resolver.cjs');
+        return pwdResolver.saveCachedPassword(url, password, source);
+    } catch (_) {}
+}
+
+async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1, password = null) {
     const safeName = recipeName.replace(/[^a-zA-Z0-9_-]/g, '_');
     console.log(`[Modul Makro] Menyiapkan auto-play resep "${safeName}" (Loop: ${loopCount}x murni, tanpa switch wallet)...`);
+    if (password) {
+        console.log(`[Modul Makro] Menyertakan Password / 口令 Klaim: "${password}"`);
+    }
 
     const triggerJs = `(function() {
         if (window.__AGY_RECIPE_TRIGGERED__) return 'ALREADY_RUNNING';
         if (!window.AgyBatchRunner || typeof window.AgyBatchRunner.run !== 'function') return 'NOT_READY';
+        window.__AGY_ACTIVE_PASSWORD__ = ${JSON.stringify(password || '')};
         var events = ${JSON.stringify(recipeEvents)};
         window.__AGY_RECIPE_TRIGGERED__ = true;
         window.__AGY_RECIPE_STATUS__ = 'RUNNING';
@@ -274,6 +306,10 @@ async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1) {
 async function waitForRecipeCompletion(timeoutMs = 180000) {
     const start = Date.now();
     const checkJs = `(function() {
+        var txt = (document.body && document.body.innerText) ? document.body.innerText : '';
+        if (txt.includes('口令错误') || txt.includes('密码错误') || txt.includes('Wrong password') || txt.includes('Password incorrect') || txt.includes('Kode salah') || txt.includes('Password salah')) {
+            return 'INVALID_PASSWORD';
+        }
         if (window.__AGY_RECIPE_STATUS__ === 'COMPLETED') return 'COMPLETED';
         if (!window.AgyBatchRunner || !window.AgyBatchRunner.isRunning) return 'STOPPED';
         return 'RUNNING';
@@ -283,7 +319,10 @@ async function waitForRecipeCompletion(timeoutMs = 180000) {
         await sleep(1500);
         try {
             const res = runIpc(`eval "${checkJs.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`);
-            if (res && res.includes('COMPLETED')) {
+            if (res && res.includes('INVALID_PASSWORD')) {
+                console.log(`[Modul Makro] ❌ ERROR: [AGY_ERROR: INVALID_PASSWORD] Password ditolak oleh situs web!`);
+                return 'INVALID_PASSWORD';
+            } else if (res && res.includes('COMPLETED')) {
                 console.log(`[Modul Makro] Seluruh alur makro telah selesai (COMPLETED)!`);
                 return true;
             } else if (res && res.includes('STOPPED')) {
@@ -310,10 +349,12 @@ function getAllSessionDirs() {
     for (const dir of candidates) {
         try {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            const real = fs.realpathSync(dir);
+            const real = fs.realpathSync.native ? fs.realpathSync.native(dir) : fs.realpathSync(dir);
             if (!dirs.includes(real)) dirs.push(real);
             if (!dirs.includes(dir)) dirs.push(dir);
-        } catch (_) {}
+        } catch (_) {
+            if (fs.existsSync(dir) && !dirs.includes(dir)) dirs.push(dir);
+        }
     }
     return dirs.length > 0 ? dirs : ['/root/wallet/sessions'];
 }
@@ -516,19 +557,22 @@ function evalJs(code) {
 
 async function ensurePortForward() {
     try {
-        const unixOut = execSync("adb -s 127.0.0.1:5555 shell 'cat /proc/net/unix | grep devtools' 2>/dev/null").toString();
+        const unixOut = execSync("adb -s 127.0.0.1:5555 shell 'cat /proc/net/unix | grep devtools' 2>/dev/null", { timeout: 1500 }).toString();
         const match = unixOut.match(/@(webview_devtools_remote_\d+)/);
         if (match) {
-            execSync(`adb -s 127.0.0.1:5555 forward tcp:9222 localabstract:${match[1]}`);
+            execSync(`adb -s 127.0.0.1:5555 forward tcp:9222 localabstract:${match[1]}`, { timeout: 1500 });
+            return true;
         }
     } catch (_) {}
+    return false;
 }
 
 async function clearCdpCookies() {
     try {
-        await ensurePortForward();
+        const forwarded = await ensurePortForward();
+        if (!forwarded) return false;
         const { chromium } = require('playwright-core');
-        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 1500 });
         const contexts = browser.contexts();
         if (contexts.length > 0) {
             await contexts[0].clearCookies();
@@ -552,9 +596,10 @@ async function saveSessionCookies(profile, silent = false) {
     }
 
     try {
-        await ensurePortForward();
+        const forwarded = await ensurePortForward();
+        if (!forwarded) return false;
         const { chromium } = require('playwright-core');
-        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 3000 });
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 1500 });
         const contexts = browser.contexts();
         if (contexts.length > 0) {
             const pages = contexts[0].pages();
@@ -699,9 +744,10 @@ async function injectSessionCookies(profile, silent = false) {
             }
         }
 
-        await ensurePortForward();
+        const forwarded = await ensurePortForward();
+        if (!forwarded) return false;
         const { chromium } = require('playwright-core');
-        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 3000 });
+        const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 1500 });
         const contexts = browser.contexts();
         if (contexts.length > 0) {
             await contexts[0].clearCookies();
@@ -823,22 +869,27 @@ async function handleOpenUrl(url, extraFlags = []) {
             }
         }
 
+        const hasMacro = cleanFlags.some(f => f.startsWith('--modul') || f.startsWith('--macro') || f.startsWith('--recipe'));
         if (isParallel) {
-            console.log(`\n[MULTI-PROFILE RUNNER] Meluncurkan Makro untuk ${multiProfiles.length} Profil (Mode: PARALEL BERSAMAAN)...`);
+            console.log(`\n[MULTI-PROFILE RUNNER] Meluncurkan ${hasMacro ? 'Makro' : 'Tab'} untuk ${multiProfiles.length} Profil (Mode: PARALEL BERSAMAAN)...`);
             for (let i = 0; i < multiProfiles.length; i++) {
                 const currentProfile = multiProfiles[i];
-                const workerTab = `worker_${currentProfile}_${Date.now().toString().slice(-4)}`;
-                const profileFlags = ['--profile', currentProfile, '--in-worker-tab', '--tab-name', workerTab, ...cleanFlags.filter(f => !f.startsWith('--profile'))];
-                const launchCmd = `web ${profileFlags.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')} ${url || ''}`.trim();
+                const shortProf = currentProfile.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
+                const workerTab = `w_${shortProf}`.slice(0, 14);
+                const profileFlags = ['--profile', currentProfile, ...(hasMacro ? ['--in-worker-tab', '--tab-name', workerTab] : []), ...cleanFlags.filter(f => !f.startsWith('--profile'))];
+                const baseWebCmd = `web ${profileFlags.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')} ${url || ''}`.trim();
+                const launchCmd = hasMacro
+                    ? `${baseWebCmd}; sleep 1; termux-ipc tab close "${workerTab}" 2>/dev/null || termux-ipc tab close current 2>/dev/null || true`
+                    : `${baseWebCmd}`;
                 console.log(`  🚀 Meluncurkan Tab [${currentProfile}] -> ${workerTab}`);
                 runIpcTab('new', [workerTab, launchCmd]);
                 await sleep(1000);
             }
-            console.log(`\n[MULTI-PROFILE RUNNER] Seluruh ${multiProfiles.length} tab profil berhasil diluncurkan secara paralel di background!`);
+            console.log(`\n[MULTI-PROFILE RUNNER] Seluruh ${multiProfiles.length} tab profil berhasil diluncurkan!`);
             console.log(`Tuan dapat memantau progresnya di laci tab WebView atau terminal tabs.\n`);
             return;
         } else {
-            console.log(`\n[MULTI-PROFILE RUNNER] Memulai Makro untuk ${multiProfiles.length} Profil (Mode: Sekuensial 1/1)...`);
+            console.log(`\n[MULTI-PROFILE RUNNER] Membuka ${multiProfiles.length} Profil (Mode: Sekuensial 1/1)...`);
             const summary = [];
             for (let i = 0; i < multiProfiles.length; i++) {
                 const currentProfile = multiProfiles[i];
@@ -869,7 +920,8 @@ async function handleOpenUrl(url, extraFlags = []) {
 }
 
 async function executeSingleProfile(url, extraFlags = []) {
-    let targetProfile = 'default';
+    let targetProfile = null;
+    let explicitProfile = false;
     let flagsWithoutProfile = [];
     let modulQuery = null;
     let loopCount = 1;
@@ -877,14 +929,27 @@ async function executeSingleProfile(url, extraFlags = []) {
     let needWallet = false;
     let stopIfWord = null;
     let stopNotWord = null;
+    let passwordArg = null;
+    let explicitPassword = false;
 
     for (let i = 0; i < extraFlags.length; i++) {
         const flag = extraFlags[i];
         if (flag === '--profile' && extraFlags[i + 1]) {
             targetProfile = extraFlags[i + 1];
+            explicitProfile = true;
             i++;
         } else if (flag.startsWith('--profile=')) {
             targetProfile = flag.split('=')[1] || 'default';
+            explicitProfile = true;
+        } else if (flag === '--pwd' || flag === '--password') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                passwordArg = extraFlags[i + 1];
+                explicitPassword = true;
+                i++;
+            }
+        } else if (flag.startsWith('--pwd=') || flag.startsWith('--password=')) {
+            passwordArg = flag.split('=')[1] || null;
+            explicitPassword = true;
         } else if (flag === '--modul' || flag === '--macro' || flag === '--recipe') {
             if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
                 modulQuery = extraFlags[i + 1];
@@ -966,67 +1031,32 @@ async function executeSingleProfile(url, extraFlags = []) {
         process.exit(1);
     }
 
-    // Auto-save profil lama jika aktif profil berbeda (hanya di mode single/sekuensial, bukan di worker tab paralel)
-    const prevProfile = getActiveProfile();
-    if (!isWorkerTab && prevProfile && prevProfile !== 'default' && prevProfile !== targetProfile) {
-        console.log(`Menyimpan sesi website untuk profil [${prevProfile}]...`);
-        const ok = await saveSessionCookies(prevProfile, false);
-        if (ok) {
-            console.log(`Sesi website berhasil disimpan ke profil [${prevProfile}].`);
+    // Password vault HANYA diakses jika menjalankan resep/modul makro atau jika diberikan --pwd secara eksplisit
+    if (recipe || modulQuery || explicitPassword) {
+        if (!passwordArg && url) {
+            passwordArg = getCachedPassword(url);
         }
-        await clearCdpCookies();
+        if (explicitPassword && passwordArg && url) {
+            saveCachedPassword(url, passwordArg, 'cli');
+        }
+    }
+
+    if (!explicitProfile) {
+        targetProfile = 'default';
     }
 
     if (targetProfile && targetProfile !== 'default') {
         process.env.FUSION_ACTIVE_PROFILE = targetProfile;
-        if (isWorkerTab) {
-            process.env.IN_WORKER_TAB = '1';
-        } else {
+        if (!isWorkerTab) {
             setActiveProfile(targetProfile);
         }
         registerProfile(targetProfile);
-    }
-
-    const dirs = getAllSessionDirs();
-    let hasSession = false;
-    for (const d of dirs) {
-        const f = path.join(d, `${targetProfile}.json`);
-        if (fs.existsSync(f) && fs.statSync(f).size > 0) {
-            hasSession = true;
-            break;
-        }
-    }
-
-    if (hasSession) {
-        await injectSessionCookies(targetProfile, true);
-    } else if (targetProfile !== 'default') {
-        await clearCdpCookies();
     }
 
     let fullFlags = `--profile ${targetProfile}`;
     if (flagsWithoutProfile.length > 0) {
         fullFlags += ` ${flagsWithoutProfile.join(' ')}`;
     }
-
-    if (targetProfile && targetProfile !== 'default') {
-        printProfileBanner(targetProfile);
-    }
-
-    let hasCleanedUpOnExit = false;
-    const handleExit = async (sig) => {
-        if (hasCleanedUpOnExit) return;
-        hasCleanedUpOnExit = true;
-        if (targetProfile && targetProfile !== 'default') {
-            console.log(`\nMenyimpan sesi website untuk profil [${targetProfile}] sebelum keluar...`);
-            const ok = await saveSessionCookies(targetProfile, false);
-            if (ok) {
-                console.log(`Sesi website berhasil disimpan ke profil [${targetProfile}].`);
-            }
-        }
-        process.exit(0);
-    };
-    process.once('SIGINT', handleExit);
-    process.once('SIGTERM', handleExit);
 
     const res = runIpc(`${fullFlags} ${url}`);
 
@@ -1064,9 +1094,13 @@ async function executeSingleProfile(url, extraFlags = []) {
             });
             console.log(`[Modul Makro] Disisipkan Auto-Stop jika hilang: "${stopNotWord}"`);
         }
-        const triggered = await triggerRecipeInWebView(recipe.name, eventsToRun, loopCount);
+        const triggered = await triggerRecipeInWebView(recipe.name, eventsToRun, loopCount, passwordArg);
         if (triggered) {
-            await waitForRecipeCompletion();
+            const completionStatus = await waitForRecipeCompletion();
+            if (completionStatus === 'INVALID_PASSWORD') {
+                console.error(`[AGY_ERROR: INVALID_PASSWORD] Password "${passwordArg}" ditolak oleh situs web!`);
+                process.exitCode = 2;
+            }
         }
     }
 
@@ -1080,7 +1114,7 @@ async function executeSingleProfile(url, extraFlags = []) {
     }
 
     // Cleanup: Jika sesi berjalan di dalam tab worker terisolasi, tutup webview & tab worker
-    if (isWorkerTab && workerTabName) {
+    if (isWorkerTab) {
         if (targetProfile && targetProfile !== 'default') {
             console.log(`Menyimpan sesi website untuk profil [${targetProfile}]...`);
             const ok = await saveSessionCookies(targetProfile, false);
@@ -1088,10 +1122,16 @@ async function executeSingleProfile(url, extraFlags = []) {
                 console.log(`Sesi website berhasil disimpan ke profil [${targetProfile}].`);
             }
         }
-        console.log(`[WebView Worker] Makro selesai. Menutup tab worker "${workerTabName}"...`);
+        console.log(`[WebView Worker] Makro selesai. Menutup tab worker "${workerTabName || 'current'}"...`);
         await sleep(1000);
         runIpc('close');
-        runIpcTab('close', [workerTabName]);
+        if (workerTabName) {
+            runIpcTab('close', [workerTabName]);
+            if (workerTabName.length > 14) {
+                runIpcTab('close', [workerTabName.slice(0, 14)]);
+            }
+        }
+        runIpcTab('close', ['current']);
     }
 }
 
@@ -1137,6 +1177,8 @@ async function main() {
         console.log(`  web --stop-if "kata"          (Auto-stop loop seketika jika teks terdeteksi di DOM)`);
         console.log(`  web --stop-not "kata"         (Auto-stop loop jika teks hilang dari DOM)`);
         console.log(`  web <coderekaman>             (Import resep otomatis)`);
+        console.log(`  web load <profil>             (Load profil & pasang sesi cookies ke browser)`);
+        console.log(`  web eject                     (Simpan sesi profil aktif & unmount/bersihkan browser)`);
         console.log(`  web save-session [nama]       (Simpan sesi website ke profil)`);
         console.log(`  web x-post "teks" [--profile] (Post tweet ke X)`);
         console.log(`  web prompt "instruksi"        (Eksekusi automasi via NLP)`);
@@ -1179,6 +1221,34 @@ async function main() {
         }
         console.log(`Profil aktif saat ini : ${active}`);
         console.log(`Sesi tersimpan di vault: ${Array.from(profiles).join(', ') || '(belum ada)'}`);
+        process.exit(0);
+    }
+
+    if (cmd === 'load' || cmd === 'load-profile' || (cmd === 'profile' && args[1] === 'load')) {
+        const prof = (cmd === 'profile' ? args[2] : args[1]);
+        if (!prof) {
+            console.log(`${RED}Error: Tentukan nama profil yang ingin di-LOAD! Contoh: web load eryziggy${RESET}`);
+            process.exit(1);
+        }
+        setActiveProfile(prof);
+        await injectSessionCookies(prof);
+        printProfileBanner(prof);
+        console.log(`Profil [${prof}] berhasil di-LOAD (Sesi aktif).`);
+        process.exit(0);
+    }
+
+    if (cmd === 'eject' || cmd === 'eject-profile' || (cmd === 'profile' && args[1] === 'eject')) {
+        const prof = getActiveProfile();
+        if (!prof || prof === 'default') {
+            console.log(`Tidak ada profil aktif yang perlu di-EJECT.`);
+            process.exit(0);
+        }
+        console.log(`Menyimpan dan meng-EJECT profil [${prof}]...`);
+        await saveSessionCookies(prof, false);
+        await clearCdpCookies();
+        runIpc('clear-cache');
+        setActiveProfile('default');
+        console.log(`Profil [${prof}] berhasil di-EJECT. (Sesi disimpan, cookies dibersihkan).`);
         process.exit(0);
     }
 
@@ -1260,9 +1330,9 @@ async function main() {
 
     // Jika dipanggil oleh Telegram / skrip background dan belum di dalam worker tab: delegasikan ke tab baru via IPC!
     if (isTelegramCaller && !inWorkerTab && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close'].includes(cmd)) {
-        const workerTab = 'web_worker_' + Date.now().toString().slice(-4);
+        const workerTab = ('w_' + Date.now().toString().slice(-8)).slice(0, 14);
         const cleanArgs = args.filter(a => a !== '--telegram' && a !== '--new-tab');
-        const delegatedCmd = `web --in-worker-tab --tab-name ${workerTab} ${cleanArgs.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}`;
+        const delegatedCmd = `web --in-worker-tab --tab-name ${workerTab} ${cleanArgs.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}; sleep 1; termux-ipc tab close "${workerTab}" 2>/dev/null || termux-ipc tab close current 2>/dev/null || true`;
         console.log(`[Agent-Web] Panggilan background/Telegram terdeteksi. Membuka tab baru "${workerTab}" via IPC...`);
         runIpcTab('new', [workerTab, delegatedCmd]);
         process.exit(0);
@@ -1272,6 +1342,7 @@ async function main() {
     const isUrlOrAutomation = args.some(a => 
         a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
         a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
+        a.startsWith('--pwd') || a.startsWith('--password') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
         a.startsWith('http://') || a.startsWith('https://') ||
         (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json'))
@@ -1282,7 +1353,7 @@ async function main() {
         let passFlags = [];
         for (let i = 0; i < args.length; i++) {
             const item = args[i];
-            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles') {
+            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password') {
                 passFlags.push(item);
                 if (args[i + 1] && !args[i + 1].startsWith('--')) {
                     // Cek jika item adalah option yang mengambil value
