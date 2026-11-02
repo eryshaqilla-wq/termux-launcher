@@ -27435,6 +27435,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mFirstBootTour != null)
                 mFirstBootTour.onActiveWindowSettled(currentWindowIdForTour());
             refreshTerminalWindowBar();
+            com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+            if (mgr != null) {
+                mgr.syncVisibility();
+            }
         }
 
         @Override public void onTreesChanged() {

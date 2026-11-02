@@ -61,24 +61,32 @@ public class FusionTabStateHelper {
     public static FusionTab getActiveTab(FusionWebViewManager fusionWebViewManager) {
         ArrayList arrayList;
         TerminalSession currentSession;
-        if (fusionWebViewManager == null || (arrayList = fusionWebViewManager.mTabList) == null) {
+        if (fusionWebViewManager == null || (arrayList = fusionWebViewManager.mTabList) == null || arrayList.isEmpty()) {
+            return null;
+        }
+        TermuxActivity termuxActivity = fusionWebViewManager.mActivity;
+        if (termuxActivity != null && (currentSession = termuxActivity.getCurrentSession()) != null) {
+            int activeIdx = fusionWebViewManager.mActiveTab;
+            if (activeIdx >= 0 && activeIdx < arrayList.size()) {
+                FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
+                if (candidate != null && candidate.mBoundSession == currentSession) {
+                    return candidate;
+                }
+            }
+            int size = arrayList.size();
+            for (int i2 = 0; i2 < size; i2++) {
+                FusionTab fusionTab = (FusionTab) arrayList.get(i2);
+                if (fusionTab != null && fusionTab.mBoundSession == currentSession) {
+                    fusionWebViewManager.mActiveTab = i2;
+                    return fusionTab;
+                }
+            }
+            // Sesi terminal aktif saat ini tidak memiliki WebView
             return null;
         }
         int i = fusionWebViewManager.mActiveTab;
         if (i >= 0 && i < arrayList.size()) {
             return (FusionTab) arrayList.get(i);
-        }
-        TermuxActivity termuxActivity = fusionWebViewManager.mActivity;
-        if (termuxActivity == null || (currentSession = termuxActivity.getCurrentSession()) == null) {
-            return null;
-        }
-        int size = arrayList.size();
-        for (int i2 = 0; i2 < size; i2++) {
-            FusionTab fusionTab = (FusionTab) arrayList.get(i2);
-            if (fusionTab != null && fusionTab.mBoundSession == currentSession) {
-                fusionWebViewManager.mActiveTab = i2;
-                return (FusionTab) arrayList.get(i2);
-            }
         }
         return null;
     }

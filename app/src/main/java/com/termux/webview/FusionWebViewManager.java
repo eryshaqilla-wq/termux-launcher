@@ -1976,6 +1976,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (i >= 0) {
             FusionTab fusionTab2 = (FusionTab) this.mTabList.get(i);
             fusionTab2.mUrl = str;
+            fusionTab2.mIsMinimized = false;
             boolean profileChanged = str2 != null && !str2.equals(fusionTab2.mProfile);
             fusionTab2.mProfile = str2;
             if (profileChanged) {
@@ -2238,19 +2239,27 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return;
         }
         this.mActiveTab = i;
+        FusionTab targetTab = (FusionTab) arrayList.get(i);
+        TermuxActivity termuxActivity = this.mActivity;
+        if (targetTab != null && termuxActivity != null) {
+            if (targetTab.mBoundSession == null) {
+                targetTab.mBoundSession = termuxActivity.getCurrentSession();
+            } else if (termuxActivity.getTermuxTerminalSessionClient() != null && termuxActivity.getCurrentSession() != targetTab.mBoundSession) {
+                termuxActivity.getTermuxTerminalSessionClient().setCurrentSession(targetTab.mBoundSession);
+            }
+        }
         for (int i2 = 0; i2 < size; i2++) {
             FusionTab fusionTab = (FusionTab) arrayList.get(i2);
             if (i2 == i) {
-                TermuxActivity termuxActivity = this.mActivity;
-                if (termuxActivity != null) {
-                    fusionTab.mBoundSession = termuxActivity.getCurrentSession();
-                }
                 WebView webView = fusionTab.mWebView;
                 if (fusionTab.mIsMinimized) {
                     webView.setVisibility(8);
                     TextView textView = this.mMinPillBtn;
                     if (textView != null) {
                         textView.setText(" MAX ");
+                    }
+                    if (this.mTerminalPaneHost != null) {
+                        this.mTerminalPaneHost.setVisibility(0);
                     }
                 } else {
                     webView.setVisibility(0);
@@ -2259,6 +2268,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     if (textView2 != null) {
                         textView2.setText(" MIN ");
                     }
+                    if (this.mTerminalPaneHost != null) {
+                        this.mTerminalPaneHost.setVisibility(8);
+                    }
                     if (termuxActivity != null) {
                         KeyboardUtils.setSoftInputModeAdjustResize(termuxActivity);
                     }
@@ -2266,7 +2278,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 this.mActiveWebView = webView;
                 this.mCurrentProfile = fusionTab.mProfile;
             } else {
-                fusionTab.mWebView.setVisibility(8);
+                if (fusionTab != null && fusionTab.mWebView != null) {
+                    fusionTab.mWebView.setVisibility(8);
+                }
             }
         }
         LinearLayout linearLayout = this.mControlPill;
@@ -2312,11 +2326,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         int i = -1;
         TerminalSession currentSession = termuxActivity.getCurrentSession();
         if (currentSession != null && (arrayList = this.mTabList) != null && (size = arrayList.size()) > 0) {
-            for (int i2 = 0; i2 < size; i2++) {
-                FusionTab fusionTab = (FusionTab) arrayList.get(i2);
-                if (fusionTab != null && (terminalSession = fusionTab.mBoundSession) != null && terminalSession == currentSession) {
-                    i = i2;
-                    break;
+            int activeIdx = this.mActiveTab;
+            if (activeIdx >= 0 && activeIdx < size) {
+                FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
+                if (candidate != null && candidate.mBoundSession == currentSession) {
+                    i = activeIdx;
+                }
+            }
+            if (i < 0) {
+                for (int i2 = 0; i2 < size; i2++) {
+                    FusionTab fusionTab = (FusionTab) arrayList.get(i2);
+                    if (fusionTab != null && (terminalSession = fusionTab.mBoundSession) != null && terminalSession == currentSession) {
+                        i = i2;
+                        break;
+                    }
                 }
             }
             if (i >= 0) {
@@ -2350,10 +2373,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     if (view != null) {
                         view.setVisibility(0);
                     }
-                    TermuxActivity r5 = this.mActivity;
-                    if (r5 != null) {
-                        r5.endWebViewExternalTextInput();
-                    }
+                    termuxActivity.endWebViewExternalTextInput();
                     LinearLayout linearLayout2 = this.mControlPill;
                     if (linearLayout2 != null) {
                         linearLayout2.setVisibility(0);
@@ -2392,10 +2412,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     webView3.bringToFront();
                     webView3.requestFocus();
                     webView3.requestFocusFromTouch();
-                    TermuxActivity act = this.mActivity;
-                    if (act != null) {
-                        act.beginWebViewExternalTextInput();
-                    }
+                    termuxActivity.beginWebViewExternalTextInput();
                 }
                 LinearLayout linearLayout3 = this.mControlPill;
                 if (linearLayout3 != null) {
@@ -2424,11 +2441,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 webView.resumeTimers();
             }
         }
-        if (this.mActiveWebView == null && arrayList != null && !arrayList.isEmpty()) {
-            FusionTab fallbackTab = (FusionTab) arrayList.get(0);
-            if (fallbackTab != null) {
-                this.mActiveWebView = fallbackTab.mWebView;
-            }
+        this.mActiveWebView = null;
+        if (this.mTerminalPaneHost != null) {
+            this.mTerminalPaneHost.setVisibility(0);
         }
         LinearLayout linearLayout4 = this.mControlPill;
         if (linearLayout4 != null) {
@@ -2448,10 +2463,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (view4 != null) {
             view4.setVisibility(0);
         }
-        TermuxActivity r0 = this.mActivity;
-        if (r0 != null) {
-            r0.endWebViewExternalTextInput();
-        }
+        termuxActivity.endWebViewExternalTextInput();
     }
 
     public void toggleAutoSign() {

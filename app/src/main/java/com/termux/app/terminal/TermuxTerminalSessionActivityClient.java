@@ -730,6 +730,10 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
             // notices that carry real news — an exited session, a refused split.
         }
         updateBackgroundColor();
+        com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.syncVisibility();
+        }
     }
 
     public void switchToSession(boolean forward) {
