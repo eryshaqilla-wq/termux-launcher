@@ -441,15 +441,10 @@ function printProfileBanner(profile) {
     const dev = getProfileDeviceIdentity(profile);
     if (!dev) return;
 
-    console.log(`\n${CYAN}╭─────────────────────────────────────────────────────────────╮${RESET}`);
-    console.log(`${CYAN}│${RESET} 📱 ${BOLD}ESO BROWSER IDENTITY VAULT${RESET}                                ${CYAN}│${RESET}`);
-    console.log(`${CYAN}├─────────────────────────────────────────────────────────────┤${RESET}`);
-    console.log(`${CYAN}│${RESET} ${BOLD}Profil  :${RESET} ${GREEN}${profile}${RESET}`);
-    console.log(`${CYAN}│${RESET} ${BOLD}Model   :${RESET} ${YELLOW}${dev.name || dev.model}${RESET} (${dev.model})`);
-    console.log(`${CYAN}│${RESET} ${BOLD}Hardware:${RESET} ${dev.renderer} | ${dev.memory}GB RAM | ${dev.cores} Cores`);
-    console.log(`${CYAN}│${RESET} ${BOLD}Layar   :${RESET} ${dev.screen || (dev.screenWidth + 'x' + dev.screenHeight)}`);
-    console.log(`${CYAN}│${RESET} ${BOLD}Stealth :${RESET} Native Multi-Profile + Zero-Leak Client Hints 🛡️`);
-    console.log(`${CYAN}╰─────────────────────────────────────────────────────────────╯${RESET}\n`);
+    console.log(`[ESO BROWSER] Profil: ${GREEN}${profile}${RESET} | ${YELLOW}${dev.name || dev.model}${RESET} (${dev.model})`);
+    console.log(`  Hardware : ${dev.renderer} | ${dev.memory}GB RAM | ${dev.cores} Cores`);
+    console.log(`  Layar    : ${dev.screen || (dev.screenWidth + 'x' + dev.screenHeight)}`);
+    console.log(`  Stealth  : Native Multi-Profile | Zero-Leak Client Hints`);
 }
 
 function spawnSessionWatcher(profile) {
