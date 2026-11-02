@@ -326,6 +326,43 @@ function getSessionsDir() {
     return def;
 }
 
+// System Lock Universal: Melacak kepemilikan akun (UID) di SELURUH profil yang ada di vault secara dinamis
+function getKnownProfileIdentities() {
+    const identities = new Map(); // uid -> profileName
+
+    // 1. Peta bawaan Tri-Agent resmi Tuan Eso
+    identities.set('1314621600', 'shaqilla');
+    identities.set('1533016831161606144', 'eryziggy');
+    identities.set('1604449944899063809', '0xjamrud');
+
+    // 2. Scan seluruh file profil (.json) di seluruh vault sessions secara dinamis (unlimited profiles)
+    const dirs = getAllSessionDirs();
+    for (const d of dirs) {
+        if (!fs.existsSync(d)) continue;
+        try {
+            const files = fs.readdirSync(d);
+            for (const f of files) {
+                if (!f.endsWith('.json') || f.endsWith('.device.json') || f === 'webview_profiles.json') continue;
+                const profName = path.basename(f, '.json');
+                if (profName === 'default' || profName.startsWith('fresh_')) continue;
+                try {
+                    const content = JSON.parse(fs.readFileSync(path.join(d, f), 'utf8'));
+                    if (content && Array.isArray(content.cookies)) {
+                        const twidCookie = content.cookies.find(c => c.name === 'twid');
+                        if (twidCookie && twidCookie.value) {
+                            const match = twidCookie.value.match(/u%3D(\d+)/) || twidCookie.value.match(/(\d+)/);
+                            if (match && match[1]) {
+                                identities.set(match[1], profName);
+                            }
+                        }
+                    }
+                } catch (_) {}
+            }
+        } catch (_) {}
+    }
+    return identities;
+}
+
 function getActiveProfile() {
     const candidates = [
         '/root/wallet/.active_profile',
@@ -503,14 +540,77 @@ async function clearCdpCookies() {
 
 async function saveSessionCookies(profile, silent = false) {
     if (!profile || profile === 'default' || profile.startsWith('fresh_')) return false;
+
+    // SYSTEM LOCK 1: Active Profile System Lock
+    // Jika sistem sedang terkunci pada profil aktif tertentu dan profil target berbeda, tolak keras!
+    const activeProfile = getActiveProfile();
+    if (activeProfile && activeProfile !== 'default' && activeProfile !== profile) {
+        console.error(`${RED}[SYSTEM LOCK ERROR] Pelanggaran Isolasi Profil! Sesi sistem saat ini terkunci pada [${activeProfile}]. Mustahil dan ditolak menyimpan ke profil berbeda [${profile}]!${RESET}`);
+        return false;
+    }
+
     try {
         await ensurePortForward();
         const { chromium } = require('playwright-core');
         const browser = await chromium.connectOverCDP('http://127.0.0.1:9222', { timeout: 3000 });
         const contexts = browser.contexts();
         if (contexts.length > 0) {
+            const pages = contexts[0].pages();
+
+            // SYSTEM LOCK 2: Tab Browser Profile Stamp Verification
+            let tabProfileFound = null;
+            for (const p of pages) {
+                try {
+                    const prof = await p.evaluate(() => window.__FUSION_PROFILE__ || null);
+                    if (prof && prof !== 'default') {
+                        tabProfileFound = prof;
+                        if (prof === profile) break;
+                    }
+                } catch (_) {}
+            }
+
+            // Jika tab di browser memiliki stempel profil berbeda dari profil yang akan disimpan, tolak keras!
+            if (tabProfileFound && tabProfileFound !== profile) {
+                console.error(`${RED}[SYSTEM LOCK ERROR] Tab browser yang aktif memiliki stempel profil [${tabProfileFound}]. Mustahil dan dilarang keras menyimpan ke profil berbeda [${profile}]! Operasi digagalkan.${RESET}`);
+                await browser.close();
+                return false;
+            }
+
             const state = await contexts[0].storageState();
             if (state && state.cookies && state.cookies.length > 0) {
+                // SYSTEM LOCK 3: Dynamic Multi-Profile Account Identity Lock (Universal untuk SEMUA profil)
+                const twidCookie = state.cookies.find(c => c.name === 'twid');
+                if (twidCookie) {
+                    const match = twidCookie.value.match(/u%3D(\d+)/) || twidCookie.value.match(/(\d+)/);
+                    if (match && match[1]) {
+                        const foundUid = match[1];
+                        const knownIdentities = getKnownProfileIdentities();
+                        if (knownIdentities.has(foundUid)) {
+                            const boundProfile = knownIdentities.get(foundUid);
+                            if (boundProfile !== profile) {
+                                console.error(`${RED}[SYSTEM LOCK CRITICAL] TERKUNCI: Cookie sesi browser ini terdeteksi milik akun X (UID: ${foundUid}) yang sudah terikat permanen pada profil [${boundProfile}]. MUSTAHIL dan DILARANG KERAS menyimpan ke profil berbeda [${profile}]! Operasi dibatalkan demi keamanan isolasi.${RESET}`);
+                                await browser.close();
+                                return false;
+                            }
+                        }
+                    }
+                }
+
+                // Deduplikasi cookies berdasarkan name + clean domain
+                const dedupedMap = new Map();
+                for (const c of state.cookies) {
+                    if (!c.name) continue;
+                    const domain = c.domain || '';
+                    const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+                    const key = `${c.name}@${cleanDomain}`;
+                    const existing = dedupedMap.get(key);
+                    const curExp = typeof c.expires === 'number' ? c.expires : -1;
+                    const prevExp = existing && typeof existing.expires === 'number' ? existing.expires : -1;
+                    if (!existing || curExp > prevExp) {
+                        dedupedMap.set(key, c);
+                    }
+                }
+                state.cookies = Array.from(dedupedMap.values());
                 const jsonStr = JSON.stringify(state, null, 2);
                 const dirs = getAllSessionDirs();
                 for (const d of dirs) {
@@ -550,12 +650,45 @@ async function injectSessionCookies(profile, silent = false) {
         const raw = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
         if (!raw.cookies || raw.cookies.length === 0) return false;
 
+        // SYSTEM LOCK: Validasi berkas sesi profil ini terhadap registri identitas profil lain secara dinamis
+        const twidCookie = raw.cookies.find(c => c.name === 'twid');
+        if (twidCookie) {
+            const match = twidCookie.value.match(/u%3D(\d+)/) || twidCookie.value.match(/(\d+)/);
+            if (match && match[1]) {
+                const foundUid = match[1];
+                const knownIdentities = getKnownProfileIdentities();
+                if (knownIdentities.has(foundUid)) {
+                    const boundProfile = knownIdentities.get(foundUid);
+                    if (boundProfile !== profile) {
+                        console.error(`${RED}[SYSTEM LOCK ERROR] Berkas sesi [${profile}.json] terdeteksi terkontaminasi akun milik profil [${boundProfile}] (UID: ${foundUid}). Injeksi dibatalkan demi keamanan!${RESET}`);
+                        return false;
+                    }
+                }
+            }
+        }
+
+        // Deduplikasi cookies sebelum inject
+        const dedupedMap = new Map();
+        for (const c of raw.cookies) {
+            if (!c.name) continue;
+            const domain = c.domain || '';
+            const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain;
+            const key = `${c.name}@${cleanDomain}`;
+            const existing = dedupedMap.get(key);
+            const curExp = typeof c.expires === 'number' ? c.expires : -1;
+            const prevExp = existing && typeof existing.expires === 'number' ? existing.expires : -1;
+            if (!existing || curExp > prevExp) {
+                dedupedMap.set(key, c);
+            }
+        }
+        const cookiesToInject = Array.from(dedupedMap.values());
+
         // Pastikan berkas sesi juga tersalin ke seluruh kandidat direktori sesi (termasuk folder home Termux)
         for (const d of dirs) {
             const target = path.join(d, `${profile}.json`);
             if (target !== sessionFile && (!fs.existsSync(target) || fs.statSync(target).size === 0)) {
                 try {
-                    fs.writeFileSync(target, JSON.stringify(raw, null, 2), 'utf8');
+                    fs.writeFileSync(target, JSON.stringify({ ...raw, cookies: cookiesToInject }, null, 2), 'utf8');
                     fs.chmodSync(target, 0o666);
                 } catch (_) {}
             }
@@ -567,8 +700,8 @@ async function injectSessionCookies(profile, silent = false) {
         const contexts = browser.contexts();
         if (contexts.length > 0) {
             await contexts[0].clearCookies();
-            await contexts[0].addCookies(raw.cookies);
-            if (!silent) console.log(`Sesi profil [${profile}] dipulihkan (${raw.cookies.length} cookies).`);
+            await contexts[0].addCookies(cookiesToInject);
+            if (!silent) console.log(`Sesi profil [${profile}] dipulihkan (${cookiesToInject.length} cookies).`);
         }
         await browser.close();
         return true;
@@ -836,6 +969,7 @@ async function executeSingleProfile(url, extraFlags = []) {
         if (ok) {
             console.log(`Sesi website berhasil disimpan ke profil [${prevProfile}].`);
         }
+        await clearCdpCookies();
     }
 
     if (targetProfile && targetProfile !== 'default') {
@@ -1047,13 +1181,26 @@ async function main() {
     }
 
     if (cmd === 'save' || cmd === 'save-session' || cmd === 'save-profile') {
-        const prof = args[1] || getActiveProfile() || '0xjamrud';
+        const activeProf = getActiveProfile();
+        const prof = args[1] || (activeProf !== 'default' ? activeProf : null);
+        if (!prof) {
+            console.log(`${RED}Error: Tentukan profil yang ingin disimpan! Contoh: web save <nama_profil>${RESET}`);
+            process.exit(1);
+        }
+
+        // SYSTEM LOCK: Jika sesi aktif sedang terkunci pada profil tertentu dan target berbeda, tolak keras!
+        if (activeProf && activeProf !== 'default' && prof !== activeProf) {
+            console.error(`${RED}[SYSTEM LOCK ERROR] Sesi web saat ini sedang terkunci pada profil [${activeProf}]. Mustahil dan dilarang keras menyimpan ke profil berbeda [${prof}]!${RESET}`);
+            process.exit(1);
+        }
+
         console.log(`Menyimpan sesi website untuk profil [${prof}]...`);
         const ok = await saveSessionCookies(prof);
         if (ok) {
             console.log(`Sesi website berhasil disimpan ke profil [${prof}].`);
         } else {
-            console.log(`Gagal menyimpan sesi. Pastikan WebView sedang aktif.`);
+            console.log(`${RED}Gagal menyimpan sesi untuk profil [${prof}] (System Lock atau sesi kosong).${RESET}`);
+            process.exit(1);
         }
         process.exit(0);
     }

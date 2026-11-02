@@ -720,6 +720,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             settings.setBuiltInZoomControls(true);
             settings.setDisplayZoomControls(false);
         }
+        try {
+            android.webkit.CookieManager globalCm = android.webkit.CookieManager.getInstance();
+            globalCm.setAcceptCookie(true);
+            globalCm.setAcceptThirdPartyCookies(webView, true);
+        } catch (Exception ignored) {}
         FusionProfileManager.setupProfileForWebView(webView, profileName, isDesktop);
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
@@ -1385,12 +1390,28 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
+    public FusionTab getTabForWebView(WebView webView) {
+        if (webView == null || this.mTabList == null) {
+            return null;
+        }
+        for (int i = 0; i < this.mTabList.size(); i++) {
+            FusionTab tab = (FusionTab) this.mTabList.get(i);
+            if (tab != null && tab.mWebView == webView) {
+                return tab;
+            }
+        }
+        return null;
+    }
+
     public void injectScripts(WebView webView) {
         if (webView == null) {
             return;
         }
-        FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(this.mCurrentProfile);
-        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + this.mCurrentProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
+        FusionTab ownerTab = getTabForWebView(webView);
+        String tabProfile = (ownerTab != null && ownerTab.mProfile != null && !ownerTab.mProfile.isEmpty())
+                ? ownerTab.mProfile : this.mCurrentProfile;
+        FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(tabProfile);
+        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + tabProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "ghost_injected.js");
     }

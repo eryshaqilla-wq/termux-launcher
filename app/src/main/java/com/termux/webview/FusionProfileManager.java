@@ -295,7 +295,16 @@ public class FusionProfileManager {
                 ProfileStore store = ProfileStore.getInstance();
                 Profile profile = store.getOrCreateProfile(profileName);
                 WebViewCompat.setProfile(webView, profileName);
+                sCurrentActiveProfile = profileName;
                 Log.i(TAG, "Assigned native Chromium profile: " + profileName);
+
+                try {
+                    CookieManager cm = profile.getCookieManager();
+                    if (cm != null) {
+                        cm.setAcceptCookie(true);
+                        cm.setAcceptThirdPartyCookies(webView, true);
+                    }
+                } catch (Exception ignored) {}
 
                 // Sinkronisasi sesi tersimpan ke CookieManager khusus profil ini (hanya sekali per session runtime)
                 if (!sInitializedProfiles.contains(profileName)) {
@@ -419,10 +428,34 @@ public class FusionProfileManager {
             JSONArray cookies = root.optJSONArray("cookies");
             if (cookies != null && cookies.length() > 0) {
                 cookieManager.setAcceptCookie(true);
+
+                // Deduplikasi cookie berdasarkan name + domain bersih (tanpa leading dot)
+                // Jika terjadi bentrok antara session cookie (-1) dan persistent (> 0), prioritaskan persistent
+                java.util.Map<String, JSONObject> deduped = new java.util.LinkedHashMap<>();
                 for (int i = 0; i < cookies.length(); i++) {
                     JSONObject c = cookies.getJSONObject(i);
-                    String name = c.getString("name");
-                    String value = c.getString("value");
+                    String name = c.optString("name", "");
+                    if (name.isEmpty()) continue;
+                    String domain = c.optString("domain", "");
+                    String cleanDomain = domain.startsWith(".") ? domain.substring(1) : domain;
+                    String key = name + "@" + cleanDomain;
+
+                    if (deduped.containsKey(key)) {
+                        JSONObject prev = deduped.get(key);
+                        long prevExp = prev.optLong("expires", -1);
+                        long curExp = c.optLong("expires", -1);
+                        if (curExp > prevExp) {
+                            deduped.put(key, c);
+                        }
+                    } else {
+                        deduped.put(key, c);
+                    }
+                }
+
+                for (JSONObject c : deduped.values()) {
+                    String name = c.optString("name", "");
+                    if (name.isEmpty()) continue;
+                    String value = c.optString("value", "");
                     String domain = c.optString("domain", "");
                     String path = c.optString("path", "/");
                     boolean secure = c.optBoolean("secure", false);
