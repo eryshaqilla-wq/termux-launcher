@@ -164,6 +164,26 @@ public class FusionRecPillHelper {
         abLp.setMargins(1, 0, 1, 0);
         stepPill.addView(addrBtn, abLp);
 
+        // PWD > (Paste / Mark Password input with {{PASSWORD}} template)
+        TextView pwdBtn = new TextView(appCompatActivity);
+        pwdBtn.setText(" PWD > ");
+        FusionUiHelper.setSolidBtn(pwdBtn);
+        pwdBtn.setTextSize(2, 10.0f);
+        pwdBtn.setPadding(6, 3, 6, 3);
+        pwdBtn.setClickable(true);
+        pwdBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                WebView webView = fusionWebViewManager.mActiveWebView;
+                if (webView != null) {
+                    webView.evaluateJavascript("(function(){ if (window.__AGY_PASTE_PWD__) return window.__AGY_PASTE_PWD__(); })()", null);
+                }
+            }
+        });
+        LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(-2, -2);
+        pbLp.setMargins(1, 0, 1, 0);
+        stepPill.addView(pwdBtn, pbLp);
+
         // EMAIL >
         TextView emailBtn = new TextView(appCompatActivity);
         sEmailBtn = emailBtn;

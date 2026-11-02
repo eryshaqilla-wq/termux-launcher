@@ -1497,14 +1497,17 @@
                                 if (valToFill.includes("{{WALLET_ADDRESS}}")) valToFill = valToFill.replace(/\{\{WALLET_ADDRESS\}\}/g, curWallet.address || "");
                                 if (valToFill.includes("{{EMAIL}}")) valToFill = valToFill.replace(/\{\{EMAIL\}\}/g, curEmail || "");
                                 if (valToFill.includes("{{NAME}}")) valToFill = valToFill.replace(/\{\{NAME\}\}/g, curWallet.name || "");
+                                if (valToFill.includes("{{PASSWORD}}") || valToFill.includes("{{PWD}}")) valToFill = valToFill.replace(/\{\{(?:PASSWORD|PWD)\}\}/g, window.__AGY_ACTIVE_PASSWORD__ || "");
                             } else if (activeMode === "standalone") {
                                 if (valToFill.includes("{{WALLET_ADDRESS}}")) valToFill = valToFill.replace(/\{\{WALLET_ADDRESS\}\}/g, "");
                                 if (valToFill.includes("{{EMAIL}}")) valToFill = valToFill.replace(/\{\{EMAIL\}\}/g, curEmail || "");
                                 if (valToFill.includes("{{NAME}}")) valToFill = valToFill.replace(/\{\{NAME\}\}/g, "User");
+                                if (valToFill.includes("{{PASSWORD}}") || valToFill.includes("{{PWD}}")) valToFill = valToFill.replace(/\{\{(?:PASSWORD|PWD)\}\}/g, window.__AGY_ACTIVE_PASSWORD__ || "");
                             } else {
                                 if (valToFill.includes("{{WALLET_ADDRESS}}")) valToFill = valToFill.replace(/\{\{WALLET_ADDRESS\}\}/g, curWallet.address);
                                 if (valToFill.includes("{{EMAIL}}")) valToFill = valToFill.replace(/\{\{EMAIL\}\}/g, curEmail);
                                 if (valToFill.includes("{{NAME}}")) valToFill = valToFill.replace(/\{\{NAME\}\}/g, curWallet.name);
+                                if (valToFill.includes("{{PASSWORD}}") || valToFill.includes("{{PWD}}")) valToFill = valToFill.replace(/\{\{(?:PASSWORD|PWD)\}\}/g, window.__AGY_ACTIVE_PASSWORD__ || "");
                             }
 
                             targetEl.focus();
@@ -1595,7 +1598,7 @@
     function smartWaitForElementWithTimeout(ev, stepIdx, totalSteps, maxWaitMs, callback) {
         var interval = 250;
         var elapsed = 0;
-        var timeoutLimit = maxWaitMs || 5000;
+        var timeoutLimit = (ev && ev.optional) ? (ev.timeout || 1500) : (maxWaitMs || 5000);
 
         function findTarget() {
             var targetEl = null;
@@ -2761,6 +2764,89 @@
         return true;
     };
     window.__FUSION_PASTE_WALLET__ = window.__AGY_PASTE_WALLET__;
+
+    // --- 5C. SMART PASSWORD PASTER (PWD > BUTTON UNTUK RED PACKET / KODE KLAIM) ---
+    window.__AGY_PASTE_PWD__ = function(passedPwd) {
+        var pwdVal = passedPwd || window.__AGY_ACTIVE_PASSWORD__ || "";
+        if (!pwdVal) {
+            pwdVal = prompt("Masukkan Password / 口令 Klaim:", "");
+            if (pwdVal) {
+                window.__AGY_ACTIVE_PASSWORD__ = pwdVal;
+            }
+        }
+        if (!pwdVal) return false;
+
+        var targetInp = null;
+        var act = document.activeElement;
+        if (act && (act.tagName === "INPUT" || act.tagName === "TEXTAREA") && !isInternalUI(act)) {
+            targetInp = act;
+        }
+
+        if (!targetInp) {
+            var selectors = [
+                "input#inp-pwd",
+                "input#pwd",
+                "input#password",
+                "input[name*='pwd' i]",
+                "input[name*='password' i]",
+                "input[placeholder*='口令' i]",
+                "input[placeholder*='password' i]",
+                "input[placeholder*='kode' i]",
+                "input[placeholder*='sandi' i]",
+                "input[type='password']"
+            ];
+            for (var i = 0; i < selectors.length; i++) {
+                var el = document.querySelector(selectors[i]);
+                if (el && !isInternalUI(el)) {
+                    var r = el.getBoundingClientRect();
+                    if (r.width > 20 && r.height > 15) {
+                        targetInp = el;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!targetInp) {
+            updateAgyHUD("PWD >", "Klik kolom password dulu, lalu tekan PWD >", "warning");
+            return false;
+        }
+
+        try { targetInp.focus(); } catch(_) {}
+
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set ||
+                     Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+        if (setter) setter.call(targetInp, pwdVal);
+        else targetInp.value = pwdVal;
+
+        targetInp.dispatchEvent(new Event("input", { bubbles: true }));
+        targetInp.dispatchEvent(new Event("change", { bubbles: true }));
+
+        highlightRecordedElement(targetInp);
+
+        var isRec = AgyRecorder.isRecording || window.__FUSION_RECORDING__;
+        if (isRec) {
+            AgyRecorder.recordEvent({
+                type: "fill",
+                timestamp: Date.now(),
+                selector: getCssSelector(targetInp),
+                tag: targetInp.tagName.toLowerCase(),
+                id: targetInp.id || "",
+                name: targetInp.name || "",
+                placeholder: targetInp.placeholder || "",
+                value: "{{PASSWORD}}",
+                isDynamic: true,
+                optional: true,
+                timeout: 1500,
+                text: "PWD >: {{PASSWORD}}"
+            });
+            updateAgyHUD("PWD > Terekam", "Ditempel: {{PASSWORD}}", "success");
+        } else {
+            updateAgyHUD("PWD > Berhasil", "Ditempel: " + pwdVal.substring(0, 10) + "...", "success");
+        }
+        return true;
+    };
+    window.__FUSION_PASTE_PWD__ = window.__AGY_PASTE_PWD__;
 
     // --- AUTO-RESTORE ACTIVE RECORDER ON PAGE NAVIGATION / RELOAD ---
     try {
