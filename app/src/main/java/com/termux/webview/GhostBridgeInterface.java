@@ -215,12 +215,26 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getWalletAddress() {
-        return !checkRpcAlive() ? "" : sCurrentWalletAddress;
+        if (sCurrentWalletAddress != null && !sCurrentWalletAddress.isEmpty()) {
+            return sCurrentWalletAddress;
+        }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty()) {
+            return mgr.mCurrentWalletAddress;
+        }
+        return FusionWalletHelper.getMasterAddress();
     }
 
     @JavascriptInterface
     public String getWalletName() {
-        return sCurrentWalletName;
+        if (sCurrentWalletName != null && !sCurrentWalletName.isEmpty()) {
+            return sCurrentWalletName;
+        }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentWalletName != null && !mgr.mCurrentWalletName.isEmpty()) {
+            return mgr.mCurrentWalletName;
+        }
+        return FusionWalletHelper.getMasterName();
     }
 
     @JavascriptInterface

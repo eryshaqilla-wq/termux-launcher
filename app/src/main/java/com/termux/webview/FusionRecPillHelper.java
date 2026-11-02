@@ -26,6 +26,7 @@ public class FusionRecPillHelper {
     public static TextView sStepCollapseBtn;
     public static boolean sStepIsCollapsed;
     public static TextView sWalletBtn;
+    public static TextView sAddrBtn;
     public static TextView sEmailBtn;
     public static TextView sRefBtn;
     public static TextView sReloadBtn;
@@ -137,6 +138,31 @@ public class FusionRecPillHelper {
         LinearLayout.LayoutParams wbLp = new LinearLayout.LayoutParams(-2, -2);
         wbLp.setMargins(1, 0, 1, 0);
         stepPill.addView(walletBtn, wbLp);
+
+        // Addr > (Paste Active Wallet Address from wallets_db.json into web input)
+        TextView addrBtn = new TextView(appCompatActivity);
+        sAddrBtn = addrBtn;
+        addrBtn.setText(" Addr > ");
+        FusionUiHelper.setSolidBtn(addrBtn);
+        addrBtn.setTextSize(2, 10.0f);
+        addrBtn.setPadding(6, 3, 6, 3);
+        addrBtn.setClickable(true);
+        addrBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String curAddr = fusionWebViewManager.mCurrentWalletAddress;
+                if (curAddr == null || curAddr.isEmpty()) {
+                    curAddr = FusionWalletHelper.getMasterAddress();
+                }
+                WebView webView = fusionWebViewManager.mActiveWebView;
+                if (webView != null) {
+                    webView.evaluateJavascript("(function(){ if (window.__AGY_PASTE_WALLET__) return window.__AGY_PASTE_WALLET__('" + curAddr + "'); })()", null);
+                }
+            }
+        });
+        LinearLayout.LayoutParams abLp = new LinearLayout.LayoutParams(-2, -2);
+        abLp.setMargins(1, 0, 1, 0);
+        stepPill.addView(addrBtn, abLp);
 
         // EMAIL >
         TextView emailBtn = new TextView(appCompatActivity);
@@ -402,6 +428,7 @@ public class FusionRecPillHelper {
                 }
                 int stepVisibility = sStepIsCollapsed ? 8 : 0;
                 if (sWalletBtn != null) sWalletBtn.setVisibility(stepVisibility);
+                if (sAddrBtn != null) sAddrBtn.setVisibility(stepVisibility);
                 if (sEmailBtn != null) sEmailBtn.setVisibility(stepVisibility);
                 if (sRefBtn != null) sRefBtn.setVisibility(stepVisibility);
                 if (sReloadBtn != null) sReloadBtn.setVisibility(stepVisibility);

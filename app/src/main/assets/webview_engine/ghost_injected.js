@@ -1383,6 +1383,31 @@
                         return;
                     }
 
+                    if (ev.type === "touch") {
+                        var tx = ev.x || 100;
+                        var ty = ev.y || 100;
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Sentuh (" + Math.round(tx) + ", " + Math.round(ty) + ")", "running");
+                        var targetAtPt = document.elementFromPoint(tx, ty) || document.body;
+                        if (targetAtPt) {
+                            var tOpts = { bubbles: true, cancelable: true, clientX: tx, clientY: ty, view: window };
+                            if (window.TouchEvent) {
+                                try {
+                                    var touchObj = new Touch({ identifier: Date.now(), target: targetAtPt, clientX: tx, clientY: ty, screenX: tx, screenY: ty, pageX: tx + window.scrollX, pageY: ty + window.scrollY });
+                                    targetAtPt.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, cancelable: true, touches: [touchObj], targetTouches: [touchObj], changedTouches: [touchObj], view: window }));
+                                    targetAtPt.dispatchEvent(new TouchEvent("touchend", { bubbles: true, cancelable: true, touches: [], targetTouches: [], changedTouches: [touchObj], view: window }));
+                                } catch(_) {}
+                            }
+                            try { targetAtPt.dispatchEvent(new MouseEvent("click", tOpts)); } catch(_) {}
+                            if (typeof targetAtPt.click === "function") {
+                                try { targetAtPt.click(); } catch(_) {}
+                            }
+                        }
+                        self.registerTimer(setTimeout(function() {
+                            waitDocReady(runNextStep);
+                        }, stepDelay));
+                        return;
+                    }
+
                     if (ev.type === "swipe") {
                         var dir = ev.direction || "down";
                         var distY = -ev.deltaY || (dir === "up" ? 300 : (dir === "down" ? -300 : 0));
@@ -1502,7 +1527,38 @@
                             } else {
                                 targetEl.__agy_last_sim_click__ = now;
                                 try { targetEl.focus(); } catch(_) {}
-                                var commonOpts = { bubbles: true, cancelable: true, view: window };
+
+                                var rect = targetEl.getBoundingClientRect();
+                                var cx = rect.left + rect.width / 2;
+                                var cy = rect.top + rect.height / 2;
+                                var commonOpts = { bubbles: true, cancelable: true, clientX: cx, clientY: cy, view: window };
+
+                                // Mobile Touch Events Dispatch (support dApp dengan bindTap / FastClick / touchend listener)
+                                if (window.TouchEvent) {
+                                    try {
+                                        var touchObj = new Touch({
+                                            identifier: Date.now(),
+                                            target: targetEl,
+                                            clientX: cx,
+                                            clientY: cy,
+                                            screenX: cx,
+                                            screenY: cy,
+                                            pageX: cx + window.scrollX,
+                                            pageY: cy + window.scrollY
+                                        });
+                                        var tOpts = {
+                                            bubbles: true,
+                                            cancelable: true,
+                                            touches: [touchObj],
+                                            targetTouches: [touchObj],
+                                            changedTouches: [touchObj],
+                                            view: window
+                                        };
+                                        targetEl.dispatchEvent(new TouchEvent("touchstart", tOpts));
+                                        targetEl.dispatchEvent(new TouchEvent("touchend", tOpts));
+                                    } catch(_) {}
+                                }
+
                                 if (window.PointerEvent) {
                                     try {
                                         targetEl.dispatchEvent(new PointerEvent("pointerdown", commonOpts));
@@ -2607,6 +2663,105 @@
         return "PLAYING";
     };
 
+    // --- 5B. SMART WALLET ADDRESS PASTER (Addr > BUTTON DARI WALLET JSON) ---
+    window.__AGY_PASTE_WALLET__ = function(passedAddr) {
+        var wAddr = (typeof passedAddr === "string" && passedAddr.startsWith("0x")) ? passedAddr : "";
+        if (!wAddr) {
+            var activeW = (typeof AgyDB !== "undefined" && AgyDB.getActiveWallet) ? AgyDB.getActiveWallet() : null;
+            if (activeW && activeW.address) wAddr = activeW.address;
+        }
+        if (!wAddr) {
+            try {
+                if (window.GhostBridge && window.GhostBridge.getWalletAddress) {
+                    wAddr = window.GhostBridge.getWalletAddress();
+                }
+            } catch(_) {}
+        }
+        if (!wAddr) {
+            var wList = (typeof AgyDB !== "undefined" && AgyDB.getWallets) ? AgyDB.getWallets() : [];
+            if (wList && wList.length > 0 && wList[0].address) {
+                wAddr = wList[0].address;
+            }
+        }
+        if (!wAddr) {
+            wAddr = "0xd184F5Eb1F94378410BCAd0D9D33e3C03c3550d9";
+        }
+
+        // 1. Deteksi input yang sedang aktif / fokus
+        var targetInp = null;
+        var act = document.activeElement;
+        if (act && (act.tagName === "INPUT" || act.tagName === "TEXTAREA") && !isInternalUI(act)) {
+            targetInp = act;
+        }
+
+        // 2. Jika tidak ada yang fokus, cari kandidat kolom alamat di DOM/Modal
+        if (!targetInp) {
+            var selectors = [
+                "input#inp-wallet",
+                "input#w",
+                "input#wallet",
+                "input#address",
+                "input[name*='wallet' i]",
+                "input[name*='address' i]",
+                "input[name*='recipient' i]",
+                "input[placeholder*='0x' i]",
+                "input[placeholder*='wallet' i]",
+                "input[placeholder*='address' i]",
+                "input[placeholder*='收款' i]",
+                "input[placeholder*='地址' i]",
+                "input[type='text']:not([id^='__agy_'])"
+            ];
+            for (var i = 0; i < selectors.length; i++) {
+                var el = document.querySelector(selectors[i]);
+                if (el && !isInternalUI(el)) {
+                    var r = el.getBoundingClientRect();
+                    if (r.width > 20 && r.height > 15) {
+                        targetInp = el;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!targetInp) {
+            updateAgyHUD("Addr >", "Klik kolom input di web dulu, lalu tekan Addr >", "warning");
+            return false;
+        }
+
+        try { targetInp.focus(); } catch(_) {}
+
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set ||
+                     Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+        if (setter) setter.call(targetInp, wAddr);
+        else targetInp.value = wAddr;
+
+        targetInp.dispatchEvent(new Event("input", { bubbles: true }));
+        targetInp.dispatchEvent(new Event("change", { bubbles: true }));
+
+        highlightRecordedElement(targetInp);
+
+        var isRec = AgyRecorder.isRecording || window.__FUSION_RECORDING__;
+        if (isRec) {
+            AgyRecorder.recordEvent({
+                type: "fill",
+                timestamp: Date.now(),
+                selector: getCssSelector(targetInp),
+                tag: targetInp.tagName.toLowerCase(),
+                id: targetInp.id || "",
+                name: targetInp.name || "",
+                placeholder: targetInp.placeholder || "",
+                value: "{{WALLET_ADDRESS}}",
+                isDynamic: true,
+                text: "Addr >: {{WALLET_ADDRESS}}"
+            });
+            updateAgyHUD("Addr > Terekam", "Ditempel: {{WALLET_ADDRESS}} (" + wAddr.substring(0, 6) + "..." + wAddr.substring(38) + ")", "success");
+        } else {
+            updateAgyHUD("Addr > Berhasil", "Ditempel: " + wAddr.substring(0, 10) + "...", "success");
+        }
+        return true;
+    };
+    window.__FUSION_PASTE_WALLET__ = window.__AGY_PASTE_WALLET__;
+
     // --- AUTO-RESTORE ACTIVE RECORDER ON PAGE NAVIGATION / RELOAD ---
     try {
         if (sessionStorage.getItem("__agy_rec_active__") === "true") {
@@ -2633,13 +2788,204 @@
     } catch(_) {}
 
     // --- 6B. GESTURE & SWIPE RECORDER LISTENER (TOUCH & HYBRID MODES) ---
-    var __agyTouchStartX = 0, __agyTouchStartY = 0, __agyTouchStartTime = 0;
+    var __agyTouchStartX = 0, __agyTouchStartY = 0, __agyTouchStartTime = 0, __agyTouchMoved = false;
+    var __lastAgyRecordedClickTime = 0;
+    var __agyPendingTap = null;
+    var __agyPendingTapTimer = null;
+
+    // Helper visual feedback highlight saat elemen berhasil direkam
+    function highlightRecordedElement(el) {
+        if (!el || !el.style) return;
+        try {
+            var origOutline = el.style.outline;
+            var origBoxShadow = el.style.boxShadow;
+            var origTransition = el.style.transition;
+            el.style.transition = "box-shadow 0.2s ease, outline 0.2s ease";
+            el.style.outline = "2px solid #00E5FF";
+            el.style.boxShadow = "0 0 16px rgba(0, 229, 255, 0.75)";
+            setTimeout(function() {
+                try {
+                    el.style.outline = origOutline || "";
+                    el.style.boxShadow = origBoxShadow || "";
+                    el.style.transition = origTransition || "";
+                } catch(_) {}
+            }, 600);
+        } catch(_) {}
+    }
+
+    // Helper fungsi untuk mendeteksi elemen internal UI AGY, Fusion, atau Native Pill
+    function isInternalUI(el) {
+        if (!el || el.nodeType !== 1) return false;
+        var id = el.id || "";
+        if (id.startsWith("__agy_") || id.startsWith("__fusion_") || id.startsWith("sRecPill")) return true;
+        if (el.closest) {
+            if (el.closest("[id^='__agy_'], [id^='__fusion_'], #sRecPill, .fusion-rec-supplementary-bar, [class*='fusion-ui'], [class*='agy-ui']")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Pemeriksaan ketat: apakah elemen memiliki alasan kuat sebagai elemen interaktif?
+    function isActionableElement(el) {
+        if (!el || el.nodeType !== 1) return false;
+        if (isInternalUI(el)) return false;
+
+        var tag = el.tagName.toLowerCase();
+        if (tag === "html" || tag === "body") return false;
+
+        // 1. Tag interaktif standar HTML
+        if (tag === "button" || tag === "a" || tag === "input" || tag === "select" || tag === "textarea" || tag === "label" || tag === "summary") {
+            return true;
+        }
+
+        // 2. ARIA role interaktif
+        var role = el.getAttribute("role");
+        if (role && /^(button|link|tab|menuitem|checkbox|radio|switch|treeitem|option)$/i.test(role)) {
+            return true;
+        }
+
+        // 3. Handler event atau atribut framework
+        if (el.hasAttribute("onclick") || el.hasAttribute("data-action") || el.hasAttribute("data-click") ||
+            el.hasAttribute("@click") || el.hasAttribute("v-on:click") || el.hasAttribute("ng-click")) {
+            return true;
+        }
+
+        // 4. Tabindex interaktif
+        var tabIndex = el.getAttribute("tabindex");
+        if (tabIndex !== null && tabIndex !== "" && !isNaN(tabIndex) && parseInt(tabIndex, 10) >= 0) {
+            return true;
+        }
+
+        // 5. Penamaan Class / ID / TestID aksi (khusus dApp, button kustom, red packet / open-btn dsb)
+        var id = (typeof el.id === "string") ? el.id.toLowerCase() : "";
+        var cls = (typeof el.className === "string") ? el.className.toLowerCase() : "";
+        var testid = (el.getAttribute("data-testid") || "").toLowerCase();
+        var ariaLabel = (el.getAttribute("aria-label") || "").toLowerCase();
+
+        var actionRegex = /(?:^|[\s_\-])(btn|button|open-btn|clickable|action|touchable|pressable|claim|mint|connect|submit|close-btn|menu-item|tap-target)(?:[\s_\-]|$)/i;
+        if (actionRegex.test(cls) || actionRegex.test(id) || actionRegex.test(testid)) {
+            return true;
+        }
+
+        // Khusus open button di red packet atau envelope
+        if (id === "open" || cls.includes("open-btn") || ariaLabel.includes("打开") || ariaLabel.includes("红包") || ariaLabel.includes("open")) {
+            return true;
+        }
+
+        // 6. CSS Cursor Pointer
+        try {
+            var cs = window.getComputedStyle(el);
+            if (cs && cs.cursor === "pointer") {
+                return true;
+            }
+        } catch(_) {}
+
+        return false;
+    }
+
+    // Helper fungsi pencari target interaktif DOM sejati (Support Button, Link, Div SPA, SVG Icon, dApp)
+    function findBestClickTarget(el) {
+        if (!el || el.nodeType !== 1) return null;
+        if (isInternalUI(el)) return null;
+
+        var tag = el.tagName.toLowerCase();
+        if (tag === "html" || tag === "body") return null;
+
+        // 1. Periksa elemen itu sendiri atau ancestor terdekat hingga 6 tingkatan
+        var cur = el;
+        var depth = 0;
+        while (cur && cur.nodeType === 1 && depth < 6) {
+            if (isInternalUI(cur)) return null;
+            var ctag = cur.tagName.toLowerCase();
+            if (ctag === "html" || ctag === "body") break;
+
+            if (isActionableElement(cur)) {
+                return cur;
+            }
+            cur = cur.parentElement;
+            depth++;
+        }
+
+        // 2. Jika elemen berupa grafis/icon (svg, path, img, i), cari pembungkus tombol atau link
+        if (tag === "path" || tag === "svg" || tag === "img" || tag === "i") {
+            var container = el.closest("button, a, [role='button'], div, span");
+            if (container && !isInternalUI(container) && isActionableElement(container)) {
+                return container;
+            }
+        }
+
+        // 3. Fallback elemen daun (leaf element): Jika elemen bukan kontainer layout (tidak membungkus kontrol
+        // interaktif lain dan ukurannya wajar), izinkan elemen seperti chip, tab pill, atau span kustom agar
+        // kompatibel 100% dengan berbagai situs web unik tanpa merusak logika DOM asli.
+        var rect = el.getBoundingClientRect();
+        var vw = window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : 360);
+
+        var hasInteractiveChildren = false;
+        try {
+            if (el.querySelector("button, a, input, select, textarea, [role='button'], [role='link']")) {
+                hasInteractiveChildren = true;
+            }
+        } catch(_) {}
+
+        // Elemen kontainer/kartu/amplop besar (membungkus tombol atau tinggi > 140px) DITOLAK KERAS!
+        if (!hasInteractiveChildren && rect.width > 4 && rect.height > 4 && rect.width <= (vw * 0.85) && rect.height <= 140) {
+            return el;
+        }
+
+        return null;
+    }
+
+    // Penetrasi titik layar: mencari elemen interaktif di bawah koordinat (x, y) melalui seluruh layer DOM
+    function findActionableAtPoint(x, y) {
+        if (typeof document.elementsFromPoint !== "function") return null;
+        try {
+            var stack = document.elementsFromPoint(x, y);
+            if (!stack || stack.length === 0) return null;
+            for (var i = 0; i < stack.length; i++) {
+                var el = stack[i];
+                if (isInternalUI(el)) continue;
+                var target = findBestClickTarget(el);
+                if (target) return target;
+            }
+        } catch(_) {}
+        return null;
+    }
+
+    // Fungsi terpusat perekam DOM Click dengan validasi dan visual highlight
+    function recordActionableClick(target, clientX, clientY, sourceTag) {
+        if (!target) return;
+        if (isInternalUI(target)) return;
+        if (!document.documentElement.contains(target)) return;
+
+        var now = Date.now();
+        // Strict Debounce: cegah event ganda atau rangkap dari touch+click dalam 350ms
+        if (now - __lastAgyRecordedClickTime < 350) {
+            return;
+        }
+        __lastAgyRecordedClickTime = now;
+
+        var ev = {
+            type: "click",
+            timestamp: now,
+            x: clientX,
+            y: clientY,
+            selector: getCssSelector(target),
+            tag: target.tagName.toLowerCase(),
+            id: target.id || "",
+            name: target.name || "",
+            testid: target.getAttribute("data-testid") || "",
+            ariaLabel: target.getAttribute("aria-label") || "",
+            text: (target.innerText || target.value || target.getAttribute("aria-label") || "").substring(0, 30).trim()
+        };
+
+        highlightRecordedElement(target);
+        AgyRecorder.recordEvent(ev);
+    }
 
     document.addEventListener("touchstart", function(e) {
         var isRec = AgyRecorder.isRecording || window.__FUSION_RECORDING__;
         if (!isRec) return;
-        var mode = AgyRecorder.recordMode;
-        if (mode !== "touch" && mode !== "hybrid") return;
 
         // Ignore touches inside AGY UI
         if (e.target.closest && e.target.closest("#__agy_slash_picker__, #__agy_slash_backdrop__, #__agy_rec_bar__, #__agy_dom_inspector_modal__, #__agy_save_modal__, #__agy_copilot_hud__, #__agy_recipe_modal__, #__agy_rec_mode_modal__, #__agy_run_config_modal__, #__agy_hub_modal__, #__agy_custom_db_modal__")) {
@@ -2662,13 +3008,23 @@
         __agyTouchStartX = t.clientX;
         __agyTouchStartY = t.clientY;
         __agyTouchStartTime = Date.now();
-    }, { passive: true });
+        __agyTouchMoved = false;
+    }, { capture: true, passive: true });
+
+    document.addEventListener("touchmove", function(e) {
+        var t = e.touches[0];
+        if (t) {
+            var dX = Math.abs(t.clientX - __agyTouchStartX);
+            var dY = Math.abs(t.clientY - __agyTouchStartY);
+            if (dX > 12 || dY > 12) {
+                __agyTouchMoved = true;
+            }
+        }
+    }, { capture: true, passive: true });
 
     document.addEventListener("touchend", function(e) {
         var isRec = AgyRecorder.isRecording || window.__FUSION_RECORDING__;
         if (!isRec) return;
-        var mode = AgyRecorder.recordMode;
-        if (mode !== "touch" && mode !== "hybrid") return;
 
         if (e.target.closest && e.target.closest("#__agy_slash_picker__, #__agy_slash_backdrop__, #__agy_rec_bar__, #__agy_dom_inspector_modal__, #__agy_save_modal__, #__agy_copilot_hud__, #__agy_recipe_modal__, #__agy_rec_mode_modal__, #__agy_run_config_modal__, #__agy_hub_modal__, #__agy_custom_db_modal__")) {
             return;
@@ -2689,12 +3045,12 @@
         var deltaX = t.clientX - __agyTouchStartX;
         var deltaY = t.clientY - __agyTouchStartY;
         var elapsed = Date.now() - __agyTouchStartTime;
-
         var absX = Math.abs(deltaX);
         var absY = Math.abs(deltaY);
+        var mode = AgyRecorder.recordMode;
 
-        // Hanya simpan jika usapan jempol signifikan (>= 40px)
-        if (absX >= 40 || absY >= 40) {
+        // 1. Deteksi Gestur Usapan / Swipe (Mode Touch & Hybrid)
+        if ((mode === "touch" || mode === "hybrid") && (absX >= 40 || absY >= 40)) {
             var dir = "down";
             if (absY >= absX) {
                 dir = deltaY < 0 ? "up" : "down";
@@ -2702,7 +3058,7 @@
                 dir = deltaX < 0 ? "left" : "right";
             }
 
-            var ev = {
+            var swipeEv = {
                 type: "swipe",
                 direction: dir,
                 deltaX: Math.round(deltaX),
@@ -2715,91 +3071,55 @@
                 timestamp: Date.now()
             };
 
-            AgyRecorder.recordEvent(ev);
+            AgyRecorder.recordEvent(swipeEv);
             updateAgyHUD("Swipe Direkam", dir.toUpperCase() + " (" + Math.round(Math.max(absX, absY)) + "px)", "recording");
-        }
-    }, { passive: true });
-
-    // Helper fungsi untuk mendeteksi elemen internal UI AGY, Fusion, atau Native Pill
-    function isInternalUI(el) {
-        if (!el || el.nodeType !== 1) return false;
-        var id = el.id || "";
-        if (id.startsWith("__agy_") || id.startsWith("__fusion_") || id.startsWith("sRecPill")) return true;
-        if (el.closest) {
-            if (el.closest("[id^='__agy_'], [id^='__fusion_'], #sRecPill, .fusion-rec-supplementary-bar, [class*='fusion-ui'], [class*='agy-ui']")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Helper fungsi pencari target interaktif DOM sejati (Support Button, Link, Div SPA, SVG Icon, dApp)
-    function findBestClickTarget(el) {
-        if (!el || el.nodeType !== 1) return null;
-        if (isInternalUI(el)) return null;
-
-        var tag = el.tagName.toLowerCase();
-        if (tag === "html" || tag === "body") return null;
-
-        // 1. Elemen kontrol standar atau link/tombol terdekat
-        var standard = el.closest('button, a, input, select, textarea, label, summary, [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="checkbox"], [role="radio"], [role="switch"]');
-        if (standard && !isInternalUI(standard)) {
-            var stag = standard.tagName.toLowerCase();
-            if (stag !== "html" && stag !== "body") return standard;
+            return;
         }
 
-        // 2. Elemen dengan explicit handler onclick, data-action, atau tabindex interaktif
-        var actionParent = el.closest('[onclick], [data-action], [data-click], [tabindex]');
-        if (actionParent && !isInternalUI(actionParent)) {
-            var atag = actionParent.tagName.toLowerCase();
-            if (atag !== "html" && atag !== "body") return actionParent;
-        }
-
-        // 3. Elemen tombol kustom / dApp SPA (kelas penanda tombol seperti btn, button, claim, mint, submit, cursor-pointer)
-        var cur = el;
-        var depth = 0;
-        while (cur && cur.nodeType === 1 && depth < 6) {
-            if (isInternalUI(cur)) return null;
-            var ctag = cur.tagName.toLowerCase();
-            if (ctag === "html" || ctag === "body") break;
-
-            var cls = (typeof cur.className === "string") ? cur.className.toLowerCase() : "";
-            if (cls.includes("btn") || cls.includes("button") || cls.includes("clickable") || cls.includes("action") || cls.includes("cursor-pointer") || cls.includes("claim") || cls.includes("mint") || cls.includes("connect")) {
-                return cur;
+        // 2. Deteksi Tap Jempol (Pergerakan < 15px dan durasi < 550ms)
+        if (!__agyTouchMoved && absX < 15 && absY < 15 && elapsed < 550) {
+            // Mode Touch Murni: rekam sentuhan layar koordinat
+            if (mode === "touch") {
+                var touchEv = {
+                    type: "touch",
+                    x: Math.round(t.clientX),
+                    y: Math.round(t.clientY),
+                    timestamp: Date.now()
+                };
+                AgyRecorder.recordEvent(touchEv);
+                return;
             }
 
-            try {
-                var cs = window.getComputedStyle(cur);
-                if (cs && cs.cursor === "pointer") {
-                    return cur;
+            // Mode DOM atau Hybrid: cari target interaktif sejati
+            var target = findBestClickTarget(e.target) || findActionableAtPoint(t.clientX, t.clientY);
+            if (target && !isInternalUI(target)) {
+                if (__agyPendingTapTimer) {
+                    clearTimeout(__agyPendingTapTimer);
+                    __agyPendingTapTimer = null;
                 }
-            } catch(_) {}
 
-            cur = cur.parentElement;
-            depth++;
-        }
+                __agyPendingTap = {
+                    target: target,
+                    x: t.clientX,
+                    y: t.clientY,
+                    time: Date.now(),
+                    recorded: false
+                };
 
-        // 4. Jika el berupa child icon/grafis (path, svg, img, i), naik ke container pembungkusnya
-        if (tag === "path" || tag === "svg" || tag === "img" || tag === "i") {
-            var container = el.closest("button, a, div, span");
-            if (container && !isInternalUI(container)) {
-                var ctag2 = container.tagName.toLowerCase();
-                if (ctag2 !== "html" && ctag2 !== "body") return container;
+                // Fallback Timer: Jika dApp (seperti bindTap / FastClick) memanggil e.preventDefault() pada touchend,
+                // browser Chromium TIDAK AKAN PERNAH menembakkan event click!
+                // Timer ini akan mensintesis klik setelah 45ms jika native click tidak muncul.
+                __agyPendingTapTimer = setTimeout(function() {
+                    if (__agyPendingTap && !__agyPendingTap.recorded) {
+                        __agyPendingTap.recorded = true;
+                        recordActionableClick(__agyPendingTap.target, __agyPendingTap.x, __agyPendingTap.y, "touch-synthesizer");
+                    }
+                    __agyPendingTap = null;
+                    __agyPendingTapTimer = null;
+                }, 45);
             }
         }
-
-        // 5. Fallback elemen yang disentuh user (pastikan bukan layout raksasa / background penuh)
-        var rect = el.getBoundingClientRect();
-        var vw = window.innerWidth || (document.documentElement ? document.documentElement.clientWidth : 360);
-        var vh = window.innerHeight || (document.documentElement ? document.documentElement.clientHeight : 640);
-        if (rect.width > 2 && rect.height > 2 && (rect.width < (vw * 0.92) || rect.height < (vh * 0.92))) {
-            return el;
-        }
-
-        return null;
-    }
-
-    var __lastAgyRecordedClickTime = 0;
+    }, { capture: true, passive: true });
 
     // --- 6. GLOBAL LIVE RECORDER LISTENER (CLICK & FORM INPUT) ---
     document.addEventListener("click", function(e) {
@@ -2812,12 +3132,6 @@
 
         // While Slash Autocomplete picker is open, NEVER record any click!
         if (SlashAutocomplete.isOpen) {
-            return;
-        }
-
-        // Strict Debounce: Cegah event ganda atau 4x lipat dalam rentang 400ms!
-        var now = Date.now();
-        if (now - __lastAgyRecordedClickTime < 400) {
             return;
         }
 
@@ -2850,27 +3164,21 @@
             return;
         }
 
-        // Target resolution: cari elemen interaktif terbaik atau target klik itu sendiri
-        var target = findBestClickTarget(e.target);
+        // Tandai pending tap sudah tercover oleh native click agar timer tidak menembak dobel
+        if (__agyPendingTap) {
+            __agyPendingTap.recorded = true;
+        }
+        if (__agyPendingTapTimer) {
+            clearTimeout(__agyPendingTapTimer);
+            __agyPendingTapTimer = null;
+        }
+
+        // Target resolution: cari elemen interaktif terbaik atau penetrasi stack layer
+        var target = findBestClickTarget(e.target) || findActionableAtPoint(e.clientX, e.clientY);
         if (!target) return;
         if (isInternalUI(target)) return;
 
-        __lastAgyRecordedClickTime = now;
-
-        var ev = {
-            type: "click",
-            timestamp: now,
-            x: e.clientX,
-            y: e.clientY,
-            selector: getCssSelector(target),
-            tag: target.tagName.toLowerCase(),
-            id: target.id || "",
-            name: target.name || "",
-            testid: target.getAttribute("data-testid") || "",
-            ariaLabel: target.getAttribute("aria-label") || "",
-            text: (target.innerText || target.value || "").substring(0, 30).trim()
-        };
-        AgyRecorder.recordEvent(ev);
+        recordActionableClick(target, e.clientX, e.clientY, "native-click");
     }, true);
 
     document.addEventListener("change", function(e) {

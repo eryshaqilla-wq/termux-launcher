@@ -543,7 +543,7 @@ async function saveSessionCookies(profile, silent = false) {
 
     // SYSTEM LOCK 1: Active Profile System Lock
     // Jika sistem sedang terkunci pada profil aktif tertentu dan profil target berbeda, tolak keras!
-    const activeProfile = getActiveProfile();
+    const activeProfile = process.env.FUSION_ACTIVE_PROFILE || (process.env.IN_WORKER_TAB ? null : getActiveProfile());
     if (activeProfile && activeProfile !== 'default' && activeProfile !== profile) {
         console.error(`${RED}[SYSTEM LOCK ERROR] Pelanggaran Isolasi Profil! Sesi sistem saat ini terkunci pada [${activeProfile}]. Mustahil dan ditolak menyimpan ke profil berbeda [${profile}]!${RESET}`);
         return false;
@@ -557,21 +557,24 @@ async function saveSessionCookies(profile, silent = false) {
         if (contexts.length > 0) {
             const pages = contexts[0].pages();
 
-            // SYSTEM LOCK 2: Tab Browser Profile Stamp Verification
-            let tabProfileFound = null;
+            // SYSTEM LOCK 2: Tab Browser Profile Stamp Verification (Mendukung Multi-Tab Paralel)
+            let hasMatchingTab = false;
+            let otherTabsCount = 0;
             for (const p of pages) {
                 try {
                     const prof = await p.evaluate(() => window.__FUSION_PROFILE__ || null);
-                    if (prof && prof !== 'default') {
-                        tabProfileFound = prof;
-                        if (prof === profile) break;
+                    if (prof === profile) {
+                        hasMatchingTab = true;
+                        break;
+                    } else if (prof && prof !== 'default') {
+                        otherTabsCount++;
                     }
                 } catch (_) {}
             }
 
-            // Jika tab di browser memiliki stempel profil berbeda dari profil yang akan disimpan, tolak keras!
-            if (tabProfileFound && tabProfileFound !== profile) {
-                console.error(`${RED}[SYSTEM LOCK ERROR] Tab browser yang aktif memiliki stempel profil [${tabProfileFound}]. Mustahil dan dilarang keras menyimpan ke profil berbeda [${profile}]! Operasi digagalkan.${RESET}`);
+            // Jika hanya ada tab milik profil lain dan tab profil target tidak ditemukan: tolak!
+            if (!hasMatchingTab && otherTabsCount > 0 && pages.length > 0) {
+                console.error(`${RED}[SYSTEM LOCK ERROR] Tidak ditemukan tab aktif milik profil [${profile}] di browser. Operasi simpan digagalkan demi keamanan.${RESET}`);
                 await browser.close();
                 return false;
             }
@@ -961,9 +964,9 @@ async function executeSingleProfile(url, extraFlags = []) {
         process.exit(1);
     }
 
-    // Auto-save profil lama jika aktif profil berbeda
+    // Auto-save profil lama jika aktif profil berbeda (hanya di mode single/sekuensial, bukan di worker tab paralel)
     const prevProfile = getActiveProfile();
-    if (prevProfile && prevProfile !== 'default' && prevProfile !== targetProfile) {
+    if (!isWorkerTab && prevProfile && prevProfile !== 'default' && prevProfile !== targetProfile) {
         console.log(`Menyimpan sesi website untuk profil [${prevProfile}]...`);
         const ok = await saveSessionCookies(prevProfile, false);
         if (ok) {
@@ -973,7 +976,12 @@ async function executeSingleProfile(url, extraFlags = []) {
     }
 
     if (targetProfile && targetProfile !== 'default') {
-        setActiveProfile(targetProfile);
+        process.env.FUSION_ACTIVE_PROFILE = targetProfile;
+        if (isWorkerTab) {
+            process.env.IN_WORKER_TAB = '1';
+        } else {
+            setActiveProfile(targetProfile);
+        }
         registerProfile(targetProfile);
     }
 
