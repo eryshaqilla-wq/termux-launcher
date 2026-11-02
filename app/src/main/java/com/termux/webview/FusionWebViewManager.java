@@ -1507,14 +1507,19 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
 
         final String profile = fusionTab.mProfile;
+        final TerminalSession boundSession = fusionTab.mBoundSession != null ? fusionTab.mBoundSession : (this.mActivity != null ? this.mActivity.getCurrentSession() : null);
         if (profile != null && !profile.isEmpty() && !"default".equals(profile) && !profile.startsWith("fresh_")) {
             // 1. Flush cookies native Android seketika (1ms)
             FusionProfileManager.flushCookies(profile);
 
             // 2. Auto-export ke JSON di background thread (fire-and-forget, zero UI block, ~15ms)
             final Context context = this.mActivity != null ? this.mActivity : (fusionTab.mWebView != null ? fusionTab.mWebView.getContext() : null);
+            final TermuxActivity act = this.mActivity;
             new Thread(() -> {
-                FusionProfileManager.exportProfileSessionToJson(context, profile);
+                String saveMsg = FusionProfileManager.exportProfileSessionToJson(context, profile);
+                if (saveMsg != null && boundSession != null && act != null) {
+                    FusionProfileManager.printToTerminalSession(act, boundSession, "\r\n\033[32m[Fusion] " + saveMsg + "\033[0m\r\n");
+                }
             }).start();
         }
 

@@ -682,21 +682,6 @@ public class FusionProfileManager {
 
             String msg = "Sesi web untuk profil [" + profileName + "] berhasil disimpan (" + cookiesArray.length() + " cookies via Native IPC).";
             Log.i(TAG, msg);
-
-            final String toastMsg = "💾 Sesi profil [" + profileName + "] tersimpan (" + cookiesArray.length() + " cookies)";
-            if (context instanceof android.app.Activity) {
-                ((android.app.Activity) context).runOnUiThread(() -> {
-                    android.widget.Toast.makeText(context, toastMsg, android.widget.Toast.LENGTH_SHORT).show();
-                });
-            } else {
-                com.termux.app.TermuxActivity act = com.termux.app.TermuxIpcServer.getActivity();
-                if (act != null) {
-                    act.runOnUiThread(() -> {
-                        android.widget.Toast.makeText(act, toastMsg, android.widget.Toast.LENGTH_SHORT).show();
-                    });
-                }
-            }
-
             return msg;
         } catch (Throwable e) {
             Log.e(TAG, "Gagal export cookies SQLite ke JSON untuk profil " + profileName + ": " + e.getMessage(), e);
@@ -728,5 +713,25 @@ public class FusionProfileManager {
      */
     public static String saveProfileSessionSync(Context context, String profileName) {
         return exportProfileSessionToJson(context, profileName);
+    }
+
+    /**
+     * Mengirim notifikasi teks ANSI langsung ke layar terminal (CLI) milik session pemilik tab.
+     * Tidak memunculkan Android OS Toast popup di layar global.
+     */
+    public static void printToTerminalSession(com.termux.app.TermuxActivity act, com.termux.terminal.TerminalSession session, String text) {
+        if (session == null || text == null || act == null) return;
+        act.runOnUiThread(() -> {
+            try {
+                com.termux.terminal.TerminalEmulator emu = session.getEmulator();
+                if (emu != null) {
+                    byte[] bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                    emu.append(bytes, bytes.length);
+                    if (act.getTermuxTerminalSessionClient() != null) {
+                        act.getTermuxTerminalSessionClient().onTextChanged(session);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        });
     }
 }
