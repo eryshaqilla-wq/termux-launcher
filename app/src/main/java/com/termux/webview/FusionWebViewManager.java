@@ -1897,17 +1897,25 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public String getSiteNameForSession(TerminalSession session) {
-        if (session == null || this.mTabList == null || this.mTabList.isEmpty() || !isWebViewVisible()) {
+        if (session == null || this.mTabList == null || this.mTabList.isEmpty()) {
             return null;
         }
 
         FusionTab targetTab = null;
         int size = this.mTabList.size();
-        for (int i = 0; i < size; i++) {
-            FusionTab tab = (FusionTab) this.mTabList.get(i);
-            if (tab != null && (tab.mBoundSession == session || (tab.mBoundSession == null && this.mActivity != null && this.mActivity.getCurrentSession() == session))) {
-                targetTab = tab;
-                break;
+        if (this.mActiveTab >= 0 && this.mActiveTab < size) {
+            FusionTab candidate = (FusionTab) this.mTabList.get(this.mActiveTab);
+            if (candidate != null && (candidate.mBoundSession == session || (candidate.mBoundSession == null && this.mActivity != null && this.mActivity.getCurrentSession() == session))) {
+                targetTab = candidate;
+            }
+        }
+        if (targetTab == null) {
+            for (int i = size - 1; i >= 0; i--) {
+                FusionTab tab = (FusionTab) this.mTabList.get(i);
+                if (tab != null && (tab.mBoundSession == session || (tab.mBoundSession == null && this.mActivity != null && this.mActivity.getCurrentSession() == session))) {
+                    targetTab = tab;
+                    break;
+                }
             }
         }
 
