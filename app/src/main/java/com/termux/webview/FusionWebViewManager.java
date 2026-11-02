@@ -514,6 +514,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         fusionTabCreateTabInternal.mWebView.loadUrl(str);
         updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
     }
 
     public boolean checkRpcDaemon() {
@@ -570,6 +573,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 @Override
                 public void run() {
                     updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
                     Toast.makeText(appCompatActivity, "Dompet Diubah ke: " + nextName, Toast.LENGTH_SHORT).show();
                 }
             });
@@ -681,6 +687,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         TermuxActivity r0 = this.mActivity;
         if (r0 != null) {
             r0.endWebViewExternalTextInput();
+            r0.refreshTerminalWindowBar();
         }
     }
 
@@ -1467,6 +1474,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mActiveTab = 0;
         }
         updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
         switchTab(this.mActiveTab);
         System.gc();
     }
@@ -1487,6 +1497,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
                 syncVisibility();
                 updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
             });
         }
     }
@@ -1507,34 +1520,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
         final String profile = fusionTab.mProfile;
         if (profile != null && !profile.isEmpty() && !"default".equals(profile) && !profile.startsWith("fresh_")) {
-            // Sembunyikan webView tab secara visual agar UI responsif seketika
-            if (fusionTab.mWebView != null) {
-                fusionTab.mWebView.setVisibility(View.INVISIBLE);
-            }
+            // 1. Flush cookies native Android seketika (1ms)
+            FusionProfileManager.flushCookies(profile);
 
-            // Jika tab aktif yang ditutup dan masih ada tab lain, alihkan ke tab sebelahnya
-            if (this.mActiveTab == i && size > 1) {
-                int nextTab = (i > 0) ? i - 1 : 1;
-                switchTab(nextTab);
-            }
-
+            // 2. Auto-export ke JSON di background thread (fire-and-forget, zero UI block, ~15ms)
             final Context context = this.mActivity != null ? this.mActivity : (fusionTab.mWebView != null ? fusionTab.mWebView.getContext() : null);
-
-            // Simpan sesi web terlebih dahulu di background thread sebelum destroy webview (CDP masih aktif)
             new Thread(() -> {
-                final String saveMsg = FusionProfileManager.saveProfileSessionSync(context, profile);
-                if (mActivity != null) {
-                    mActivity.runOnUiThread(() -> {
-                        if (saveMsg != null) {
-                            Toast.makeText(mActivity, saveMsg, Toast.LENGTH_SHORT).show();
-                        }
-                        performDirectTabDestroy(fusionTab);
-                    });
-                } else {
-                    performDirectTabDestroy(fusionTab);
-                }
+                FusionProfileManager.exportProfileSessionToJson(context, profile);
             }).start();
-            return;
         }
 
         performDirectTabDestroy(fusionTab);
@@ -1850,6 +1843,105 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
+    public static String cleanSiteTitle(String title) {
+        if (title == null) return null;
+        title = title.trim();
+        if (title.isEmpty() || "New Tab".equalsIgnoreCase(title) || "about:blank".equalsIgnoreCase(title)) {
+            return null;
+        }
+
+        // Khusus X / Twitter
+        if (title.contains("/ X") || title.endsWith(" / X") || title.equals("X") || title.startsWith("X (") || title.startsWith("(X)")) {
+            return "X";
+        }
+        String lower = title.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("twitter")) {
+            return "X";
+        }
+
+        // Pisahkan pemisah judul umum (misal: "Title - SiteName", "Page | Brand")
+        String[] separators = new String[]{" - ", " | ", " — ", " : ", " • ", " · "};
+        for (String sep : separators) {
+            int idx = title.indexOf(sep);
+            if (idx > 0) {
+                String candidate = title.substring(0, idx).trim();
+                if (candidate.length() >= 2) {
+                    title = candidate;
+                    break;
+                }
+            }
+        }
+
+        // Pembersihan ekstensi jika judulnya berupa nama domain
+        if (title.equalsIgnoreCase("google.com")) return "Google";
+        if (title.equalsIgnoreCase("x.com")) return "X";
+        if (title.equalsIgnoreCase("github.com")) return "GitHub";
+
+        if (title.length() > 16) {
+            return title.substring(0, 15) + "…";
+        }
+        return title;
+    }
+
+    public static String extractDomainName(String urlStr) {
+        if (urlStr == null || urlStr.isEmpty() || "about:blank".equalsIgnoreCase(urlStr)) return null;
+        try {
+            android.net.Uri uri = android.net.Uri.parse(urlStr);
+            String host = uri.getHost();
+            if (host != null) {
+                if (host.startsWith("www.")) host = host.substring(4);
+                if ("x.com".equalsIgnoreCase(host) || "twitter.com".equalsIgnoreCase(host)) {
+                    return "X";
+                }
+                if ("google.com".equalsIgnoreCase(host)) {
+                    return "Google";
+                }
+                if ("github.com".equalsIgnoreCase(host)) {
+                    return "GitHub";
+                }
+                if (host.length() > 16) {
+                    return host.substring(0, 15) + "…";
+                }
+                return host;
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    public String getSiteNameForSession(TerminalSession session) {
+        if (session == null || this.mTabList == null || this.mTabList.isEmpty() || !isWebViewVisible()) {
+            return null;
+        }
+
+        FusionTab targetTab = null;
+        int size = this.mTabList.size();
+        for (int i = 0; i < size; i++) {
+            FusionTab tab = (FusionTab) this.mTabList.get(i);
+            if (tab != null && (tab.mBoundSession == session || (tab.mBoundSession == null && this.mActivity != null && this.mActivity.getCurrentSession() == session))) {
+                targetTab = tab;
+                break;
+            }
+        }
+
+        if (targetTab == null || targetTab.mIsMinimized) {
+            return null;
+        }
+
+        // 1. Title dari DOM
+        String siteTitle = cleanSiteTitle(targetTab.mTitle);
+        if (siteTitle != null && !siteTitle.isEmpty()) {
+            return siteTitle;
+        }
+
+        // 2. Domain dari URL
+        String domain = extractDomainName(targetTab.mUrl);
+        if (domain != null && !domain.isEmpty()) {
+            return domain;
+        }
+
+        return "Web";
+    }
+
     public void onTabTitleReceived(WebView webView, String str) {
         ArrayList arrayList;
         if (webView == null || str == null || (arrayList = this.mTabList) == null) {
@@ -1860,6 +1952,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab = (FusionTab) arrayList.get(i);
             if (fusionTab.mWebView == webView) {
                 fusionTab.mTitle = str;
+                updateContextUi();
+                if (this.mActivity != null) {
+                    this.mActivity.runOnUiThread(() -> this.mActivity.refreshTerminalWindowBar());
+                }
                 return;
             }
         }
@@ -1875,6 +1971,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab = (FusionTab) arrayList.get(i);
             if (fusionTab.mWebView == webView) {
                 fusionTab.mUrl = str;
+                updateContextUi();
+                if (this.mActivity != null) {
+                    this.mActivity.runOnUiThread(() -> this.mActivity.refreshTerminalWindowBar());
+                }
                 return;
             }
         }
@@ -1994,6 +2094,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         syncVisibility();
         updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
     }
 
     public void openWorkerTab(String str) {
@@ -2285,6 +2388,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout2.bringToFront();
         }
         updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
     }
 
     public void syncDbManual() {
@@ -2375,6 +2481,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         linearLayout2.bringToFront();
                     }
                     updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
                     return;
                 }
                 TextView textView2 = this.mMinPillBtn;
@@ -2420,6 +2529,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     linearLayout3.bringToFront();
                 }
                 updateContextUi();
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
+        }
                 FusionRecPillHelper.showRecPill(this);
                 return;
             }

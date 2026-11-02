@@ -25623,6 +25623,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 ? com.termux.app.terminal.TerminalWindowBar.itemFor(null, index)
                 : com.termux.app.terminal.TerminalWindowBar.itemForNamed(windowName, null);
         }
+
+        // Cek apakah WebView sedang aktif & terikat pada session ini
+        com.termux.webview.FusionWebViewManager webMgr = com.termux.webview.FusionWebViewManager.getInstance();
+        if (webMgr != null) {
+            String siteName = webMgr.getSiteNameForSession(session);
+            if (siteName != null && !siteName.isEmpty()) {
+                return com.termux.app.terminal.TerminalWindowBar.itemForNamed(siteName, "web");
+            }
+        }
         int pid = session.getPid();
         if (pid > 0) foregroundPids.add(pid);
         com.termux.app.statusbar.WindowForegroundResolver.ForegroundInfo info =

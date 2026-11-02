@@ -473,6 +473,17 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.startsWith("WEBVIEW_SAVE_SESSION ") || strTrim.startsWith("WEBVIEW_SAVE ")) {
+                                String prof = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                String res = com.termux.webview.FusionProfileManager.exportProfileSessionToJson(act, prof);
+                                if (res != null) {
+                                    outputStream.write((res + "\n").getBytes());
+                                } else {
+                                    outputStream.write(("Gagal menyimpan sesi untuk profil [" + prof + "]\n").getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
                             } else if ((strTrim.equalsIgnoreCase("KEYBOARD_SHOW") || strTrim.equalsIgnoreCase("SHOW")) && (activity = TermuxIpcServer.getActivity()) != null) {
                                 activity.runOnUiThread(new KeyboardRunnable(activity, 3));
                             } else {

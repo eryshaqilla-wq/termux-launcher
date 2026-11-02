@@ -277,6 +277,7 @@ public class FusionTabStateHelper {
             TermuxActivity r2 = fusionWebViewManager.mActivity;
             if (r2 != null) {
                 r2.endWebViewExternalTextInput();
+                r2.refreshTerminalWindowBar();
                 Toast.makeText((Context) r2, "WebView diminimalkan", 0).show();
                 return;
             }
@@ -306,6 +307,7 @@ public class FusionTabStateHelper {
             TermuxActivity r2 = fusionWebViewManager.mActivity;
             if (r2 != null) {
                 r2.beginWebViewExternalTextInput();
+                r2.refreshTerminalWindowBar();
             }
         }
         FusionRecPillHelper.showRecPill(fusionWebViewManager);

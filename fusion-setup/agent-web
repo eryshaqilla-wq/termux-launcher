@@ -1116,14 +1116,12 @@ async function executeSingleProfile(url, extraFlags = []) {
     // Cleanup: Jika sesi berjalan di dalam tab worker terisolasi, tutup webview & tab worker
     if (isWorkerTab) {
         if (targetProfile && targetProfile !== 'default') {
-            console.log(`Menyimpan sesi website untuk profil [${targetProfile}]...`);
-            const ok = await saveSessionCookies(targetProfile, false);
-            if (ok) {
-                console.log(`Sesi website berhasil disimpan ke profil [${targetProfile}].`);
-            }
+            try {
+                runIpc(`save-session ${targetProfile}`);
+            } catch (_) {}
         }
         console.log(`[WebView Worker] Makro selesai. Menutup tab worker "${workerTabName || 'current'}"...`);
-        await sleep(1000);
+        await sleep(500);
         runIpc('close');
         if (workerTabName) {
             runIpcTab('close', [workerTabName]);
@@ -1274,7 +1272,16 @@ async function main() {
             process.exit(1);
         }
 
-        console.log(`Menyimpan sesi website untuk profil [${prof}]...`);
+        console.log(`Menyimpan sesi website untuk profil [${prof}] via IPC Native...`);
+        try {
+            const ipcResp = runIpc(`save-session ${prof}`);
+            if (ipcResp && (ipcResp.includes('berhasil') || ipcResp.includes('OK') || ipcResp.includes('cookies'))) {
+                console.log(ipcResp.trim());
+                process.exit(0);
+            }
+        } catch (_) {}
+
+        // Fallback CDP jika IPC tidak aktif
         const ok = await saveSessionCookies(prof);
         if (ok) {
             console.log(`Sesi website berhasil disimpan ke profil [${prof}].`);
@@ -1410,24 +1417,6 @@ async function main() {
     }
 
     if (cmd === 'kill' || cmd === 'kill-tab' || cmd === 'killtab') {
-        let prof = null;
-        for (let i = 1; i < args.length; i++) {
-            if (args[i] === '--profile' && args[i + 1]) {
-                prof = args[i + 1];
-                break;
-            } else if (args[i].startsWith('--profile=')) {
-                prof = args[i].split('=')[1];
-                break;
-            }
-        }
-        if (!prof) prof = getActiveProfile();
-        if (prof && prof !== 'default') {
-            console.log(`Menyimpan sesi website untuk profil [${prof}]...`);
-            const ok = await saveSessionCookies(prof, false);
-            if (ok) {
-                console.log(`Sesi website berhasil disimpan ke profil [${prof}].`);
-            }
-        }
         const killArg = args[1] && !args[1].startsWith('-') ? `kill-tab ${args[1]}` : 'kill-tab';
         runIpc(killArg);
         console.log(`Tab WebView ditutup.`);
@@ -1435,27 +1424,6 @@ async function main() {
     }
 
     if (cmd === 'close') {
-        let prof = null;
-        for (let i = 1; i < args.length; i++) {
-            if (args[i] === '--profile' && args[i + 1]) {
-                prof = args[i + 1];
-                break;
-            } else if (args[i].startsWith('--profile=')) {
-                prof = args[i].split('=')[1];
-                break;
-            } else if (!args[i].startsWith('-')) {
-                prof = args[i];
-                break;
-            }
-        }
-        if (!prof) prof = getActiveProfile();
-        if (prof && prof !== 'default') {
-            console.log(`Menyimpan sesi website untuk profil [${prof}]...`);
-            const ok = await saveSessionCookies(prof, false);
-            if (ok) {
-                console.log(`Sesi website berhasil disimpan ke profil [${prof}].`);
-            }
-        }
         runIpc('close');
         console.log(`WebView ditutup.`);
         process.exit(0);

@@ -183,6 +183,9 @@ public class FusionWebViewDispatcher {
         } else if (str.startsWith("WEBVIEW_CLEAR_COOKIES")) {
             FusionProfileManager.clearAllCookiesAndStorage();
             fusionWebViewManager.clearWebviewCache();
+        } else if (str.startsWith("WEBVIEW_SAVE_SESSION ") || str.startsWith("WEBVIEW_SAVE ")) {
+            String prof = str.substring(str.indexOf(" ") + 1).trim();
+            FusionProfileManager.exportProfileSessionToJson(fusionWebViewManager.mActivity, prof);
         } else if (str.startsWith("WEBVIEW_COLLAPSE_PILL")) {
             fusionWebViewManager.toggleCollapsePill();
         }
