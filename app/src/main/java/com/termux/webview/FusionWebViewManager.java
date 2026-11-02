@@ -25,6 +25,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.webkit.ValueCallback;
+import android.webkit.WebBackForwardList;
+import android.webkit.WebHistoryItem;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.EditText;
@@ -501,8 +503,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             frameLayout.setVisibility(0);
             frameLayout.bringToFront();
         }
-        if (str == null || str.length() == 0) {
-            str = "https://google.com";
+        if (str == null || str.length() == 0 || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
+            str = "file:///android_asset/webview_engine/home.html";
         }
         FusionTab fusionTabCreateTabInternal = createTabInternal(str, "default", "", "base", true, false, false, "");
         switchTab(this.mTabList.size() - 1);
@@ -1020,26 +1022,75 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (frameLayout3 != null) {
                 frameLayout3.addView(view, new FrameLayout.LayoutParams(-1, -1));
             }
-            LinearLayout linearLayout6 = new LinearLayout(this.mActivity);
-            linearLayout6.setOrientation(0);
-            linearLayout6.setPadding(0, 0, 0, 10);
-            TextView textView7 = new TextView(this.mActivity);
-            textView7.setText("FUSION WEB3");
-            textView7.setTextColor(-1);
-            textView7.setTextSize(2, 14.0f);
-            textView7.setTypeface(null, 1);
-            textView7.setGravity(19);
-            linearLayout6.addView(textView7, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            TextView textView8 = new TextView(this.mActivity);
-            textView8.setText("  X  ");
-            textView8.setTextColor(-13124);
-            textView8.setTextSize(2, 14.0f);
-            textView8.setTypeface(null, 1);
-            textView8.setPadding(10, 6, 10, 6);
-            textView8.setClickable(z);
-            textView8.setOnClickListener(new CloseMenuClick(this));
-            linearLayout6.addView(textView8);
-            this.mMenuCard.addView(linearLayout6);
+            LinearLayout headerRow = new LinearLayout(this.mActivity);
+            headerRow.setOrientation(0);
+            headerRow.setPadding(4, 4, 4, 12);
+            headerRow.setGravity(19);
+
+            TextView titleText = new TextView(this.mActivity);
+            titleText.setText("FUSION BROWSER");
+            titleText.setTextColor(0xFFCDD6F4);
+            titleText.setTextSize(2, 14.5f);
+            titleText.setTypeface(null, 1);
+            headerRow.addView(titleText, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+            TextView closeBtn = new TextView(this.mActivity);
+            closeBtn.setText("  ✕  ");
+            closeBtn.setTextColor(0xFFF38BA8);
+            closeBtn.setTextSize(2, 15.0f);
+            closeBtn.setTypeface(null, 1);
+            closeBtn.setPadding(10, 6, 10, 6);
+            closeBtn.setClickable(true);
+            closeBtn.setOnClickListener(new CloseMenuClick(this));
+            headerRow.addView(closeBtn);
+            this.mMenuCard.addView(headerRow);
+
+            // ==================== BARIS TOP QUICK ACTION (KIWI / CHROME STYLE) ====================
+            LinearLayout quickActionRow = new LinearLayout(this.mActivity);
+            quickActionRow.setOrientation(0);
+            quickActionRow.setPadding(0, 0, 0, 10);
+
+            // 1. Forward (➡️)
+            TextView fwdBtn = FusionUiHelper.createQuickActionBtn(this.mActivity, "➡️", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    performQuickForward();
+                }
+            });
+            quickActionRow.addView(fwdBtn);
+
+            // 2. Bookmark (⭐)
+            TextView starBtn = FusionUiHelper.createQuickActionBtn(this.mActivity, "⭐", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    toggleBookmarkCurrentPage();
+                }
+            });
+            quickActionRow.addView(starBtn);
+
+            // 3. Save Session (💾)
+            TextView saveBtn = FusionUiHelper.createQuickActionBtn(this.mActivity, "💾", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    saveCurrentSessionManual();
+                }
+            });
+            quickActionRow.addView(saveBtn);
+
+            // 4. Site Info (ℹ️)
+            TextView infoBtn = FusionUiHelper.createQuickActionBtn(this.mActivity, "ℹ️", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showSiteInfoDialog();
+                }
+            });
+            quickActionRow.addView(infoBtn);
+
+            // 5. Reload (🔄)
+            TextView reloadBtn = FusionUiHelper.createQuickActionBtn(this.mActivity, "🔄", new ReloadClick(this));
+            quickActionRow.addView(reloadBtn);
+
+            this.mMenuCard.addView(quickActionRow);
 
             ScrollView menuScrollView = new ScrollView(this.mActivity);
             menuScrollView.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1.0f));
@@ -1047,313 +1098,322 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             LinearLayout menuContent = new LinearLayout(this.mActivity);
             menuContent.setOrientation(1);
 
-            LinearLayout linearLayout7 = new LinearLayout(this.mActivity);
-            linearLayout7.setOrientation(0);
-            linearLayout7.setPadding(0, 4, 0, 6);
-            TextView textView9 = new TextView(this.mActivity);
-            this.mStatusText = textView9;
-            textView9.setText("* RPC: 127.0.0.1:3333");
-            textView9.setTextColor(-5592406);
-            textView9.setTextSize(2, 11.0f);
-            textView9.setGravity(19);
-            textView9.setClickable(z);
-            textView9.setOnClickListener(this);
-            linearLayout7.addView(textView9, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            TextView textView10 = new TextView(this.mActivity);
-            this.mStartDaemonBtn = textView10;
-            textView10.setText("[Start Wallet (" + FusionWalletHelper.getDetectedEngine() + ")]");
-            textView10.setBackground(FusionUiHelper.createRounded(-12285730, -12762806, 3.0f));
-            textView10.setTextColor(-1);
-            textView10.setTextSize(2, 11.5f);
-            textView10.setGravity(17);
-            textView10.setPadding(10, 8, 10, 8);
-            textView10.setClickable(z);
-            textView10.setOnClickListener(this);
-            linearLayout7.addView(textView10);
-            menuContent.addView(linearLayout7);
-            TextView textView11 = new TextView(this.mActivity);
-            this.mChainInfoText = textView11;
-            textView11.setText("Network: Base (8453) [v]");
-            textView11.setTextColor(-2258875);
-            textView11.setTextSize(2, 11.0f);
-            textView11.setPadding(0, 2, 0, 3);
-            menuContent.addView(textView11);
-            TextView textView12 = new TextView(this.mActivity);
-            this.mWalletInfoText = textView12;
-            textView12.setText("Active: Master\nAddress: 0x87A6...b359");
-            textView12.setTextColor(-3355444);
-            textView12.setTextSize(2, 11.0f);
-            textView12.setPadding(0, 2, 0, 8);
-            menuContent.addView(textView12);
-            LinearLayout linearLayout8 = new LinearLayout(this.mActivity);
-            linearLayout8.setOrientation(0);
-            linearLayout8.setPadding(0, 3, 0, 3);
-            TextView textView13 = new TextView(this.mActivity);
-            this.mSwitchWalletBtn = textView13;
-            textView13.setText("Ganti Dompet");
-            textView13.setBackground(FusionUiHelper.createRounded(-12285730, -12762806, 3.0f));
-            textView13.setTextColor(-1);
-            textView13.setTextSize(2, 12.0f);
-            textView13.setGravity(17);
-            textView13.setPadding(10, 10, 10, 10);
-            textView13.setClickable(z);
-            textView13.setOnClickListener(new SwitchWalletClick(this));
-            LinearLayout.LayoutParams layoutParams9 = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            layoutParams9.rightMargin = 6;
-            linearLayout8.addView(textView13, layoutParams9);
-            TextView textView14 = new TextView(this.mActivity);
-            this.mSwitchChainBtn = textView14;
-            textView14.setText("Network");
-            textView14.setBackground(FusionUiHelper.createRounded(-2258875, -12762806, 3.0f));
-            textView14.setTextColor(-1);
-            textView14.setTextSize(2, 12.0f);
-            textView14.setGravity(17);
-            textView14.setPadding(10, 10, 10, 10);
-            textView14.setClickable(z);
-            textView14.setOnClickListener(new SwitchChainClick(this));
-            linearLayout8.addView(textView14, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            menuContent.addView(linearLayout8);
-            TextView textView15 = new TextView(this.mActivity);
-            textView15.setText("Lokasi GhostWallet / Load DB");
-            FusionUiHelper.setSolidBtn(textView15);
-            textView15.setTextSize(2, 12.0f);
-            textView15.setGravity(17);
-            textView15.setPadding(10, 10, 10, 10);
-            textView15.setClickable(true);
-            textView15.setOnClickListener(new FusionWalletPathBtnClick(this));
-            LinearLayout.LayoutParams layoutParams10 = new LinearLayout.LayoutParams(-1, -2);
-            layoutParams10.setMargins(0, 5, 0, 5);
-            menuContent.addView(textView15, layoutParams10);
-            LinearLayout linearLayout9 = new LinearLayout(this.mActivity);
-            linearLayout9.setOrientation(0);
-            linearLayout9.setPadding(0, 3, 0, 3);
-            TextView textView16 = new TextView(this.mActivity);
-            textView16.setText("Sync DB");
-            textView16.setBackground(FusionUiHelper.createRounded(-5605427, -12762806, 3.0f));
-            textView16.setTextColor(-1);
-            textView16.setTextSize(2, 12.0f);
-            textView16.setGravity(17);
-            textView16.setPadding(10, 10, 10, 10);
-            textView16.setClickable(z);
-            textView16.setOnClickListener(new SyncDbClick(this));
-            LinearLayout.LayoutParams layoutParams11 = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            layoutParams11.rightMargin = 6;
-            linearLayout9.addView(textView16, layoutParams11);
-            TextView textView17 = new TextView(this.mActivity);
-            this.mCopyAddressBtn = textView17;
-            textView17.setText("Salin Alamat");
-            textView17.setBackground(FusionUiHelper.createRounded(-14013884, -12762806, 3.0f));
-            textView17.setTextColor(-1);
-            textView17.setTextSize(2, 12.0f);
-            textView17.setGravity(17);
-            textView17.setPadding(10, 10, 10, 10);
-            textView17.setClickable(z);
-            textView17.setOnClickListener(new CopyAddressClick(this));
-            linearLayout9.addView(textView17, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            menuContent.addView(linearLayout9);
-            LinearLayout linearLayout10 = new LinearLayout(this.mActivity);
-            linearLayout10.setOrientation(0);
-            linearLayout10.setPadding(0, 3, 0, 3);
-            TextView textView18 = new TextView(this.mActivity);
-            this.mRecBtn = textView18;
-            textView18.setText("Record Macro");
-            textView18.setBackground(FusionUiHelper.createRounded(-7820595, -12762806, 3.0f));
-            textView18.setTextColor(-1);
-            textView18.setTextSize(2, 12.0f);
-            textView18.setGravity(17);
-            textView18.setPadding(10, 10, 10, 10);
-            textView18.setClickable(z);
-            textView18.setOnClickListener(new RecClick(this));
-            LinearLayout.LayoutParams layoutParams12 = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            layoutParams12.rightMargin = 6;
-            linearLayout10.addView(textView18, layoutParams12);
-            TextView textView19 = new TextView(this.mActivity);
-            this.mRunMacroBtn = textView19;
-            textView19.setText("Play Macro");
-            textView19.setBackground(FusionUiHelper.createRounded(-2254404, -12762806, 3.0f));
-            textView19.setTextColor(-1);
-            textView19.setTextSize(2, 12.0f);
-            textView19.setGravity(17);
-            textView19.setPadding(10, 10, 10, 10);
-            textView19.setClickable(z);
-            textView19.setOnClickListener(this);
-            linearLayout10.addView(textView19, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            menuContent.addView(linearLayout10);
-            LinearLayout linearLayout11 = new LinearLayout(this.mActivity);
-            linearLayout11.setOrientation(0);
-            linearLayout11.setPadding(0, 3, 0, 3);
-            TextView textView20 = new TextView(this.mActivity);
-            this.mDevModeBtn = textView20;
-            textView20.setText("Dev Mode: CDP");
-            textView20.setBackground(FusionUiHelper.createRounded(-4482645, -12762806, 3.0f));
-            textView20.setTextColor(-1);
-            textView20.setTextSize(2, 12.0f);
-            textView20.setGravity(17);
-            textView20.setPadding(10, 10, 10, 10);
-            textView20.setClickable(z);
-            textView20.setOnClickListener(this);
-            LinearLayout.LayoutParams layoutParams13 = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            layoutParams13.rightMargin = 6;
-            linearLayout11.addView(textView20, layoutParams13);
-            TextView textView21 = new TextView(this.mActivity);
-            this.mAiBridgeBtn = textView21;
-            textView21.setText("AI DevBridge");
-            textView21.setBackground(FusionUiHelper.createRounded(-5583735, -12762806, 3.0f));
-            textView21.setTextColor(-1);
-            textView21.setTextSize(2, 12.0f);
-            textView21.setGravity(17);
-            textView21.setPadding(10, 10, 10, 10);
-            textView21.setClickable(z);
-            textView21.setOnClickListener(this);
-            linearLayout11.addView(textView21, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            menuContent.addView(linearLayout11);
-            LinearLayout linearLayout12 = new LinearLayout(this.mActivity);
-            linearLayout12.setOrientation(0);
-            linearLayout12.setPadding(0, 3, 0, 3);
-            TextView textView22 = new TextView(this.mActivity);
-            this.mRandomFpBtn = textView22;
-            textView22.setText("Acak ID / FP");
-            textView22.setBackground(FusionUiHelper.createRounded(-7820578, -12762806, 3.0f));
-            textView22.setTextColor(-1);
-            textView22.setTextSize(2, 12.0f);
-            textView22.setGravity(17);
-            textView22.setPadding(10, 10, 10, 10);
-            textView22.setClickable(z);
-            textView22.setOnClickListener(this);
-            LinearLayout.LayoutParams layoutParams14 = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            layoutParams14.rightMargin = 6;
-            linearLayout12.addView(textView22, layoutParams14);
-            TextView textView23 = new TextView(this.mActivity);
-            this.mOpacityBtn = textView23;
-            textView23.setText("Opacity: 100%");
-            textView23.setBackground(FusionUiHelper.createRounded(-4473958, -12762806, 3.0f));
-            textView23.setTextColor(-1);
-            textView23.setTextSize(2, 12.0f);
-            textView23.setGravity(17);
-            textView23.setPadding(10, 10, 10, 10);
-            textView23.setClickable(z);
-            textView23.setOnClickListener(this);
-            linearLayout12.addView(textView23, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            menuContent.addView(linearLayout12);
-            LinearLayout linearLayout13 = new LinearLayout(this.mActivity);
-            linearLayout13.setOrientation(0);
-            linearLayout13.setPadding(0, 3, 0, 3);
-            TextView textView24 = new TextView(this.mActivity);
-            textView24.setText("Connect WC");
-            textView24.setBackground(FusionUiHelper.createRounded(-3359880, -12762806, 3.0f));
-            textView24.setTextColor(-1);
-            textView24.setTextSize(2, 12.0f);
-            textView24.setGravity(17);
-            textView24.setPadding(10, 10, 10, 10);
-            textView24.setClickable(z);
-            textView24.setOnClickListener(new WcClick(this));
-            LinearLayout.LayoutParams layoutParams15 = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            layoutParams15.rightMargin = 6;
-            linearLayout13.addView(textView24, layoutParams15);
-            TextView textView25 = new TextView(this.mActivity);
-            this.mDesktopBtn = textView25;
-            textView25.setText("Desktop");
-            textView25.setBackground(FusionUiHelper.createRounded(-4482645, -12762806, 3.0f));
-            textView25.setTextColor(-1);
-            textView25.setTextSize(2, 12.0f);
-            textView25.setGravity(17);
-            textView25.setPadding(10, 10, 10, 10);
-            textView25.setClickable(z);
-            textView25.setOnClickListener(new DesktopClick(this));
-            linearLayout13.addView(textView25, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            menuContent.addView(linearLayout13);
-            LinearLayout linearLayout14 = new LinearLayout(this.mActivity);
-            linearLayout14.setOrientation(0);
-            linearLayout14.setPadding(0, 10, 0, 6);
-            TextView textView26 = new TextView(this.mActivity);
-            textView26.setText("< Back");
-            FusionUiHelper.setSolidBtn(textView26);
-            textView26.setTextSize(2, 11.5f);
-            textView26.setGravity(17);
-            textView26.setPadding(6, 10, 6, 10);
-            textView26.setClickable(z);
-            textView26.setOnClickListener(new BackClick(this));
-            LinearLayout.LayoutParams lpBack = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            lpBack.rightMargin = 4;
-            linearLayout14.addView(textView26, lpBack);
-            TextView textView27 = new TextView(this.mActivity);
-            textView27.setText("Reload");
-            FusionUiHelper.setSolidBtn(textView27);
-            textView27.setTextSize(2, 11.5f);
-            textView27.setGravity(17);
-            textView27.setPadding(6, 10, 6, 10);
-            textView27.setClickable(z);
-            textView27.setOnClickListener(new ReloadClick(this));
-            LinearLayout.LayoutParams lpReload = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            lpReload.rightMargin = 4;
-            linearLayout14.addView(textView27, lpReload);
-            TextView textView28 = new TextView(this.mActivity);
-            textView28.setText("Cache");
-            textView28.setBackground(FusionUiHelper.createRounded(-6702114, -12762806, 3.0f));
-            textView28.setTextColor(-1);
-            textView28.setTextSize(2, 11.5f);
-            textView28.setGravity(17);
-            textView28.setPadding(6, 10, 6, 10);
-            textView28.setClickable(z);
-            textView28.setOnClickListener(new ClearCacheClick(this));
-            LinearLayout.LayoutParams lpCache = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            lpCache.rightMargin = 4;
-            linearLayout14.addView(textView28, lpCache);
-            TextView textView29 = new TextView(this.mActivity);
-            textView29.setText("X Tutup");
-            FusionUiHelper.setSolidAccentBtn(textView29, -13124, -13947597);
-            textView29.setTextSize(2, 11.5f);
-            textView29.setGravity(17);
-            textView29.setPadding(6, 10, 6, 10);
-            textView29.setClickable(z);
-            textView29.setOnClickListener(new CloseClick(this));
-            linearLayout14.addView(textView29, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            menuContent.addView(linearLayout14);
-            LinearLayout linearLayout15 = new LinearLayout(this.mActivity);
-            linearLayout15.setOrientation(1);
-            linearLayout15.setPadding(0, 8, 0, 4);
-            TextView textView30 = new TextView(this.mActivity);
-            this.mContextStatusText = textView30;
-            textView30.setText("Konteks: 1 Aktif (shaqilla)");
-            textView30.setTextColor(-8930321);
-            textView30.setTextSize(2, 11.0f);
-            textView30.setPadding(0, 0, 0, 4);
-            linearLayout15.addView(textView30, new LinearLayout.LayoutParams(-1, -2));
-            LinearLayout linearLayout16 = new LinearLayout(this.mActivity);
-            linearLayout16.setOrientation(0);
-            linearLayout16.setPadding(0, 2, 0, 2);
-            TextView textView31 = new TextView(this.mActivity);
-            this.mNewWorkerBtn = textView31;
-            textView31.setText("+ Worker (Guest)");
-            textView31.setBackground(FusionUiHelper.createRounded(-4482645, -12762806, 3.0f));
-            textView31.setTextColor(-1);
-            textView31.setTextSize(2, 11.5f);
-            textView31.setGravity(17);
-            textView31.setPadding(8, 10, 8, 10);
-            textView31.setClickable(true);
-            textView31.setOnClickListener(this);
-            LinearLayout.LayoutParams layoutParams16 = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            layoutParams16.rightMargin = 6;
-            linearLayout16.addView(textView31, layoutParams16);
-            TextView textView32 = new TextView(this.mActivity);
-            this.mKillWorkerBtn = textView32;
-            textView32.setText("Kill Worker");
-            textView32.setBackground(FusionUiHelper.createRounded(-5583667, -12762806, 3.0f));
-            textView32.setTextColor(-1);
-            textView32.setTextSize(2, 11.5f);
-            textView32.setGravity(17);
-            textView32.setPadding(8, 10, 8, 10);
-            textView32.setClickable(true);
-            textView32.setOnClickListener(this);
-            linearLayout16.addView(textView32, new LinearLayout.LayoutParams(0, -2, 1.0f));
-            linearLayout15.addView(linearLayout16, new LinearLayout.LayoutParams(-1, -2));
-            menuContent.addView(linearLayout15);
+            // ==================== SECTION 1: NAVIGASI & TAB ====================
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "➕", "Tab baru", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    closeAllDrawers();
+                    promptNewTabUrlDirect();
+                }
+            }));
+
+            TextView workerBtn = new TextView(this.mActivity);
+            this.mNewWorkerBtn = workerBtn;
+            workerBtn.setText("Tab Samaran (Worker)");
+            workerBtn.setTextColor(0xFFCDD6F4);
+            workerBtn.setTextSize(2, 13.5f);
+            workerBtn.setGravity(19);
+            workerBtn.setClickable(true);
+            workerBtn.setOnClickListener(this);
+            menuContent.addView(FusionUiHelper.createMenuRowWithCustomText(this.mActivity, "🕵️", workerBtn, null));
+
+            LinearLayout ctxRow = new LinearLayout(this.mActivity);
+            ctxRow.setOrientation(0);
+            ctxRow.setPadding(12, 4, 12, 4);
+            ctxRow.setGravity(19);
+
+            TextView ctxText = new TextView(this.mActivity);
+            this.mContextStatusText = ctxText;
+            ctxText.setText("Konteks: 1 Aktif (shaqilla)");
+            ctxText.setTextColor(0xFF777DA7);
+            ctxText.setTextSize(2, 11.0f);
+            ctxRow.addView(ctxText, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+            TextView killBtn = new TextView(this.mActivity);
+            this.mKillWorkerBtn = killBtn;
+            killBtn.setText("Tutup Worker");
+            killBtn.setTextColor(0xFFF38BA8);
+            killBtn.setBackground(FusionUiHelper.createRounded(0x33F38BA8, 0xFFF38BA8, 4.0f));
+            killBtn.setTextSize(2, 10.5f);
+            killBtn.setPadding(8, 4, 8, 4);
+            killBtn.setClickable(true);
+            killBtn.setOnClickListener(this);
+            ctxRow.addView(killBtn);
+            menuContent.addView(ctxRow);
+
+            menuContent.addView(FusionUiHelper.createSectionDivider(this.mActivity));
+
+            // ==================== SECTION 2: ALAT BROWSER & EKSTENSI ====================
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🕒", "Histori", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showHistoryDialog();
+                }
+            }));
+
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🧩", "Ekstensi (Extensions)", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showExtensionsDialog();
+                }
+            }));
+
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "📁", "Bookmark", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showBookmarksDialog();
+                }
+            }));
+
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🗂️", "Kelola Tab (Tab Manager)", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    showTabManagerDialogDirect();
+                }
+            }));
+
+            menuContent.addView(FusionUiHelper.createSectionDivider(this.mActivity));
+
+            // ==================== SECTION 3: FUSION WEB3 ENGINE & OTOMASI ====================
+            menuContent.addView(FusionUiHelper.createSectionHeader(this.mActivity, "FUSION WEB3 & WALLET"));
+
+            LinearLayout web3Card = new LinearLayout(this.mActivity);
+            web3Card.setOrientation(1);
+            web3Card.setBackground(FusionUiHelper.createRounded(-15724528, -13548988, 8.0f)); // #11111b, border #313244
+            web3Card.setPadding(12, 10, 12, 10);
+            LinearLayout.LayoutParams lpWeb3 = new LinearLayout.LayoutParams(-1, -2);
+            lpWeb3.setMargins(0, 4, 0, 8);
+            web3Card.setLayoutParams(lpWeb3);
+
+            // Baris 1: Status RPC + Tombol Start Daemon
+            LinearLayout rpcRow = new LinearLayout(this.mActivity);
+            rpcRow.setOrientation(0);
+            rpcRow.setGravity(19);
+
+            TextView rpcStatus = new TextView(this.mActivity);
+            this.mStatusText = rpcStatus;
+            rpcStatus.setText("* RPC: 127.0.0.1:3333");
+            rpcStatus.setTextColor(-5592406);
+            rpcStatus.setTextSize(2, 11.0f);
+            rpcStatus.setClickable(true);
+            rpcStatus.setOnClickListener(this);
+            rpcRow.addView(rpcStatus, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+            TextView startDaemon = new TextView(this.mActivity);
+            this.mStartDaemonBtn = startDaemon;
+            startDaemon.setText("[Start Wallet (" + FusionWalletHelper.getDetectedEngine() + ")]");
+            startDaemon.setBackground(FusionUiHelper.createRounded(-12285730, -12762806, 4.0f));
+            startDaemon.setTextColor(-1);
+            startDaemon.setTextSize(2, 11.0f);
+            startDaemon.setPadding(8, 6, 8, 6);
+            startDaemon.setClickable(true);
+            startDaemon.setOnClickListener(this);
+            rpcRow.addView(startDaemon);
+            web3Card.addView(rpcRow);
+
+            // Baris 2: Info Jaringan (Network)
+            TextView chainText = new TextView(this.mActivity);
+            this.mChainInfoText = chainText;
+            chainText.setText("Network: Base (8453) [v]");
+            chainText.setTextColor(-2258875);
+            chainText.setTextSize(2, 11.0f);
+            chainText.setPadding(0, 4, 0, 2);
+            chainText.setClickable(true);
+            chainText.setOnClickListener(new SwitchChainClick(this));
+            web3Card.addView(chainText);
+
+            // Baris 3: Info Dompet (Active Wallet & Address)
+            TextView walletText = new TextView(this.mActivity);
+            this.mWalletInfoText = walletText;
+            walletText.setText("Active: Master\nAddress: 0x87A6...b359");
+            walletText.setTextColor(-3355444);
+            walletText.setTextSize(2, 11.0f);
+            walletText.setPadding(0, 2, 0, 6);
+            web3Card.addView(walletText);
+
+            // Baris 4: Tombol Ganti Dompet, Network, Salin Alamat
+            LinearLayout walletBtnRow = new LinearLayout(this.mActivity);
+            walletBtnRow.setOrientation(0);
+            walletBtnRow.setPadding(0, 2, 0, 2);
+
+            TextView switchWallet = new TextView(this.mActivity);
+            this.mSwitchWalletBtn = switchWallet;
+            switchWallet.setText("Ganti Dompet");
+            switchWallet.setBackground(FusionUiHelper.createRounded(-12285730, -12762806, 4.0f));
+            switchWallet.setTextColor(-1);
+            switchWallet.setTextSize(2, 11.5f);
+            switchWallet.setGravity(17);
+            switchWallet.setPadding(6, 8, 6, 8);
+            switchWallet.setClickable(true);
+            switchWallet.setOnClickListener(new SwitchWalletClick(this));
+            LinearLayout.LayoutParams lpW1 = new LinearLayout.LayoutParams(0, -2, 1.0f);
+            lpW1.rightMargin = 4;
+            walletBtnRow.addView(switchWallet, lpW1);
+
+            TextView switchChain = new TextView(this.mActivity);
+            this.mSwitchChainBtn = switchChain;
+            switchChain.setText("Network");
+            switchChain.setBackground(FusionUiHelper.createRounded(-2258875, -12762806, 4.0f));
+            switchChain.setTextColor(-1);
+            switchChain.setTextSize(2, 11.5f);
+            switchChain.setGravity(17);
+            switchChain.setPadding(6, 8, 6, 8);
+            switchChain.setClickable(true);
+            switchChain.setOnClickListener(new SwitchChainClick(this));
+            LinearLayout.LayoutParams lpW2 = new LinearLayout.LayoutParams(0, -2, 1.0f);
+            lpW2.rightMargin = 4;
+            walletBtnRow.addView(switchChain, lpW2);
+
+            TextView copyAddr = new TextView(this.mActivity);
+            this.mCopyAddressBtn = copyAddr;
+            copyAddr.setText("Salin Alamat");
+            copyAddr.setBackground(FusionUiHelper.createRounded(-14013884, -12762806, 4.0f));
+            copyAddr.setTextColor(-1);
+            copyAddr.setTextSize(2, 11.5f);
+            copyAddr.setGravity(17);
+            copyAddr.setPadding(6, 8, 6, 8);
+            copyAddr.setClickable(true);
+            copyAddr.setOnClickListener(new CopyAddressClick(this));
+            walletBtnRow.addView(copyAddr, new LinearLayout.LayoutParams(0, -2, 1.0f));
+            web3Card.addView(walletBtnRow);
+
+            // Baris 5: Lokasi DB GhostWallet & Sync DB
+            LinearLayout dbBtnRow = new LinearLayout(this.mActivity);
+            dbBtnRow.setOrientation(0);
+            dbBtnRow.setPadding(0, 4, 0, 0);
+
+            TextView pathBtn = new TextView(this.mActivity);
+            pathBtn.setText("Lokasi GhostWallet / DB");
+            pathBtn.setBackground(FusionUiHelper.createRounded(-13947597, -12762806, 4.0f));
+            pathBtn.setTextColor(-1907994);
+            pathBtn.setTextSize(2, 11.0f);
+            pathBtn.setGravity(17);
+            pathBtn.setPadding(6, 7, 6, 7);
+            pathBtn.setClickable(true);
+            pathBtn.setOnClickListener(new FusionWalletPathBtnClick(this));
+            LinearLayout.LayoutParams lpDb1 = new LinearLayout.LayoutParams(0, -2, 1.2f);
+            lpDb1.rightMargin = 4;
+            dbBtnRow.addView(pathBtn, lpDb1);
+
+            TextView syncDb = new TextView(this.mActivity);
+            syncDb.setText("Sync DB");
+            syncDb.setBackground(FusionUiHelper.createRounded(-5605427, -12762806, 4.0f));
+            syncDb.setTextColor(-1);
+            syncDb.setTextSize(2, 11.0f);
+            syncDb.setGravity(17);
+            syncDb.setPadding(6, 7, 6, 7);
+            syncDb.setClickable(true);
+            syncDb.setOnClickListener(new SyncDbClick(this));
+            dbBtnRow.addView(syncDb, new LinearLayout.LayoutParams(0, -2, 0.8f));
+            web3Card.addView(dbBtnRow);
+
+            menuContent.addView(web3Card);
+
+            // Baris Otomasi Makro
+            LinearLayout macroRow = new LinearLayout(this.mActivity);
+            macroRow.setOrientation(0);
+            macroRow.setPadding(0, 3, 0, 3);
+
+            TextView recBtnView = new TextView(this.mActivity);
+            this.mRecBtn = recBtnView;
+            recBtnView.setText("Record Macro");
+            recBtnView.setBackground(FusionUiHelper.createRounded(-7820595, -12762806, 4.0f));
+            recBtnView.setTextColor(-1);
+            recBtnView.setTextSize(2, 12.0f);
+            recBtnView.setGravity(17);
+            recBtnView.setPadding(8, 10, 8, 10);
+            recBtnView.setClickable(true);
+            recBtnView.setOnClickListener(new RecClick(this));
+            LinearLayout.LayoutParams lpM1 = new LinearLayout.LayoutParams(0, -2, 1.0f);
+            lpM1.rightMargin = 6;
+            macroRow.addView(recBtnView, lpM1);
+
+            TextView runMacro = new TextView(this.mActivity);
+            this.mRunMacroBtn = runMacro;
+            runMacro.setText("Play Macro");
+            runMacro.setBackground(FusionUiHelper.createRounded(-2254404, -12762806, 4.0f));
+            runMacro.setTextColor(-1);
+            runMacro.setTextSize(2, 12.0f);
+            runMacro.setGravity(17);
+            runMacro.setPadding(8, 10, 8, 10);
+            runMacro.setClickable(true);
+            runMacro.setOnClickListener(this);
+            macroRow.addView(runMacro, new LinearLayout.LayoutParams(0, -2, 1.0f));
+            menuContent.addView(macroRow);
+
+            // Acak FP
+            TextView randFp = new TextView(this.mActivity);
+            this.mRandomFpBtn = randFp;
+            randFp.setText("Acak ID / Anti-Sybil FP");
+            randFp.setTextColor(0xFFCDD6F4);
+            randFp.setTextSize(2, 13.5f);
+            randFp.setGravity(19);
+            randFp.setClickable(true);
+            randFp.setOnClickListener(this);
+            menuContent.addView(FusionUiHelper.createMenuRowWithCustomText(this.mActivity, "🥷", randFp, null));
+
+            // Desktop Mode
+            TextView desktopBtnView = new TextView(this.mActivity);
+            this.mDesktopBtn = desktopBtnView;
+            desktopBtnView.setText(this.mIsDesktopMode ? "Mobile" : "Desktop");
+            desktopBtnView.setBackground(FusionUiHelper.createRounded(this.mIsDesktopMode ? 0xFF2E7D32 : -4482645, -12762806, 4.0f));
+            desktopBtnView.setTextColor(0xFFFFFFFF);
+            desktopBtnView.setTextSize(2, 12.0f);
+            desktopBtnView.setGravity(17);
+            desktopBtnView.setPadding(8, 10, 8, 10);
+            desktopBtnView.setClickable(true);
+            desktopBtnView.setOnClickListener(new DesktopClick(this));
+
+            LinearLayout desktopRow = new LinearLayout(this.mActivity);
+            desktopRow.setOrientation(0);
+            desktopRow.setPadding(0, 3, 0, 3);
+            desktopRow.addView(desktopBtnView, new LinearLayout.LayoutParams(-1, -2));
+            menuContent.addView(desktopRow);
+
+            // WalletConnect
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🔗", "Connect WalletConnect (WC)", new WcClick(this)));
+
+            menuContent.addView(FusionUiHelper.createSectionDivider(this.mActivity));
+
+            // ==================== SECTION 4: SISTEM & PENGEMBANG ====================
+            TextView opacityBtnView = new TextView(this.mActivity);
+            this.mOpacityBtn = opacityBtnView;
+            opacityBtnView.setText("Opacity Layar: 100%");
+            opacityBtnView.setTextColor(0xFFCDD6F4);
+            opacityBtnView.setTextSize(2, 13.5f);
+            opacityBtnView.setGravity(19);
+            opacityBtnView.setClickable(true);
+            opacityBtnView.setOnClickListener(this);
+            menuContent.addView(FusionUiHelper.createMenuRowWithCustomText(this.mActivity, "🌙", opacityBtnView, null));
+
+            TextView devModeBtnView = new TextView(this.mActivity);
+            this.mDevModeBtn = devModeBtnView;
+            devModeBtnView.setText("Dev Mode: CDP (9222)");
+            devModeBtnView.setTextColor(0xFFCDD6F4);
+            devModeBtnView.setTextSize(2, 13.5f);
+            devModeBtnView.setGravity(19);
+            devModeBtnView.setClickable(true);
+            devModeBtnView.setOnClickListener(this);
+            menuContent.addView(FusionUiHelper.createMenuRowWithCustomText(this.mActivity, "⌨️", devModeBtnView, null));
+
+            TextView aiBridge = new TextView(this.mActivity);
+            this.mAiBridgeBtn = aiBridge;
+            aiBridge.setText("AI DevBridge (Inspect DOM)");
+            aiBridge.setTextColor(0xFFCDD6F4);
+            aiBridge.setTextSize(2, 13.5f);
+            aiBridge.setGravity(19);
+            aiBridge.setClickable(true);
+            aiBridge.setOnClickListener(this);
+            menuContent.addView(FusionUiHelper.createMenuRowWithCustomText(this.mActivity, "🤖", aiBridge, null));
+
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🗑️", "Hapus Data & Cache", new ClearCacheClick(this)));
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "❌", "Tutup Tab Webview", new CloseClick(this)));
 
             menuScrollView.addView(menuContent);
             this.mMenuCard.addView(menuScrollView);
 
             TextView menuCloseBtn = new TextView(this.mActivity);
-            menuCloseBtn.setText("TUTUP");
+            menuCloseBtn.setText("TUTUP MENU");
             FusionUiHelper.setDrawerCloseBtn(menuCloseBtn);
             menuCloseBtn.setTextSize(2, 12.0f);
             menuCloseBtn.setGravity(17);
@@ -1854,6 +1914,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return null;
         }
 
+        if ("Beranda".equalsIgnoreCase(title) || "Fusion Browser".equalsIgnoreCase(title)) {
+            return "Beranda";
+        }
+
         // Khusus X / Twitter
         if (title.contains("/ X") || title.endsWith(" / X") || title.equals("X") || title.startsWith("X (") || title.startsWith("(X)")) {
             return "X";
@@ -1889,6 +1953,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
     public static String extractDomainName(String urlStr) {
         if (urlStr == null || urlStr.isEmpty() || "about:blank".equalsIgnoreCase(urlStr)) return null;
+        if (urlStr.contains("home.html")) return "Beranda";
         try {
             android.net.Uri uri = android.net.Uri.parse(urlStr);
             String host = uri.getHost();
@@ -2042,6 +2107,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
         TerminalSession currentSession = null;
         initViews();
+        if (str == null || str.isEmpty() || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
+            str = "file:///android_asset/webview_engine/home.html";
+        }
         if (str2 == null) {
             str2 = "default";
         }
@@ -2127,6 +2195,156 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         } else {
             webView.evaluateJavascript("window.history.back();", null);
         }
+    }
+
+    public void performQuickForward() {
+        WebView webView;
+        if (this.mActiveTab != 1 || (webView = this.mWorkerWebView) == null) {
+            webView = this.mActiveWebView;
+        }
+        if (webView == null) {
+            return;
+        }
+        if (webView.canGoForward()) {
+            webView.goForward();
+        } else {
+            webView.evaluateJavascript("window.history.forward();", null);
+        }
+    }
+
+    public void toggleBookmarkCurrentPage() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
+        if (webView == null || webView.getUrl() == null || webView.getUrl().isEmpty()) {
+            Toast.makeText(act, "Tidak ada halaman aktif untuk disimpan", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String url = webView.getUrl();
+        String title = webView.getTitle();
+        if (title == null || title.isEmpty()) {
+            title = url;
+        }
+        FusionBookmarkHelper.addBookmark(act, title, url);
+        Toast.makeText(act, "⭐ Disimpan ke Bookmark!", Toast.LENGTH_SHORT).show();
+    }
+
+    public void showBookmarksDialog() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        FusionBookmarkHelper.showBookmarksDialog(act, this);
+    }
+
+    public void saveCurrentSessionManual() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        FusionTab tab = FusionTabStateHelper.getActiveTab(this);
+        final String profile = tab != null ? tab.mProfile : this.mCurrentProfile;
+        if (profile != null && !profile.isEmpty() && !"default".equals(profile) && !profile.startsWith("fresh_")) {
+            FusionProfileManager.flushCookies(profile);
+            new Thread(() -> {
+                String saveMsg = FusionProfileManager.exportProfileSessionToJson(act, profile);
+                TerminalSession boundSession = tab != null && tab.mBoundSession != null ? tab.mBoundSession : act.getCurrentSession();
+                if (saveMsg != null && boundSession != null) {
+                    FusionProfileManager.printToTerminalSession(act, boundSession, "\r\n\033[32m[Fusion] " + saveMsg + "\033[0m\r\n");
+                }
+                act.runOnUiThread(() -> {
+                    Toast.makeText(act, "[Fusion] Sesi profile '" + profile + "' berhasil disimpan!", Toast.LENGTH_SHORT).show();
+                });
+            }).start();
+        } else {
+            Toast.makeText(act, "[Fusion] Sesi default (tanpa profile aktif). Gunakan --profile <nama>", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    public void showSiteInfoDialog() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
+        final String url = webView != null ? webView.getUrl() : "Tidak ada URL";
+        final String title = webView != null ? webView.getTitle() : "-";
+        boolean isHttps = url != null && url.startsWith("https://");
+
+        AlertDialog.Builder b = new AlertDialog.Builder(act);
+        b.setTitle(isHttps ? "🔒 Info Situs (Aman)" : "ℹ️ Info Situs");
+        b.setMessage("Judul:\n" + title + "\n\nURL:\n" + url + "\n\nProfile: " + this.mCurrentProfile + "\nMode: " + (this.mIsDesktopMode ? "Desktop" : "Mobile") + "\nDevTools CDP: " + (this.mIsDevMode ? "Aktif (9222)" : "Nonaktif"));
+        b.setPositiveButton("Salin URL", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                try {
+                    ClipboardManager cm = (ClipboardManager) act.getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (cm != null && url != null) {
+                        cm.setPrimaryClip(ClipData.newPlainText("URL", url));
+                        Toast.makeText(act, "URL berhasil disalin!", Toast.LENGTH_SHORT).show();
+                    }
+                } catch (Throwable unused) {}
+            }
+        });
+        b.setNegativeButton("Tutup", null);
+        b.show();
+    }
+
+    public void showHistoryDialog() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        final WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
+        if (webView == null) {
+            Toast.makeText(act, "WebView tidak aktif", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        WebBackForwardList list = webView.copyBackForwardList();
+        int size = list != null ? list.getSize() : 0;
+        if (size == 0) {
+            Toast.makeText(act, "Belum ada riwayat penjelajahan", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final String[] items = new String[size];
+        final int currentIndex = list.getCurrentIndex();
+        for (int i = 0; i < size; i++) {
+            WebHistoryItem item = list.getItemAtIndex(i);
+            String itemTitle = (item != null && item.getTitle() != null && !item.getTitle().isEmpty()) ? item.getTitle() : (item != null ? item.getUrl() : "-");
+            if (i == currentIndex) {
+                items[i] = "▶ " + itemTitle;
+            } else {
+                items[i] = "   " + itemTitle;
+            }
+        }
+        AlertDialog.Builder b = new AlertDialog.Builder(act);
+        b.setTitle("🕒 Riwayat Navigasi (" + size + ")");
+        b.setItems(items, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                int step = which - currentIndex;
+                if (step != 0) {
+                    webView.goBackOrForward(step);
+                    closeAllDrawers();
+                }
+            }
+        });
+        b.setNegativeButton("Tutup", null);
+        b.show();
+    }
+
+    public void showExtensionsDialog() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        AlertDialog.Builder b = new AlertDialog.Builder(act);
+        b.setTitle("🧩 Ekstensi (Extensions)");
+        b.setMessage("Fusion WebView Engine berbasis Chromium.\n\n" +
+                "• Ekstensi Chrome Web Store & Userscripts didukung melalui injeksi script.\n" +
+                "• Injeksi otomatis: webview_engine/ (GhostBridge, Web3, Macro, CDP).\n" +
+                "• Kunjungi Chrome Web Store untuk melihat katalog ekstensi.");
+        b.setPositiveButton("Buka Web Store", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                closeAllDrawers();
+                if (mActiveWebView != null) {
+                    mActiveWebView.loadUrl("https://chromewebstore.google.com");
+                }
+            }
+        });
+        b.setNegativeButton("Tutup", null);
+        b.show();
     }
 
     public boolean onBackPressed() {

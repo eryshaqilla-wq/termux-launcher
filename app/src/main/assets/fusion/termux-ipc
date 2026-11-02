@@ -629,10 +629,8 @@ handle_webview() {
         esac
     done
 
-    if [ -z "$URL" ]; then
-        echo "Usage: termux-ipc webview [options] <url>"
-        echo "Gunakan 'termux-ipc webview --help' untuk melihat daftar perintah lengkap."
-        return 1
+    if [ -z "$URL" ] || [ "$URL" = "home" ] || [ "$URL" = "about:home" ] || [ "$URL" = "about:newtab" ]; then
+        URL="file:///android_asset/webview_engine/home.html"
     fi
 
     if [[ "$URL" != http://* && "$URL" != https://* && "$URL" != file://* ]]; then

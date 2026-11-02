@@ -834,6 +834,9 @@ async function handleSnapshot() {
 }
 
 async function handleOpenUrl(url, extraFlags = []) {
+    if (!url || url === 'home' || url === 'about:home' || url === 'about:newtab') {
+        url = 'file:///android_asset/webview_engine/home.html';
+    }
     // 1. Deteksi Multi-Profile Flags (--all-profiles / --profiles / --parallel)
     let multiProfiles = null;
     const isAllProfiles = extraFlags.includes('--all-profiles') || extraFlags.includes('--allprofiles');
@@ -1026,9 +1029,8 @@ async function executeSingleProfile(url, extraFlags = []) {
         }
     }
 
-    if (!url) {
-        console.error(`${RED}Error: URL target wajib ditentukan!${RESET}`);
-        process.exit(1);
+    if (!url || url === 'home' || url === 'about:home' || url === 'about:newtab') {
+        url = 'file:///android_asset/webview_engine/home.html';
     }
 
     // Password vault HANYA diakses jika menjalankan resep/modul makro atau jika diberikan --pwd secara eksplisit
@@ -1061,7 +1063,12 @@ async function executeSingleProfile(url, extraFlags = []) {
     const res = runIpc(`${fullFlags} ${url}`);
 
     // Print 1x bersih dan ringkas tanpa icon alay
-    const displayUrl = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) ? url : `https://${url}`;
+    let displayUrl;
+    if (url.includes('home.html')) {
+        displayUrl = 'Beranda Browser (Fusion Home)';
+    } else {
+        displayUrl = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) ? url : `https://${url}`;
+    }
     let statusMsg = `Membuka ${displayUrl}`;
     if (targetProfile && targetProfile !== 'default') statusMsg += ` (profil: ${targetProfile}) [Auto-Session: Aktif]`;
     if (needWallet) statusMsg += ` [GhostWallet: ${targetWallet ? targetWallet : 'Auto-Daemon'}]`;
@@ -1162,10 +1169,11 @@ async function main() {
         }
     }
 
-    if (!cmd || cmd === '--help' || cmd === 'help') {
+    if (cmd === '--help' || cmd === 'help' || cmd === '-h') {
         console.log(`\nAGENT-WEB CONTROLLER (Universal Web Automation)`);
         console.log(`Pengendali browser otonom untuk Antigravity, Subagents, dan CLI.\n`);
         console.log(`Usage:`);
+        console.log(`  web                           (Buka halaman Beranda browser)`);
         console.log(`  web <url> [options]           (Buka URL di WebView)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
         console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);
@@ -1190,6 +1198,11 @@ async function main() {
         console.log(`  web --wallet Master --modul web3_claim "https://web3.claim/gift/gsisbsi"`);
         console.log(`  web --modul giftedstock_claim --loop 5 "https://giftedstock.com/gift"`);
         console.log(`  web --wallet --modul gacha_box --stop-if "Out of stock" --loop 20 "https://dapp.xyz/box"\n`);
+        process.exit(0);
+    }
+
+    if (args.length === 0 || cmd === 'home' || cmd === 'beranda') {
+        await handleOpenUrl('file:///android_asset/webview_engine/home.html', args.filter(a => a !== 'home' && a !== 'beranda'));
         process.exit(0);
     }
 
@@ -1345,12 +1358,13 @@ async function main() {
         process.exit(0);
     }
 
-    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles)
+    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost)
     const isUrlOrAutomation = args.some(a => 
         a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
         a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
-        a.startsWith('--pwd') || a.startsWith('--password') ||
+        a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
+        a === 'home' || a === 'beranda' ||
         a.startsWith('http://') || a.startsWith('https://') ||
         (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json'))
     );
@@ -1371,11 +1385,14 @@ async function main() {
                 passFlags.push(item);
             } else if (item.startsWith('--')) {
                 passFlags.push(item);
-            } else if (!targetUrl && (item.startsWith('http://') || item.startsWith('https://') || item.includes('.'))) {
-                targetUrl = item;
+            } else if (!targetUrl && (item.startsWith('http://') || item.startsWith('https://') || item === 'home' || item === 'beranda' || item.includes('.'))) {
+                targetUrl = (item === 'home' || item === 'beranda') ? 'file:///android_asset/webview_engine/home.html' : item;
             } else {
                 passFlags.push(item);
             }
+        }
+        if (!targetUrl) {
+            targetUrl = 'file:///android_asset/webview_engine/home.html';
         }
         await handleOpenUrl(targetUrl, passFlags);
         process.exit(0);

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Beranda</title>
+    <style>
+        :root {
+            --bg-color: #11111b;
+            --surface-color: #181825;
+            --card-color: #1e1e2e;
+            --card-hover: #313244;
+            --border-color: #313244;
+            --text-primary: #cdd6f4;
+            --text-secondary: #a6adc8;
+            --accent-color: #89b4fa;
+            --accent-green: #a6e3a1;
+            --accent-mauve: #cba6f7;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 24px 16px;
+            user-select: none;
+        }
+
+        .header {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 24px;
+            margin-bottom: 24px;
+            text-align: center;
+        }
+
+        .logo-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .logo-icon {
+            font-size: 32px;
+        }
+
+        .logo-title {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #89b4fa, #cba6f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .badge-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 4px;
+        }
+
+        .badge {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: rgba(137, 180, 250, 0.15);
+            color: var(--accent-color);
+            border: 1px solid rgba(137, 180, 250, 0.3);
+        }
+
+        .badge.online {
+            background: rgba(166, 227, 161, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(166, 227, 161, 0.3);
+        }
+
+        .search-container {
+            width: 100%;
+            max-width: 480px;
+            margin-bottom: 28px;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            background-color: var(--surface-color);
+            border: 1.5px solid var(--border-color);
+            border-radius: 28px;
+            padding: 6px 14px 6px 18px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+            transition: all 0.2s ease;
+        }
+
+        .search-box:focus-within {
+            border-color: var(--accent-color);
+            box-shadow: 0 4px 18px rgba(137, 180, 250, 0.25);
+            background-color: var(--card-color);
+        }
+
+        .search-icon {
+            font-size: 17px;
+            color: var(--text-secondary);
+            margin-right: 10px;
+        }
+
+        .search-input {
+            flex: 1;
+            background: none;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-size: 15px;
+            padding: 8px 0;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .search-btn {
+            background: var(--accent-color);
+            color: #11111b;
+            border: none;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-left: 8px;
+            transition: transform 0.1s ease;
+        }
+
+        .search-btn:active {
+            transform: scale(0.92);
+        }
+
+        .section-title {
+            width: 100%;
+            max-width: 480px;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            padding-left: 6px;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            width: 100%;
+            max-width: 480px;
+            margin-bottom: 28px;
+        }
+
+        .shortcut-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-decoration: none;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 14px 6px;
+            transition: all 0.15s ease;
+            cursor: pointer;
+        }
+
+        .shortcut-item:active {
+            transform: scale(0.94);
+            background: var(--card-hover);
+        }
+
+        .shortcut-icon-circle {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--card-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            margin-bottom: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .shortcut-title {
+            font-size: 11.5px;
+            color: var(--text-primary);
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90%;
+            font-weight: 500;
+        }
+
+        .quick-tools {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            width: 100%;
+            max-width: 480px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .tool-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 7px 14px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .tool-pill:active {
+            background: var(--card-hover);
+            color: var(--text-primary);
+        }
+
+        .footer {
+            margin-top: auto;
+            text-align: center;
+            font-size: 11px;
+            color: #585b70;
+            padding-top: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo-wrap">
+            <span class="logo-icon">🌐</span>
+            <span class="logo-title">FUSION BROWSER</span>
+        </div>
+        <div class="badge-row">
+            <span class="badge" id="profileBadge">Profile: Default</span>
+            <span class="badge online" id="rpcBadge">RPC: 3333</span>
+        </div>
+    </div>
+
+    <div class="search-container">
+        <form class="search-box" id="searchForm" onsubmit="event.preventDefault(); submitQuery();">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="queryInput" placeholder="Ketik URL atau telusuri Google..." autocomplete="off" autofocus>
+            <button type="submit" class="search-btn" title="Go">➔</button>
+        </form>
+    </div>
+
+    <div class="section-title">Akses Cepat (Speed Dial)</div>
+    <div class="grid-container">
+        <div class="shortcut-item" onclick="navigateTo('https://www.google.com')">
+            <div class="shortcut-icon-circle">🔍</div>
+            <span class="shortcut-title">Google</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://x.com')">
+            <div class="shortcut-icon-circle">𝕏</div>
+            <span class="shortcut-title">X / Twitter</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://www.binance.com')">
+            <div class="shortcut-icon-circle">🟡</div>
+            <span class="shortcut-title">Binance</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://dexscreener.com')">
+            <div class="shortcut-icon-circle">🦅</div>
+            <span class="shortcut-title">DexScreener</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://github.com')">
+            <div class="shortcut-icon-circle">🐙</div>
+            <span class="shortcut-title">GitHub</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://chromewebstore.google.com')">
+            <div class="shortcut-icon-circle">🧩</div>
+            <span class="shortcut-title">Web Store</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://coinmarketcap.com')">
+            <div class="shortcut-icon-circle">📈</div>
+            <span class="shortcut-title">CoinMarket</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://web.telegram.org')">
+            <div class="shortcut-icon-circle">✈️</div>
+            <span class="shortcut-title">Telegram</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://chatgpt.com')">
+            <div class="shortcut-icon-circle">🤖</div>
+            <span class="shortcut-title">ChatGPT</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://app.uniswap.org')">
+            <div class="shortcut-icon-circle">🦄</div>
+            <span class="shortcut-title">Uniswap</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://bridge.base.org')">
+            <div class="shortcut-icon-circle">🔵</div>
+            <span class="shortcut-title">Base Bridge</span>
+        </div>
+        <div class="shortcut-item" onclick="navigateTo('https://etherscan.io')">
+            <div class="shortcut-icon-circle">📜</div>
+            <span class="shortcut-title">Etherscan</span>
+        </div>
+    </div>
+
+    <div class="section-title">Pintasan Fitur</div>
+    <div class="quick-tools">
+        <div class="tool-pill" onclick="promptUrl()">➕ Buka URL Baru</div>
+        <div class="tool-pill" onclick="navigateTo('https://chromewebstore.google.com')">🧩 Ekstensi CRX</div>
+        <div class="tool-pill" onclick="checkWallet()">🦊 GhostWallet</div>
+    </div>
+
+    <div class="footer">
+        Fusion Engine v1.2.0 • Chromium Android WebView
+    </div>
+
+    <script>
+        function getQueryParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // Deteksi profil aktif
+        const prof = getQueryParam('profile') || localStorage.getItem('fusion_last_profile') || 'default';
+        if (prof) {
+            document.getElementById('profileBadge').textContent = 'Profile: ' + prof;
+        }
+
+        function navigateTo(targetUrl) {
+            if (!targetUrl) return;
+            window.location.href = targetUrl;
+        }
+
+        function submitQuery() {
+            const input = document.getElementById('queryInput');
+            let q = (input ? input.value : '').trim();
+            if (!q) return;
+
+            if (q.startsWith('http://') || q.startsWith('https://') || q.startsWith('file://')) {
+                navigateTo(q);
+            } else if (q.includes('.') && !q.includes(' ') && q.length > 3) {
+                navigateTo('https://' + q);
+            } else {
+                navigateTo('https://www.google.com/search?q=' + encodeURIComponent(q));
+            }
+        }
+
+        function promptUrl() {
+            const url = prompt('Masukkan URL lengkap website:', 'https://');
+            if (url && url.trim() && url !== 'https://') {
+                navigateTo(url.trim());
+            }
+        }
+
+        function checkWallet() {
+            if (window.ethereum) {
+                alert('GhostWeb3 Injected!\nAddress: ' + (window.ethereum.selectedAddress || 'Terkoneksi') + '\nRPC Port: 3333');
+            } else {
+                navigateTo('https://app.uniswap.org');
+            }
+        }
+    </script>
+</body>
+</html>
