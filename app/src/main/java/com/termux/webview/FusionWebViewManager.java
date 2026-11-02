@@ -1481,7 +1481,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 for (int i = this.mTabList.size() - 1; i >= 0; i--) {
                     if (i < this.mTabList.size()) {
                         FusionTab tab = (FusionTab) this.mTabList.get(i);
-                        if (tab != null && tab.mBoundSession == session) {
+                        if (tab != null && (tab.mBoundSession == session || (this.mBoundSession == session && tab.mBoundSession == null))) {
+                            final String profile = tab.mProfile;
+                            if (profile != null && !profile.isEmpty() && !"default".equals(profile) && !profile.startsWith("fresh_")) {
+                                // 1. Flush cookies native Android seketika (1ms)
+                                FusionProfileManager.flushCookies(profile);
+
+                                // 2. Auto-export ke JSON di background thread (fire-and-forget, ~15ms)
+                                final Context context = act != null ? act : (tab.mWebView != null ? tab.mWebView.getContext() : null);
+                                new Thread(() -> {
+                                    FusionProfileManager.exportProfileSessionToJson(context, profile);
+                                }).start();
+                            }
                             performDirectTabDestroy(tab);
                         }
                     }

@@ -753,6 +753,12 @@ public final class TermuxService extends Service implements AppShell.AppShellCli
         int index = getIndexOfSession(sessionToKill);
         if (index < 0)
             return -1;
+        try {
+            com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+            if (mgr != null) {
+                mgr.destroyTabForSession(sessionToKill);
+            }
+        } catch (Throwable ignored) {}
         TermuxSession termuxSession = mShellManager.mTermuxSessions.get(index);
         // Completes an already-exited session; a no-op while the shell is running.
         termuxSession.finish();
