@@ -212,3 +212,108 @@ Untuk menjamin stabilitas tinggi dan zero-flicker, toolbar recorder kini diimple
 - `[ WIPE ]`: Menghapus cache, cookies, form data, dan web storage secara tuntas (`wipe_cache`).
 - `[ FP ]`: Mengacak dan menyuntikkan model fingerprint perangkat baru (`GhostBridge.nextFingerprint()`).
 
+---
+
+## 9. Native Chromium Multi-Profile Isolation & Document-Start Stealth
+
+Sistem tidak lagi menggunakan teknik pembersihan cache / tukar sesi legacy yang memicu kedipan layar (*screen wipe*). Kini setiap profil berjalan di lingkungan Chromium terisolasi secara bersamaan:
+
+1. **Engine Chromium ProfileStore**:
+   - Berbasis `androidx.webkit:webkit:1.12.0`.
+   - Menggunakan `ProfileStore.getInstance().getOrCreateProfile(profileName)` dan `WebViewCompat.setProfile(webView, profileName)`.
+   - Penyimpanan data, database IndexedDB, LocalStorage, dan CookieJar untuk setiap profil terpisah 100% pada tingkat kernel Chromium.
+
+2. **Document-Start Stealth Injeksi (`DOCUMENT_START_SCRIPT`)**:
+   - Skrip spoofing fingerprint disuntikkan langsung ke engine browser via `WebViewCompat.addDocumentStartJavaScript(webView, fakerScript, Collections.singleton("*"))`.
+   - Dijalankan sebelum script `<head>` mana pun pada halaman web dimuat. Menghilangkan celah deteksi anti-bot, anti-tamper, dan proteksi Cloudflare Turnstile.
+
+3. **Badge Tab Label Profil**:
+   - Drawer tab Termux otomatis menampilkan nama profil aktif pada chip tab:
+     `* Tab 1: [shaqilla] ...`
+
+---
+
+## 10. Persistent Hardware Identity per Profile (Anti-Detection 16 Flagship Pool)
+
+Setiap profil browser memiliki identitas perangkat keras yang terkunci secara permanen di disk:
+- Lokasi Penyimpanan: `/root/wallet/sessions/<profile>.device.json`
+- **3 Wallet Utama Tuan Eso Terkunci Permanen**:
+  - `shaqilla` $\rightarrow$ **Samsung Galaxy S24 Ultra** (`SM-S928B`, Snapdragon 8 Gen 3 / Adreno 750, 12GB RAM, layar 1440x3120).
+  - `eryziggy` $\rightarrow$ **Google Pixel 8 Pro** (`Pixel 8 Pro`, Tensor G3 / Mali-G715 Immortalis, 12GB RAM, layar 1344x2992).
+  - `0xjamrud` $\rightarrow$ **OnePlus 12** (`CPH2581`, Snapdragon 8 Gen 3 / Adreno 750, 16GB RAM, layar 1440x3168).
+- **Pool 16 Flagship untuk Profil Baru**: Profil baru otomatis mendapat alokasi deterministik dari 16 model flagship ternama (Xiaomi 14 Pro, Asus ROG 8 Pro, Poco F6 Pro, Vivo X100 Pro, Sony Xperia 1 V, dsb.) dan identitas tersebut disimpan selamanya.
+- **Tampilan Launch Minimalis**: Bersih tanpa icon alay dan tanpa kotak-kotak border:
+  ```text
+  [ESO BROWSER] Profil: shaqilla | Samsung Galaxy S24 Ultra (SM-S928B)
+    Hardware : Adreno (TM) 750 | 12GB RAM | 8 Cores
+    Layar    : 1440x3120 (Ratio 3.0)
+    Stealth  : Native Multi-Profile | Zero-Leak Client Hints
+  ```
+
+---
+
+## 11. Multi-Profile Macro Execution (`--all-profiles`, `--profiles`, `--parallel`)
+
+Otomasi makro webview kini dapat dieksekusi untuk banyak profil sekaligus baik secara bergantian maupun bersamaan:
+
+1. **Eksekusi Sekuensial (1 per 1 - Bergantian)**:
+   ```bash
+   # Menjalankan makro untuk 3 akun utama secara berurutan:
+   web --all-profiles --modul klaim_airdrop --loop 1
+
+   # Menjalankan untuk daftar akun tertentu:
+   web --profiles shaqilla,0xjamrud --modul daily_quest
+   ```
+   Menampilkan ringkasan status (`OK`/`FAILED`) dan durasi eksekusi per-profil di akhir putaran.
+
+2. **Eksekusi Paralel (Bersamaan)**:
+   ```bash
+   # Meluncurkan 3 profil bersamaan di worker tab mandiri:
+   web --all-profiles --parallel --modul klaim_angpao "https://tapexo.app/c/rp_123"
+
+   # Kombinasi dengan GhostWallet:
+   web --all-profiles --parallel --wallet --modul mint_nft "https://nft.dapp/free"
+   ```
+   Setiap profil berjalan di tab worker background (`worker_<profile>_<id>`), memuat identitas dan sesi masing-masing, menjalankan makro, melakukan auto-save sesi, lalu menutup tab secara mandiri.
+
+---
+
+## 12. Auto-Save Sesi Wajib Sebelum Tab / Menu Ditutup atau Di-Kill
+
+Sistem menjamin sesi akun tidak akan pernah hilang ketika tab ditutup atau proses dihentikan:
+1. **Langkah Terakhir Wajib (`web save` Otomatis)**:
+   - Sebelum tab dihancurkan (`webView.destroy()`), engine CDP Playwright wajib mengekstrak seluruh cookies & storage ke `/root/wallet/sessions/<profile>.json`.
+   - Berlaku saat:
+     - Tutup tab via tombol silang `[ ✕ ]` di drawer/chip tab Android UI.
+     - Tutup dari tombol menu close WebView.
+     - Tutup via CLI: `web close`, `web kill-tab`.
+     - Penghentian paksa / exit signal (Ctrl+C / `SIGINT` / `SIGTERM`).
+     - Selesainya makro worker tab.
+2. **Format Info Sesi Persis Seperti `web save`**:
+   - Di terminal:
+     ```text
+     Menyimpan sesi website untuk profil [0xjamrud]...
+     Sesi web untuk profil [0xjamrud] berhasil disimpan (16 cookies).
+     Sesi website berhasil disimpan ke profil [0xjamrud].
+     WebView ditutup.
+     ```
+   - Di Android UI: Muncul Toast notifikasi langsung ke layar:  
+     `Sesi web untuk profil [0xjamrud] berhasil disimpan (16 cookies).`
+3. **Browsing Default Tanpa Profil**: Ditutup instan (0 milidetik) tanpa memicu dump JSON, menjaga navigasi harian tetap ringan.
+
+---
+
+## 13. Interactive 4-Step Wizard di X Radar & Telegram Swarm
+
+Menu relasi modul pada CLI `x` (X Radar) dan `pemantau` / `pmt` (Telegram Swarm) telah diperbarui dengan wizard 4 langkah:
+- **[WIZARD 1/4] Profil Browser**:
+  - `[1]` 3 Profil Utama Sekuensial (1/1) $\rightarrow$ `--all-profiles`
+  - `[2]` 3 Profil Utama Paralel (Bersamaan) $\rightarrow$ `--all-profiles --parallel`
+  - `[3]` 1 Profil Tertentu (Tunggal) $\rightarrow$ `--profile <nama>`
+  - `[4]` Multi-Profil Custom $\rightarrow$ `--profiles <list> [--parallel]`
+  - `[5]` Tanpa Profil (Default / Bersih)
+- **[WIZARD 2/4] GhostWallet**: Konek daemon port 3333 default, wallet tertentu, atau tanpa wallet.
+- **[WIZARD 3/4] Total Loop**: Jumlah putaran (default 1x putaran).
+- **[WIZARD 4/4] Kata Kunci Auto-Stop**: Kata pemicu henti seketika (`--stop-if "<kata>"`).
+Perintah lengkap otomatis dirangkai dan tersimpan ke `modules.json`.
+
