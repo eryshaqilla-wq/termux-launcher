@@ -514,9 +514,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         fusionTabCreateTabInternal.mWebView.loadUrl(str);
         updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
     }
 
     public boolean checkRpcDaemon() {
@@ -573,9 +570,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 @Override
                 public void run() {
                     updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
                     Toast.makeText(appCompatActivity, "Dompet Diubah ke: " + nextName, Toast.LENGTH_SHORT).show();
                 }
             });
@@ -1474,9 +1468,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mActiveTab = 0;
         }
         updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
         switchTab(this.mActiveTab);
         System.gc();
     }
@@ -1497,9 +1488,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
                 syncVisibility();
                 updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
             });
         }
     }
@@ -1952,9 +1940,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab = (FusionTab) arrayList.get(i);
             if (fusionTab.mWebView == webView) {
                 fusionTab.mTitle = str;
-                updateContextUi();
                 if (this.mActivity != null) {
-                    this.mActivity.runOnUiThread(() -> this.mActivity.refreshTerminalWindowBar());
+                    this.mActivity.runOnUiThread(this::updateContextUi);
+                } else {
+                    updateContextUi();
                 }
                 return;
             }
@@ -1971,9 +1960,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab = (FusionTab) arrayList.get(i);
             if (fusionTab.mWebView == webView) {
                 fusionTab.mUrl = str;
-                updateContextUi();
                 if (this.mActivity != null) {
-                    this.mActivity.runOnUiThread(() -> this.mActivity.refreshTerminalWindowBar());
+                    this.mActivity.runOnUiThread(this::updateContextUi);
+                } else {
+                    updateContextUi();
                 }
                 return;
             }
@@ -2094,9 +2084,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         syncVisibility();
         updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
     }
 
     public void openWorkerTab(String str) {
@@ -2388,9 +2375,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout2.bringToFront();
         }
         updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
     }
 
     public void syncDbManual() {
@@ -2481,9 +2465,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         linearLayout2.bringToFront();
                     }
                     updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
                     return;
                 }
                 TextView textView2 = this.mMinPillBtn;
@@ -2529,9 +2510,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     linearLayout3.bringToFront();
                 }
                 updateContextUi();
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
                 FusionRecPillHelper.showRecPill(this);
                 return;
             }
@@ -2809,6 +2787,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 textView7.setText("[Start Wallet (" + FusionWalletHelper.getDetectedEngine() + ")]");
                 textView7.setBackgroundColor(-12285730);
             }
+        }
+        if (this.mActivity != null) {
+            this.mActivity.refreshTerminalWindowBar();
         }
     }
 }
