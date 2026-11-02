@@ -913,6 +913,10 @@ async function main() {
     }
 
     if (cmd === 'profile' || cmd === 'profiles') {
+        const targetProf = args[1] || getActiveProfile();
+        if (targetProf && targetProf !== 'list' && targetProf !== 'default') {
+            printProfileBanner(targetProf);
+        }
         const active = getActiveProfile();
         const dirs = getAllSessionDirs();
         const profiles = new Set();
@@ -920,7 +924,7 @@ async function main() {
             try {
                 const files = fs.readdirSync(d);
                 for (const f of files) {
-                    if (f.endsWith('.json')) profiles.add(f.replace('.json', ''));
+                    if (f.endsWith('.json') && !f.endsWith('.device.json')) profiles.add(f.replace('.json', ''));
                 }
             } catch (_) {}
         }
