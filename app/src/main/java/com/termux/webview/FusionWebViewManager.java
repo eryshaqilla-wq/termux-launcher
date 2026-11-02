@@ -1410,18 +1410,16 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         termuxActivity.runOnUiThread(new FusionTabKillRunnable(this, i));
     }
 
-    public void killTabDirect(int i) {
-        WebView webView;
-        ArrayList arrayList = this.mTabList;
-        if (arrayList == null) {
+    public void performDirectTabDestroy(FusionTab fusionTab) {
+        if (fusionTab == null || this.mTabList == null) {
             return;
         }
-        int size = arrayList.size();
-        if (i < 0 || i >= size) {
-            return;
+        int i = this.mTabList.indexOf(fusionTab);
+        if (i != -1) {
+            this.mTabList.remove(i);
         }
-        FusionTab fusionTab = (FusionTab) arrayList.remove(i);
-        if (fusionTab != null && (webView = fusionTab.mWebView) != null) {
+        WebView webView = fusionTab.mWebView;
+        if (webView != null) {
             webView.setVisibility(8);
             FrameLayout frameLayout = this.mPaneHost;
             if (frameLayout != null) {
@@ -1438,7 +1436,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return;
         }
         int i2 = this.mActiveTab;
-        if (i2 > i) {
+        if (i2 > i && i != -1) {
             this.mActiveTab = i2 - 1;
         }
         if (this.mActiveTab >= size2) {
@@ -1450,6 +1448,55 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         updateContextUi();
         switchTab(this.mActiveTab);
         System.gc();
+    }
+
+    public void killTabDirect(int i) {
+        ArrayList arrayList = this.mTabList;
+        if (arrayList == null) {
+            return;
+        }
+        int size = arrayList.size();
+        if (i < 0 || i >= size) {
+            return;
+        }
+        final FusionTab fusionTab = (FusionTab) arrayList.get(i);
+        if (fusionTab == null) {
+            return;
+        }
+
+        final String profile = fusionTab.mProfile;
+        if (profile != null && !profile.isEmpty() && !"default".equals(profile) && !profile.startsWith("fresh_")) {
+            // Sembunyikan webView tab secara visual agar UI responsif seketika
+            if (fusionTab.mWebView != null) {
+                fusionTab.mWebView.setVisibility(View.INVISIBLE);
+            }
+
+            // Jika tab aktif yang ditutup dan masih ada tab lain, alihkan ke tab sebelahnya
+            if (this.mActiveTab == i && size > 1) {
+                int nextTab = (i > 0) ? i - 1 : 1;
+                switchTab(nextTab);
+            }
+
+            final Context context = this.mActivity != null ? this.mActivity : (fusionTab.mWebView != null ? fusionTab.mWebView.getContext() : null);
+
+            // Simpan sesi web terlebih dahulu di background thread sebelum destroy webview (CDP masih aktif)
+            new Thread(() -> {
+                final String saveMsg = FusionProfileManager.saveProfileSessionSync(context, profile);
+                if (mActivity != null) {
+                    mActivity.runOnUiThread(() -> {
+                        if (saveMsg != null) {
+                            Toast.makeText(mActivity, saveMsg, Toast.LENGTH_SHORT).show();
+                        }
+                        performDirectTabDestroy(fusionTab);
+                    });
+                } else {
+                    performDirectTabDestroy(fusionTab);
+                }
+            }).start();
+            return;
+        }
+
+        performDirectTabDestroy(fusionTab);
     }
 
     public void killWorkerTab() {

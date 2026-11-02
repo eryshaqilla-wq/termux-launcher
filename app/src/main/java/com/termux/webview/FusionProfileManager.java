@@ -16,11 +16,13 @@ import androidx.webkit.WebViewFeature;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
@@ -447,5 +449,84 @@ public class FusionProfileManager {
 
     public static String getCurrentActiveProfile() {
         return sCurrentActiveProfile;
+    }
+
+    /**
+     * Menyimpan sesi cookies dan storage untuk profil ke vault session JSON secara otomatis.
+     * Mengembalikan pesan konfirmasi penyimpanan persis seperti format web save:
+     * "Sesi web untuk profil [profile] berhasil disimpan (X cookies)."
+     */
+    public static String saveProfileSessionSync(Context context, String profileName) {
+        if (profileName == null || profileName.isEmpty() || "default".equals(profileName) || profileName.startsWith("fresh_")) {
+            return null;
+        }
+
+        try {
+            // 1. Pastikan CookieManager lokal menulis cookies ke SQLite / memori
+            CookieManager.getInstance().flush();
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+                try {
+                    ProfileStore store = ProfileStore.getInstance();
+                    Profile profile = store.getOrCreateProfile(profileName);
+                    profile.getCookieManager().flush();
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable ignored) {}
+
+        // 2. Eksekusi agent-web save <profileName> via runner environment aktif
+        try {
+            Fusion9RouterHelper.TargetEnvironment target = Fusion9RouterHelper.getSelectedTarget(context);
+            Process p;
+            if (target != null && target.isRoot && target.rootfsPath != null) {
+                if (target.type == Fusion9RouterHelper.RunnerType.DROIDSPACES) {
+                    String dsName = target.id.replace("ds_", "");
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-c",
+                        "/data/local/Droidspaces/bin/droidspaces --name=\"" + dsName + "\" enter -- /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/bash -c 'agent-web save " + profileName + "'"});
+                } else {
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c",
+                        "chroot " + target.rootfsPath + " /usr/bin/env -i HOME=/root USER=root PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /bin/bash -c 'agent-web save " + profileName + "'"});
+                }
+            } else {
+                p = Runtime.getRuntime().exec(new String[]{
+                    "/data/data/com.termux/files/usr/bin/bash", "-c",
+                    "export HOME=/data/data/com.termux/files/home PATH=/data/data/com.termux/files/usr/bin:$PATH && agent-web save " + profileName});
+            }
+
+            // Baca output untuk mencari konfirmasi cookies
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line;
+            String confirmedMsg = null;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                Log.d(TAG, "[Auto-Session-Save] " + line);
+                if (line.contains("berhasil disimpan") && line.contains("cookies")) {
+                    confirmedMsg = line;
+                }
+            }
+            p.waitFor();
+
+            if (confirmedMsg != null) {
+                return confirmedMsg;
+            }
+
+            // Fallback: baca jumlah cookies dari berkas sesi yang baru diperbarui
+            File sessionFile = getSessionFile(profileName);
+            if (sessionFile.exists() && sessionFile.length() > 0) {
+                try {
+                    FileInputStream fis = new FileInputStream(sessionFile);
+                    byte[] bytes = new byte[(int) sessionFile.length()];
+                    fis.read(bytes);
+                    fis.close();
+                    JSONObject root = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+                    JSONArray cookies = root.optJSONArray("cookies");
+                    int count = cookies != null ? cookies.length() : 0;
+                    return "Sesi web untuk profil [" + profileName + "] berhasil disimpan (" + count + " cookies).";
+                } catch (Throwable ignored) {}
+            }
+            return "Sesi web untuk profil [" + profileName + "] berhasil disimpan.";
+        } catch (Exception e) {
+            Log.e(TAG, "Gagal auto-save sesi profil " + profileName + ": " + e.getMessage());
+            return null;
+        }
     }
 }
