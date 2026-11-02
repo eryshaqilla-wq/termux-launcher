@@ -1471,6 +1471,26 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         System.gc();
     }
 
+    public void destroyTabForSession(TerminalSession session) {
+        if (session == null || this.mTabList == null) return;
+        TermuxActivity act = this.mActivity;
+        if (act != null) {
+            act.runOnUiThread(() -> {
+                if (this.mTabList == null) return;
+                for (int i = this.mTabList.size() - 1; i >= 0; i--) {
+                    if (i < this.mTabList.size()) {
+                        FusionTab tab = (FusionTab) this.mTabList.get(i);
+                        if (tab != null && tab.mBoundSession == session) {
+                            performDirectTabDestroy(tab);
+                        }
+                    }
+                }
+                syncVisibility();
+                updateContextUi();
+            });
+        }
+    }
+
     public void killTabDirect(int i) {
         ArrayList arrayList = this.mTabList;
         if (arrayList == null) {

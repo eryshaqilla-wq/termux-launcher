@@ -77,6 +77,7 @@ function getSitePrefix(rawUrl) {
 
 function saveRecipeToDisk(recipe) {
     const candidates = [
+        '/proc/1/root/data/data/com.termux/files/home/wallet/recipes_db.json',
         '/root/wallet/recipes_db.json',
         '/data/data/com.termux/files/home/wallet/recipes_db.json'
     ];
@@ -139,6 +140,7 @@ function loadRecipe(recipeQuery) {
 
     // 2. Baca dari recipes_db.json
     const candidates = [
+        '/proc/1/root/data/data/com.termux/files/home/wallet/recipes_db.json',
         '/root/wallet/recipes_db.json',
         '/data/data/com.termux/files/home/wallet/recipes_db.json'
     ];

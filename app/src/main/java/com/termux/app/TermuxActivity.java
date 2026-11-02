@@ -27133,8 +27133,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // right-hand neighbour moves up to fill its slot. Only the visible window is carried off;
         // closing any other one changes nothing on screen.
         if (visible) captureTerminalDeparture();
-        for (TerminalSession s : mPaneController.removeWindow(w))
+        for (TerminalSession s : mPaneController.removeWindow(w)) {
             if (mTermuxService != null) mTermuxService.killTermuxSession(s);
+            try {
+                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                if (mgr != null) {
+                    mgr.destroyTabForSession(s);
+                }
+            } catch (Exception ignored) {}
+        }
         mCurrentWSession.windows.remove(w);
         if (mCurrentWSession.windows.isEmpty()) {
             mWSessions.remove(mCurrentWSession);

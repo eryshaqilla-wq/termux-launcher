@@ -492,26 +492,27 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public boolean writeWalletFile(String str, String str2) {
-        File file;
         if (str != null && str2 != null) {
-            try {
-                if (str.startsWith("/")) {
-                    file = new File(str);
-                } else {
-                    File file2 = new File("/root/wallet/");
-                    file = new File(((file2.exists() && file2.canWrite()) ? "/root/wallet/" : "/data/data/com.termux/files/home/wallet/") + str);
+            boolean written = false;
+            String[] targetDirs = str.startsWith("/")
+                ? new String[]{""}
+                : new String[]{"/data/data/com.termux/files/home/wallet/", "/data/local/nhsystem/kali-arm64/root/wallet/", "/root/wallet/"};
+            for (String dir : targetDirs) {
+                try {
+                    File file = str.startsWith("/") ? new File(str) : new File(dir + str);
+                    File parentFile = file.getParentFile();
+                    if (parentFile != null && !parentFile.exists()) {
+                        parentFile.mkdirs();
+                    }
+                    FileOutputStream fileOutputStream = new FileOutputStream(file);
+                    fileOutputStream.write(str2.getBytes("UTF-8"));
+                    fileOutputStream.flush();
+                    fileOutputStream.close();
+                    written = true;
+                } catch (Exception unused) {
                 }
-                File parentFile = file.getParentFile();
-                if (parentFile != null && !parentFile.exists()) {
-                    parentFile.mkdirs();
-                }
-                FileOutputStream fileOutputStream = new FileOutputStream(file);
-                fileOutputStream.write(str2.getBytes("UTF-8"));
-                fileOutputStream.flush();
-                fileOutputStream.close();
-                return true;
-            } catch (Exception unused) {
             }
+            return written;
         }
         return false;
     }

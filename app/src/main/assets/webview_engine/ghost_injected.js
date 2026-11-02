@@ -2663,7 +2663,7 @@
         return "PLAYING";
     };
 
-    // --- 5B. SMART WALLET ADDRESS PASTER (Addr > BUTTON DARI WALLET JSON) ---
+    // --- 5B. SMART WALLET ADDRESS PASTER (ADDR > BUTTON DARI WALLET JSON) ---
     window.__AGY_PASTE_WALLET__ = function(passedAddr) {
         var wAddr = (typeof passedAddr === "string" && passedAddr.startsWith("0x")) ? passedAddr : "";
         if (!wAddr) {
@@ -2724,7 +2724,7 @@
         }
 
         if (!targetInp) {
-            updateAgyHUD("Addr >", "Klik kolom input di web dulu, lalu tekan Addr >", "warning");
+            updateAgyHUD("ADDR >", "Klik kolom input di web dulu, lalu tekan ADDR >", "warning");
             return false;
         }
 
@@ -2752,11 +2752,11 @@
                 placeholder: targetInp.placeholder || "",
                 value: "{{WALLET_ADDRESS}}",
                 isDynamic: true,
-                text: "Addr >: {{WALLET_ADDRESS}}"
+                text: "ADDR >: {{WALLET_ADDRESS}}"
             });
-            updateAgyHUD("Addr > Terekam", "Ditempel: {{WALLET_ADDRESS}} (" + wAddr.substring(0, 6) + "..." + wAddr.substring(38) + ")", "success");
+            updateAgyHUD("ADDR > Terekam", "Ditempel: {{WALLET_ADDRESS}} (" + wAddr.substring(0, 6) + "..." + wAddr.substring(38) + ")", "success");
         } else {
-            updateAgyHUD("Addr > Berhasil", "Ditempel: " + wAddr.substring(0, 10) + "...", "success");
+            updateAgyHUD("ADDR > Berhasil", "Ditempel: " + wAddr.substring(0, 10) + "...", "success");
         }
         return true;
     };

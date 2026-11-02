@@ -139,10 +139,10 @@ public class FusionRecPillHelper {
         wbLp.setMargins(1, 0, 1, 0);
         stepPill.addView(walletBtn, wbLp);
 
-        // Addr > (Paste Active Wallet Address from wallets_db.json into web input)
+        // ADDR > (Paste Active Wallet Address from wallets_db.json into web input)
         TextView addrBtn = new TextView(appCompatActivity);
         sAddrBtn = addrBtn;
-        addrBtn.setText(" Addr > ");
+        addrBtn.setText(" ADDR > ");
         FusionUiHelper.setSolidBtn(addrBtn);
         addrBtn.setTextSize(2, 10.0f);
         addrBtn.setPadding(6, 3, 6, 3);
