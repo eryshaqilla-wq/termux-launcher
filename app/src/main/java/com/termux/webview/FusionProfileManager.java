@@ -19,6 +19,7 @@ import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -79,6 +80,23 @@ public class FusionProfileManager {
                 return "{}";
             }
         }
+
+        public static DeviceProfile fromJsonObject(JSONObject obj) {
+            return new DeviceProfile(
+                obj.optString("name", "Samsung Galaxy S24 Ultra"),
+                obj.optString("model", "SM-S928B"),
+                obj.optString("brand", "Samsung"),
+                obj.optString("userAgent", "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36"),
+                obj.optString("platform", "Linux armv8l"),
+                obj.optString("vendor", "Qualcomm"),
+                obj.optString("renderer", "Adreno (TM) 750"),
+                obj.optInt("cores", 8),
+                obj.optInt("memory", 12),
+                obj.optInt("screenWidth", 1440),
+                obj.optInt("screenHeight", 3120),
+                obj.optDouble("pixelRatio", 3.0)
+            );
+        }
     }
 
     private static final DeviceProfile[] DEVICE_POOL = new DeviceProfile[] {
@@ -103,9 +121,14 @@ public class FusionProfileManager {
             "Linux armv8l", "Qualcomm", "Adreno (TM) 750", 8, 16, 1440, 3168, 3.0
         ),
         new DeviceProfile(
-            "Infinix GT 20 Pro", "X6871", "Infinix",
-            "Mozilla/5.0 (Linux; Android 14; X6871) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
-            "Linux armv8l", "ARM", "Mali-G610 MC6", 8, 8, 1080, 2436, 2.25
+            "Asus ROG Phone 8 Pro", "ASUS_AI2401", "Asus",
+            "Mozilla/5.0 (Linux; Android 14; ASUS_AI2401) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "Qualcomm", "Adreno (TM) 750", 8, 16, 1080, 2400, 2.25
+        ),
+        new DeviceProfile(
+            "Vivo X100 Pro", "V2324A", "vivo",
+            "Mozilla/5.0 (Linux; Android 14; V2324A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "ARM", "Mali-G720 Immortalis MC12", 8, 16, 1260, 2800, 2.8125
         ),
         new DeviceProfile(
             "POCO F6 Pro", "23113RKC6G", "POCO",
@@ -118,32 +141,46 @@ public class FusionProfileManager {
             "Linux armv8l", "Qualcomm", "Adreno (TM) 740", 8, 12, 1644, 3840, 3.5
         ),
         new DeviceProfile(
-            "Vivo X100 Pro", "V2324A", "vivo",
-            "Mozilla/5.0 (Linux; Android 14; V2324A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
-            "Linux armv8l", "ARM", "Mali-G720 Immortalis MC12", 8, 16, 1260, 2800, 2.8125
+            "Infinix GT 20 Pro", "X6871", "Infinix",
+            "Mozilla/5.0 (Linux; Android 14; X6871) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "ARM", "Mali-G610 MC6", 8, 8, 1080, 2436, 2.25
+        ),
+        new DeviceProfile(
+            "Oppo Find X7 Ultra", "PHY110", "Oppo",
+            "Mozilla/5.0 (Linux; Android 14; PHY110) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "Qualcomm", "Adreno (TM) 750", 8, 16, 1440, 3168, 3.0
+        ),
+        new DeviceProfile(
+            "Realme GT 5 Pro", "RMX3888", "realme",
+            "Mozilla/5.0 (Linux; Android 14; RMX3888) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "Qualcomm", "Adreno (TM) 750", 8, 16, 1264, 2780, 2.75
+        ),
+        new DeviceProfile(
+            "Motorola Edge 50 Ultra", "XT2401-1", "Motorola",
+            "Mozilla/5.0 (Linux; Android 14; XT2401-1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "Qualcomm", "Adreno (TM) 735", 8, 12, 1220, 2712, 2.7
+        ),
+        new DeviceProfile(
+            "Honor Magic 6 Pro", "BVL-AN16", "Honor",
+            "Mozilla/5.0 (Linux; Android 14; BVL-AN16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "Qualcomm", "Adreno (TM) 750", 8, 12, 1280, 2800, 2.8125
+        ),
+        new DeviceProfile(
+            "iQOO 12 Pro", "V2329A", "iQOO",
+            "Mozilla/5.0 (Linux; Android 14; V2329A) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "Qualcomm", "Adreno (TM) 750", 8, 16, 1440, 3200, 3.0
+        ),
+        new DeviceProfile(
+            "Nothing Phone (2)", "A065", "Nothing",
+            "Mozilla/5.0 (Linux; Android 14; A065) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux armv8l", "Qualcomm", "Adreno (TM) 730", 8, 12, 1080, 2412, 2.25
+        ),
+        new DeviceProfile(
+            "Google Pixel 9 Pro XL", "Pixel 9 Pro XL", "Google",
+            "Mozilla/5.0 (Linux; Android 14; Pixel 9 Pro XL) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36",
+            "Linux aarch64", "ARM", "Mali-G715", 8, 16, 1344, 2992, 2.8125
         )
     };
-
-    public static DeviceProfile getDeviceForProfile(String profile) {
-        if (profile == null || profile.isEmpty() || profile.equals("default")) {
-            return DEVICE_POOL[0];
-        }
-        String p = profile.toLowerCase().trim();
-        // Pemetaan identitas permanen & eksklusif untuk 3 Wallet Binance Agentic Wallet Tuan Eso
-        if ("shaqilla".equals(p)) {
-            return DEVICE_POOL[0]; // Samsung Galaxy S24 Ultra (Adreno 750)
-        } else if ("eryziggy".equals(p)) {
-            return DEVICE_POOL[1]; // Google Pixel 8 Pro (Mali-G715)
-        } else if ("0xjamrud".equals(p)) {
-            return DEVICE_POOL[3]; // OnePlus 12 (Adreno 750 16GB)
-        } else if ("wallet_1".equals(p)) {
-            return DEVICE_POOL[2]; // Xiaomi 14 Pro
-        }
-
-        int hash = Math.abs(p.hashCode());
-        int index = hash % DEVICE_POOL.length;
-        return DEVICE_POOL[index];
-    }
 
     public static File getSessionsDir() {
         String[] candidates = new String[] {
@@ -169,6 +206,67 @@ public class FusionProfileManager {
     public static File getSessionFile(String profile) {
         File dir = getSessionsDir();
         return new File(dir, profile + ".json");
+    }
+
+    public static File getDeviceFile(String profile) {
+        File dir = getSessionsDir();
+        return new File(dir, profile + ".device.json");
+    }
+
+    public static void saveDeviceProfile(String profile, DeviceProfile dev) {
+        if (profile == null || profile.isEmpty() || profile.equals("default") || dev == null) return;
+        try {
+            File f = getDeviceFile(profile);
+            FileOutputStream fos = new FileOutputStream(f);
+            fos.write(dev.toJsonString().getBytes(StandardCharsets.UTF_8));
+            fos.close();
+            try { f.setReadable(true, false); f.setWritable(true, false); } catch(Exception ignored) {}
+        } catch(Exception e) {
+            Log.e(TAG, "Error saving device profile: " + e.getMessage());
+        }
+    }
+
+    public static DeviceProfile getDeviceForProfile(String profile) {
+        if (profile == null || profile.isEmpty() || profile.equals("default")) {
+            return DEVICE_POOL[0];
+        }
+        String p = profile.toLowerCase().trim();
+
+        // 1. Cek apakah identitas tersimpan permanen di file <profile>.device.json
+        File devFile = getDeviceFile(p);
+        if (devFile.exists() && devFile.length() > 0) {
+            try {
+                FileInputStream fis = new FileInputStream(devFile);
+                byte[] b = new byte[(int) devFile.length()];
+                fis.read(b);
+                fis.close();
+                JSONObject json = new JSONObject(new String(b, StandardCharsets.UTF_8));
+                return DeviceProfile.fromJsonObject(json);
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading saved device identity for " + p + ": " + e.getMessage());
+            }
+        }
+
+        // 2. Pemetaan Eksklusif untuk Core Wallet Tuan Eso & Fallback Pool Luas
+        DeviceProfile dev;
+        if ("shaqilla".equals(p)) {
+            dev = DEVICE_POOL[0]; // Samsung Galaxy S24 Ultra
+        } else if ("eryziggy".equals(p)) {
+            dev = DEVICE_POOL[1]; // Google Pixel 8 Pro
+        } else if ("0xjamrud".equals(p)) {
+            dev = DEVICE_POOL[3]; // OnePlus 12
+        } else if ("wallet_1".equals(p)) {
+            dev = DEVICE_POOL[2]; // Xiaomi 14 Pro
+        } else {
+            // Untuk semua profil baru, pilih model secara deterministik dari 16 pool flagship
+            int hash = Math.abs(p.hashCode());
+            int index = hash % DEVICE_POOL.length;
+            dev = DEVICE_POOL[index];
+        }
+
+        // 3. Kunci dan simpan identitas ke disk agar permanen selamanya
+        saveDeviceProfile(p, dev);
+        return dev;
     }
 
     /**
@@ -254,8 +352,6 @@ public class FusionProfileManager {
         }
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-            // Pada native multi-profile, webView sudah terikat dengan profil saat inisialisasi.
-            // Cukup perbarui sCurrentActiveProfile dan User-Agent jika diperlukan.
             sCurrentActiveProfile = targetProfile;
             DeviceProfile device = getDeviceForProfile(targetProfile);
             if (webView != null) {
@@ -269,7 +365,6 @@ public class FusionProfileManager {
             return;
         }
 
-        // Jalur Fallback Klasik (Hanya jika perangkat tidak mendukung MULTI_PROFILE)
         applyLegacyProfileFallback(targetProfile, webView);
     }
 
