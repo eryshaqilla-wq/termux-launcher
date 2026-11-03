@@ -12,6 +12,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 import androidx.appcompat.app.AppCompatActivity;
 import java.util.ArrayList;
 
@@ -412,7 +413,7 @@ public class FusionDrawerHelper {
                 if (manager != null) {
                     manager.evalOnActiveTab("window.AgyBridge && window.AgyBridge.setActiveAiEngine && window.AgyBridge.setActiveAiEngine('custom');");
                 }
-                Toast.makeText(activity, "Mesin AI Aktif: DeepSeek (Custom)", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(activity, "Mesin AI Aktif: DeepSeek (Custom)", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -424,7 +425,7 @@ public class FusionDrawerHelper {
                 if (manager != null) {
                     manager.evalOnActiveTab("window.AgyBridge && window.AgyBridge.setActiveAiEngine && window.AgyBridge.setActiveAiEngine('9router');");
                 }
-                Toast.makeText(activity, "Mesin AI Aktif: 9Router (Port 20128)", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(activity, "Mesin AI Aktif: 9Router (Port 20128)", Toast.LENGTH_SHORT).show();
             }
         });
 
@@ -436,7 +437,7 @@ public class FusionDrawerHelper {
                 if (manager != null) {
                     manager.evalOnActiveTab("window.AgyBridge && window.AgyBridge.setActiveAiEngine && window.AgyBridge.setActiveAiEngine('agy');");
                 }
-                Toast.makeText(activity, "Mesin AI Aktif: AGY Copilot", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(activity, "Mesin AI Aktif: AGY Copilot", Toast.LENGTH_SHORT).show();
             }
         });
 

@@ -4,6 +4,7 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.util.ArrayList;
@@ -70,7 +71,7 @@ public class FusionBookmarkHelper {
         if (context == null || manager == null) return;
         ArrayList<BookmarkItem> list = getBookmarks(context);
         if (list.isEmpty()) {
-            Toast.makeText(context, "Belum ada bookmark tersimpan. Ketuk ⭐ di baris atas untuk simpan.", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(context, "Belum ada bookmark tersimpan. Ketuk ⭐ di baris atas untuk simpan.", Toast.LENGTH_SHORT).show();
             return;
         }
         String[] displayItems = new String[list.size()];
@@ -91,7 +92,7 @@ public class FusionBookmarkHelper {
         });
         b.setNeutralButton("Hapus Semua", (dialog, which) -> {
             saveBookmarks(context, new ArrayList<>());
-            Toast.makeText(context, "Semua bookmark telah dibersihkan", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(context, "Semua bookmark telah dibersihkan", Toast.LENGTH_SHORT).show();
         });
         b.setNegativeButton("Tutup", null);
         b.show();

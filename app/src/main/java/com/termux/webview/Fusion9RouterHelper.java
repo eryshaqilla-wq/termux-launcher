@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 
 import androidx.preference.PreferenceManager;
 
@@ -555,7 +556,7 @@ public class Fusion9RouterHelper {
                     }
                 } else {
                     if (context != null) {
-                        Toast.makeText(context, "Layanan 9Router belum siap di port 20128. Silakan periksa service 9Router.", Toast.LENGTH_LONG).show();
+                        FusionToast.makeText(context, "Layanan 9Router belum siap di port 20128. Silakan periksa service 9Router.", Toast.LENGTH_LONG).show();
                     }
                 }
             });

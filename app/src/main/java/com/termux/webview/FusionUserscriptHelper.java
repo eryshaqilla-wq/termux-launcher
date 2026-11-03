@@ -6,6 +6,7 @@ import android.content.DialogInterface;
 import android.util.Log;
 import android.webkit.WebView;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 
 import com.termux.app.TermuxActivity;
 
@@ -259,10 +260,10 @@ public class FusionUserscriptHelper {
                             try { targetFile.setReadable(true, false); } catch (Throwable ignored) {}
                             try { targetFile.setWritable(true, false); } catch (Throwable ignored) {}
 
-                            Toast.makeText(dialogCtx, "✅ Userscript Terpasang: " + finalName, Toast.LENGTH_SHORT).show();
+                            FusionToast.makeText(dialogCtx, "✅ Userscript Terpasang: " + finalName, Toast.LENGTH_SHORT).show();
                             Log.i(TAG, "Userscript berhasil disimpan ke " + targetFile.getAbsolutePath());
                         } catch (Throwable err) {
-                            Toast.makeText(dialogCtx, "❌ Gagal pasang script: " + err.getMessage(), Toast.LENGTH_SHORT).show();
+                            FusionToast.makeText(dialogCtx, "❌ Gagal pasang script: " + err.getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     });
                     b.setNegativeButton("Batal", null);
@@ -332,7 +333,7 @@ public class FusionUserscriptHelper {
         if (act == null) return;
         final List<File> scripts = getInstalledScripts(act);
         if (scripts.isEmpty()) {
-            Toast.makeText(act, "Tidak ada skrip yang terpasang.", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(act, "Tidak ada skrip yang terpasang.", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -353,9 +354,9 @@ public class FusionUserscriptHelper {
                 confirm.setMessage("Yakin ingin menghapus userscript \"" + name + "\"?");
                 confirm.setPositiveButton("Hapus", (d, w) -> {
                     if (target.delete()) {
-                        Toast.makeText(act, "Skrip \"" + name + "\" berhasil dihapus.", Toast.LENGTH_SHORT).show();
+                        FusionToast.makeText(act, "Skrip \"" + name + "\" berhasil dihapus.", Toast.LENGTH_SHORT).show();
                     } else {
-                        Toast.makeText(act, "Gagal menghapus berkas skrip.", Toast.LENGTH_SHORT).show();
+                        FusionToast.makeText(act, "Gagal menghapus berkas skrip.", Toast.LENGTH_SHORT).show();
                     }
                 });
                 confirm.setNegativeButton("Batal", null);

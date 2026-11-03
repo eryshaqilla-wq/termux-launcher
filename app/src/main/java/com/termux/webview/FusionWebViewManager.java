@@ -35,6 +35,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.termux.app.TermuxActivity;
 import com.termux.app.TermuxIpcServer;
@@ -539,7 +540,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "Cache Tab Aktif Berhasil Dibersihkan!", 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "Cache Tab Aktif Berhasil Dibersihkan!", 0).show();
         }
     }
 
@@ -572,7 +573,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 @Override
                 public void run() {
                     updateContextUi();
-                    Toast.makeText(appCompatActivity, "Dompet Diubah ke: " + nextName, Toast.LENGTH_SHORT).show();
+                    FusionToast.makeText(appCompatActivity, "Dompet Diubah ke: " + nextName, Toast.LENGTH_SHORT).show();
                 }
             });
         }
@@ -608,7 +609,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                                 "window.__FUSION_DEVICE__ = " + dev.toJsonString() + ";" +
                                 "if(window.__applyFingerprintFaker) window.__applyFingerprintFaker();", null
                             );
-                            Toast.makeText(appCompatActivity, "Fingerprint: " + dev.name, Toast.LENGTH_SHORT).show();
+                            FusionToast.makeText(appCompatActivity, "Fingerprint: " + dev.name, Toast.LENGTH_SHORT).show();
                         }
                     }
                 });
@@ -694,7 +695,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         try {
             ((ClipboardManager) r0.getSystemService("clipboard")).setPrimaryClip(ClipData.newPlainText("wallet_address", str));
-            Toast.makeText((Context) r0, "Alamat disalin: " + str, 0).show();
+            FusionToast.makeText((Context) r0, "Alamat disalin: " + str, 0).show();
         } catch (Exception unused) {
         }
     }
@@ -1621,7 +1622,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) ("Jaringan: " + FusionChainHelper.getCurrentChainName()), 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) ("Jaringan: " + FusionChainHelper.getCurrentChainName()), 0).show();
         }
     }
 
@@ -1902,7 +1903,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return;
         }
         if (zCheckRpcDaemon) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "* RPC: ONLINE (127.0.0.1:3333)", 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "* RPC: ONLINE (127.0.0.1:3333)", 0).show();
         } else {
             startWalletDaemon();
         }
@@ -2218,7 +2219,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (act == null) return;
         WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
         if (webView == null || webView.getUrl() == null || webView.getUrl().isEmpty()) {
-            Toast.makeText(act, "Tidak ada halaman aktif untuk disimpan", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(act, "Tidak ada halaman aktif untuk disimpan", Toast.LENGTH_SHORT).show();
             return;
         }
         String url = webView.getUrl();
@@ -2227,7 +2228,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             title = url;
         }
         FusionBookmarkHelper.addBookmark(act, title, url);
-        Toast.makeText(act, "⭐ Disimpan ke Bookmark!", Toast.LENGTH_SHORT).show();
+        FusionToast.makeText(act, "⭐ Disimpan ke Bookmark!", Toast.LENGTH_SHORT).show();
     }
 
     public void showBookmarksDialog() {
@@ -2250,11 +2251,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     FusionProfileManager.printToTerminalSession(act, boundSession, "\r\n\033[32m[Fusion] " + saveMsg + "\033[0m\r\n");
                 }
                 act.runOnUiThread(() -> {
-                    Toast.makeText(act, "[Fusion] Sesi profile '" + profile + "' berhasil disimpan!", Toast.LENGTH_SHORT).show();
+                    FusionToast.makeText(act, "[Fusion] Sesi profile '" + profile + "' berhasil disimpan!", Toast.LENGTH_SHORT).show();
                 });
             }).start();
         } else {
-            Toast.makeText(act, "[Fusion] Sesi default (tanpa profile aktif). Gunakan --profile <nama>", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(act, "[Fusion] Sesi default (tanpa profile aktif). Gunakan --profile <nama>", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -2276,7 +2277,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     ClipboardManager cm = (ClipboardManager) act.getSystemService(Context.CLIPBOARD_SERVICE);
                     if (cm != null && url != null) {
                         cm.setPrimaryClip(ClipData.newPlainText("URL", url));
-                        Toast.makeText(act, "URL berhasil disalin!", Toast.LENGTH_SHORT).show();
+                        FusionToast.makeText(act, "URL berhasil disalin!", Toast.LENGTH_SHORT).show();
                     }
                 } catch (Throwable unused) {}
             }
@@ -2290,13 +2291,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (act == null) return;
         final WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
         if (webView == null) {
-            Toast.makeText(act, "WebView tidak aktif", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(act, "WebView tidak aktif", Toast.LENGTH_SHORT).show();
             return;
         }
         WebBackForwardList list = webView.copyBackForwardList();
         int size = list != null ? list.getSize() : 0;
         if (size == 0) {
-            Toast.makeText(act, "Belum ada riwayat penjelajahan", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(act, "Belum ada riwayat penjelajahan", Toast.LENGTH_SHORT).show();
             return;
         }
         final String[] items = new String[size];
@@ -2406,7 +2407,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.evaluateJavascript("if(window.AgyBridge && window.AgyBridge.showRecipePicker){window.AgyBridge.showRecipePicker();}else if(window.__FUSION_PLAY_MACRO__){window.__FUSION_PLAY_MACRO__();}", null);
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "Buka Rekaman...", 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "Buka Rekaman...", 0).show();
         }
     }
 
@@ -2417,7 +2418,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         evalOnActiveTab("if(window.AgyBridge && window.AgyBridge.stop){window.AgyBridge.stop();}if(window.AgyBatchRunner && window.AgyBatchRunner.stop){window.AgyBatchRunner.stop();}if(window.AgyRecorder && window.AgyRecorder.cancel){window.AgyRecorder.cancel();}");
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "Menghentikan Makro...", 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "Menghentikan Makro...", 0).show();
         }
     }
 
@@ -2440,7 +2441,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "AI DevBridge: DOM tersimpan di ~/.webview_bridge_dump.json & disalin!", 1).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "AI DevBridge: DOM tersimpan di ~/.webview_bridge_dump.json & disalin!", 1).show();
         }
     }
 
@@ -2457,7 +2458,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "Makro Berhasil Disimpan & Disalin!", 1).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "Makro Berhasil Disimpan & Disalin!", 1).show();
         }
     }
 
@@ -2529,11 +2530,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return;
         }
         if (zCheckRpcDaemon) {
-            Toast.makeText((Context) r1, "[OK] GhostWallet Aktif di Port 3333!", 0).show();
+            FusionToast.makeText((Context) r1, "[OK] GhostWallet Aktif di Port 3333!", 0).show();
             return;
         }
         TermuxIpcServer.injectCommand(r1, FusionWalletHelper.getStartWalletDaemonCommand(), true);
-        Toast.makeText((Context) r1, "Memulai GhostWallet di terminal (port 3333)...", 0).show();
+        FusionToast.makeText((Context) r1, "Memulai GhostWallet di terminal (port 3333)...", 0).show();
         updateMenuTexts();
         toggleMinimize();
     }
@@ -2615,7 +2616,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mCurrentWalletAddress = strFindAddressByName;
             GhostBridgeInterface.setWallet(this.mCurrentWalletName, strFindAddressByName);
             updateMenuTexts();
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "Database Dompet & Jaringan Disinkronkan!", 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "Database Dompet & Jaringan Disinkronkan!", 0).show();
         }
     }
 
@@ -2789,7 +2790,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             StringBuilder sb = new StringBuilder();
             sb.append("Auto-Sign: ");
             sb.append(z ? "AKTIF" : "NONAKTIF");
-            Toast.makeText((Context) appCompatActivity, (CharSequence) sb.toString(), 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) sb.toString(), 0).show();
         }
     }
 
@@ -2820,7 +2821,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
             AppCompatActivity appCompatActivity = this.mActivity;
             if (appCompatActivity != null) {
-                Toast.makeText((Context) appCompatActivity, (CharSequence) "CDP NONAKTIF (OFF)", 0).show();
+                FusionToast.makeText((Context) appCompatActivity, (CharSequence) "CDP NONAKTIF (OFF)", 0).show();
                 return;
             }
             return;
@@ -2847,7 +2848,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         AppCompatActivity appCompatActivity2 = this.mActivity;
         if (appCompatActivity2 != null) {
-            Toast.makeText((Context) appCompatActivity2, (CharSequence) ("CDP AKTIF!\nSocket: @" + str + "\nForward: adb forward tcp:9222 localabstract:" + str), 1).show();
+            FusionToast.makeText((Context) appCompatActivity2, (CharSequence) ("CDP AKTIF!\nSocket: @" + str + "\nForward: adb forward tcp:9222 localabstract:" + str), 1).show();
         }
     }
 
@@ -2876,7 +2877,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "Perekaman Makro Dimulai...", 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "Perekaman Makro Dimulai...", 0).show();
         }
     }
 
@@ -2896,7 +2897,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.evaluateJavascript("window.__AI_DEVBRIDGE_INSPECT__ ? window.__AI_DEVBRIDGE_INSPECT__() : JSON.stringify({url: window.location.href, title: document.title});", this);
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) "AI DevBridge: Mengekstrak DOM...", 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) "AI DevBridge: Mengekstrak DOM...", 0).show();
         }
     }
 

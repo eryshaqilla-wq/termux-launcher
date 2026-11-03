@@ -14,6 +14,7 @@ import androidx.preference.PreferenceManager;
 import java.util.Set;
 
 import com.termux.R;
+import com.termux.app.FusionToast;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
@@ -88,7 +89,7 @@ public class X11DisplayPreferencesFragment extends MaterialPreferenceFragment {
                 @SuppressWarnings("unchecked")
                 Set<String> selected = (Set<String>) newValue;
                 if (selected != null && selected.size() > 5) {
-                    android.widget.Toast.makeText(context, "Maksimal 5 tombol aksi cepat!", android.widget.Toast.LENGTH_SHORT).show();
+                    FusionToast.show(context, "Maksimal 5 tombol aksi cepat!");
                     return false;
                 }
                 return true;

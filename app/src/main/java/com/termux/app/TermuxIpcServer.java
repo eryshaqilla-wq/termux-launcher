@@ -76,7 +76,7 @@ public class TermuxIpcServer {
 
         @Override // java.lang.Runnable
         public void run() {
-            Toast.makeText(this.mContext, this.mText, 0).show();
+            FusionToast.show(this.mContext, this.mText);
         }
     }
 

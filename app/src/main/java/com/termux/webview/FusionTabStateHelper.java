@@ -9,6 +9,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.termux.app.TermuxActivity;
 import com.termux.shared.view.KeyboardUtils;
@@ -101,7 +102,7 @@ public class FusionTabStateHelper {
         fusionWebViewManager.mCurrentProfile = str;
         AppCompatActivity appCompatActivity = fusionWebViewManager.mActivity;
         if (appCompatActivity != null) {
-            Toast.makeText((Context) appCompatActivity, (CharSequence) ("Fingerprint Diacak: " + str), 0).show();
+            FusionToast.makeText((Context) appCompatActivity, (CharSequence) ("Fingerprint Diacak: " + str), 0).show();
         }
     }
 
@@ -241,7 +242,7 @@ public class FusionTabStateHelper {
 
         TermuxActivity act = fusionWebViewManager.mActivity;
         if (act != null) {
-            Toast.makeText(act, z ? "Mode Desktop AKTIF (1280px)" : "Mode Mobile AKTIF", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(act, z ? "Mode Desktop AKTIF (1280px)" : "Mode Mobile AKTIF", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -278,7 +279,7 @@ public class FusionTabStateHelper {
             if (r2 != null) {
                 r2.endWebViewExternalTextInput();
                 r2.refreshTerminalWindowBar();
-                Toast.makeText((Context) r2, "WebView diminimalkan", 0).show();
+                FusionToast.makeText((Context) r2, "WebView diminimalkan", 0).show();
                 return;
             }
         } else {

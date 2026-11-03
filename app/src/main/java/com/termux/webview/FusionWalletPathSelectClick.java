@@ -3,6 +3,7 @@ package com.termux.webview;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionWalletPathSelectClick implements DialogInterface.OnClickListener {
@@ -25,7 +26,7 @@ public class FusionWalletPathSelectClick implements DialogInterface.OnClickListe
         FusionWalletHelper.setCustomWalletPath(str);
         FusionWalletHelper.reload(fusionWebViewManager.mActivity);
         fusionWebViewManager.updateMenuTexts();
-        Toast.makeText((Context) fusionWebViewManager.mActivity, (CharSequence) ("DB Dompet Dimuat: " + str), 1).show();
+        FusionToast.makeText((Context) fusionWebViewManager.mActivity, (CharSequence) ("DB Dompet Dimuat: " + str), 1).show();
         if (dialogInterface != null) {
             dialogInterface.dismiss();
         }

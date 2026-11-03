@@ -12,6 +12,7 @@ import androidx.preference.ListPreference;
 import androidx.preference.Preference;
 import androidx.preference.PreferenceCategory;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 
 import com.termux.R;
 import com.termux.app.x11.ChrootDistro;
@@ -94,7 +95,7 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
                         syncPref.setSummary(R.string.settings_x11_sync_linux_apps_summary);
                         com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(ctx.getApplicationContext()).invalidate();
                         com.termux.app.TermuxActivity.requestAppDrawerReloadOnNextResume(ctx.getApplicationContext());
-                        Toast.makeText(ctx, R.string.settings_x11_sync_linux_apps_done, Toast.LENGTH_SHORT).show();
+                        FusionToast.makeText(ctx, R.string.settings_x11_sync_linux_apps_done, Toast.LENGTH_SHORT).show();
                     });
                 });
                 return true;

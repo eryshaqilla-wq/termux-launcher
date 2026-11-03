@@ -2,6 +2,7 @@ package com.termux.webview;
 
 import android.content.Context;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionNotifyOfflineRunnable implements Runnable {
@@ -15,7 +16,7 @@ public class FusionNotifyOfflineRunnable implements Runnable {
     public void run() {
         Context context = this.mContext;
         if (context != null) {
-            Toast.makeText(context, "[RPC Daemon] Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.", 1).show();
+            FusionToast.makeText(context, "[RPC Daemon] Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.", 1).show();
         }
     }
 }

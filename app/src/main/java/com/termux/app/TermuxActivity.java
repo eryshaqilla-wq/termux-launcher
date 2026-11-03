@@ -22009,7 +22009,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 try {
                     Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
                 } catch (Exception ignored) {}
-                runOnUiThread(() -> android.widget.Toast.makeText(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!", android.widget.Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!"));
             }).start();
         } else if ("PASTE".equalsIgnoreCase(actionKey)) {
             com.termux.x11.LorieView display = getActiveLorieView();
@@ -22340,7 +22340,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 try {
                     Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
                 } catch (Exception ignored) {}
-                runOnUiThread(() -> android.widget.Toast.makeText(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!", android.widget.Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!"));
             }).start();
         } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
             if (mTermuxTerminalViewClient != null) {
@@ -24380,7 +24380,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * and resets the display UI.
      */
     private void stopAndKillAllDisplayServices() {
-        android.widget.Toast.makeText(this, "Stopping X11 Display & DE...", android.widget.Toast.LENGTH_SHORT).show();
+        FusionToast.show(this, "Stopping X11 Display & DE...");
         com.termux.app.x11.ChrootDistro.killDesktopEnvironmentAsync(this, () -> {
             killEmbeddedDisplayServer();
             com.termux.app.x11.X11PaneFrame displayFrame = mPaneWallController == null
@@ -24390,7 +24390,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             refreshPlaceBar();
             refreshTerminalWindowBar();
-            android.widget.Toast.makeText(this, "X11 Display & DE stopped", android.widget.Toast.LENGTH_SHORT).show();
+            FusionToast.show(this, "X11 Display & DE stopped");
         });
     }
 
@@ -26126,9 +26126,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (state.voltageMv > 0) {
                 info += "\nTegangan: " + (state.voltageMv / 1000.0f) + " V";
             }
-            android.widget.Toast.makeText(this, info, android.widget.Toast.LENGTH_SHORT).show();
+            FusionToast.show(this, info);
         } else {
-            android.widget.Toast.makeText(this, "Membaca status baterai...", android.widget.Toast.LENGTH_SHORT).show();
+            FusionToast.show(this, "Membaca status baterai...");
         }
     }
 

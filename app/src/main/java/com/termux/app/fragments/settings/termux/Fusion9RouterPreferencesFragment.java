@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
+import com.termux.app.FusionToast;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;
@@ -92,7 +93,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 for (Fusion9RouterHelper.TargetEnvironment t : targets) {
                     if (t.id.equals(newId)) {
                         targetPref.setSummary(t.displayName);
-                        Toast.makeText(context, "Target diubah: " + t.displayName, Toast.LENGTH_SHORT).show();
+                        FusionToast.makeText(context, "Target diubah: " + t.displayName, Toast.LENGTH_SHORT).show();
                         break;
                     }
                 }
@@ -106,11 +107,11 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         if (installPref != null) {
             installPref.setOnPreferenceClickListener(preference -> {
                 Fusion9RouterHelper.TargetEnvironment target = Fusion9RouterHelper.getSelectedTarget(context);
-                Toast.makeText(context, "Memulai instalasi 9Router di " + target.displayName + "...", Toast.LENGTH_LONG).show();
+                FusionToast.makeText(context, "Memulai instalasi 9Router di " + target.displayName + "...", Toast.LENGTH_LONG).show();
                 installPref.setEnabled(false);
                 installPref.setSummary("Sedang mengunduh dan memasang paket via npm...");
                 Fusion9RouterHelper.installRouter(context, target, () -> {
-                    Toast.makeText(context, "Instalasi 9Router di " + target.displayName + " berhasil!", Toast.LENGTH_SHORT).show();
+                    FusionToast.makeText(context, "Instalasi 9Router di " + target.displayName + " berhasil!", Toast.LENGTH_SHORT).show();
                     installPref.setEnabled(true);
                     refreshState();
                 });
@@ -125,15 +126,15 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 if (mIsUpdatingUi) return true;
                 boolean shouldStart = (Boolean) newValue;
                 if (shouldStart) {
-                    Toast.makeText(context, "Menjalankan 9Router di background...", Toast.LENGTH_SHORT).show();
+                    FusionToast.makeText(context, "Menjalankan 9Router di background...", Toast.LENGTH_SHORT).show();
                     Fusion9RouterHelper.startService(context, () -> {
-                        Toast.makeText(context, "9Router aktif di port 20128!", Toast.LENGTH_SHORT).show();
+                        FusionToast.makeText(context, "9Router aktif di port 20128!", Toast.LENGTH_SHORT).show();
                         refreshState();
                     });
                 } else {
-                    Toast.makeText(context, "Menghentikan service 9Router...", Toast.LENGTH_SHORT).show();
+                    FusionToast.makeText(context, "Menghentikan service 9Router...", Toast.LENGTH_SHORT).show();
                     Fusion9RouterHelper.stopService(context, () -> {
-                        Toast.makeText(context, "9Router telah dihentikan.", Toast.LENGTH_SHORT).show();
+                        FusionToast.makeText(context, "9Router telah dihentikan.", Toast.LENGTH_SHORT).show();
                         refreshState();
                     });
                 }
@@ -154,7 +155,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         Preference openWebUi = findPreference(PREF_OPEN_WEBUI);
         if (openWebUi != null) {
             openWebUi.setOnPreferenceClickListener(preference -> {
-                Toast.makeText(context, "Mempersiapkan Dashboard 9Router...", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(context, "Mempersiapkan Dashboard 9Router...", Toast.LENGTH_SHORT).show();
                 Fusion9RouterHelper.openDashboard(context, () -> {
                     if (getActivity() != null && !getActivity().isFinishing()) {
                         getActivity().finish();
@@ -168,11 +169,11 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         Preference syncAccounts = findPreference(PREF_SYNC_ACCOUNTS);
         if (syncAccounts != null) {
             syncAccounts.setOnPreferenceClickListener(preference -> {
-                Toast.makeText(context, "Menyinkronkan akun Antigravity...", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(context, "Menyinkronkan akun Antigravity...", Toast.LENGTH_SHORT).show();
                 Fusion9RouterHelper.syncAccounts(context, () -> {
                     int count = Fusion9RouterHelper.getAccountCount(context);
                     String msg = count > 0 ? (count + " Akun Antigravity berhasil disinkronkan!") : "Sinkronisasi akun selesai.";
-                    mMainHandler.post(() -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show());
+                    mMainHandler.post(() -> FusionToast.makeText(context, msg, Toast.LENGTH_SHORT).show());
                     refreshState();
                 });
                 return true;
@@ -183,7 +184,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         Preference autoConfigPref = findPreference(PREF_AUTOCONFIG_CLIENTS);
         if (autoConfigPref != null) {
             autoConfigPref.setOnPreferenceClickListener(preference -> {
-                Toast.makeText(context, "Memindai klien AI terpasang...", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(context, "Memindai klien AI terpasang...", Toast.LENGTH_SHORT).show();
                 new Thread(() -> {
                     final Fusion9RouterHelper.AutoConfigData data = Fusion9RouterHelper.getAutoConfigData(context);
                     mMainHandler.post(() -> {
@@ -223,12 +224,12 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                                     }
                                 }
                                 if (toApply.isEmpty()) {
-                                    Toast.makeText(context, "Tidak ada klien yang dipilih.", Toast.LENGTH_SHORT).show();
+                                    FusionToast.makeText(context, "Tidak ada klien yang dipilih.", Toast.LENGTH_SHORT).show();
                                     return;
                                 }
-                                Toast.makeText(context, "Menerapkan konfigurasi 9Router...", Toast.LENGTH_SHORT).show();
+                                FusionToast.makeText(context, "Menerapkan konfigurasi 9Router...", Toast.LENGTH_SHORT).show();
                                 Fusion9RouterHelper.applyAutoConfig(context, toApply, () -> {
-                                    Toast.makeText(context, "Konfigurasi 9Router berhasil diterapkan ke " + toApply.size() + " klien!", Toast.LENGTH_LONG).show();
+                                    FusionToast.makeText(context, "Konfigurasi 9Router berhasil diterapkan ke " + toApply.size() + " klien!", Toast.LENGTH_LONG).show();
                                     refreshState();
                                 });
                             })
@@ -244,14 +245,14 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
         Preference modelsPref = findPreference(PREF_MODELS_INFO);
         if (modelsPref != null) {
             modelsPref.setOnPreferenceClickListener(preference -> {
-                Toast.makeText(context, "Memuat daftar model...", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(context, "Memuat daftar model...", Toast.LENGTH_SHORT).show();
                 new Thread(() -> {
                     final Fusion9RouterHelper.AutoConfigData data = Fusion9RouterHelper.getAutoConfigData(context);
                     final int accCount = Fusion9RouterHelper.getAccountCount(context);
                     final String accLabel = accCount > 0 ? (accCount + " akun") : "multi-akun";
                     mMainHandler.post(() -> {
                         if (data == null || data.models.isEmpty()) {
-                            Toast.makeText(context, "Gagal memuat model dari 9Router", Toast.LENGTH_SHORT).show();
+                            FusionToast.makeText(context, "Gagal memuat model dari 9Router", Toast.LENGTH_SHORT).show();
                             return;
                         }
                         final List<String> models = data.models;
@@ -275,9 +276,9 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                             })
                             .setPositiveButton("Ganti Model", (dialog, which) -> {
                                 String selectedModel = models.get(chosenIdx[0]);
-                                Toast.makeText(context, "Mengganti model ke " + selectedModel + "...", Toast.LENGTH_SHORT).show();
+                                FusionToast.makeText(context, "Mengganti model ke " + selectedModel + "...", Toast.LENGTH_SHORT).show();
                                 Fusion9RouterHelper.applyModel(context, selectedModel, () -> {
-                                    Toast.makeText(context, "Model aktif diubah ke: " + selectedModel, Toast.LENGTH_LONG).show();
+                                    FusionToast.makeText(context, "Model aktif diubah ke: " + selectedModel, Toast.LENGTH_LONG).show();
                                     refreshState();
                                 });
                             })
@@ -297,7 +298,7 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                 if (clipboard != null) {
                     ClipData clip = ClipData.newPlainText("9Router Endpoint", Fusion9RouterHelper.LOCAL_BASE_URL);
                     clipboard.setPrimaryClip(clip);
-                    Toast.makeText(context, "Endpoint disalin: " + Fusion9RouterHelper.LOCAL_BASE_URL, Toast.LENGTH_SHORT).show();
+                    FusionToast.makeText(context, "Endpoint disalin: " + Fusion9RouterHelper.LOCAL_BASE_URL, Toast.LENGTH_SHORT).show();
                 }
                 return true;
             });
@@ -316,10 +317,10 @@ public final class Fusion9RouterPreferencesFragment extends MaterialPreferenceFr
                                 ClipData clip = ClipData.newPlainText("9Router API Key", key);
                                 clipboard.setPrimaryClip(clip);
                                 String preview = key.length() > 14 ? (key.substring(0, 10) + "...") : key;
-                                Toast.makeText(context, "API Key disalin: " + preview, Toast.LENGTH_SHORT).show();
+                                FusionToast.makeText(context, "API Key disalin: " + preview, Toast.LENGTH_SHORT).show();
                             }
                         } else {
-                            Toast.makeText(context, "API Key belum tersedia di database 9Router", Toast.LENGTH_SHORT).show();
+                            FusionToast.makeText(context, "API Key belum tersedia di database 9Router", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }).start();
