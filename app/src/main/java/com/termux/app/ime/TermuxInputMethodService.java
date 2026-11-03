@@ -541,19 +541,19 @@ public class TermuxInputMethodService extends InputMethodService {
                     String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
                     Context context = TermuxInputMethodService.this;
                     int surfaceColor;
+                    Theme.Palette p;
                     if (InAppKeyboardPaletteFactory.isSolidTheme(theme)) {
                         surfaceColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme);
+                        p = InAppKeyboardPaletteFactory.createSolid(context, theme);
                     } else {
                         surfaceColor = InAppKeyboardPaletteFactory.resolveDockGlassBaseColor(context) | 0xFF000000;
+                        p = InAppKeyboardPaletteFactory.createGlass(context, theme,
+                            com.termux.app.chrome.GlassLook.of(mPreferences));
                     }
-                    int onSurface = 0xFFFFFFFF;
-                    int accent = 0xFF38BDF8;
-                    if (mKeyboardView != null && mKeyboardView.palette() != null) {
-                        Theme.Palette p = mKeyboardView.palette();
-                        if (p.labelColor != 0) onSurface = p.labelColor;
-                        if (p.accent != 0) accent = p.accent;
-                    }
-                    return new ClipboardPanelView.Palette(surfaceColor, onSurface, accent);
+                    int onSurface = p != null && p.labelColor != 0 ? p.labelColor : 0xFFFFFFFF;
+                    int onSurfaceVariant = p != null && p.subLabelColor != 0 ? p.subLabelColor : 0x88FFFFFF;
+                    int accent = p != null && p.actionKeyBackground != 0 ? p.actionKeyBackground : 0xFF38BDF8;
+                    return new ClipboardPanelView.Palette(surfaceColor, onSurface, onSurfaceVariant, accent);
                 }
 
                 @Override
@@ -566,7 +566,7 @@ public class TermuxInputMethodService extends InputMethodService {
                     DisplayMetrics dm = getResources().getDisplayMetrics();
                     return Math.round(260f * dm.density);
                 }
-            }, ClipboardHistory.getInstance(this));
+            }, ClipboardHistory.get(this));
         }
         return mClipboardPanel;
     }

@@ -17943,7 +17943,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         } catch (Throwable ignored) {}
     }
 
-    boolean toggleVoiceDictation() {
+    public boolean toggleVoiceDictation() {
         VoiceInputSession session = mVoiceInput;
         if (session != null) {
             // Like the voice key: once the mic has closed, the captured phrases finish on their own.
@@ -23515,8 +23515,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
 
             @Override public int defaultHeightPx() {
-                if (mKeyboardGeometry != null && mKeyboardGeometry.lastMeasuredHeight() > 0) {
-                    return mKeyboardGeometry.lastMeasuredHeight();
+                if (mKeyboardGeometry != null && mKeyboardGeometry.desiredHeightPx() > 0) {
+                    return mKeyboardGeometry.desiredHeightPx();
                 }
                 return Math.round(dpToPx(260));
             }
