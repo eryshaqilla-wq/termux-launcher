@@ -1500,8 +1500,8 @@
                         updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Memecahkan Captcha/Tantangan...", "running");
 
                         var chEl = ev.challengeSelector ? document.querySelector(ev.challengeSelector) : null;
-                        var chText = chEl ? (chEl.innerText || chEl.textContent || chEl.value || "").trim() : (ev.challengeSample || "");
                         var inEl = ev.inputSelector ? document.querySelector(ev.inputSelector) : null;
+                        var isImgOrCanvas = (ev.solverType === "ocr_vision") || (chEl && (chEl.tagName === "IMG" || chEl.tagName === "CANVAS" || chEl.querySelector("img, canvas")));
 
                         function fillSolution(answer) {
                             if (inEl && answer !== undefined && answer !== null && answer !== "") {
@@ -1519,19 +1519,41 @@
                             }, stepDelay));
                         }
 
-                        // 1. Coba Solver Matematika Lokal Cepat (0ms, tanpa kuota AI)
+                        // 1. Coba Vision OCR AI jika elemen gambar/canvas
+                        if (isImgOrCanvas) {
+                            var imgData = extractElementImageData(chEl);
+                            if (imgData) {
+                                requestAiVisionSolve(imgData, function(vRes) {
+                                    if (vRes && vRes.success && vRes.answer) {
+                                        fillSolution(vRes.answer);
+                                    } else {
+                                        showManualSolvePill("Vision AI gagal membaca captcha. Silakan isi manual:", function() {
+                                            updateAgyHUD("Melanjutkan", "Melanjutkan langkah berikutnya...", "running");
+                                            self.registerTimer(setTimeout(function() {
+                                                waitDocReady(runNextStep);
+                                            }, 400));
+                                        });
+                                    }
+                                });
+                                return;
+                            }
+                        }
+
+                        var chText = chEl ? (chEl.innerText || chEl.textContent || chEl.value || "").trim() : (ev.challengeSample || "");
+
+                        // 2. Coba Solver Matematika Lokal Cepat (0ms, tanpa kuota AI)
                         var mathSol = solveSimpleMathLocally(chText);
                         if (mathSol) {
                             fillSolution(mathSol.answer);
                             return;
                         }
 
-                        // 2. Coba Solver AI (DeepSeek / 9Router)
+                        // 3. Coba Solver AI Teks (DeepSeek / 9Router)
                         requestAiChallengeSolve(chText, function(aiRes) {
                             if (aiRes && aiRes.success && aiRes.answer) {
                                 fillSolution(aiRes.answer);
                             } else {
-                                // 3. FALLBACK MANUAL: Jika AI gagal, minta user solve manual di layar
+                                // 4. FALLBACK MANUAL: Jika AI gagal, minta user solve manual di layar
                                 showManualSolvePill("AI gagal memecahkan. Silakan isi jawaban manual:", function() {
                                     updateAgyHUD("Melanjutkan", "Melanjutkan langkah berikutnya...", "running");
                                     self.registerTimer(setTimeout(function() {
@@ -1701,50 +1723,52 @@
                         }
                     }
 
-                    smartWaitForElementWithTimeout(ev, stepNum, eventsList.length, maxTimeout, function(targetEl) {
-                        if (self.isAborted || window.__AGY_ABORT_RUN__) return;
-                        if (!targetEl) {
-                            var aiEngine = getAIEngine();
-                            if (aiEngine !== "off") {
-                                updateAgyHUD("🤖 AI-Heal (" + aiEngine.toUpperCase() + ")", "Langkah " + stepNum + " macet. Menganalisis layar...", "running");
-                                tryAiSelfHealing(ev, eventsList, idx, runTitle, function(healedEl, newSel) {
-                                    if (healedEl) {
-                                        updateAgyHUD("✨ AI-Heal Sukses!", "Langkah " + stepNum + " sembuh ➔ " + newSel, "success");
-                                        ev.selector = newSel;
-                                        ev.healed = true;
-                                        try {
-                                            var rName = sessionStorage.getItem("__agy_active_recipe_name__");
-                                            if (rName && typeof RecipeStore !== "undefined") {
-                                                RecipeStore.save(rName, eventsList, window.location.href);
-                                            }
-                                        } catch(_) {}
-                                        executeResolvedTarget(healedEl);
-                                    } else {
-                                        showManualHealPill(ev, function(manualEl) {
-                                            if (manualEl) {
-                                                var manSel = getCssSelector(manualEl);
-                                                ev.selector = manSel;
-                                                ev.healed = true;
-                                                try {
-                                                    var rName = sessionStorage.getItem("__agy_active_recipe_name__");
-                                                    if (rName && typeof RecipeStore !== "undefined") {
-                                                        RecipeStore.save(rName, eventsList, window.location.href);
-                                                    }
-                                                } catch(_) {}
-                                                executeResolvedTarget(manualEl);
-                                            } else {
-                                                self.registerTimer(setTimeout(runNextStep, 400));
-                                            }
-                                        });
-                                    }
-                                });
+                    sweepBlockingPopups(ev, function() {
+                        smartWaitForElementWithTimeout(ev, stepNum, eventsList.length, maxTimeout, function(targetEl) {
+                            if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+                            if (!targetEl) {
+                                var aiEngine = getAIEngine();
+                                if (aiEngine !== "off") {
+                                    updateAgyHUD("🤖 AI-Heal (" + aiEngine.toUpperCase() + ")", "Langkah " + stepNum + " macet. Menganalisis layar...", "running");
+                                    tryAiSelfHealing(ev, eventsList, idx, runTitle, function(healedEl, newSel) {
+                                        if (healedEl) {
+                                            updateAgyHUD("✨ AI-Heal Sukses!", "Langkah " + stepNum + " sembuh ➔ " + newSel, "success");
+                                            ev.selector = newSel;
+                                            ev.healed = true;
+                                            try {
+                                                var rName = sessionStorage.getItem("__agy_active_recipe_name__");
+                                                if (rName && typeof RecipeStore !== "undefined") {
+                                                    RecipeStore.save(rName, eventsList, window.location.href);
+                                                }
+                                            } catch(_) {}
+                                            executeResolvedTarget(healedEl);
+                                        } else {
+                                            showManualHealPill(ev, function(manualEl) {
+                                                if (manualEl) {
+                                                    var manSel = getCssSelector(manualEl);
+                                                    ev.selector = manSel;
+                                                    ev.healed = true;
+                                                    try {
+                                                        var rName = sessionStorage.getItem("__agy_active_recipe_name__");
+                                                        if (rName && typeof RecipeStore !== "undefined") {
+                                                            RecipeStore.save(rName, eventsList, window.location.href);
+                                                        }
+                                                    } catch(_) {}
+                                                    executeResolvedTarget(manualEl);
+                                                } else {
+                                                    self.registerTimer(setTimeout(runNextStep, 400));
+                                                }
+                                            });
+                                        }
+                                    });
+                                    return;
+                                }
+                                self.registerTimer(setTimeout(runNextStep, 400));
                                 return;
                             }
-                            self.registerTimer(setTimeout(runNextStep, 400));
-                            return;
-                        }
 
-                        executeResolvedTarget(targetEl);
+                            executeResolvedTarget(targetEl);
+                        });
                     });
                 }
 
@@ -3014,6 +3038,240 @@
         (document.body || document.documentElement).appendChild(pill);
     }
 
+    // --- 4D. MULTIMODAL OCR & VISION CAPTCHA SOLVER ---
+    function extractElementImageData(el) {
+        if (!el) return null;
+        var targetImg = (el.tagName === "IMG" || el.tagName === "CANVAS") ? el : el.querySelector("img, canvas");
+        if (!targetImg) return null;
+        try {
+            if (targetImg.tagName === "CANVAS") {
+                return targetImg.toDataURL("image/png");
+            }
+            if (targetImg.tagName === "IMG") {
+                if (targetImg.src && targetImg.src.startsWith("data:image/")) {
+                    return targetImg.src;
+                }
+                var c = document.createElement("canvas");
+                c.width = targetImg.naturalWidth || targetImg.width || 120;
+                c.height = targetImg.naturalHeight || targetImg.height || 40;
+                var ctx = c.getContext("2d");
+                ctx.drawImage(targetImg, 0, 0);
+                return c.toDataURL("image/png");
+            }
+        } catch(err) {
+            console.warn("[OCR Vision] Error extracting canvas/img data:", err);
+        }
+        return null;
+    }
+
+    function queryTriEngineVision(imageDataUrl, promptText, callback) {
+        var engine = getAIEngine();
+        if (engine === "off" || !imageDataUrl) {
+            if (callback) callback({ success: false, text: null });
+            return;
+        }
+
+        var defaultPrompt = "Read the captcha, distorted digits, or characters in this image. Output strictly ONLY the answer value without quotes or explanation.";
+        var userPrompt = promptText || defaultPrompt;
+
+        // 1. Coba 9Router (Local Vision via 20128)
+        function try9RouterVision(next) {
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "http://127.0.0.1:20128/v1/chat/completions", true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.timeout = 7000;
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            var content = resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
+                            if (content) {
+                                callback({ success: true, text: content.trim(), engine: "9Router-Vision" });
+                                return;
+                            }
+                        } catch(_) {}
+                    }
+                    next();
+                };
+                xhr.onerror = next;
+                xhr.ontimeout = next;
+                xhr.send(JSON.stringify({
+                    model: "antigravity",
+                    messages: [
+                        { role: "system", content: "You are an expert OCR and captcha visual reader. Output strictly ONLY the answer string." },
+                        {
+                            role: "user",
+                            content: [
+                                { type: "text", text: userPrompt },
+                                { type: "image_url", image_url: { url: imageDataUrl } }
+                            ]
+                        }
+                    ],
+                    max_tokens: 60
+                }));
+            } catch(_) { next(); }
+        }
+
+        // 2. Coba Gemini / AGY Ephemeral via GhostBridge
+        function tryAgyVision() {
+            try {
+                if (typeof GhostBridge !== "undefined" && GhostBridge.wakeUpAgy) {
+                    GhostBridge.wakeUpAgy();
+                }
+            } catch(_) {}
+            if (callback) callback({ success: false, text: null });
+        }
+
+        try9RouterVision(tryAgyVision);
+    }
+
+    function requestAiVisionSolve(imageDataUrl, callback) {
+        if (!imageDataUrl) {
+            if (callback) callback({ success: false, error: "Empty image data" });
+            return;
+        }
+        updateAgyHUD("👁️ Vision AI", "Menganalisis gambar/canvas captcha...", "running");
+        queryTriEngineVision(imageDataUrl, "Read the digits or text in this captcha image. Output strictly ONLY the single final answer without explanation.", function(res) {
+            if (res && res.success && res.text) {
+                var cleanAns = res.text.replace(/^["'`]|["'`]$/g, "").trim();
+                callback({ success: true, answer: cleanAns, engine: res.engine });
+            } else {
+                callback({ success: false, error: "Vision AI failed" });
+            }
+        });
+    }
+
+    // --- 4E. PROACTIVE POPUP & CONSENT SWEEPER ---
+    function sweepBlockingPopups(currentEv, onDone) {
+        try {
+            var modalCandidates = document.querySelectorAll(
+                'div[role="dialog"], div[aria-modal="true"], .modal, [class*="modal-content"], ' +
+                '[class*="backdrop"], [class*="overlay"], [class*="cookie" i], [id*="cookie" i], ' +
+                '[class*="consent" i], [id*="consent" i], [class*="banner" i]'
+            );
+            var blocker = null;
+            for (var i = 0; i < modalCandidates.length; i++) {
+                var m = modalCandidates[i];
+                if (!m || (m.offsetParent === null && m.offsetWidth === 0)) continue;
+                var style = window.getComputedStyle(m);
+                if (style.display === "none" || style.visibility === "hidden" || parseFloat(style.opacity) === 0) continue;
+                var z = parseInt(style.zIndex, 10);
+                var rect = m.getBoundingClientRect();
+                if ((style.position === "fixed" || style.position === "absolute" || z >= 50) &&
+                    rect.width > window.innerWidth * 0.25 && rect.height > window.innerHeight * 0.12) {
+                    var txt = (m.innerText || "").toLowerCase();
+                    if (txt.match(/cookie|consent|persetujuan|terms|privacy|kebijakan|subscribe|newsletter|adblock|turn off|notification|whitelist|agree/)) {
+                        if (currentEv && currentEv.selector) {
+                            try {
+                                if (m.querySelector(currentEv.selector)) continue;
+                            } catch(_) {}
+                        }
+                        blocker = m;
+                        break;
+                    }
+                }
+            }
+
+            if (blocker) {
+                var closeBtn = blocker.querySelector(
+                    'button[aria-label*="close" i], button[aria-label*="tutup" i], .close, .btn-close, ' +
+                    '[data-dismiss="modal"], [data-bs-dismiss="modal"], [class*="close-btn" i], [class*="closeBtn" i]'
+                );
+                if (!closeBtn) {
+                    var btns = blocker.querySelectorAll('button, a, div[role="button"], span[role="button"]');
+                    for (var b = 0; b < btns.length; b++) {
+                        var bEl = btns[b];
+                        var bTxt = (bEl.innerText || bEl.textContent || "").trim();
+                        if (bTxt.match(/^(accept all|accept|agree|i agree|got it|understand|allow all|allow|ok|tutup|saya setuju|lanjutkan|close|×|✕)$/i)) {
+                            closeBtn = bEl;
+                            break;
+                        }
+                    }
+                }
+                if (!closeBtn) {
+                    var svgs = blocker.querySelectorAll('button svg, div[role="button"] svg');
+                    if (svgs.length > 0) {
+                        closeBtn = svgs[svgs.length - 1].closest('button, div[role="button"]');
+                    }
+                }
+
+                if (closeBtn) {
+                    try {
+                        closeBtn.focus();
+                        closeBtn.click();
+                        updateAgyHUD("🛡️ Auto-Sweeper", "Popup / Consent ditutup otomatis", "info");
+                        setTimeout(onDone, 300);
+                        return;
+                    } catch(_) {}
+                }
+            }
+        } catch(err) {
+            console.warn("[AutoSweeper] Error:", err);
+        }
+        onDone();
+    }
+
+    // --- 4F. AUTONOMOUS RECIPE SYNTHESIZER DOM SUMMARIZER ---
+    window.__AGY_GET_PAGE_SUMMARY__ = function() {
+        try {
+            var buttons = [];
+            var inputs = [];
+            var seenSel = new Set();
+
+            var allBtns = document.querySelectorAll("button, a, [role='button'], input[type='button'], input[type='submit']");
+            for (var i = 0; i < allBtns.length; i++) {
+                var el = allBtns[i];
+                if (isInternalUI(el)) continue;
+                if (el.offsetParent === null && el.offsetWidth === 0) continue;
+                var rect = el.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) continue;
+                var txt = (el.innerText || el.value || el.getAttribute("aria-label") || "").trim();
+                var sel = getCssSelector(el);
+                if (!sel || seenSel.has(sel)) continue;
+                seenSel.add(sel);
+
+                buttons.push({
+                    text: txt.substring(0, 40),
+                    selector: sel,
+                    tag: el.tagName.toLowerCase(),
+                    id: el.id || "",
+                    className: (el.className && typeof el.className === "string") ? el.className.substring(0, 50) : ""
+                });
+                if (buttons.length >= 30) break;
+            }
+
+            var allInputs = document.querySelectorAll("input:not([type='hidden']):not([type='button']):not([type='submit']), textarea");
+            for (var j = 0; j < allInputs.length; j++) {
+                var inp = allInputs[j];
+                if (isInternalUI(inp)) continue;
+                if (inp.offsetParent === null && inp.offsetWidth === 0) continue;
+                var inpSel = getCssSelector(inp);
+                if (!inpSel || seenSel.has(inpSel)) continue;
+                seenSel.add(inpSel);
+
+                inputs.push({
+                    selector: inpSel,
+                    type: inp.type || "text",
+                    placeholder: (inp.placeholder || "").substring(0, 40),
+                    name: inp.name || "",
+                    id: inp.id || "",
+                    value: (inp.value || "").substring(0, 30)
+                });
+                if (inputs.length >= 15) break;
+            }
+
+            return JSON.stringify({
+                title: document.title || "",
+                url: window.location.href,
+                buttons: buttons,
+                inputs: inputs
+            });
+        } catch(err) {
+            return JSON.stringify({ error: err.message });
+        }
+    };
+
     // --- 5. DEBOUNCED & UNIFIED LIVE RECORDER ---
     var AgyRecorder = {
         isRecording: false,
@@ -3342,7 +3600,9 @@
                     }
                     var inSel = getCssSelector(inputTarget);
                     var chSel = getCssSelector(pickedChallenge);
-                    var chText = (pickedChallenge.innerText || pickedChallenge.textContent || "").substring(0, 60).trim();
+                    var isImgOrCanvas = pickedChallenge && (pickedChallenge.tagName === "IMG" || pickedChallenge.tagName === "CANVAS" || pickedChallenge.querySelector("img, canvas"));
+                    var chText = isImgOrCanvas ? "[Gambar/Canvas Captcha]" : (pickedChallenge.innerText || pickedChallenge.textContent || "").substring(0, 60).trim();
+                    var solverType = isImgOrCanvas ? "ocr_vision" : "ai_math_regex";
 
                     document.removeEventListener("click", onPickStep, true);
 
@@ -3351,12 +3611,12 @@
                         challengeSelector: chSel,
                         inputSelector: inSel,
                         challengeSample: chText,
-                        solverType: "ai_math_regex",
+                        solverType: solverType,
                         timestamp: Date.now(),
-                        desc: "AI/Regex Solver: " + (chText || chSel).substring(0, 20) + " ➔ " + (inSel || "input")
+                        desc: (isImgOrCanvas ? "👁️ Vision OCR: " : "AI/Regex Solver: ") + (chText || chSel).substring(0, 20) + " ➔ " + (inSel || "input")
                     });
 
-                    updateAgyHUD("✅ Solver Tersisip", "Tantangan akan di-solve otomatis oleh AI/Regex!", "success");
+                    updateAgyHUD("✅ Solver Tersisip", isImgOrCanvas ? "Captcha gambar akan di-solve oleh Vision AI!" : "Tantangan akan di-solve otomatis oleh AI/Regex!", "success");
                 }
             }
 
