@@ -4,7 +4,7 @@
  * 
  * Fitur Utama:
  * 1. Sinkronisasi Dua Arah (Bidirectional Sync) antara ~/.agy-accounts dan 9Router SQLite.
- * 2. CLI Fast Switcher: Ganti akun secepat kilat dengan 'agy-ganti <nomor|nama>'.
+ * 2. CLI Fast Switcher: Ganti akun secepat kilat dengan 'switch <nomor|nama>'.
  * 3. Modern Dark Glassmorphism WebUI (serasi dengan tema 9Router, pure Node.js, 0% RAM standby).
  * 4. Usage & Quota Tracker: Memantau request, prompt tokens, completion tokens, cost, dan Google Cloud Code tier.
  * 5. Integrasi Termux WebView otomatis di tab baru (terisolasi dan aman untuk sesi AGY).
@@ -67,8 +67,8 @@ const SANDBOXES_DIR = findCandidate([
 
 const TOKEN_DEST = path.join(BASE_HOME, ".gemini", "antigravity-cli", "antigravity-oauth-token");
 const ACTIVE_FILE = path.join(ACCOUNTS_DIR, ".active");
-const PID_FILE = path.join(ACCOUNTS_DIR, ".agy-ganti.pid");
-const LOG_FILE = path.join(ACCOUNTS_DIR, ".agy-ganti.log");
+const PID_FILE = path.join(ACCOUNTS_DIR, ".agy-switch.pid");
+const LOG_FILE = path.join(ACCOUNTS_DIR, ".agy-switch.log");
 
 const DB_PATH = findCandidate([
   path.join(BASE_HOME, ".9router", "db", "data.sqlite"),
@@ -80,127 +80,12 @@ const CLIENT_ID = [49,48,55,49,48,48,54,48,54,48,53,57,49,45,116,109,104,115,115
 const CLIENT_SECRET = [71,79,67,83,80,88,45,75,53,56,70,87,82,52,56,54,76,100,76,74,49,109,76,66,56,115,88,67,52,122,54,113,68,65,102].map(c => String.fromCharCode(c)).join('');
 const DEFAULT_SCOPE = "https://www.googleapis.com/auth/experimentsandconfigs https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.profile openid https://www.googleapis.com/auth/cclog";
 
-// Pastikan direktori akun & sandbox ada
+// Pastikan direktori akun ada
 if (!fs.existsSync(ACCOUNTS_DIR)) {
   try { fs.mkdirSync(ACCOUNTS_DIR, { recursive: true }); } catch {}
 }
-if (!fs.existsSync(SANDBOXES_DIR)) {
-  try { fs.mkdirSync(SANDBOXES_DIR, { recursive: true }); } catch {}
-}
 
-function ensureSandbox(accountName) {
-  if (!accountName) return null;
-  const safeName = accountName.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
-  const sbDir = path.join(SANDBOXES_DIR, safeName);
-  const cliDir = path.join(sbDir, ".gemini", "antigravity-cli");
-  fs.mkdirSync(cliDir, { recursive: true });
 
-  // 1. Shared Soul (AGENTS.md & GEMINI.md)
-  const masterAgentsMd = findCandidate([
-    path.join(BASE_HOME, "AGENTS.md"),
-    "/project/AGENTS.md",
-    "/root/AGENTS.md",
-    "/data/data/com.termux/files/home/AGENTS.md"
-  ], null);
-  if (masterAgentsMd) {
-    const agentsMd = path.join(sbDir, "AGENTS.md");
-    if (!fs.existsSync(agentsMd)) try { fs.symlinkSync(masterAgentsMd, agentsMd); } catch {}
-  }
-
-  const masterGeminiMd = findCandidate([
-    path.join(BASE_HOME, "GEMINI.md"),
-    "/project/GEMINI.md",
-    "/root/GEMINI.md",
-    "/data/data/com.termux/files/home/GEMINI.md"
-  ], null);
-  if (masterGeminiMd) {
-    const geminiMd = path.join(sbDir, "GEMINI.md");
-    if (!fs.existsSync(geminiMd)) try { fs.symlinkSync(masterGeminiMd, geminiMd); } catch {}
-  }
-
-  // 2. Shared Skills & MCP
-  const masterAgentsDir = findCandidate([
-    path.join(BASE_HOME, ".agents"),
-    "/root/.agents",
-    "/data/data/com.termux/files/home/.agents"
-  ], null);
-  if (masterAgentsDir) {
-    const agentsDir = path.join(sbDir, ".agents");
-    if (!fs.existsSync(agentsDir)) try { fs.symlinkSync(masterAgentsDir, agentsDir); } catch {}
-  }
-
-  const masterBuiltin = findCandidate([
-    path.join(BASE_HOME, ".gemini", "antigravity-cli", "builtin"),
-    "/root/.gemini/antigravity-cli/builtin",
-    "/data/data/com.termux/files/home/.gemini/antigravity-cli/builtin"
-  ], null);
-  if (masterBuiltin) {
-    const builtinDir = path.join(cliDir, "builtin");
-    if (!fs.existsSync(builtinDir)) try { fs.symlinkSync(masterBuiltin, builtinDir); } catch {}
-  }
-
-  const masterMcp = findCandidate([
-    path.join(BASE_HOME, ".gemini", "antigravity-cli", "mcp"),
-    "/root/.gemini/antigravity-cli/mcp",
-    "/data/data/com.termux/files/home/.gemini/antigravity-cli/mcp"
-  ], null);
-  if (masterMcp) {
-    const mcpDir = path.join(cliDir, "mcp");
-    if (!fs.existsSync(mcpDir)) try { fs.symlinkSync(masterMcp, mcpDir); } catch {}
-  }
-
-  // 3. Shared Settings
-  const masterSettings = findCandidate([
-    path.join(BASE_HOME, ".gemini", "antigravity-cli", "settings.json"),
-    "/root/.gemini/antigravity-cli/settings.json",
-    "/data/data/com.termux/files/home/.gemini/antigravity-cli/settings.json"
-  ], null);
-  if (masterSettings) {
-    const settingsFile = path.join(cliDir, "settings.json");
-    if (!fs.existsSync(settingsFile)) try { fs.symlinkSync(masterSettings, settingsFile); } catch {}
-  }
-
-  // 4. Shared Workspace & Shell
-  const masterProject = findCandidate([
-    "/project",
-    path.join(BASE_HOME, "project"),
-    "/root/project",
-    "/data/data/com.termux/files/home/project"
-  ], "/project");
-  const projSymlink = path.join(sbDir, "project");
-  if (!fs.existsSync(projSymlink)) try { fs.symlinkSync(masterProject, projSymlink); } catch {}
-
-  const masterZshrc = findCandidate([
-    path.join(BASE_HOME, ".zshrc"),
-    "/root/.zshrc",
-    "/data/data/com.termux/files/home/.zshrc"
-  ], null);
-  if (masterZshrc) {
-    const zshrcSymlink = path.join(sbDir, ".zshrc");
-    if (!fs.existsSync(zshrcSymlink)) try { fs.symlinkSync(masterZshrc, zshrcSymlink); } catch {}
-  }
-
-  // 5. Unique Installation ID & UUID per Sandbox
-  const installIdFile = path.join(cliDir, "installation_id");
-  if (!fs.existsSync(installIdFile)) {
-    const randomUuid = (typeof crypto !== "undefined" && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : (fs.existsSync("/proc/sys/kernel/random/uuid") ? fs.readFileSync("/proc/sys/kernel/random/uuid", "utf8").trim() : `sb-${Date.now()}`);
-    fs.writeFileSync(installIdFile, randomUuid);
-  }
-
-  // 6. Token Sync: Sinkronkan token dari ~/.agy-accounts/<accountName>.json
-  const accFile = path.join(ACCOUNTS_DIR, `${safeName}.json`);
-  const tokenDest = path.join(cliDir, "antigravity-oauth-token");
-  if (fs.existsSync(accFile)) {
-    try {
-      fs.copyFileSync(accFile, tokenDest);
-      fs.chmodSync(tokenDest, 0o600);
-    } catch {}
-  }
-
-  return { sbDir, cliDir, tokenDest, accountName: safeName };
-}
 
 // --- DATABASE HELPER (node:sqlite dengan fallback sqlite3 cli) ---
 let sqliteDb = null;
@@ -714,14 +599,7 @@ async function syncBidirectional() {
     }
   }
 
-  // Otomatis sinkronkan / inisialisasi sandbox vault untuk seluruh akun
-  try {
-    const allFiles = fs.readdirSync(ACCOUNTS_DIR).filter(f => f.endsWith(".json"));
-    for (const f of allFiles) {
-      ensureSandbox(path.basename(f, ".json"));
-    }
-  } catch (_) {}
-
+  
   return result;
 }
 
@@ -1891,7 +1769,7 @@ function startServer() {
 
   server.listen(PORT, "127.0.0.1", () => {
     fs.writeFileSync(PID_FILE, String(process.pid), "utf8");
-    console.log(`[✓] AGY-Ganti Server aktif di http://127.0.0.1:${PORT} (PID: ${process.pid})`);
+    console.log(`[✓] AGY-Switch Server aktif di http://127.0.0.1:${PORT} (PID: ${process.pid})`);
   });
 
   server.on("error", (e) => {
@@ -1940,16 +1818,16 @@ function launchWebView(isAgent = false) {
   const url = `http://127.0.0.1:${PORT}`;
 
   if (isAgent) {
-    console.log(`\n🌐 [Agent Mode] Membuka AGY-Ganti WebUI di tab baru: ${url}...`);
+    console.log(`\n🌐 [Agent Mode] Membuka AGY-Switch WebUI di tab baru: ${url}...`);
     try {
-      execSync(`termux-ipc tab new "AGY-Ganti" "termux-ipc webview ${url}" 2>/dev/null`, { stdio: "ignore" });
-      console.log("[✓] Tab baru 'AGY-Ganti' berhasil dibuka bersama Termux WebView!");
+      execSync(`termux-ipc tab new "AGY-Switch" "termux-ipc webview ${url}" 2>/dev/null`, { stdio: "ignore" });
+      console.log("[✓] Tab baru 'AGY-Switch' berhasil dibuka bersama Termux WebView!");
       return;
     } catch {}
   }
 
   // Eksekusi Manual oleh Tuan Eso: langsung buka webview di tab aktif tanpa membuat tab baru
-  console.log(`\n🌐 Membuka AGY-Ganti WebUI: ${url}...`);
+  console.log(`\n🌐 Membuka AGY-Switch WebUI: ${url}...`);
   try {
     execSync(`termux-ipc webview "${url}" 2>/dev/null`, { stdio: "ignore" });
     console.log("[✓] WebView diluncurkan di tab saat ini.");
@@ -2029,85 +1907,20 @@ async function main() {
       );
     });
     console.log("========================================================");
-    console.log("💡 Ganti akun cepat : agy-ganti <nomor|nama>");
-    console.log("   Contoh           : agy-ganti 1   atau   agy-ganti devikarina69");
-    console.log("   Buka WebUI       : agy-ganti ui");
-    console.log("   Buka Sandbox     : agy-ganti sandbox <nomor|nama>");
-    console.log("   Sinkronisasi     : agy-ganti sync\n");
+    console.log("💡 Ganti akun cepat : switch <nomor|nama>");
+    console.log("   Contoh           : switch 1   atau   switch devikarina69");
+    console.log("   Buka WebUI       : switch ui");
+    console.log("   Sinkronisasi     : switch sync\n");
     return;
   }
 
-  // 2B. Sandbox Execution: agy-ganti sandbox <nomor|nama> [args...]
-  if (cmd === "sandbox" || cmd === "sb" || cmd === "run") {
-    const target = args[1];
-    if (!target) {
-      console.log("\n========================================================");
-      console.log("            AGY SANDBOX RUNNER (ISOLATED INSTANCE)      ");
-      console.log("========================================================");
-      const accs = listAccounts();
-      accs.forEach(a => {
-        const sbPath = path.join(SANDBOXES_DIR, a.name);
-        const hasSb = fs.existsSync(sbPath) ? "🟢 READY" : "⚪ AUTO-CREATE";
-        console.log(`  ${String(a.index).padStart(2, " ")}. ${a.name.padEnd(16, " ")} [${hasSb}] (${a.email})`);
-      });
-      console.log("========================================================");
-      console.log("💡 Cara Menjalankan Sandbox:");
-      console.log("   Buka shell AGY di sandbox : agy-ganti sandbox <nomor|nama>");
-      console.log("   Jalankan prompt langsung   : agy-ganti sandbox <nomor|nama> -p \"prompt koding\"");
-      console.log("   Shortcut praktis           : agy-sandbox <nomor|nama>\n");
-      return;
-    }
-
-    let selected = null;
-    const accs = listAccounts();
-    const idx = parseInt(target, 10);
-    if (!isNaN(idx) && idx >= 1 && idx <= accs.length) {
-      selected = accs[idx - 1];
-    } else {
-      selected = accs.find(a => a.name.toLowerCase() === target.toLowerCase() || (a.email && a.email.toLowerCase().includes(target.toLowerCase())));
-    }
-
-    if (!selected) {
-      console.error(`❌ Akun '${target}' tidak ditemukan.`);
-      console.log("Gunakan 'agy-ganti list' untuk melihat daftar akun yang tersedia.");
-      process.exit(1);
-    }
-
-    // Refresh token jika perlu
-    try {
-      switchToAccount(selected.name);
-    } catch (_) {}
-
-    const sb = ensureSandbox(selected.name);
-    console.log(`\n🚀 [AGY SANDBOX] Meluncurkan instance terisolasi: ${selected.name} (${selected.email})`);
-    console.log(`📁 Sandbox Vault : ${sb.sbDir}`);
-    console.log(`🧠 Shared Soul   : AGENTS.md & GEMINI.md (100% sinkron)`);
-    console.log(`⚡ Shared Skills : ${path.join(sb.sbDir, ".agents", "skills")} (Semua skill aktif)`);
-    console.log(`📂 Workspace     : /project (Symlink ke root project)\n`);
-
-    const agyBin = [process.env.AGY_BIN, '/usr/local/bin/agy', '/root/.local/bin/agy', path.join(BASE_HOME, '.local', 'bin', 'agy'), '/data/data/com.termux/files/usr/bin/agy'].find(b => b && fs.existsSync(b)) || 'agy';
-    const subArgs = args.slice(2);
-
-    const child = spawn(agyBin, subArgs, {
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        HOME: sb.sbDir,
-        AGY_SANDBOX: selected.name
-      }
-    });
-
-    child.on("exit", (code) => {
-      process.exit(code || 0);
-    });
-    return;
-  }
+  
 
   // 3. Simpan Akun Saat Ini
   if (cmd === "simpan" || cmd === "save") {
     const targetName = args[1];
     if (!targetName) {
-      console.error("❌ Harap masukkan nama akun! Contoh: agy-ganti simpan akun-baru");
+      console.error("❌ Harap masukkan nama akun! Contoh: agy-switch simpan akun-baru");
       process.exit(1);
     }
     if (!fs.existsSync(TOKEN_DEST)) {
@@ -2140,12 +1953,12 @@ async function main() {
       }
       try { execSync(`fuser -k ${PORT}/tcp 2>/dev/null || true`); } catch {}
     } else if (sub === "restart") {
-      try { execSync(`agy-ganti server stop`, { stdio: "ignore" }); } catch {}
+      try { execSync(`agy-switch server stop`, { stdio: "ignore" }); } catch {}
       await ensureDaemonRunning();
       console.log("[✓] Server berhasil di-restart.");
     } else {
       const running = await isPortRunning(PORT);
-      console.log(`AGY-Ganti Server (Port ${PORT}): ${running ? "🟢 AKTIF" : "⚪ MATI"}`);
+      console.log(`AGY-Switch Server (Port ${PORT}): ${running ? "🟢 AKTIF" : "⚪ MATI"}`);
     }
     return;
   }
@@ -2205,7 +2018,7 @@ async function main() {
       const accs = listAccounts();
       console.log("Daftar akun yang tersedia:");
       accs.forEach(a => console.log(`  ${a.index}. ${a.name} (${a.email})`));
-      console.log("\nGunakan: agy-ganti <nomor|nama>");
+      console.log("\nGunakan: switch <nomor|nama>");
       process.exit(1);
     }
     return;
@@ -2234,9 +2047,9 @@ async function main() {
   });
   console.log("========================================================");
   console.log(`🌐 WebUI Server : http://127.0.0.1:${PORT}`);
-  console.log("💡 Ganti Cepat   : agy-ganti <nomor|nama>  (contoh: agy-ganti 1)");
-  console.log("   Sinkronisasi  : agy-ganti sync");
-  console.log("   Daftar Akun   : agy-ganti list\n");
+  console.log("💡 Ganti Cepat   : switch <nomor|nama>  (contoh: switch 1)");
+  console.log("   Sinkronisasi  : switch sync");
+  console.log("   Daftar Akun   : agy-switch list\n");
 }
 
 main().catch(err => {

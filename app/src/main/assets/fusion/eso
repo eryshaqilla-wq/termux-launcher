@@ -42,6 +42,7 @@ show_overview() {
     printf " ${BOLD}[ SUB-PERINTAH TERSEDIA ]${RESET}\n"
     printf " │\n"
     printf " ├─ ${MAGENTA}eso manual${RESET}    : ${BOLD}Buku Panduan Induk${RESET} (AGY Sandbox Pool, Tri-Engine, Web3, & Setup)\n"
+    printf " ├─ ${CYAN}eso soul${RESET}      : ${BOLD}Jurnal Memori Persisten (Soul)${RESET} & Handover Lintas Akun\n"
     printf " ├─ ${CYAN}eso ipc${RESET}       : Panduan lengkap seluruh perintah Termux IPC & WebView Controller\n"
     printf " ├─ ${CYAN}eso payload${RESET}   : Daftar modul suite CJS (Wallet, X Radar, Telegram Tuyul, 9router)\n"
     printf " ├─ ${CYAN}eso setup${RESET}     : Petunjuk eksekusi setup.sh (Root Container vs Non-Root)\n"
@@ -53,9 +54,9 @@ show_overview() {
     printf " ┌──────────────────────────┬────────────────────────────────────────────────────────┐\n"
     printf " │ Perintah                 │ Fungsi Cepat                                           │\n"
     printf " ├──────────────────────────┼────────────────────────────────────────────────────────┤\n"
-    printf " │ ${GREEN}agy${RESET}                      │ Masuk ke sandbox AGY aktif (Zero /resume leak)         │\n"
-    printf " │ ${GREEN}agy list${RESET} / ${GREEN}agy <1-7>${RESET}      │ Tinjau 7 Akun Pro AGY / Lompat ke akun tertentu       │\n"
-    printf " │ ${GREEN}agy sync${RESET}                 │ Sinkronisasi 2 arah pool AGY dengan 9Router (SQLite)   │\n"
+    printf " │ ${GREEN}switch <1-7>${RESET}             │ Ganti akun AGY aktif seketika (misal: switch 2)        │\n"
+    printf " │ ${GREEN}switch list${RESET} / ${GREEN}switch${RESET}     │ Tinjau 7 Akun Pro AGY, prioritas & status              │\n"
+    printf " │ ${GREEN}switch sync${RESET}             │ Sinkronisasi 2 arah pool AGY dengan 9Router (SQLite)   │\n"
     printf " │ ${GREEN}ai status${RESET}                │ Cek status Tri-Engine (DeepSeek, 9Router, AGY Pool)    │\n"
     printf " │ ${GREEN}browser <url|cmd>${RESET}        │ Buka / kendalikan WebView Android via IPC              │\n"
     printf " │ ${GREEN}web --synth <url>${RESET}        │ Sintesis resep otomatis dApp via Tri-Engine AI         │\n"
@@ -73,24 +74,23 @@ show_manual() {
     printf " ${MAGENTA}${BOLD}           BUKU PANDUAN INDUK SISTEM & ARSITEKTUR ESO:LAUNCHER                        ${RESET}\n"
     printf " ${MAGENTA}${BOLD}══════════════════════════════════════════════════════════════════════════════════════${RESET}\n\n"
 
-    printf " ${YELLOW}${BOLD}1. POOL AKUN PRO ANTIGRAVITY (AGY) & ARSITEKTUR SANDBOX${RESET}\n"
-    printf "   • ${BOLD}Tujuan Utama${RESET} : Mencegah kebocoran sesi tugas otomatis ke riwayat ${CYAN}/resume${RESET} terminal koding Tuan.\n"
+    printf " ${YELLOW}${BOLD}1. POOL AKUN PRO ANTIGRAVITY (AGY) & MULTI-ACCOUNT SWITCHER${RESET}\n"
+    printf "   • ${BOLD}Tujuan Utama${RESET} : Mengelola pool 7 Akun Pro Google Antigravity dalam 1 direktori murni.\n"
     printf "   • ${BOLD}Pool 7 Akun Pro${RESET}: Tersimpan di ${CYAN}~/.agy-accounts/${RESET}. Akun-akun ini adalah komputasi mengambang (unbound)\n"
     printf "     yang bebas digunakan bergantian tanpa terikat ke wallet atau akun X.\n"
-    printf "   • ${BOLD}Isolasi Sandbox${RESET}: Setiap akun memiliki sandbox independen di ${CYAN}~/.gemini/sandboxes/<nama>/${RESET}\n"
-    printf "     dengan database SQLite sesi terpisah, namun ${GREEN}100%% berbagi Soul${RESET} (AGENTS.md, GEMINI.md),\n"
-    printf "     shared skills (${CYAN}/root/.agents/skills/${RESET}), settings.json, dan folder kerja ${CYAN}/project${RESET}.\n\n"
+    printf "   • ${BOLD}Mekanisme Switch Cepat${RESET}: Perintah ${GREEN}switch <nomor|nama>${RESET} langsung menukar token aktif di\n"
+    printf "     ${CYAN}~/.gemini/antigravity-cli/antigravity-oauth-token${RESET} secara instan dalam 1 detik.\n"
+    printf "   • ${BOLD}Riwayat Alami Utuh${RESET}: Riwayat percakapan, database SQLite, dan transcripts tetap tersimpan\n"
+    printf "     di tempat aslinya tanpa lapisan sandbox atau symlink buatan yang rumit.\n\n"
     printf "   ┌─────────────────────────────────────────────────────────────────────────────────┐\n"
     printf "   │ Perintah Navigasi AGY :                                                         │\n"
     printf "   ├─────────────────────────────────────────────────────────────────────────────────┤\n"
-    printf "   │ ${GREEN}agy${RESET}                   Masuk langsung ke sandbox akun yang sedang aktif          │\n"
-    printf "   │ ${GREEN}agy list${RESET} / ${GREEN}agy ls${RESET}       Tampilkan tabel visual 7 akun, ID, & status aktif         │\n"
-    printf "   │ ${GREEN}agy <1-7>${RESET}              Lompat langsung ke akun nomor 1 sampai 7 (misal: agy 2)  │\n"
-    printf "   │ ${GREEN}agy switch <nama>${RESET}      Ganti default akun aktif secara permanen                  │\n"
-    printf "   │ ${GREEN}agy sync${RESET}              Sinkronisasi 2 arah dengan database 9Router (SQLite)     │\n"
-    printf "   │ ${GREEN}agy ui${RESET}                Buka Web UI manager multi-akun di browser                 │\n"
+    printf "   │ ${GREEN}switch${RESET} / ${GREEN}switch list${RESET}     Tampilkan tabel visual 7 akun, ID, prioritas & status     │\n"
+    printf "   │ ${GREEN}switch <1-7>${RESET}           Ganti akun aktif seketika (contoh: switch 1 atau switch 2)│\n"
+    printf "   │ ${GREEN}switch sync${RESET}           Sinkronisasi 2 arah dengan database 9Router (SQLite)     │\n"
+    printf "   │ ${GREEN}switch ui${RESET}             Buka Web UI manager multi-akun di browser                 │\n"
     printf "   │ ${GREEN}agy-install${RESET}           Pasang / perbarui binary AGY di Termux Native / Container │\n"
-    printf "   │ ${GREEN}agy --raw${RESET}             Jalankan binary host mentah tanpa lingkungan sandbox      │\n"
+    printf "   │ ${GREEN}agy${RESET}                   Jalankan sesi Antigravity CLI langsung                    │\n"
     printf "   └─────────────────────────────────────────────────────────────────────────────────┘\n\n"
 
     printf " ${YELLOW}${BOLD}2. DUAL-ENVIRONMENT: TERMUX NATIVE (NON-ROOT) vs ROOT CONTAINER${RESET}\n"
@@ -295,6 +295,53 @@ if 'PONG' in resp:
     printf " └─ Folder Kerja      : ${CYAN}$(readlink -f /project 2>/dev/null || echo '/project')${RESET}\n\n"
 }
 
+show_soul() {
+    local sub="$1"
+    local state_file="/project/SESSION_STATE.md"
+    if [ ! -f "$state_file" ]; then
+        state_file="/root/project/SESSION_STATE.md"
+    fi
+
+    if [ "$sub" = "prompt" ] || [ "$sub" = "--prompt" ] || [ "$sub" = "-p" ]; then
+        if [ -f "$state_file" ]; then
+            sed -n '/```text/,/```/p' "$state_file" | grep -v '```'
+        else
+            echo "File /project/SESSION_STATE.md belum ditemukan."
+        fi
+        return
+    fi
+
+    if [ "$sub" = "update" ]; then
+        local cur_time=$(date "+%Y-%m-%d %H:%M:%S WIB")
+        local cur_branch=$(cd /project/termux-launcher 2>/dev/null && git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "eso-launcher")
+        local cur_commit=$(cd /project/termux-launcher 2>/dev/null && git log -1 --format="%h (%s)" 2>/dev/null || echo "11a7b08")
+        local act_acc=$(cat /root/.agy-accounts/.active 2>/dev/null | tr -d "[:space:]")
+        echo -e "${CYAN}● Memperbarui status Git & Environment di $state_file...${RESET}"
+        if [ -f "$state_file" ]; then
+            sed -i "s/\* \*\*Waktu Terakhir Diperbarui\*\*: .*/\* \*\*Waktu Terakhir Diperbarui\*\*: \`$cur_time\`/" "$state_file"
+            [ -n "$act_acc" ] && sed -i "s/\* \*\*Akun AGY Utama (Pencipta Sesi)\*\*: .*/\* \*\*Akun AGY Utama (Pencipta Sesi)\*\*: \`$act_acc\`/" "$state_file"
+            sed -i "s/\* \*\*Branch\*\*: .*/\* \*\*Branch\*\*: \`$cur_branch\`/" "$state_file"
+            sed -i "s/\* \*\*Commit Terakhir\*\*: .*/\* \*\*Commit Terakhir\*\*: \`$cur_commit\`/" "$state_file"
+            echo -e "${GREEN}✔ Berhasil memperbarui $state_file.${RESET}"
+        fi
+        return
+    fi
+
+    title_header
+    printf " ${MAGENTA}${BOLD}══════════════════════════════════════════════════════════════════════════════════════${RESET}\n"
+    printf " ${MAGENTA}${BOLD}           MEMORI PERSISTEN ('SOUL') & LIVE SESSION HANDOVER                         ${RESET}\n"
+    printf " ${MAGENTA}${BOLD}══════════════════════════════════════════════════════════════════════════════════════${RESET}\n\n"
+
+    if [ -f "$state_file" ]; then
+        cat "$state_file"
+    else
+        printf " ${YELLOW}[!] File /project/SESSION_STATE.md belum ada.${RESET}\n"
+    fi
+    printf "\n"
+    printf " ${CYAN}💡 Tips:${RESET} Ketik ${GREEN}eso soul prompt${RESET} untuk mendapatkan teks handover siap copy-paste!\n"
+    printf "         Ketik ${GREEN}eso soul update${RESET} untuk menyinkronkan status commit & jam terkini.\n\n"
+}
+
 # ==============================================================================
 # DISPATCHER UTAMA
 # ==============================================================================
@@ -303,6 +350,10 @@ CMD="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
 case "$CMD" in
     manual|panduan|guide|buku)
         show_manual
+        ;;
+    soul|state|handover|memory)
+        shift
+        show_soul "$@"
         ;;
     ipc)
         show_ipc

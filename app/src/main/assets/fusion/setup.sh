@@ -873,9 +873,9 @@ exit 1
 EOF_9R
 chmod 755 "$PREFIX/bin/9router"
 
-# Pasang AGY Suite & Sandbox hanya jika mode Root atau Non-Root yang memilih pasang AGY
+# Pasang AGY Suite (agy-switch & agy-copilot) hanya jika mode Root atau Non-Root yang memilih pasang AGY
 if [ $IS_ROOT -eq 1 ] || [ "$INSTALL_AGY_NONROOT" = "1" ]; then
-    for agy_tool in agy-ganti agy-sandbox agy-copilot; do
+    for agy_tool in agy-switch agy-copilot; do
         if [ -f "$SCRIPT_DIR/$agy_tool" ]; then
             cp -f "$SCRIPT_DIR/$agy_tool" "$PREFIX/bin/$agy_tool"
             chmod 755 "$PREFIX/bin/$agy_tool"
@@ -885,10 +885,10 @@ if [ $IS_ROOT -eq 1 ] || [ "$INSTALL_AGY_NONROOT" = "1" ]; then
         fi
     done
     [ -f "$PREFIX/bin/agy-copilot" ] && ln -sf "$PREFIX/bin/agy-copilot" "$PREFIX/bin/copilot"
-    [ -f "$PREFIX/bin/agy-sandbox" ] && ln -sf "$PREFIX/bin/agy-sandbox" "$PREFIX/bin/sandbox"
-    [ -f "$PREFIX/bin/agy-sandbox" ] && ln -sf "$PREFIX/bin/agy-sandbox" "$PREFIX/bin/agy-sb"
-    [ -f "$PREFIX/bin/agy-ganti" ] && ln -sf "$PREFIX/bin/agy-ganti" "$PREFIX/bin/ganti"
-    [ -f "$PREFIX/bin/agy-ganti" ] && ln -sf "$PREFIX/bin/agy-ganti" "$PREFIX/bin/ganti-akun"
+    [ -f "$PREFIX/bin/agy-switch" ] && ln -sf "$PREFIX/bin/agy-switch" "$PREFIX/bin/switch"
+    [ -f "$PREFIX/bin/agy-switch" ] && ln -sf "$PREFIX/bin/agy-switch" "$PREFIX/bin/ganti"
+    [ -f "$PREFIX/bin/agy-switch" ] && ln -sf "$PREFIX/bin/agy-switch" "$PREFIX/bin/agy-ganti"
+    [ -f "$PREFIX/bin/agy-switch" ] && ln -sf "$PREFIX/bin/agy-switch" "$PREFIX/bin/ganti-akun"
 fi
 
 # Tool installer on-demand (agy-install) selalu disematkan di $PREFIX/bin
@@ -1243,9 +1243,9 @@ fi
 EOF_R9
                 chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/9router"
 
-                # Pasang AGY Suite ke Container Root jika AGY aktif
+                # Pasang AGY Suite (agy-switch & agy-copilot) ke Container Root jika AGY aktif
                 if [ "$WIRE_AGY_CONTAINER" = "1" ]; then
-                    for agy_tool in agy-ganti agy-sandbox agy-copilot; do
+                    for agy_tool in agy-switch agy-copilot; do
                         if [ -f "$SCRIPT_DIR/\$agy_tool" ]; then
                             cp -f "$SCRIPT_DIR/\$agy_tool" "$CONTAINER_ROOTFS/usr/local/bin/\$agy_tool"
                             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/\$agy_tool"
@@ -1255,10 +1255,10 @@ EOF_R9
                         fi
                     done
                     [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-copilot" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-copilot" "$CONTAINER_ROOTFS/usr/local/bin/copilot"
-                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" "$CONTAINER_ROOTFS/usr/local/bin/sandbox"
-                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" "$CONTAINER_ROOTFS/usr/local/bin/agy-sb"
-                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" "$CONTAINER_ROOTFS/usr/local/bin/ganti"
-                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" "$CONTAINER_ROOTFS/usr/local/bin/ganti-akun"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" "$CONTAINER_ROOTFS/usr/local/bin/switch"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" "$CONTAINER_ROOTFS/usr/local/bin/ganti"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-switch" "$CONTAINER_ROOTFS/usr/local/bin/ganti-akun"
                 fi
 
                 # Tool installer on-demand selalu tersedia
@@ -1694,6 +1694,9 @@ alias browser="termux-ipc webview"
 alias ipc="termux-ipc"
 alias tab="termux-ipc tab"
 alias copilot="agy-copilot"
+alias eso="eso"
+alias soul="eso soul"
+alias handover="eso soul prompt"
 alias bashnh="bashnh"
 alias login="login"
 alias bspwm="termux-bspwm"
@@ -1701,82 +1704,13 @@ alias bspwm="termux-bspwm"
 
 if [ $IS_ROOT -eq 1 ] || [ "$INSTALL_AGY_NONROOT" = "1" ]; then
     ALIAS_SNIPPET="${ALIAS_SNIPPET}"'
-alias agy-ganti="agy-ganti"
-alias ganti="agy-ganti"
-alias ganti-akun="agy-ganti"
-alias agy-sandbox="agy-sandbox"
-alias sandbox="agy-sandbox"
-alias agy-sb="agy-sandbox"
+alias switch="agy-switch"
+alias agy-switch="agy-switch"
+alias ganti="agy-switch"
+alias agy-ganti="agy-switch"
+alias ganti-akun="agy-switch"
 alias agy-install="agy-install"
 alias install-agy="agy-install"
-
-# Smart AGY Auto-Sandbox (Universal Root & Non-Root)
-agy() {
-  local first_arg="$1"
-  if [[ "$first_arg" == "list" || "$first_arg" == "ls" || "$first_arg" == "accounts" || "$first_arg" == "acc" ]]; then
-    agy-ganti list
-    return
-  fi
-  if [[ "$first_arg" == "sync" || "$first_arg" == "sync-9router" ]]; then
-    agy-ganti sync
-    return
-  fi
-  if [[ "$first_arg" == "ui" || "$first_arg" == "web" ]]; then
-    agy-ganti ui
-    return
-  fi
-  if [[ "$first_arg" == "sandbox" || "$first_arg" == "sb" ]]; then
-    shift
-    agy-sandbox "$@"
-    return
-  fi
-  if [[ "$first_arg" == "switch" || "$first_arg" == "ganti" ]]; then
-    agy-ganti "$2"
-    return
-  fi
-  if [[ "$first_arg" =~ ^[0-9]+$ && -z "$2" ]]; then
-    agy-sandbox "$first_arg"
-    return
-  fi
-
-  local base_dir="${HOME:-/root}"
-  local active_file="${base_dir}/.agy-accounts/.active"
-  [ ! -f "$active_file" ] && active_file="/root/.agy-accounts/.active"
-  [ ! -f "$active_file" ] && active_file="/data/data/com.termux/files/home/.agy-accounts/.active"
-
-  local active_acc=""
-  if [[ -f "$active_file" ]]; then
-    active_acc="$(cat "$active_file" 2>/dev/null | tr -d "[:space:]")"
-  fi
-
-  local sb_dir="${base_dir}/.gemini/sandboxes/${active_acc}"
-  [ ! -d "$sb_dir" ] && sb_dir="/root/.gemini/sandboxes/${active_acc}"
-  [ ! -d "$sb_dir" ] && sb_dir="/data/data/com.termux/files/home/.gemini/sandboxes/${active_acc}"
-
-  local agy_bin=""
-  for b_cand in "${base_dir}/.local/bin/agy" "/root/.local/bin/agy" "${PREFIX:-/data/data/com.termux/files/usr}/bin/agy" "/usr/local/bin/agy"; do
-    if [[ -x "$b_cand" ]]; then
-      agy_bin="$b_cand"
-      break
-    fi
-  done
-  if [[ -z "$agy_bin" ]] && command -v agy >/dev/null 2>&1; then
-    agy_bin="agy"
-  fi
-
-  if [[ -z "$agy_bin" ]] || (! command -v "$agy_bin" >/dev/null 2>&1 && [[ ! -x "$agy_bin" ]]); then
-    echo -e "\033[33m[!] Antigravity CLI (agy) belum terpasang di sistem.\033[0m"
-    echo -e "Untuk memasang di Termux Native, ketik: \033[36magy-install\033[0m"
-    echo -e "atau via script: \033[32mcurl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash\033[0m"
-    return 1
-  fi
-
-  if [[ -n "$active_acc" && -d "$sb_dir" && "$first_arg" != "--raw" && "$first_arg" != "--no-sandbox" ]]; then
-    HOME="$sb_dir" AGY_SANDBOX="$active_acc" "$agy_bin" "$@"
-  else
-    "$agy_bin" "$@"
-  fi
-}
 '
 else
     ALIAS_SNIPPET="${ALIAS_SNIPPET}"'

@@ -116,8 +116,8 @@ else
     echo -e "  ${YELLOW}➔ Jalankan 'agy --version' untuk verifikasi di shell Anda.${RESET}\n"
 fi
 
-# 7. Aktifkan Multi-Account Sandbox Suite jika belum ada di $TARGET_BIN
-for s_tool in agy-ganti agy-sandbox agy-copilot; do
+# 7. Aktifkan Multi-Account Switcher Suite jika belum ada di $TARGET_BIN
+for s_tool in agy-switch agy-copilot; do
     if [ ! -f "$TARGET_BIN/$s_tool" ]; then
         for cand in "$HOME/.fusion/bin/$s_tool" "$HOME/.fusion/$s_tool" "/project/termux-launcher/fusion-setup/$s_tool" "/project/termux-launcher/app/src/main/assets/fusion/$s_tool"; do
             if [ -f "$cand" ]; then
@@ -129,82 +129,23 @@ for s_tool in agy-ganti agy-sandbox agy-copilot; do
     fi
 done
 [ -f "$TARGET_BIN/agy-copilot" ] && ln -sf "$TARGET_BIN/agy-copilot" "$TARGET_BIN/copilot" 2>/dev/null || true
-[ -f "$TARGET_BIN/agy-sandbox" ] && ln -sf "$TARGET_BIN/agy-sandbox" "$TARGET_BIN/sandbox" 2>/dev/null || true
-[ -f "$TARGET_BIN/agy-sandbox" ] && ln -sf "$TARGET_BIN/agy-sandbox" "$TARGET_BIN/agy-sb" 2>/dev/null || true
-[ -f "$TARGET_BIN/agy-ganti" ] && ln -sf "$TARGET_BIN/agy-ganti" "$TARGET_BIN/ganti" 2>/dev/null || true
-[ -f "$TARGET_BIN/agy-ganti" ] && ln -sf "$TARGET_BIN/agy-ganti" "$TARGET_BIN/ganti-akun" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-switch" ] && ln -sf "$TARGET_BIN/agy-switch" "$TARGET_BIN/switch" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-switch" ] && ln -sf "$TARGET_BIN/agy-switch" "$TARGET_BIN/ganti" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-switch" ] && ln -sf "$TARGET_BIN/agy-switch" "$TARGET_BIN/agy-ganti" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-switch" ] && ln -sf "$TARGET_BIN/agy-switch" "$TARGET_BIN/ganti-akun" 2>/dev/null || true
 
-# 8. Pastikan alias dan smart agy() aktif di ~/.zshrc / ~/.bashrc
+# 8. Pastikan alias multi-account aktif di ~/.zshrc / ~/.bashrc
 for sh_rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     if [ -f "$sh_rc" ]; then
-        if ! grep -q "Smart AGY Auto-Sandbox" "$sh_rc" 2>/dev/null; then
+        if ! grep -q "AGY-Switch Multi-Account" "$sh_rc" 2>/dev/null; then
             cat << 'EOF_AGY_ACT' >> "$sh_rc"
 
-# Smart AGY Auto-Sandbox & Multi-Account
-alias agy-ganti="agy-ganti"
-alias ganti="agy-ganti"
-alias ganti-akun="agy-ganti"
-alias agy-sandbox="agy-sandbox"
-alias sandbox="agy-sandbox"
-alias agy-sb="agy-sandbox"
-
-agy() {
-  local first_arg="$1"
-  if [[ "$first_arg" == "list" || "$first_arg" == "ls" || "$first_arg" == "accounts" || "$first_arg" == "acc" ]]; then
-    agy-ganti list
-    return
-  fi
-  if [[ "$first_arg" == "sync" || "$first_arg" == "sync-9router" ]]; then
-    agy-ganti sync
-    return
-  fi
-  if [[ "$first_arg" == "ui" || "$first_arg" == "web" ]]; then
-    agy-ganti ui
-    return
-  fi
-  if [[ "$first_arg" == "sandbox" || "$first_arg" == "sb" ]]; then
-    shift
-    agy-sandbox "$@"
-    return
-  fi
-  if [[ "$first_arg" == "switch" || "$first_arg" == "ganti" ]]; then
-    agy-ganti "$2"
-    return
-  fi
-  if [[ "$first_arg" =~ ^[0-9]+$ && -z "$2" ]]; then
-    agy-sandbox "$first_arg"
-    return
-  fi
-
-  local base_dir="${HOME:-/root}"
-  local active_file="${base_dir}/.agy-accounts/.active"
-  [ ! -f "$active_file" ] && active_file="/root/.agy-accounts/.active"
-  [ ! -f "$active_file" ] && active_file="/data/data/com.termux/files/home/.agy-accounts/.active"
-
-  local active_acc=""
-  if [[ -f "$active_file" ]]; then
-    active_acc="$(cat "$active_file" 2>/dev/null | tr -d "[:space:]")"
-  fi
-
-  local sb_dir="${base_dir}/.gemini/sandboxes/${active_acc}"
-  [ ! -d "$sb_dir" ] && sb_dir="/root/.gemini/sandboxes/${active_acc}"
-  [ ! -d "$sb_dir" ] && sb_dir="/data/data/com.termux/files/home/.gemini/sandboxes/${active_acc}"
-
-  local agy_bin=""
-  for b_cand in "${base_dir}/.local/bin/agy" "/root/.local/bin/agy" "${PREFIX:-/data/data/com.termux/files/usr}/bin/agy" "/usr/local/bin/agy"; do
-    if [[ -x "$b_cand" ]]; then
-      agy_bin="$b_cand"
-      break
-    fi
-  done
-  [ -z "$agy_bin" ] && agy_bin="agy"
-
-  if [[ -n "$active_acc" && -d "$sb_dir" && "$first_arg" != "--raw" && "$first_arg" != "--no-sandbox" ]]; then
-    HOME="$sb_dir" AGY_SANDBOX="$active_acc" "$agy_bin" "$@"
-  else
-    "$agy_bin" "$@"
-  fi
-}
+# AGY-Switch Multi-Account & 9Router Sync
+alias switch="agy-switch"
+alias agy-switch="agy-switch"
+alias ganti="agy-switch"
+alias agy-ganti="agy-switch"
+alias ganti-akun="agy-switch"
 EOF_AGY_ACT
         fi
     fi

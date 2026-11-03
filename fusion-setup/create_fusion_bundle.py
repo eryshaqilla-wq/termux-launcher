@@ -301,10 +301,16 @@ exit 1
 
 if os.path.exists("/usr/local/bin/agy-copilot"):
     shutil.copy2("/usr/local/bin/agy-copilot", os.path.join(BUNDLE_DIR, "bin/agy-copilot"))
-if os.path.exists("/usr/local/bin/agy-ganti"):
-    shutil.copy2("/usr/local/bin/agy-ganti", os.path.join(BUNDLE_DIR, "bin/agy-ganti"))
-if os.path.exists("/usr/local/bin/agy-sandbox"):
-    shutil.copy2("/usr/local/bin/agy-sandbox", os.path.join(BUNDLE_DIR, "bin/agy-sandbox"))
+if os.path.exists("/usr/local/bin/agy-switch"):
+    shutil.copy2("/usr/local/bin/agy-switch", os.path.join(BUNDLE_DIR, "bin/agy-switch"))
+    # Pasang symlinks praktis
+    for alias_name in ["switch", "ganti", "agy-ganti"]:
+        alias_path = os.path.join(BUNDLE_DIR, "bin", alias_name)
+        if os.path.islink(alias_path) or os.path.exists(alias_path):
+            os.remove(alias_path)
+        os.symlink("agy-switch", alias_path)
+elif os.path.exists("/usr/local/bin/agy-ganti"):
+    shutil.copy2("/usr/local/bin/agy-ganti", os.path.join(BUNDLE_DIR, "bin/agy-switch"))
 if os.path.exists("/usr/local/bin/agy-install"):
     shutil.copy2("/usr/local/bin/agy-install", os.path.join(BUNDLE_DIR, "bin/agy-install"))
 elif os.path.exists("/project/termux-launcher/fusion-setup/agy-install"):
@@ -550,12 +556,15 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/telegram-relogin")):
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/9router")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(ASSETS_DIR, "9router"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(FUSION_SETUP_DIR, "9router"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-ganti")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-ganti"), os.path.join(ASSETS_DIR, "agy-ganti"))
-    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-ganti"), os.path.join(FUSION_SETUP_DIR, "agy-ganti"))
-if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-sandbox")):
-    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-sandbox"), os.path.join(ASSETS_DIR, "agy-sandbox"))
-    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-sandbox"), os.path.join(FUSION_SETUP_DIR, "agy-sandbox"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-switch")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-switch"), os.path.join(ASSETS_DIR, "agy-switch"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-switch"), os.path.join(FUSION_SETUP_DIR, "agy-switch"))
+    for d_target in [ASSETS_DIR, FUSION_SETUP_DIR]:
+        for lk in ["switch", "ganti", "agy-ganti"]:
+            lp = os.path.join(d_target, lk)
+            if os.path.islink(lp) or os.path.exists(lp):
+                os.remove(lp)
+            os.symlink("agy-switch", lp)
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-copilot")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-copilot"), os.path.join(ASSETS_DIR, "agy-copilot"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-copilot"), os.path.join(FUSION_SETUP_DIR, "agy-copilot"))
