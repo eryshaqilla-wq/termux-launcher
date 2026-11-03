@@ -817,6 +817,63 @@ Rules:
         }
     } catch (_) {}
 
+    // 3. Coba AGY Ephemeral Runner dari Pool Akun
+    try {
+        const agyRes = await new Promise((resolve) => {
+            const baseHome = process.env.HOME || '/root';
+            const accDirs = [path.join(baseHome, '.agy-accounts'), '/root/.agy-accounts', '/data/data/com.termux/files/home/.agy-accounts'];
+            const accDir = accDirs.find(d => fs.existsSync(d));
+            let tokenSource = null;
+            if (accDir) {
+                try {
+                    const accFiles = fs.readdirSync(accDir).filter(f => f.endsWith('.json'));
+                    const actFile = path.join(accDir, '.active');
+                    const actName = fs.existsSync(actFile) ? fs.readFileSync(actFile, 'utf8').trim() : '';
+                    const workers = accFiles.filter(f => !f.startsWith(actName));
+                    const chosen = workers.length > 0 ? workers[0] : accFiles[0];
+                    if (chosen) tokenSource = path.join(accDir, chosen);
+                } catch (_) {}
+            }
+            if (!tokenSource) {
+                const legacy = [path.join(baseHome, '.gemini/antigravity-cli/antigravity-oauth-token'), '/root/.gemini/antigravity-cli/antigravity-oauth-token'];
+                tokenSource = legacy.find(p => fs.existsSync(p));
+            }
+            if (!tokenSource || !fs.existsSync(tokenSource)) return resolve(null);
+
+            const tmpDir = path.join('/tmp', `agy_web_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+            const cliDir = path.join(tmpDir, '.gemini', 'antigravity-cli');
+            try {
+                fs.mkdirSync(cliDir, { recursive: true });
+                fs.copyFileSync(tokenSource, path.join(cliDir, 'antigravity-oauth-token'));
+                fs.chmodSync(path.join(cliDir, 'antigravity-oauth-token'), 0o600);
+                const settingsCandidates = [path.join(baseHome, '.gemini/antigravity-cli/settings.json'), '/root/.gemini/antigravity-cli/settings.json'];
+                const foundSettings = settingsCandidates.find(s => fs.existsSync(s));
+                if (foundSettings) { try { fs.symlinkSync(foundSettings, path.join(cliDir, 'settings.json')); } catch (_) {} }
+            } catch (_) { return resolve(null); }
+
+            const fullPrompt = `[SYSTEM: ${systemPrompt}]\n\n${userPrompt}`;
+            const child = spawn('agy', ['-p', fullPrompt, '--effort', 'low', '--disable-slash-commands'], {
+                env: { ...process.env, HOME: tmpDir, AGY_EPHEMERAL: '1' },
+                timeout: 25000
+            });
+            let out = '';
+            child.stdout.on('data', chunk => out += chunk);
+            child.on('close', () => {
+                try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+                resolve(out.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim() || null);
+            });
+            child.on('error', () => {
+                try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+                resolve(null);
+            });
+        });
+
+        if (agyRes) {
+            const match = agyRes.match(/\{[\s\S]*\}/);
+            if (match) return { success: true, recipe: JSON.parse(match[0]), engine: "AGY-Pool" };
+        }
+    } catch (_) {}
+
     return { success: false, error: "Semua AI Engine offline atau gagal mensintesis resep" };
 }
 
@@ -1569,6 +1626,7 @@ async function main() {
         console.log(`  web eval "kode JS"            (Eksekusi JavaScript di WebView)`);
         console.log(`  web --ai [mode]               (Atur mode AI Engine permanen: auto|deepseek|9router|agy|off)`);
         console.log(`  web --synth <url> [--run]     (Sintesis resep makro dApp/faucet secara otonom via AI)`);
+        console.log(`  web quest "<teks postingan>"  (Eksekusi tugas whitelist/airdrop dinamis via AI)`);
         console.log(`  web close                     (Tutup WebView)\n`);
         console.log(`Contoh Integrasi Telegram / Sniper:`);
         console.log(`  web --wallet Master --modul web3_claim "https://web3.claim/gift/gsisbsi"`);
@@ -1627,6 +1685,23 @@ async function main() {
         }
         await handleSynthesizeRecipe(targetUrl, extra);
         process.exit(0);
+    }
+
+    const isQuestCmd = (
+        cmd === 'quest' ||
+        cmd === '--quest' ||
+        cmd === 'alpha' ||
+        cmd === '--alpha'
+    );
+
+    if (isQuestCmd) {
+        const questInput = args.slice(1).join(' ').trim();
+        const autoEngineScript = fs.existsSync('/root/wallet/auto_engine.cjs') ? '/root/wallet/auto_engine.cjs' : '/wallet/auto_engine.cjs';
+        if (fs.existsSync(autoEngineScript)) {
+            const child = spawn('node', [autoEngineScript, 'quest', questInput], { stdio: 'inherit' });
+            child.on('close', code => process.exit(code || 0));
+            return;
+        }
     }
 
     if (args.length === 0 || cmd === 'home' || cmd === 'beranda') {
@@ -1700,18 +1775,40 @@ async function main() {
             console.log(`⚠️  Belum ada profil tersimpan di vault.\n`);
         } else {
             console.log(`Daftar Profil Tersedia:`);
-            const walletMap = {
-                'shaqilla': 'Wallet 1 (eso.ai)',
-                'eryziggy': 'Wallet 2 (eryziggy.ai)',
-                '0xjamrud': 'Wallet 3 (erikasopi.ai)'
+            let dbWallets = [];
+            const dbCandidates = [
+                '/root/wallet/wallets_db.json',
+                '/data/data/com.termux/files/home/wallet/wallets_db.json',
+                '/wallet/wallets_db.json'
+            ];
+            for (const f of dbCandidates) {
+                if (fs.existsSync(f)) {
+                    try {
+                        const parsed = JSON.parse(fs.readFileSync(f, 'utf8'));
+                        if (parsed && Array.isArray(parsed.wallets)) {
+                            dbWallets = parsed.wallets;
+                            break;
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            const getDbWalletBadge = (profName) => {
+                const found = dbWallets.find(w => w.bind_webview && w.bind_webview.toLowerCase() === profName.toLowerCase());
+                if (found) {
+                    const shortAddr = found.address ? `${found.address.substring(0, 6)}...${found.address.substring(found.address.length - 4)}` : '';
+                    return ` ${CYAN}[DB: ${found.name} (${shortAddr})]${RESET}`;
+                }
+                return '';
             };
+
             profileList.forEach((p, idx) => {
                 const sess = checkProfileSessionInfo(p);
                 const isCurr = p === active ? ` ${GREEN}(AKTIF)${RESET}` : '';
                 const sessBadge = sess.hasSession
                     ? `${GREEN}[✅ Sesi X: ${sess.handle || 'Aktif'}]${RESET}`
                     : `${YELLOW}[⚠️  Belum Ada Sesi X]${RESET}`;
-                const wBadge = walletMap[p] ? ` ${CYAN}[${walletMap[p]}]${RESET}` : '';
+                const wBadge = getDbWalletBadge(p);
                 console.log(`  [${idx + 1}] ${CYAN}${p.padEnd(12)}${RESET} ── ${sessBadge}${wBadge}${isCurr}`);
             });
             console.log();

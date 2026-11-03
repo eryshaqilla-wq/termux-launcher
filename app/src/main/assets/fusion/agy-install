@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# 🤖 ANTIGRAVITY CLI (AGY) UNIVERSAL INSTALLER (TERMUX NATIVE & LINUX CONTAINER)
+# Ported for Project Fusion (Eso:Launcher)
+# ==============================================================================
+
+CYAN='\033[38;2;139;233;253m'
+GREEN='\033[38;2;80;250;123m'
+YELLOW='\033[38;2;241;250;140m'
+RED='\033[38;2;255;85;85m'
+RESET='\033[0m'
+BOLD='\033[1m'
+
+echo -e "\n${CYAN}${BOLD}🤖 Antigravity CLI (AGY) Universal Installer${RESET}"
+
+# 0. Cek Lingkungan: Apakah Linux Container (glibc) atau Native Termux (Bionic)?
+if [ -z "$PREFIX" ] && [ ! -d "/data/data/com.termux" ]; then
+    echo -e "${RESET}Lingkungan: ${GREEN}Linux Container / Standard GNU/Linux (Glibc)${RESET}"
+    echo -e "Sumber Build: ${CYAN}Official Google Antigravity Installer${RESET}\n"
+    echo -e "  ${CYAN}● Memasang Antigravity CLI Resmi via Google Bootstrapper...${RESET}"
+    if curl -fsSL https://antigravity.google/cli/install.sh | bash; then
+        [ -f "$HOME/.local/bin/agy" ] && ln -sf "$HOME/.local/bin/agy" "/usr/local/bin/agy" 2>/dev/null || true
+        echo -e "  ${GREEN}✔ Sukses! Antigravity CLI Resmi berhasil terpasang di Container Linux.${RESET}\n"
+        exit 0
+    else
+        echo -e "  ${RED}✖ Gagal memasang Antigravity CLI resmi di container.${RESET}\n"
+        exit 1
+    fi
+fi
+
+# Native Termux Android (Bionic)
+echo -e "${RESET}Lingkungan: ${GREEN}Native Android Termux (Bionic)${RESET}"
+echo -e "Sumber Build: ${CYAN}https://github.com/wallentx/antigravity-cli-termux${RESET}\n"
+
+# 1. Cek Arsitektur CPU
+ARCH="$(uname -m)"
+if [[ "$ARCH" != "aarch64" && "$ARCH" != "arm64" ]]; then
+    echo -e "  ${RED}✖ Error: Arsitektur CPU ($ARCH) tidak didukung.${RESET}"
+    echo -e "  Antigravity CLI Standalone Termux saat ini hanya mendukung aarch64 (64-bit ARM)."
+    exit 1
+fi
+echo -e "  ${GREEN}✔ Arsitektur CPU: aarch64 terdeteksi${RESET}"
+
+# 2. Tentukan Direktori Tujuan
+TARGET_BIN=""
+if [ -n "$PREFIX" ] && [ -d "$PREFIX/bin" ]; then
+    TARGET_BIN="$PREFIX/bin"
+elif [ -d "/data/data/com.termux/files/usr/bin" ]; then
+    TARGET_BIN="/data/data/com.termux/files/usr/bin"
+elif [ -d "/usr/local/bin" ]; then
+    TARGET_BIN="/usr/local/bin"
+else
+    TARGET_BIN="$HOME/.local/bin"
+    mkdir -p "$TARGET_BIN"
+fi
+
+TMP_DIR="${PREFIX:-/tmp}/tmp/.agy_install_$$"
+TARBALL="$TMP_DIR/antigravity-termux-standalone.tar.gz"
+mkdir -p "$TMP_DIR" "$TARGET_BIN"
+
+# 3. Cek & Pasang Dependensi
+echo -e "  ${CYAN}● Memeriksa dependensi Termux (ca-certificates, resolv-conf, curl, tar)...${RESET}"
+if command -v pkg >/dev/null 2>&1; then
+    pkg install -y ca-certificates resolv-conf curl tar >/dev/null 2>&1 || true
+elif command -v apt-get >/dev/null 2>&1; then
+    apt-get install -y ca-certificates resolv-conf curl tar >/dev/null 2>&1 || true
+fi
+
+# Cek LSE atomics & QEMU jika CPU lawas
+if ! grep -q "atomics" /proc/cpuinfo 2>/dev/null; then
+    if ! command -v qemu-aarch64 >/dev/null 2>&1; then
+        echo -e "  ${YELLOW}ℹ CPU tidak memiliki ekstensi LSE atomics. Memasang qemu-user-aarch64...${RESET}"
+        if command -v pkg >/dev/null 2>&1; then
+            pkg install -y qemu-user-aarch64 >/dev/null 2>&1 || true
+        fi
+    fi
+fi
+
+# 4. Unduh Release Terbaru
+URL="https://github.com/wallentx/antigravity-cli-termux/releases/latest/download/antigravity-termux-standalone.tar.gz"
+echo -e "  ${CYAN}● Mengunduh Antigravity CLI Standalone release terbaru...${RESET}"
+if ! curl -fLs -H "Cache-Control: no-cache" "$URL" -o "$TARBALL"; then
+    echo -e "  ${RED}✖ Gagal mengunduh release dari GitHub. Periksa koneksi internet Anda.${RESET}"
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+# 5. Ekstraksi Twin-Binary (agy & agy.va39)
+echo -e "  ${CYAN}● Mengekstrak paket twin-binary (agy & agy.va39)...${RESET}"
+if ! tar -xz -C "$TMP_DIR" -f "$TARBALL" agy agy.va39 2>/dev/null; then
+    echo -e "  ${RED}✖ Gagal mengekstrak arsip tar.gz.${RESET}"
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+if [[ ! -f "$TMP_DIR/agy" || ! -f "$TMP_DIR/agy.va39" ]]; then
+    echo -e "  ${RED}✖ Binary agy atau agy.va39 tidak ditemukan di dalam paket.${RESET}"
+    rm -rf "$TMP_DIR"
+    exit 1
+fi
+
+# Pasang ke Target Bin
+cp -f "$TMP_DIR/agy" "$TARGET_BIN/agy"
+cp -f "$TMP_DIR/agy.va39" "$TARGET_BIN/agy.va39"
+chmod 755 "$TARGET_BIN/agy" "$TARGET_BIN/agy.va39"
+rm -rf "$TMP_DIR"
+
+# 6. Verifikasi Eksekusi
+echo -e "  ${CYAN}● Memverifikasi eksekusi binary...${RESET}"
+if "$TARGET_BIN/agy" --version >/dev/null 2>&1; then
+    VER="$("$TARGET_BIN/agy" --version 2>/dev/null | head -n1)"
+    echo -e "  ${GREEN}✔ Sukses! Antigravity CLI aktif (${VER})${RESET}"
+    echo -e "  ${GREEN}➔ Terpasang di: ${BOLD}$TARGET_BIN/agy${RESET}\n"
+else
+    echo -e "  ${YELLOW}ℹ Binary terpasang di $TARGET_BIN/agy.${RESET}"
+    echo -e "  ${YELLOW}➔ Jalankan 'agy --version' untuk verifikasi di shell Anda.${RESET}\n"
+fi
+
+# 7. Aktifkan Multi-Account Sandbox Suite jika belum ada di $TARGET_BIN
+for s_tool in agy-ganti agy-sandbox agy-copilot; do
+    if [ ! -f "$TARGET_BIN/$s_tool" ]; then
+        for cand in "$HOME/.fusion/bin/$s_tool" "$HOME/.fusion/$s_tool" "/project/termux-launcher/fusion-setup/$s_tool" "/project/termux-launcher/app/src/main/assets/fusion/$s_tool"; do
+            if [ -f "$cand" ]; then
+                cp -f "$cand" "$TARGET_BIN/$s_tool"
+                chmod 755 "$TARGET_BIN/$s_tool"
+                break
+            fi
+        done
+    fi
+done
+[ -f "$TARGET_BIN/agy-copilot" ] && ln -sf "$TARGET_BIN/agy-copilot" "$TARGET_BIN/copilot" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-sandbox" ] && ln -sf "$TARGET_BIN/agy-sandbox" "$TARGET_BIN/sandbox" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-sandbox" ] && ln -sf "$TARGET_BIN/agy-sandbox" "$TARGET_BIN/agy-sb" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-ganti" ] && ln -sf "$TARGET_BIN/agy-ganti" "$TARGET_BIN/ganti" 2>/dev/null || true
+[ -f "$TARGET_BIN/agy-ganti" ] && ln -sf "$TARGET_BIN/agy-ganti" "$TARGET_BIN/ganti-akun" 2>/dev/null || true
+
+# 8. Pastikan alias dan smart agy() aktif di ~/.zshrc / ~/.bashrc
+for sh_rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    if [ -f "$sh_rc" ]; then
+        if ! grep -q "Smart AGY Auto-Sandbox" "$sh_rc" 2>/dev/null; then
+            cat << 'EOF_AGY_ACT' >> "$sh_rc"
+
+# Smart AGY Auto-Sandbox & Multi-Account
+alias agy-ganti="agy-ganti"
+alias ganti="agy-ganti"
+alias ganti-akun="agy-ganti"
+alias agy-sandbox="agy-sandbox"
+alias sandbox="agy-sandbox"
+alias agy-sb="agy-sandbox"
+
+agy() {
+  local first_arg="$1"
+  if [[ "$first_arg" == "list" || "$first_arg" == "ls" || "$first_arg" == "accounts" || "$first_arg" == "acc" ]]; then
+    agy-ganti list
+    return
+  fi
+  if [[ "$first_arg" == "sync" || "$first_arg" == "sync-9router" ]]; then
+    agy-ganti sync
+    return
+  fi
+  if [[ "$first_arg" == "ui" || "$first_arg" == "web" ]]; then
+    agy-ganti ui
+    return
+  fi
+  if [[ "$first_arg" == "sandbox" || "$first_arg" == "sb" ]]; then
+    shift
+    agy-sandbox "$@"
+    return
+  fi
+  if [[ "$first_arg" == "switch" || "$first_arg" == "ganti" ]]; then
+    agy-ganti "$2"
+    return
+  fi
+  if [[ "$first_arg" =~ ^[0-9]+$ && -z "$2" ]]; then
+    agy-sandbox "$first_arg"
+    return
+  fi
+
+  local base_dir="${HOME:-/root}"
+  local active_file="${base_dir}/.agy-accounts/.active"
+  [ ! -f "$active_file" ] && active_file="/root/.agy-accounts/.active"
+  [ ! -f "$active_file" ] && active_file="/data/data/com.termux/files/home/.agy-accounts/.active"
+
+  local active_acc=""
+  if [[ -f "$active_file" ]]; then
+    active_acc="$(cat "$active_file" 2>/dev/null | tr -d "[:space:]")"
+  fi
+
+  local sb_dir="${base_dir}/.gemini/sandboxes/${active_acc}"
+  [ ! -d "$sb_dir" ] && sb_dir="/root/.gemini/sandboxes/${active_acc}"
+  [ ! -d "$sb_dir" ] && sb_dir="/data/data/com.termux/files/home/.gemini/sandboxes/${active_acc}"
+
+  local agy_bin=""
+  for b_cand in "${base_dir}/.local/bin/agy" "/root/.local/bin/agy" "${PREFIX:-/data/data/com.termux/files/usr}/bin/agy" "/usr/local/bin/agy"; do
+    if [[ -x "$b_cand" ]]; then
+      agy_bin="$b_cand"
+      break
+    fi
+  done
+  [ -z "$agy_bin" ] && agy_bin="agy"
+
+  if [[ -n "$active_acc" && -d "$sb_dir" && "$first_arg" != "--raw" && "$first_arg" != "--no-sandbox" ]]; then
+    HOME="$sb_dir" AGY_SANDBOX="$active_acc" "$agy_bin" "$@"
+  else
+    "$agy_bin" "$@"
+  fi
+}
+EOF_AGY_ACT
+        fi
+    fi
+done

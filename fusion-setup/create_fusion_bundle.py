@@ -301,6 +301,18 @@ exit 1
 
 if os.path.exists("/usr/local/bin/agy-copilot"):
     shutil.copy2("/usr/local/bin/agy-copilot", os.path.join(BUNDLE_DIR, "bin/agy-copilot"))
+if os.path.exists("/usr/local/bin/agy-ganti"):
+    shutil.copy2("/usr/local/bin/agy-ganti", os.path.join(BUNDLE_DIR, "bin/agy-ganti"))
+if os.path.exists("/usr/local/bin/agy-sandbox"):
+    shutil.copy2("/usr/local/bin/agy-sandbox", os.path.join(BUNDLE_DIR, "bin/agy-sandbox"))
+if os.path.exists("/usr/local/bin/agy-install"):
+    shutil.copy2("/usr/local/bin/agy-install", os.path.join(BUNDLE_DIR, "bin/agy-install"))
+elif os.path.exists("/project/termux-launcher/fusion-setup/agy-install"):
+    shutil.copy2("/project/termux-launcher/fusion-setup/agy-install", os.path.join(BUNDLE_DIR, "bin/agy-install"))
+if os.path.exists("/usr/local/bin/eso"):
+    shutil.copy2("/usr/local/bin/eso", os.path.join(BUNDLE_DIR, "bin/eso"))
+elif os.path.exists("/project/termux-launcher/fusion-setup/eso"):
+    shutil.copy2("/project/termux-launcher/fusion-setup/eso", os.path.join(BUNDLE_DIR, "bin/eso"))
 if os.path.exists("/usr/local/bin/pwd-vault"):
     shutil.copy2("/usr/local/bin/pwd-vault", os.path.join(BUNDLE_DIR, "bin/pwd-vault"))
 
@@ -538,6 +550,21 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/telegram-relogin")):
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/9router")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(ASSETS_DIR, "9router"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(FUSION_SETUP_DIR, "9router"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-ganti")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-ganti"), os.path.join(ASSETS_DIR, "agy-ganti"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-ganti"), os.path.join(FUSION_SETUP_DIR, "agy-ganti"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-sandbox")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-sandbox"), os.path.join(ASSETS_DIR, "agy-sandbox"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-sandbox"), os.path.join(FUSION_SETUP_DIR, "agy-sandbox"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-copilot")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-copilot"), os.path.join(ASSETS_DIR, "agy-copilot"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-copilot"), os.path.join(FUSION_SETUP_DIR, "agy-copilot"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-install")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-install"), os.path.join(ASSETS_DIR, "agy-install"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-install"), os.path.join(FUSION_SETUP_DIR, "agy-install"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/eso")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/eso"), os.path.join(ASSETS_DIR, "eso"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/eso"), os.path.join(FUSION_SETUP_DIR, "eso"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "termux.properties")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "termux.properties"), os.path.join(ASSETS_DIR, "termux.properties"))
 

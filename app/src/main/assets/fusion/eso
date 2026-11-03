@@ -1,0 +1,325 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# ⚡ ESO : MASTER SYSTEM MANUAL & ARCHITECTURE REFERENCE (CLI TOOL)
+# ==============================================================================
+# Panduan Lengkap:
+# - Antigravity CLI (AGY) Multi-Account Sandbox Pool (7 Pro Accounts)
+# - Dual-Environment Engine (Termux Native Non-Root vs Root Container)
+# - Tri-Engine Synergy Controller (DeepSeek, 9Router, AGY Ephemeral)
+# - Ghost Web3 Wallet Daemon (Port 3333) & 3 Binance Agentic Wallets (BAW)
+# - Telegram Tuyul Radar & Sniper AI (pmt)
+# - X Radar & Autonomous Web Controller (web / agent-web)
+# - Termux IPC Socket & Touchpad Glass Architecture
+# ==============================================================================
+
+BOLD="\033[1m"
+DIM="\033[2m"
+CYAN="\033[1;36m"
+GREEN="\033[1;32m"
+YELLOW="\033[1;33m"
+RED="\033[1;31m"
+MAGENTA="\033[1;35m"
+BLUE="\033[1;34m"
+RESET="\033[0m"
+
+title_header() {
+    clear 2>/dev/null || true
+    printf "${CYAN}${BOLD}"
+    cat << "EOF"
+ ███████╗███████╗ ██████╗     ███╗   ███╗ █████╗ ███╗   ██╗██╗   ██╗ █████╗ ██╗     
+ ██╔════╝██╔════╝██╔═══██╗    ████╗ ████║██╔══██╗████╗  ██║██║   ██║██╔══██╗██║     
+ █████╗  ███████╗██║   ██║    ██╔████╔██║███████║██╔██╗ ██║██║   ██║███████║██║     
+ ██╔══╝  ╚════██║██║   ██║    ██║╚██╔╝██║██╔══██║██║╚██╗██║██║   ██║██╔══██║██║     
+ ███████╗███████║╚██████╔╝    ██║ ╚═╝ ██║██║  ██║██║ ╚═╝██║╚██████╔╝██║  ██║███████╗
+ ╚══════╝╚══════╝ ╚═════╝     ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝
+EOF
+    printf "${RESET}"
+    printf " ${DIM}PROJECT FUSION : MASTER ARCHITECTURE, IPC COMMANDS & PAYLOAD REFERENCE${RESET}\n\n"
+}
+
+show_overview() {
+    title_header
+    printf " ${BOLD}[ SUB-PERINTAH TERSEDIA ]${RESET}\n"
+    printf " │\n"
+    printf " ├─ ${MAGENTA}eso manual${RESET}    : ${BOLD}Buku Panduan Induk${RESET} (AGY Sandbox Pool, Tri-Engine, Web3, & Setup)\n"
+    printf " ├─ ${CYAN}eso ipc${RESET}       : Panduan lengkap seluruh perintah Termux IPC & WebView Controller\n"
+    printf " ├─ ${CYAN}eso payload${RESET}   : Daftar modul suite CJS (Wallet, X Radar, Telegram Tuyul, 9router)\n"
+    printf " ├─ ${CYAN}eso setup${RESET}     : Petunjuk eksekusi setup.sh (Root Container vs Non-Root)\n"
+    printf " ├─ ${CYAN}eso status${RESET}    : Cek status socket IPC live, port daemon, AGY pool & konektivitas\n"
+    printf " │\n"
+    printf " └─ ${YELLOW}Ketik: eso <subcommand>${RESET} (contoh: ${MAGENTA}eso manual${RESET} atau ${CYAN}eso status${RESET})\n\n"
+
+    printf " ${BOLD}[ SHORTCUT PINTAS HARIAN TUAN ESO ]${RESET}\n"
+    printf " ┌──────────────────────────┬────────────────────────────────────────────────────────┐\n"
+    printf " │ Perintah                 │ Fungsi Cepat                                           │\n"
+    printf " ├──────────────────────────┼────────────────────────────────────────────────────────┤\n"
+    printf " │ ${GREEN}agy${RESET}                      │ Masuk ke sandbox AGY aktif (Zero /resume leak)         │\n"
+    printf " │ ${GREEN}agy list${RESET} / ${GREEN}agy <1-7>${RESET}      │ Tinjau 7 Akun Pro AGY / Lompat ke akun tertentu       │\n"
+    printf " │ ${GREEN}agy sync${RESET}                 │ Sinkronisasi 2 arah pool AGY dengan 9Router (SQLite)   │\n"
+    printf " │ ${GREEN}ai status${RESET}                │ Cek status Tri-Engine (DeepSeek, 9Router, AGY Pool)    │\n"
+    printf " │ ${GREEN}browser <url|cmd>${RESET}        │ Buka / kendalikan WebView Android via IPC              │\n"
+    printf " │ ${GREEN}web --synth <url>${RESET}        │ Sintesis resep otomatis dApp via Tri-Engine AI         │\n"
+    printf " │ ${GREEN}wallet${RESET}                   │ Jalankan Ghost Web3 Wallet Daemon (Port 3333)          │\n"
+    printf " │ ${GREEN}baw${RESET} / ${GREEN}baw2${RESET} / ${GREEN}baw3${RESET}         │ 3 Binance Agentic Wallets (eso.ai, eryziggy, 0xjamrud) │\n"
+    printf " │ ${GREEN}pmt${RESET} / ${GREEN}telegram${RESET}              │ Buka Telegram Link & Code Sniper AI (TUI Client)       │\n"
+    printf " │ ${GREEN}x${RESET}                        │ Buka automasi X (Twitter) Radar WebView                │\n"
+    printf " │ ${GREEN}gui${RESET} / ${GREEN}gui-stop${RESET}             │ Luncurkan / matikan Cyberpunk Touch GUI                │\n"
+    printf " └──────────────────────────┴────────────────────────────────────────────────────────┘\n\n"
+}
+
+show_manual() {
+    title_header
+    printf " ${MAGENTA}${BOLD}══════════════════════════════════════════════════════════════════════════════════════${RESET}\n"
+    printf " ${MAGENTA}${BOLD}           BUKU PANDUAN INDUK SISTEM & ARSITEKTUR ESO:LAUNCHER                        ${RESET}\n"
+    printf " ${MAGENTA}${BOLD}══════════════════════════════════════════════════════════════════════════════════════${RESET}\n\n"
+
+    printf " ${YELLOW}${BOLD}1. POOL AKUN PRO ANTIGRAVITY (AGY) & ARSITEKTUR SANDBOX${RESET}\n"
+    printf "   • ${BOLD}Tujuan Utama${RESET} : Mencegah kebocoran sesi tugas otomatis ke riwayat ${CYAN}/resume${RESET} terminal koding Tuan.\n"
+    printf "   • ${BOLD}Pool 7 Akun Pro${RESET}: Tersimpan di ${CYAN}~/.agy-accounts/${RESET}. Akun-akun ini adalah komputasi mengambang (unbound)\n"
+    printf "     yang bebas digunakan bergantian tanpa terikat ke wallet atau akun X.\n"
+    printf "   • ${BOLD}Isolasi Sandbox${RESET}: Setiap akun memiliki sandbox independen di ${CYAN}~/.gemini/sandboxes/<nama>/${RESET}\n"
+    printf "     dengan database SQLite sesi terpisah, namun ${GREEN}100%% berbagi Soul${RESET} (AGENTS.md, GEMINI.md),\n"
+    printf "     shared skills (${CYAN}/root/.agents/skills/${RESET}), settings.json, dan folder kerja ${CYAN}/project${RESET}.\n\n"
+    printf "   ┌─────────────────────────────────────────────────────────────────────────────────┐\n"
+    printf "   │ Perintah Navigasi AGY :                                                         │\n"
+    printf "   ├─────────────────────────────────────────────────────────────────────────────────┤\n"
+    printf "   │ ${GREEN}agy${RESET}                   Masuk langsung ke sandbox akun yang sedang aktif          │\n"
+    printf "   │ ${GREEN}agy list${RESET} / ${GREEN}agy ls${RESET}       Tampilkan tabel visual 7 akun, ID, & status aktif         │\n"
+    printf "   │ ${GREEN}agy <1-7>${RESET}              Lompat langsung ke akun nomor 1 sampai 7 (misal: agy 2)  │\n"
+    printf "   │ ${GREEN}agy switch <nama>${RESET}      Ganti default akun aktif secara permanen                  │\n"
+    printf "   │ ${GREEN}agy sync${RESET}              Sinkronisasi 2 arah dengan database 9Router (SQLite)     │\n"
+    printf "   │ ${GREEN}agy ui${RESET}                Buka Web UI manager multi-akun di browser                 │\n"
+    printf "   │ ${GREEN}agy-install${RESET}           Pasang / perbarui binary AGY di Termux Native / Container │\n"
+    printf "   │ ${GREEN}agy --raw${RESET}             Jalankan binary host mentah tanpa lingkungan sandbox      │\n"
+    printf "   └─────────────────────────────────────────────────────────────────────────────────┘\n\n"
+
+    printf " ${YELLOW}${BOLD}2. DUAL-ENVIRONMENT: TERMUX NATIVE (NON-ROOT) vs ROOT CONTAINER${RESET}\n"
+    printf "   • ${CYAN}Non-Root (Termux Native Android Bionic)${RESET}:\n"
+    printf "     - Menggunakan build standalone twin-binary dari ${BOLD}wallentx/antigravity-cli-termux${RESET}.\n"
+    printf "     - Terdiri dari ${GREEN}agy${RESET} (Bionic C bootstrapper) dan ${GREEN}agy.va39${RESET} (core engine patched).\n"
+    printf "     - Jika saat setup user memilih ${BOLD}Lewati${RESET}, sistem Termux tetap 100%% bersih tanpa sampah.\n"
+    printf "     - Kapan pun ingin dipasang, cukup ketik: ${GREEN}agy-install${RESET}.\n"
+    printf "   • ${CYAN}Root Mode (Kali NetHunter Chroot / Droidspaces Ubuntu)${RESET}:\n"
+    printf "     - Menggunakan binary glibc Linux resmi dari Google (antigravity.google/cli).\n"
+    printf "     - Setup otomatis mendeteksi apakah binary AGY sudah ada di container rootfs.\n"
+    printf "     - Jika belum ada, setup menawarkan opsi pasang instan via chroot/droidspaces exec.\n\n"
+
+    printf " ${YELLOW}${BOLD}3. SISTEM OTONOM TRI-ENGINE (AI SYNERGY CONTROLLER)${RESET}\n"
+    printf "   • ${BOLD}Master Controller${RESET}: ${CYAN}ai${RESET} / ${CYAN}auto-engine${RESET} (/root/wallet/auto_engine.cjs).\n"
+    printf "   • ${BOLD}3 Mesin AI${RESET}       :\n"
+    printf "     1. ${GREEN}DeepSeek Flash${RESET}   : Konfigurasi di /root/wallet/ai_config.json.\n"
+    printf "     2. ${GREEN}9Router Gateway${RESET}  : Port 20128 (OpenAI-compatible), auto-rotasi seluruh akun Pro.\n"
+    printf "     3. ${GREEN}AGY Pool Workers${RESET} : Mengambil token standby dari ~/.agy-accounts/ dan jalan di\n"
+    printf "                           folder ephemeral (/tmp/agy_auto_*) -> 0%% sampah di /resume.\n"
+    printf "   • ${BOLD}Cek Status${RESET}       : ${GREEN}ai status${RESET}\n"
+    printf "   • ${BOLD}Agent Web Synth${RESET}  : ${GREEN}web --synth <url>${RESET} (Mencoba 9Router -> DeepSeek -> AGY Pool).\n"
+    printf "   • ${BOLD}WebView Co-Pilot${RESET} : Daemon ${GREEN}agy-copilot${RESET} berjalan terisolasi di /tmp/agy_copilot_env.\n\n"
+
+    printf " ${YELLOW}${BOLD}4. ATURAN 3 WALLET BINANCE AGENTIC WALLET (TRI-AGENT TUAN ESO)${RESET}\n"
+    printf "   • ${BOLD}Wallet 1 (Utama)${RESET}  : ${CYAN}eso.ai${RESET} (0xd184F5Eb1F94378410BCAd0D9D33e3C03c3550d9) -> CLI: ${GREEN}baw${RESET}\n"
+    printf "     Terkait 1:1 Profil X: ${BOLD}shaqilla${RESET} (@shaqilla_emilia, UID: 1314621600)\n"
+    printf "   • ${BOLD}Wallet 2 (Kedua)${RESET}  : ${CYAN}eryziggy.ai${RESET} (0x6ee9037f387387787facfee953cb41e781285568) -> CLI: ${GREEN}baw2${RESET}\n"
+    printf "     Terkait 1:1 Profil X: ${BOLD}eryziggy${RESET} (@Eryziggy, UID: 1533016831161606144)\n"
+    printf "   • ${BOLD}Wallet 3 (Ketiga)${RESET} : ${CYAN}erikasopi.ai${RESET} (0x3b29e871a90FD46Ca0Aa944AFED2fC38c5dCb1b6) -> CLI: ${GREEN}baw3${RESET}\n"
+    printf "     Terkait 1:1 Profil X: ${BOLD}0xjamrud${RESET} (@0xjamrud, UID: 1604449944899063809)\n"
+    printf "   • ${RED}${BOLD}Aturan Strict Binding 1:1${RESET}: Dilarang menukar akun X atau mencampur cookies antar profil.\n"
+    printf "   • ${YELLOW}Aturan Free Minting${RESET}    : Selalu ambil opsi GRATIS (Free Tier, value = 0).\n"
+    printf "   • ${YELLOW}Challenge Solver${RESET}       : Pecahkan rumus on-chain (a * b + len(handle)) secara otomatis.\n\n"
+
+    printf " ${YELLOW}${BOLD}5. SISTEM MAKRO & EKSEKUSI BROWSER WEBVIEW${RESET}\n"
+    printf "   • Format Perintah : ${GREEN}web [--wallet [nama]] --modul <nama> [--loop <n>] [--stop-if \"<teks>\"] <url>${RESET}\n"
+    printf "   • Fitur Auto-Stop : Loop otomatis berhenti seketika jika teks 'Sold out', 'Limit', atau 'Sukses' muncul.\n"
+    printf "   • Tab Baru Mandiri: WebView WAJIB selalu dibuka di tab terpisah agar tidak mengganggu terminal AGY.\n"
+    printf "   • Kanvas Kiri     : Berfungsi sebagai Eso Browser dengan arsitektur 0 MB RAM Standby.\n\n"
+
+    printf " ${DIM}Gunakan 'eso ipc', 'eso payload', atau 'eso status' untuk panduan spesifik lainnya.${RESET}\n\n"
+}
+
+show_ipc() {
+    title_header
+    printf " ${CYAN}${BOLD}[ PANDUAN LENGKAP TERMUX IPC (@termux_ipc) ]${RESET}\n"
+    printf " Jalur komunikasi UNIX Abstract Domain Socket berkecepatan tinggi (< 1ms).\n\n"
+
+    printf " ${YELLOW}${BOLD}1. KONTROL WEBVIEW (termux-ipc webview / alias: browser)${RESET}\n"
+    printf " ┌──────────────────────────────────────┬────────────────────────────────────────────────────┐\n"
+    printf " │ Sub-command                          │ Penjelasan & Fungsi                                │\n"
+    printf " ├──────────────────────────────────────┼────────────────────────────────────────────────────┤\n"
+    printf " │ ${GREEN}browser new-tab [url]${RESET}                │ Buka tab baru di WebView (default: google.com)     │\n"
+    printf " │ ${GREEN}browser tabs${RESET}                         │ Tampilkan dialog Tab Manager interaktif            │\n"
+    printf " │ ${GREEN}browser switch-tab <index>${RESET}           │ Pindah fokus ke tab nomor index                    │\n"
+    printf " │ ${GREEN}browser kill-tab [index]${RESET}             │ Tutup tab nomor index (default: tab aktif)         │\n"
+    printf " │ ${GREEN}browser close${RESET}                        │ Tutup/sembunyikan jendela WebView                  │\n"
+    printf " │ ${GREEN}browser reload${RESET}                       │ Muat ulang halaman aktif                           │\n"
+    printf " │ ${GREEN}browser back${RESET}                         │ Kembali ke halaman sebelumnya                      │\n"
+    printf " │ ${GREEN}browser eval \"<code>\"${RESET}                │ Eksekusi kode JavaScript langsung di halaman aktif │\n"
+    printf " │ ${GREEN}browser inspect${RESET}                      │ Buka remote Chrome DevTools CDP debugging          │\n"
+    printf " │ ${GREEN}browser dom${RESET}                          │ Ekstrak snapshot DOM halaman aktif ke file JSON    │\n"
+    printf " │ ${GREEN}browser autofill${RESET}                     │ Isi form otomatis dengan profil dompet aktif       │\n"
+    printf " │ ${GREEN}browser claim${RESET}                        │ Smart Claim reward / airdrop (Bezier OS curve)     │\n"
+    printf " │ ${GREEN}browser cf-bypass${RESET}                    │ Selesaikan verifikasi Cloudflare Turnstile bot     │\n"
+    printf " │ ${GREEN}browser tma-init${RESET}                     │ Ekstrak dan salin Telegram Mini App initData       │\n"
+    printf " │ ${GREEN}browser macro-rec${RESET}                    │ Toggle rekam/stop makro aksi klik & input browser  │\n"
+    printf " │ ${GREEN}browser macro-play${RESET}                   │ Putar ulang rekaman makro dengan injeksi dinamis   │\n"
+    printf " │ ${GREEN}browser random-fp${RESET}                    │ Acak sidik jari browser (Canvas, Audio, WebGL)     │\n"
+    printf " │ ${GREEN}browser opacity${RESET}                      │ Rotasi transparansi overlay WebView (100-10%%)     │\n"
+    printf " └──────────────────────────────────────┴────────────────────────────────────────────────────┘\n\n"
+
+    printf " ${YELLOW}${BOLD}2. KONTROL TERMINAL, INPUT & NOTIFIKASI${RESET}\n"
+    printf "  • ${GREEN}termux-ipc ping${RESET}                  : Uji koneksi IPC (mengembalikan PONG)\n"
+    printf "  • ${GREEN}termux-ipc toast \"<pesan>\"${RESET}       : Munculkan Android Toast melayang\n"
+    printf "  • ${GREEN}termux-ipc vibrate${RESET}               : Picu getaran haptic ponsel\n"
+    printf "  • ${GREEN}termux-ipc clip-set \"<teks>\"${RESET}    : Salin teks ke Clipboard Android\n"
+    printf "  • ${GREEN}termux-ipc clip-get${RESET}              : Baca teks dari Clipboard Android\n"
+    printf "  • ${GREEN}termux-ipc keyboard-hide${RESET}         : Sembunyikan soft keyboard\n"
+    printf "  • ${GREEN}termux-ipc keyboard-show${RESET}         : Tampilkan soft keyboard\n"
+    printf "  • ${GREEN}termux-ipc mouse-on / mouse-off${RESET}  : Kontrol mode touch mouse terminal\n"
+    printf "  • ${GREEN}termux-ipc input \"<teks>\"${RESET}        : Ketik teks ke prompt aktif tanpa Enter\n"
+    printf "  • ${GREEN}termux-ipc run \"<perintah>\"${RESET}     : Jalankan command di sesi aktif Termux\n\n"
+
+    printf " ${YELLOW}${BOLD}3. DESKTOP DISPLAY X11 & AUDIO BRIDGE${RESET}\n"
+    printf "  • ${GREEN}termux-ipc x11-start${RESET}             : Nyalakan server display X11 (:0)\n"
+    printf "  • ${GREEN}termux-ipc x11-stop${RESET}              : Hentikan server X11 & PulseAudio\n"
+    printf "  • ${GREEN}termux-ipc x11-launch${RESET}            : Bawa aplikasi Termux:X11 ke foreground\n"
+    printf "  • ${GREEN}termux-ipc x11-audio${RESET}             : Inisialisasi bridge audio PulseAudio (TCP 4713)\n"
+    printf "  • ${GREEN}gui${RESET} / ${GREEN}fusion-gui${RESET}                  : Buka Cyberpunk Touch GUI di WebView\n"
+    printf "  • ${GREEN}gui-stop${RESET}                         : Matikan Touch GUI & bebaskan RAM seketika\n\n"
+}
+
+show_payload() {
+    title_header
+    printf " ${CYAN}${BOLD}[ PANDUAN DAFTAR PAYLOAD & SUITE GHOST CJS ]${RESET}\n"
+    printf " Seluruh binary mandiri (zero-dependency) tanpa ketergantungan folder node_modules.\n\n"
+
+    printf " ${YELLOW}${BOLD}1. GHOST WEB3 WALLET DAEMON${RESET} (${GREEN}/wallet/wallet.cjs${RESET})\n"
+    printf "  • Alias Zsh   : ${CYAN}wallet${RESET}\n"
+    printf "  • Port RPC    : ${BOLD}http://127.0.0.1:3333${RESET} (EVM JSON-RPC & Wagmi bridge)\n"
+    printf "  • Perintah    : ${GREEN}wallet --auto --ghostwallet 3333${RESET}\n\n"
+
+    printf " ${YELLOW}${BOLD}2. TELEGRAM TUYUL & RADAR ORCHESTRATOR${RESET} (${GREEN}/wallet/telegram.cjs${RESET})\n"
+    printf "  • Alias Zsh   : ${CYAN}telegram${RESET} atau ${CYAN}pmt${RESET}\n"
+    printf "  • Fitur       : Terminal TUI, interactive buttons, mini app resolver, sniper AI.\n\n"
+
+    printf " ${YELLOW}${BOLD}3. X (TWITTER) RADAR NATIVE${RESET} (${GREEN}/wallet/x_webview.cjs${RESET})\n"
+    printf "  • Alias Zsh   : ${CYAN}x${RESET}\n"
+    printf "  • Perintah    : ${GREEN}x --profile <nama>${RESET}\n\n"
+
+    printf " ${YELLOW}${BOLD}4. 9ROUTER MULTI-MODEL AI DAEMON${RESET} (${GREEN}/wallet/9router.cjs${RESET})\n"
+    printf "  • Alias Zsh   : ${CYAN}9router${RESET}\n"
+    printf "  • Port Socket : ${BOLD}http://127.0.0.1:20128${RESET}\n"
+    printf "  • Sinkronisasi: Otomatis tersinkronisasi 2 arah via ${GREEN}agy sync${RESET}.\n\n"
+}
+
+show_setup() {
+    title_header
+    printf " ${CYAN}${BOLD}[ PETUNJUK SETUP SISTEM (setup.sh) ]${RESET}\n\n"
+    printf " Skrip instalasi universal Project Fusion (Eso:Launcher):\n"
+    printf "   ${GREEN}${BOLD}./setup.sh${RESET}\n\n"
+    printf " ${BOLD}Tahapan Otomatisasi setup.sh:${RESET}\n"
+    printf "  1. Deteksi Sistem (Root vs Non-Root Termux)\n"
+    printf "  2. Integrasi Distro Linux (NetHunter Chroot / Droidspaces Ubuntu / PRoot)\n"
+    printf "  3. Shell & Produktivitas (Zsh Powerlevel10k & Opsi AGY Sandbox)\n"
+    printf "  4. Pemasangan Tools, AGY Standalone & Dekripsi Payload AES-256\n"
+    printf "  5. Injeksi Shims Container (termux-ipc, web, wallet, x, rofi-touch)\n"
+    printf "  6. Preset Tampilan Eso (Base16 Isotope, Nerd Font, Touchpad Glass)\n"
+    printf "  7. Inisialisasi Modul Web3 CJS Suite & Database Vault\n"
+    printf "  8. Finalisasi Alias Zsh & Smart AGY Auto-Sandbox Function\n\n"
+}
+
+show_status() {
+    title_header
+    printf " ${CYAN}${BOLD}[ DIAGNOSTIK STATUS SISTEM & DAEMON ]${RESET}\n\n"
+
+    # 1. Cek Socket IPC
+    printf " ├─ Socket Termux IPC : "
+    local py_cmd=""
+    command -v python3 >/dev/null 2>&1 && py_cmd="python3" || command -v python >/dev/null 2>&1 && py_cmd="python"
+    local ipc_pong=""
+    if [ -n "$py_cmd" ]; then
+        ipc_pong=$("$py_cmd" -c "
+import socket
+targets = ['\0termux_ipc', '/var/tmp/termux_ipc.sock', '/tmp/termux_ipc.sock']
+resp = ''
+for t in targets:
+    try:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        s.settimeout(1.0)
+        s.connect(t)
+        s.sendall(b'ping\n')
+        resp = s.recv(1024).decode(errors='ignore').strip()
+        s.close()
+        break
+    except Exception:
+        pass
+if 'PONG' in resp:
+    print('PONG')
+" 2>/dev/null)
+    fi
+
+    if [ "$ipc_pong" = "PONG" ]; then
+        printf "${GREEN}[OK] ONLINE (Abstract Socket @termux_ipc)${RESET}\n"
+    else
+        printf "${RED}[--] OFFLINE / STANDALONE (Socket belum terhubung)${RESET}\n"
+    fi
+
+    # 2. Cek Port 3333 (Wallet Daemon)
+    printf " ├─ Ghost Web3 Wallet : "
+    if (exec 3<>/dev/tcp/127.0.0.1/3333) 2>/dev/null; then
+        exec 3<&- && exec 3>&-
+        printf "${GREEN}[OK] AKTIF (Port 3333 Terbuka)${RESET}\n"
+    else
+        printf "${YELLOW}[--] STANDBY / MATI (Port 3333 Tertutup)${RESET}\n"
+    fi
+
+    # 3. Cek Port 20128 (9router AI)
+    printf " ├─ 9router AI Engine : "
+    if (exec 3<>/dev/tcp/127.0.0.1/20128) 2>/dev/null; then
+        exec 3<&- && exec 3>&-
+        printf "${GREEN}[OK] AKTIF (Port 20128 Terbuka)${RESET}\n"
+    else
+        printf "${YELLOW}[--] STANDBY / MATI (Port 20128 Tertutup)${RESET}\n"
+    fi
+
+    # 4. Cek AGY Multi-Account Pool
+    printf " ├─ AGY Sandbox Pool  : "
+    local acc_cnt=$(ls -1 /root/.agy-accounts/*.json 2>/dev/null | wc -l)
+    local act_acc=$(cat /root/.agy-accounts/.active 2>/dev/null | tr -d '\r\n')
+    if [ "$acc_cnt" -gt 0 ]; then
+        printf "${GREEN}[OK] ${acc_cnt} Akun Terdaftar (Aktif: ${CYAN}${act_acc:-Default}${GREEN})${RESET}\n"
+    else
+        printf "${YELLOW}[!] Belum ada akun di ~/.agy-accounts/${RESET}\n"
+    fi
+
+    # 5. Cek Runtime Environment
+    printf " ├─ Node.js Runtime   : ${CYAN}$(node -v 2>/dev/null || echo 'Tidak terpasang')${RESET}\n"
+    printf " ├─ Python Runtime    : ${CYAN}$(python3 --version 2>/dev/null || echo 'Tidak terpasang')${RESET}\n"
+    printf " └─ Folder Kerja      : ${CYAN}$(readlink -f /project 2>/dev/null || echo '/project')${RESET}\n\n"
+}
+
+# ==============================================================================
+# DISPATCHER UTAMA
+# ==============================================================================
+CMD="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
+
+case "$CMD" in
+    manual|panduan|guide|buku)
+        show_manual
+        ;;
+    ipc)
+        show_ipc
+        ;;
+    payload|payloads)
+        show_payload
+        ;;
+    setup)
+        show_setup
+        ;;
+    status|check)
+        show_status
+        ;;
+    help|--help|-h|"")
+        show_overview
+        ;;
+    *)
+        show_overview
+        ;;
+esac

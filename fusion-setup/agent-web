@@ -10,6 +10,8 @@ const { execSync, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const net = require('net');
+const http = require('http');
+const https = require('https');
 
 const GREEN = '\x1b[32m';
 const CYAN = '\x1b[36m';
@@ -119,6 +121,48 @@ function saveRecipeToDisk(recipe) {
     } catch (e) {
         return { ok: false, error: e.message };
     }
+}
+
+function getAiEngineState() {
+    const candidates = [
+        '/root/wallet/ai_engine.json',
+        '/data/local/nhsystem/kali-arm64/root/wallet/ai_engine.json',
+        '/data/data/com.termux/files/home/wallet/ai_engine.json',
+        '/wallet/ai_engine.json'
+    ];
+    for (const f of candidates) {
+        if (fs.existsSync(f)) {
+            try {
+                const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+                if (data && data.activeEngine) return data.activeEngine.toLowerCase();
+            } catch (_) {}
+        }
+    }
+    return 'auto';
+}
+
+function setAiEngineState(engine) {
+    const clean = (engine || 'auto').toLowerCase();
+    const payload = JSON.stringify({ activeEngine: clean, updatedAt: Date.now() }, null, 2);
+    const dirs = [
+        '/root/wallet',
+        '/data/local/nhsystem/kali-arm64/root/wallet',
+        '/data/data/com.termux/files/home/wallet',
+        '/wallet'
+    ];
+    let written = false;
+    for (const d of dirs) {
+        if (fs.existsSync(d)) {
+            try {
+                fs.writeFileSync(path.join(d, 'ai_engine.json'), payload, 'utf8');
+                written = true;
+            } catch (_) {}
+        }
+    }
+    try {
+        evalJs(`if(typeof localStorage!=='undefined')localStorage.setItem('__agy_ai_engine__','${clean}')`);
+    } catch (_) {}
+    return { success: written, engine: clean };
 }
 
 function loadRecipe(recipeQuery) {
@@ -322,17 +366,51 @@ async function waitForRecipeCompletion(timeoutMs = 180000) {
             if (res && res.includes('INVALID_PASSWORD')) {
                 console.log(`[Modul Makro] ❌ ERROR: [AGY_ERROR: INVALID_PASSWORD] Password ditolak oleh situs web!`);
                 return 'INVALID_PASSWORD';
-            } else if (res && res.includes('COMPLETED')) {
-                console.log(`[Modul Makro] Seluruh alur makro telah selesai (COMPLETED)!`);
-                return true;
-            } else if (res && res.includes('STOPPED')) {
-                console.log(`[Modul Makro] Alur makro selesai / berhenti.`);
+            } else if (res && (res.includes('COMPLETED') || res.includes('STOPPED'))) {
+                const isCompleted = res.includes('COMPLETED');
+                console.log(`[Modul Makro] Alur makro selesai (${isCompleted ? 'COMPLETED' : 'STOPPED'})!`);
+                try {
+                    const rewCheck = runIpc(`eval "(function(){ var r = window.__AGY_LAST_REWARD__; if (!r && typeof extractRewardFromDom === 'function') r = extractRewardFromDom({}); return (r && (r.amount || r.status !== 'UNKNOWN')) ? JSON.stringify(r) : ''; })()"`);
+                    if (rewCheck && rewCheck.trim()) {
+                        const parsedRew = JSON.parse(rewCheck.trim());
+                        if (parsedRew.amount || parsedRew.status !== 'UNKNOWN') {
+                            const amtStr = parsedRew.amount ? `${parsedRew.amount} ${parsedRew.token || ''}`.trim() : '';
+                            console.log(`\n🎁 [HASIL KLAIM / REWARD]`);
+                            if (amtStr) console.log(`   └─ Nominal Token : ${amtStr}`);
+                            if (parsedRew.status) console.log(`   └─ Status Klaim  : ${parsedRew.status}`);
+                            if (parsedRew.text && parsedRew.text !== amtStr) console.log(`   └─ Keterangan    : ${parsedRew.text}`);
+                            saveRewardToLoopState(parsedRew);
+                        }
+                    }
+                } catch (_) {}
                 return true;
             }
         } catch (_) {}
     }
     console.log(`[Modul Makro] Batas waktu pemantauan (${timeoutMs / 1000}s) tercapai.`);
     return false;
+}
+
+function saveRewardToLoopState(rewardObj) {
+    const candidates = [
+        '/proc/1/root/data/data/com.termux/files/home/wallet/loop_state.json',
+        '/root/wallet/loop_state.json',
+        '/data/data/com.termux/files/home/wallet/loop_state.json'
+    ];
+    for (const p of candidates) {
+        try {
+            if (fs.existsSync(path.dirname(p))) {
+                let curData = {};
+                if (fs.existsSync(p)) {
+                    try { curData = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) {}
+                }
+                curData.last_reward = rewardObj;
+                curData.last_update = new Date().toISOString();
+                fs.writeFileSync(p, JSON.stringify(curData, null, 2), 'utf8');
+                break;
+            }
+        } catch (_) {}
+    }
 }
 
 function getAllSessionDirs() {
@@ -412,11 +490,14 @@ function getActiveProfile() {
         '/data/data/com.termux/files/home/wallet/.active_profile',
         '/wallet/.active_profile'
     ];
+    const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
     for (const p of candidates) {
         try {
             if (fs.existsSync(p)) {
                 const val = fs.readFileSync(p, 'utf8').trim();
-                if (val) return val;
+                if (val && !blacklist.includes(val.toLowerCase()) && !val.endsWith('.device') && !val.startsWith('fp_') && !val.startsWith('fresh_')) {
+                    return val;
+                }
             }
         } catch (_) {}
     }
@@ -425,6 +506,10 @@ function getActiveProfile() {
 
 function setActiveProfile(profile) {
     if (!profile) return;
+    const clean = profile.trim().toLowerCase();
+    const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
+    const finalProfile = (blacklist.includes(clean) || clean.endsWith('.device') || clean.startsWith('fresh_') || clean.startsWith('fp_')) ? 'default' : profile.trim();
+
     const paths = [
         '/root/wallet/.active_profile',
         '/data/data/com.termux/files/home/wallet/.active_profile',
@@ -434,14 +519,17 @@ function setActiveProfile(profile) {
         try {
             const dir = path.dirname(p);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(p, profile.trim(), 'utf8');
+            fs.writeFileSync(p, finalProfile, 'utf8');
             try { fs.chmodSync(p, 0o666); } catch (_) {}
         } catch (_) {}
     }
 }
 
 function registerProfile(profile) {
-    if (!profile || profile === 'default' || profile.startsWith('fresh_')) return;
+    if (!profile) return;
+    const clean = profile.trim().toLowerCase();
+    const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
+    if (blacklist.includes(clean) || clean.endsWith('.device') || clean.startsWith('fresh_') || clean.startsWith('fp_')) return;
     const paths = [
         '/root/wallet/webview_profiles.json',
         '/data/data/com.termux/files/home/wallet/webview_profiles.json',
@@ -454,15 +542,99 @@ function registerProfile(profile) {
                 try { list = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) {}
             }
             if (!Array.isArray(list)) list = [];
+            list = list.filter(x => x && !blacklist.includes(x.toLowerCase()) && !x.endsWith('.device') && !x.startsWith('fresh_') && !x.startsWith('fp_'));
             if (!list.includes(profile)) {
                 list.push(profile);
-                const dir = path.dirname(p);
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                fs.writeFileSync(p, JSON.stringify(list, null, 2), 'utf8');
-                try { fs.chmodSync(p, 0o666); } catch (_) {}
             }
+            const dir = path.dirname(p);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(p, JSON.stringify(list, null, 2), 'utf8');
+            try { fs.chmodSync(p, 0o666); } catch (_) {}
         } catch (_) {}
     }
+}
+
+function checkProfileSessionInfo(prof) {
+    if (!prof) return { hasSession: false };
+    const dirs = getAllSessionDirs();
+    let filePath = null;
+    for (const d of dirs) {
+        const candidate = path.join(d, `${prof}.json`);
+        if (fs.existsSync(candidate)) { filePath = candidate; break; }
+    }
+    if (!filePath && (prof === 'shaqilla' || prof === 'default')) {
+        const legacy = '/root/wallet/x_session.json';
+        if (fs.existsSync(legacy)) filePath = legacy;
+    }
+    if (!filePath) return { hasSession: false };
+    try {
+        const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        const cookies = raw.cookies || [];
+        const auth = cookies.find(c => c.name === 'auth_token' && (c.domain.includes('x.com') || c.domain.includes('twitter.com')));
+        if (!auth || !auth.value || auth.value.length < 20) return { hasSession: false };
+        if (auth.expires && auth.expires > 0 && auth.expires * 1000 < Date.now()) return { hasSession: false };
+        const twid = cookies.find(c => c.name === 'twid');
+        let handle = null;
+        if (twid && twid.value) {
+            const rawTwid = decodeURIComponent(twid.value).replace(/["']/g, '');
+            const uid = rawTwid.replace(/^u=/, '');
+            const knownHandles = {
+                '1314621600': '@shaqilla_emilia',
+                '1533016831161606144': '@Eryziggy',
+                '1604449944899063809': '@0xjamrud'
+            };
+            handle = knownHandles[uid] || rawTwid;
+        }
+        return { hasSession: true, handle };
+    } catch (_) {
+        return { hasSession: false };
+    }
+}
+
+function deleteProfileFromVault(prof) {
+    if (!prof) return { success: false, message: 'Nama profil kosong.' };
+    const clean = prof.trim();
+    let deletedFiles = [];
+
+    // 1. Hapus dari webview_profiles.json di semua path
+    const profileFiles = [
+        '/root/wallet/webview_profiles.json',
+        '/data/data/com.termux/files/home/wallet/webview_profiles.json',
+        '/wallet/webview_profiles.json'
+    ];
+    for (const pf of profileFiles) {
+        if (fs.existsSync(pf)) {
+            try {
+                let list = JSON.parse(fs.readFileSync(pf, 'utf8'));
+                if (Array.isArray(list) && list.includes(clean)) {
+                    list = list.filter(p => p !== clean);
+                    fs.writeFileSync(pf, JSON.stringify(list, null, 2), 'utf8');
+                    deletedFiles.push(path.basename(pf));
+                }
+            } catch (_) {}
+        }
+    }
+
+    // 2. Hapus berkas sesi dan device di direktori session
+    const dirs = getAllSessionDirs();
+    for (const d of dirs) {
+        const sessionFile = path.join(d, `${clean}.json`);
+        if (fs.existsSync(sessionFile)) {
+            try { fs.unlinkSync(sessionFile); deletedFiles.push(`sessions/${clean}.json`); } catch (_) {}
+        }
+        const devFile = path.join(d, `${clean}.device.json`);
+        if (fs.existsSync(devFile)) {
+            try { fs.unlinkSync(devFile); deletedFiles.push(`sessions/${clean}.device.json`); } catch (_) {}
+        }
+    }
+
+    // 3. Reset .active_profile jika profil yang dihapus sedang aktif
+    const active = getActiveProfile();
+    if (active === clean) {
+        setActiveProfile('default');
+    }
+
+    return { success: true, deletedFiles: Array.from(new Set(deletedFiles)) };
 }
 
 const DEVICE_POOL = [
@@ -537,6 +709,252 @@ async function runSessionWatcher(profile) {
 
 function sleep(ms) {
     return new Promise(r => setTimeout(r, ms));
+}
+
+async function queryAiForRecipeSynthesis(pageSummary) {
+    const systemPrompt = `You are an expert Web3 Airdrop & Faucet Automation Synthesizer.
+Analyze this dApp's interactive elements and generate a robust sequence of macro steps to connect wallet and claim rewards.
+
+Output strictly JSON with this structure:
+{
+  "name": "<short_clean_recipe_name>",
+  "targetUrl": "<url>",
+  "events": [
+    { "type": "click", "selector": "<css_selector>", "text": "<button_text>", "desc": "<step_desc>" },
+    { "type": "reward_extractor", "desc": "Ekstrak Hasil Klaim", "stopOnSuccess": true }
+  ]
+}
+
+Rules:
+1. Use ONLY the valid selectors provided in the input elements list.
+2. Step 1: Find and click 'Connect Wallet' or 'Connect' button if present.
+3. Step 2: If a modal with wallet choices appears, select 'Browser Wallet' or 'Injected' or 'Metamask'.
+4. Step 3: Find and click 'Claim', 'Faucet', 'Get Tokens', or 'Submit'.
+5. Last Step: Always include a 'reward_extractor' step.
+6. Output strictly the JSON object, no explanation.`;
+
+    const userPrompt = `Page Title: ${pageSummary.title}\nURL: ${pageSummary.url}\n\nInteractive Buttons:\n${JSON.stringify(pageSummary.buttons, null, 2)}\n\nInputs:\n${JSON.stringify(pageSummary.inputs, null, 2)}`;
+
+    // 1. Coba 9Router (Port 20128)
+    try {
+        const payload = JSON.stringify({
+            model: "antigravity",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userPrompt }
+            ],
+            temperature: 0.1
+        });
+        const resp = await new Promise((resolve, reject) => {
+            const req = http.request("http://127.0.0.1:20128/v1/chat/completions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+                timeout: 10000
+            }, res => {
+                let data = "";
+                res.on("data", chunk => data += chunk);
+                res.on("end", () => resolve(data));
+            });
+            req.on("error", reject);
+            req.on("timeout", () => req.destroy(new Error("Timeout")));
+            req.write(payload);
+            req.end();
+        });
+        const parsed = JSON.parse(resp);
+        const content = parsed.choices?.[0]?.message?.content;
+        if (content) {
+            const match = content.match(/\{[\s\S]*\}/);
+            if (match) return { success: true, recipe: JSON.parse(match[0]), engine: "9Router" };
+        }
+    } catch (_) {}
+
+    // 2. Coba DeepSeek via ai_config.json
+    try {
+        let apiKey = null;
+        const cfgFiles = ['/root/wallet/ai_config.json', '/data/data/com.termux/files/home/wallet/ai_config.json', '/wallet/ai_config.json'];
+        for (const f of cfgFiles) {
+            if (fs.existsSync(f)) {
+                try {
+                    const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+                    if (c.apiKey) { apiKey = c.apiKey; break; }
+                } catch (_) {}
+            }
+        }
+        if (apiKey) {
+            const payload = JSON.stringify({
+                model: "deepseek-flash",
+                messages: [
+                    { role: "system", content: systemPrompt },
+                    { role: "user", content: userPrompt }
+                ],
+                temperature: 0.1
+            });
+            const resp = await new Promise((resolve, reject) => {
+                const req = https.request("https://api.deepseek.com/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Length": Buffer.byteLength(payload)
+                    },
+                    timeout: 12000
+                }, res => {
+                    let data = "";
+                    res.on("data", chunk => data += chunk);
+                    res.on("end", () => resolve(data));
+                });
+                req.on("error", reject);
+                req.on("timeout", () => req.destroy(new Error("Timeout")));
+                req.write(payload);
+                req.end();
+            });
+            const parsed = JSON.parse(resp);
+            const content = parsed.choices?.[0]?.message?.content;
+            if (content) {
+                const match = content.match(/\{[\s\S]*\}/);
+                if (match) return { success: true, recipe: JSON.parse(match[0]), engine: "DeepSeek" };
+            }
+        }
+    } catch (_) {}
+
+    // 3. Coba AGY Ephemeral Runner dari Pool Akun
+    try {
+        const agyRes = await new Promise((resolve) => {
+            const baseHome = process.env.HOME || '/root';
+            const accDirs = [path.join(baseHome, '.agy-accounts'), '/root/.agy-accounts', '/data/data/com.termux/files/home/.agy-accounts'];
+            const accDir = accDirs.find(d => fs.existsSync(d));
+            let tokenSource = null;
+            if (accDir) {
+                try {
+                    const accFiles = fs.readdirSync(accDir).filter(f => f.endsWith('.json'));
+                    const actFile = path.join(accDir, '.active');
+                    const actName = fs.existsSync(actFile) ? fs.readFileSync(actFile, 'utf8').trim() : '';
+                    const workers = accFiles.filter(f => !f.startsWith(actName));
+                    const chosen = workers.length > 0 ? workers[0] : accFiles[0];
+                    if (chosen) tokenSource = path.join(accDir, chosen);
+                } catch (_) {}
+            }
+            if (!tokenSource) {
+                const legacy = [path.join(baseHome, '.gemini/antigravity-cli/antigravity-oauth-token'), '/root/.gemini/antigravity-cli/antigravity-oauth-token'];
+                tokenSource = legacy.find(p => fs.existsSync(p));
+            }
+            if (!tokenSource || !fs.existsSync(tokenSource)) return resolve(null);
+
+            const tmpDir = path.join('/tmp', `agy_web_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+            const cliDir = path.join(tmpDir, '.gemini', 'antigravity-cli');
+            try {
+                fs.mkdirSync(cliDir, { recursive: true });
+                fs.copyFileSync(tokenSource, path.join(cliDir, 'antigravity-oauth-token'));
+                fs.chmodSync(path.join(cliDir, 'antigravity-oauth-token'), 0o600);
+                const settingsCandidates = [path.join(baseHome, '.gemini/antigravity-cli/settings.json'), '/root/.gemini/antigravity-cli/settings.json'];
+                const foundSettings = settingsCandidates.find(s => fs.existsSync(s));
+                if (foundSettings) { try { fs.symlinkSync(foundSettings, path.join(cliDir, 'settings.json')); } catch (_) {} }
+            } catch (_) { return resolve(null); }
+
+            const fullPrompt = `[SYSTEM: ${systemPrompt}]\n\n${userPrompt}`;
+            const child = spawn('agy', ['-p', fullPrompt, '--effort', 'low', '--disable-slash-commands'], {
+                env: { ...process.env, HOME: tmpDir, AGY_EPHEMERAL: '1' },
+                timeout: 25000
+            });
+            let out = '';
+            child.stdout.on('data', chunk => out += chunk);
+            child.on('close', () => {
+                try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+                resolve(out.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim() || null);
+            });
+            child.on('error', () => {
+                try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+                resolve(null);
+            });
+        });
+
+        if (agyRes) {
+            const match = agyRes.match(/\{[\s\S]*\}/);
+            if (match) return { success: true, recipe: JSON.parse(match[0]), engine: "AGY-Pool" };
+        }
+    } catch (_) {}
+
+    return { success: false, error: "Semua AI Engine offline atau gagal mensintesis resep" };
+}
+
+async function handleSynthesizeRecipe(url, extraFlags = []) {
+    if (!url || url.startsWith('-')) {
+        console.error(`${RED}Error: Masukkan URL dApp/faucet yang ingin disintesis!${RESET}`);
+        console.error(`Contoh: web --synth https://testnet.faucet.xyz`);
+        process.exit(1);
+    }
+
+    console.log(`\n${CYAN}🤖 [AUTONOMOUS RECIPE SYNTHESIZER]${RESET}`);
+    console.log(`├─ Membuka Target URL : ${GREEN}${url}${RESET}`);
+    console.log(`└─ Menyiapkan halaman di WebView...`);
+
+    // 1. Buka URL di WebView
+    await handleOpenUrl(url, extraFlags.filter(f => f !== '--synth' && f !== '--auto-recipe' && f !== 'synth'));
+
+    console.log(`[Synthesizer] Menunggu DOM stabil (3.5 detik)...`);
+    await sleep(3500);
+
+    // 2. Ambil ringkasan DOM
+    console.log(`[Synthesizer] Mengambil snapshot elemen interaktif halaman...`);
+    const summaryRaw = evalJs('window.__AGY_GET_PAGE_SUMMARY__ ? window.__AGY_GET_PAGE_SUMMARY__() : JSON.stringify({error:"not_ready"})');
+    let summary = null;
+    try {
+        summary = JSON.parse(summaryRaw);
+    } catch (_) {
+        summary = null;
+    }
+
+    if (!summary || summary.error || (!summary.buttons?.length && !summary.inputs?.length)) {
+        console.error(`${RED}Error: Gagal mengekstrak elemen DOM halaman (${summary?.error || 'elemen kosong'}).${RESET}`);
+        console.error(`Pastikan halaman telah selesai dimuat di WebView.`);
+        process.exit(1);
+    }
+
+    console.log(`[Synthesizer] Terdeteksi: ${summary.buttons.length} Tombol, ${summary.inputs.length} Kolom Input.`);
+    console.log(`[Synthesizer] Mengirim data ke AI Trilogy untuk penalaran urutan makro...`);
+
+    // 3. Panggil AI
+    const aiResult = await queryAiForRecipeSynthesis(summary);
+    if (!aiResult.success || !aiResult.recipe) {
+        console.error(`${RED}Error: ${aiResult.error || 'AI gagal menyusun resep'}${RESET}`);
+        process.exit(1);
+    }
+
+    const generated = aiResult.recipe;
+    const sitePrefix = getSitePrefix(url);
+    const recipeName = generated.name ? `auto_${generated.name.replace(/[^a-zA-Z0-9_-]/g, '_')}` : `auto_${sitePrefix}_${Date.now()}`;
+    generated.name = recipeName;
+    generated.targetUrl = url;
+
+    // 4. Simpan ke database recipes_db.json
+    const saveRes = saveRecipeToDisk(generated);
+    if (!saveRes.ok) {
+        console.error(`${RED}Error menyimpan resep: ${saveRes.error}${RESET}`);
+        process.exit(1);
+    }
+
+    console.log(`\n${GREEN}✨ RESEP BERHASIL DISINTESIS OTONOM OLEH AI [${aiResult.engine}]!${RESET}`);
+    console.log(`├─ Nama Resep : ${CYAN}${recipeName}${RESET}`);
+    console.log(`├─ Total Step : ${YELLOW}${generated.events.length} langkah${RESET}`);
+    console.log(`├─ Database   : ${saveRes.file}`);
+    console.log(`└─ Daftar Langkah:`);
+    generated.events.forEach((ev, idx) => {
+        const typeStr = ev.type === 'reward_extractor' ? '[REWARD]' : (ev.type === 'solve_challenge' ? '[SOLVER]' : `[${ev.type.toUpperCase()}]`);
+        console.log(`   ${idx + 1}. ${CYAN}${typeStr.padEnd(9)}${RESET} ${ev.desc || ev.text || ev.selector}`);
+    });
+    console.log();
+
+    // 5. Jika disertakan flag --run atau --auto-run, langsung putar resepnya!
+    const shouldRun = extraFlags.includes('--run') || extraFlags.includes('--auto-run') || extraFlags.includes('--play');
+    if (shouldRun) {
+        console.log(`[Synthesizer] Flag --run terdeteksi. Memutar resep "${recipeName}" seketika...`);
+        const runFlags = ['--modul', recipeName, ...extraFlags.filter(f => f !== '--synth' && f !== '--auto-recipe' && f !== 'synth' && f !== '--run' && f !== '--auto-run' && f !== '--play')];
+        await handleOpenUrl(url, runFlags);
+    } else {
+        console.log(`${CYAN}💡 CARA MEMUTAR:${RESET}`);
+        console.log(`  web --modul ${recipeName} "${url}"`);
+        console.log(`  web --modul ${recipeName} --all-profiles --wallet "${url}"\n`);
+    }
 }
 
 function runIpc(ipcArgs) {
@@ -938,12 +1356,18 @@ async function executeSingleProfile(url, extraFlags = []) {
     for (let i = 0; i < extraFlags.length; i++) {
         const flag = extraFlags[i];
         if (flag === '--profile' && extraFlags[i + 1]) {
-            targetProfile = extraFlags[i + 1];
-            explicitProfile = true;
+            const nextP = extraFlags[i + 1];
+            if (nextP.toLowerCase() !== 'list' && nextP.toLowerCase() !== 'ls') {
+                targetProfile = nextP;
+                explicitProfile = true;
+            }
             i++;
         } else if (flag.startsWith('--profile=')) {
-            targetProfile = flag.split('=')[1] || 'default';
-            explicitProfile = true;
+            const nextP = flag.split('=')[1] || 'default';
+            if (nextP.toLowerCase() !== 'list' && nextP.toLowerCase() !== 'ls') {
+                targetProfile = nextP;
+                explicitProfile = true;
+            }
         } else if (flag === '--pwd' || flag === '--password') {
             if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
                 passwordArg = extraFlags[i + 1];
@@ -992,6 +1416,13 @@ async function executeSingleProfile(url, extraFlags = []) {
             }
         } else if (flag.startsWith('--stop-not=')) {
             stopNotWord = flag.split('=')[1] || null;
+        } else if (flag === '--ai' || flag === '--engine') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                setAiEngineState(extraFlags[i + 1]);
+                i++;
+            }
+        } else if (flag.startsWith('--ai=') || flag.startsWith('--engine=')) {
+            setAiEngineState(flag.split('=')[1]);
         } else {
             flagsWithoutProfile.push(flag);
         }
@@ -1047,7 +1478,7 @@ async function executeSingleProfile(url, extraFlags = []) {
         targetProfile = 'default';
     }
 
-    if (targetProfile && targetProfile !== 'default') {
+    if (targetProfile && targetProfile !== 'default' && targetProfile !== 'list') {
         process.env.FUSION_ACTIVE_PROFILE = targetProfile;
         if (!isWorkerTab) {
             setActiveProfile(targetProfile);
@@ -1122,7 +1553,7 @@ async function executeSingleProfile(url, extraFlags = []) {
 
     // Cleanup: Jika sesi berjalan di dalam tab worker terisolasi, tutup webview & tab worker
     if (isWorkerTab) {
-        if (targetProfile && targetProfile !== 'default') {
+        if (targetProfile && targetProfile !== 'default' && targetProfile !== 'list') {
             try {
                 runIpc(`save-session ${targetProfile}`);
             } catch (_) {}
@@ -1193,12 +1624,84 @@ async function main() {
         console.log(`  web snapshot                  (Ambil DOM dump aktif)`);
         console.log(`  web clear-cookies             (Bersihkan cookies & cache aktif)`);
         console.log(`  web eval "kode JS"            (Eksekusi JavaScript di WebView)`);
+        console.log(`  web --ai [mode]               (Atur mode AI Engine permanen: auto|deepseek|9router|agy|off)`);
+        console.log(`  web --synth <url> [--run]     (Sintesis resep makro dApp/faucet secara otonom via AI)`);
+        console.log(`  web quest "<teks postingan>"  (Eksekusi tugas whitelist/airdrop dinamis via AI)`);
         console.log(`  web close                     (Tutup WebView)\n`);
         console.log(`Contoh Integrasi Telegram / Sniper:`);
         console.log(`  web --wallet Master --modul web3_claim "https://web3.claim/gift/gsisbsi"`);
         console.log(`  web --modul giftedstock_claim --loop 5 "https://giftedstock.com/gift"`);
-        console.log(`  web --wallet --modul gacha_box --stop-if "Out of stock" --loop 20 "https://dapp.xyz/box"\n`);
+        console.log(`  web --wallet --modul gacha_box --stop-if "Out of stock" --loop 20 "https://dapp.xyz/box"`);
+        console.log(`  web --synth "https://testnet.faucet.xyz" --run --wallet\n`);
         process.exit(0);
+    }
+
+    const isAiCmd = (
+        cmd === '--ai' ||
+        cmd === 'ai' ||
+        cmd === '--engine' ||
+        cmd === 'engine'
+    );
+
+    if (isAiCmd) {
+        const targetEng = args[1] ? args[1].toLowerCase() : null;
+        const validEngines = ['auto', 'deepseek', '9router', 'agy', 'off'];
+        if (!targetEng) {
+            const current = getAiEngineState();
+            console.log(`\n🤖 [AI CO-PILOT & SOLVER STATE]`);
+            console.log(`├─ Mode Aktif Saat Ini : ${GREEN}${current.toUpperCase()}${RESET}`);
+            console.log(`├─ Pilihan Tersedia    : auto, deepseek, 9router, agy, off`);
+            console.log(`└─ Cara Mengubah       : ${GREEN}web --ai <auto|deepseek|9router|agy|off>${RESET}\n`);
+            process.exit(0);
+        }
+        if (!validEngines.includes(targetEng)) {
+            console.error(`${RED}Error: Mode AI tidak valid "${targetEng}"!${RESET}`);
+            console.error(`Pilihan yang didukung: auto, deepseek, 9router, agy, off`);
+            process.exit(1);
+        }
+        setAiEngineState(targetEng);
+        console.log(`\n${GREEN}✅ AI Engine berhasil diubah ke: [${targetEng.toUpperCase()}]${RESET}`);
+        console.log(`Pengaturan disimpan secara permanen di vault (/root/wallet/ai_engine.json) & WebView.\n`);
+        process.exit(0);
+    }
+
+    const isSynthCmd = (
+        cmd === '--synth' ||
+        cmd === 'synth' ||
+        cmd === '--auto-recipe' ||
+        cmd === 'auto-recipe'
+    );
+
+    if (isSynthCmd) {
+        let targetUrl = '';
+        const extra = [];
+        for (let i = 1; i < args.length; i++) {
+            const a = args[i];
+            if (!targetUrl && (a.startsWith('http://') || a.startsWith('https://') || (a.includes('.') && !a.startsWith('-')))) {
+                targetUrl = a;
+            } else {
+                extra.push(a);
+            }
+        }
+        await handleSynthesizeRecipe(targetUrl, extra);
+        process.exit(0);
+    }
+
+    const isQuestCmd = (
+        cmd === 'quest' ||
+        cmd === '--quest' ||
+        cmd === 'alpha' ||
+        cmd === '--alpha'
+    );
+
+    if (isQuestCmd) {
+        const questInput = args.slice(1).join(' ').trim();
+        const autoEngineScript = fs.existsSync('/root/wallet/auto_engine.cjs') ? '/root/wallet/auto_engine.cjs' : '/wallet/auto_engine.cjs';
+        if (fs.existsSync(autoEngineScript)) {
+            const child = spawn('node', [autoEngineScript, 'quest', questInput], { stdio: 'inherit' });
+            child.on('close', code => process.exit(code || 0));
+            return;
+        }
     }
 
     if (args.length === 0 || cmd === 'home' || cmd === 'beranda') {
@@ -1214,24 +1717,142 @@ async function main() {
         process.exit(0);
     }
 
-    if (cmd === 'profile' || cmd === 'profiles') {
-        const targetProf = args[1] || getActiveProfile();
-        if (targetProf && targetProf !== 'list' && targetProf !== 'default') {
-            printProfileBanner(targetProf);
-        }
+    const isProfileListCmd = (
+        cmd === '--profile-list' ||
+        cmd === 'profile-list' ||
+        cmd === '--profiles-list' ||
+        cmd === 'profiles-list' ||
+        cmd === 'profiles' ||
+        (cmd === 'profile' && (!args[1] || args[1].toLowerCase() === 'list' || args[1].toLowerCase() === 'ls')) ||
+        (cmd === '--profile' && (!args[1] || args[1].toLowerCase() === 'list' || args[1].toLowerCase() === 'ls'))
+    );
+
+    if (isProfileListCmd) {
         const active = getActiveProfile();
         const dirs = getAllSessionDirs();
         const profiles = new Set();
+        const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
+
+        const profileFiles = [
+            '/root/wallet/webview_profiles.json',
+            '/data/data/com.termux/files/home/wallet/webview_profiles.json',
+            '/wallet/webview_profiles.json'
+        ];
+        for (const pf of profileFiles) {
+            if (fs.existsSync(pf)) {
+                try {
+                    const list = JSON.parse(fs.readFileSync(pf, 'utf8'));
+                    if (Array.isArray(list)) {
+                        list.forEach(p => {
+                            if (p && typeof p === 'string' && !blacklist.includes(p.toLowerCase()) && !p.endsWith('.device') && !p.startsWith('fp_') && !p.startsWith('fresh_')) {
+                                profiles.add(p);
+                            }
+                        });
+                    }
+                } catch (_) {}
+            }
+        }
+
         for (const d of dirs) {
             try {
                 const files = fs.readdirSync(d);
                 for (const f of files) {
-                    if (f.endsWith('.json') && !f.endsWith('.device.json')) profiles.add(f.replace('.json', ''));
+                    if (f.endsWith('.json') && !f.endsWith('.device.json') && f !== 'webview_profiles.json') {
+                        const p = f.replace('.json', '');
+                        if (!blacklist.includes(p.toLowerCase()) && !p.endsWith('.device') && !p.startsWith('fp_') && !p.startsWith('fresh_')) {
+                            profiles.add(p);
+                        }
+                    }
                 }
             } catch (_) {}
         }
-        console.log(`Profil aktif saat ini : ${active}`);
-        console.log(`Sesi tersimpan di vault: ${Array.from(profiles).join(', ') || '(belum ada)'}`);
+
+        const profileList = Array.from(profiles);
+        console.log(`\n${CYAN}[ESO BROWSER] Daftar Profil Tersimpan di Vault:${RESET}`);
+        console.log(`├─ Profil Aktif Saat Ini : ${GREEN}${active || 'default'}${RESET}\n`);
+
+        if (profileList.length === 0) {
+            console.log(`⚠️  Belum ada profil tersimpan di vault.\n`);
+        } else {
+            console.log(`Daftar Profil Tersedia:`);
+            let dbWallets = [];
+            const dbCandidates = [
+                '/root/wallet/wallets_db.json',
+                '/data/data/com.termux/files/home/wallet/wallets_db.json',
+                '/wallet/wallets_db.json'
+            ];
+            for (const f of dbCandidates) {
+                if (fs.existsSync(f)) {
+                    try {
+                        const parsed = JSON.parse(fs.readFileSync(f, 'utf8'));
+                        if (parsed && Array.isArray(parsed.wallets)) {
+                            dbWallets = parsed.wallets;
+                            break;
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            const getDbWalletBadge = (profName) => {
+                const found = dbWallets.find(w => w.bind_webview && w.bind_webview.toLowerCase() === profName.toLowerCase());
+                if (found) {
+                    const shortAddr = found.address ? `${found.address.substring(0, 6)}...${found.address.substring(found.address.length - 4)}` : '';
+                    return ` ${CYAN}[DB: ${found.name} (${shortAddr})]${RESET}`;
+                }
+                return '';
+            };
+
+            profileList.forEach((p, idx) => {
+                const sess = checkProfileSessionInfo(p);
+                const isCurr = p === active ? ` ${GREEN}(AKTIF)${RESET}` : '';
+                const sessBadge = sess.hasSession
+                    ? `${GREEN}[✅ Sesi X: ${sess.handle || 'Aktif'}]${RESET}`
+                    : `${YELLOW}[⚠️  Belum Ada Sesi X]${RESET}`;
+                const wBadge = getDbWalletBadge(p);
+                console.log(`  [${idx + 1}] ${CYAN}${p.padEnd(12)}${RESET} ── ${sessBadge}${wBadge}${isCurr}`);
+            });
+            console.log();
+        }
+
+        console.log(`${CYAN}💡 CARA MENGGUNAKAN:${RESET}`);
+        console.log(`  Lihat daftar profil        : ${GREEN}web --profile-list${RESET}`);
+        console.log(`  Hapus profil tersimpan     : ${GREEN}web --profile-remove <nama_profil>${RESET}`);
+        console.log(`  Buka beranda dengan profil : ${GREEN}web --profile <nama_profil>${RESET}`);
+        console.log(`  Buka URL dengan profil     : ${GREEN}web --profile <nama_profil> <url>${RESET}`);
+        console.log(`  Load sesi ke browser aktif : ${GREEN}web load <nama_profil>${RESET}`);
+        console.log(`  Eject sesi aktif           : ${GREEN}web eject${RESET}\n`);
+        process.exit(0);
+    }
+
+    const isProfileRemoveCmd = (
+        cmd === '--profile-remove' ||
+        cmd === 'profile-remove' ||
+        cmd === '--remove-profile' ||
+        cmd === 'remove-profile' ||
+        cmd === '--profile-delete' ||
+        cmd === 'profile-delete' ||
+        cmd === 'delete-profile' ||
+        cmd === 'rm-profile' ||
+        cmd === 'del-profile' ||
+        (cmd === 'profile' && (args[1] === 'remove' || args[1] === 'rm' || args[1] === 'delete' || args[1] === 'del'))
+    );
+
+    if (isProfileRemoveCmd) {
+        const targetProf = (cmd === 'profile' ? args[2] : args[1]);
+        if (!targetProf) {
+            console.log(`${RED}Error: Tentukan nama profil yang ingin dihapus!${RESET}`);
+            console.log(`Contoh: web --profile-remove wallet_1`);
+            process.exit(1);
+        }
+        const res = deleteProfileFromVault(targetProf);
+        if (res.success) {
+            console.log(`\n${GREEN}✅ Profil "${targetProf}" berhasil dihapus dari vault WebView.${RESET}`);
+            if (res.deletedFiles.length > 0) {
+                console.log(`🗑️ Berkas dibersihkan: ${res.deletedFiles.join(', ')}\n`);
+            }
+        } else {
+            console.log(`\n${RED}❌ Gagal menghapus profil: ${res.message}${RESET}\n`);
+        }
         process.exit(0);
     }
 
@@ -1358,10 +1979,11 @@ async function main() {
         process.exit(0);
     }
 
-    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost)
+    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost / --ai / --engine)
     const isUrlOrAutomation = args.some(a => 
         a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
         a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
+        a.startsWith('--ai') || a.startsWith('--engine') ||
         a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
         a === 'home' || a === 'beranda' ||
@@ -1369,12 +1991,12 @@ async function main() {
         (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json'))
     );
 
-    if (isUrlOrAutomation && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close'].includes(cmd)) {
+    if (isUrlOrAutomation && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close', '--synth', 'synth', '--auto-recipe', 'auto-recipe'].includes(cmd)) {
         let targetUrl = '';
         let passFlags = [];
         for (let i = 0; i < args.length; i++) {
             const item = args[i];
-            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password') {
+            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine') {
                 passFlags.push(item);
                 if (args[i + 1] && !args[i + 1].startsWith('--')) {
                     // Cek jika item adalah option yang mengambil value
@@ -1393,6 +2015,10 @@ async function main() {
         }
         if (!targetUrl) {
             targetUrl = 'file:///android_asset/webview_engine/home.html';
+        }
+        if (passFlags.includes('--synth') || passFlags.includes('--auto-recipe')) {
+            await handleSynthesizeRecipe(targetUrl, passFlags);
+            process.exit(0);
         }
         await handleOpenUrl(targetUrl, passFlags);
         process.exit(0);

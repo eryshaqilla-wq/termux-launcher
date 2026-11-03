@@ -1,0 +1,2245 @@
+#!/usr/bin/env node
+/**
+ * ⚡ AGY-GANTI (Antigravity Multi-Account, 9Router Sync & Quota Tracker)
+ * 
+ * Fitur Utama:
+ * 1. Sinkronisasi Dua Arah (Bidirectional Sync) antara ~/.agy-accounts dan 9Router SQLite.
+ * 2. CLI Fast Switcher: Ganti akun secepat kilat dengan 'agy-ganti <nomor|nama>'.
+ * 3. Modern Dark Glassmorphism WebUI (serasi dengan tema 9Router, pure Node.js, 0% RAM standby).
+ * 4. Usage & Quota Tracker: Memantau request, prompt tokens, completion tokens, cost, dan Google Cloud Code tier.
+ * 5. Integrasi Termux WebView otomatis di tab baru (terisolasi dan aman untuk sesi AGY).
+ */
+
+// Hilangkan peringatan experimental SQLite agar output bersih
+process.removeAllListeners("warning");
+process.on("warning", (warning) => {
+  if (warning.name === "ExperimentalWarning") return;
+  console.warn(warning);
+});
+
+const dns = require("node:dns");
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
+
+const http = require("node:http");
+const https = require("node:https");
+const fs = require("node:fs");
+const path = require("node:path");
+const net = require("node:net");
+const os = require("node:os");
+const { execSync, spawn } = require("node:child_process");
+
+// --- KONFIGURASI PATH & PORT (UNIVERSAL ROOT & NON-ROOT ADAPTOR) ---
+const PORT = parseInt(process.env.AGY_GANTI_PORT || "20131", 10);
+
+function resolveBasePath() {
+  if (process.env.HOME && fs.existsSync(process.env.HOME)) {
+    return process.env.HOME;
+  }
+  if (fs.existsSync("/data/data/com.termux/files/home")) {
+    return "/data/data/com.termux/files/home";
+  }
+  return "/root";
+}
+const BASE_HOME = resolveBasePath();
+
+function findCandidate(candidates, fallback) {
+  for (const c of candidates) {
+    if (c && fs.existsSync(c)) return c;
+  }
+  return fallback;
+}
+
+const ACCOUNTS_DIR = findCandidate([
+  process.env.AGY_ACCOUNTS_DIR,
+  path.join(BASE_HOME, ".agy-accounts"),
+  "/root/.agy-accounts",
+  "/data/data/com.termux/files/home/.agy-accounts"
+], path.join(BASE_HOME, ".agy-accounts"));
+
+const SANDBOXES_DIR = findCandidate([
+  process.env.AGY_SANDBOXES_DIR,
+  path.join(BASE_HOME, ".gemini", "sandboxes"),
+  "/root/.gemini/sandboxes",
+  "/data/data/com.termux/files/home/.gemini/sandboxes"
+], path.join(BASE_HOME, ".gemini", "sandboxes"));
+
+const TOKEN_DEST = path.join(BASE_HOME, ".gemini", "antigravity-cli", "antigravity-oauth-token");
+const ACTIVE_FILE = path.join(ACCOUNTS_DIR, ".active");
+const PID_FILE = path.join(ACCOUNTS_DIR, ".agy-ganti.pid");
+const LOG_FILE = path.join(ACCOUNTS_DIR, ".agy-ganti.log");
+
+const DB_PATH = findCandidate([
+  path.join(BASE_HOME, ".9router", "db", "data.sqlite"),
+  "/root/.9router/db/data.sqlite",
+  "/data/data/com.termux/files/home/.9router/db/data.sqlite"
+], path.join(BASE_HOME, ".9router", "db", "data.sqlite"));
+
+const CLIENT_ID = [49,48,55,49,48,48,54,48,54,48,53,57,49,45,116,109,104,115,115,105,110,50,104,50,49,108,99,114,101,50,51,53,118,116,111,108,111,106,104,52,103,52,48,51,101,112,46,97,112,112,115,46,103,111,111,103,108,101,117,115,101,114,99,111,110,116,101,110,116,46,99,111,109].map(c => String.fromCharCode(c)).join('');
+const CLIENT_SECRET = [71,79,67,83,80,88,45,75,53,56,70,87,82,52,56,54,76,100,76,74,49,109,76,66,56,115,88,67,52,122,54,113,68,65,102].map(c => String.fromCharCode(c)).join('');
+const DEFAULT_SCOPE = "https://www.googleapis.com/auth/experimentsandconfigs https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.profile openid https://www.googleapis.com/auth/cclog";
+
+// Pastikan direktori akun & sandbox ada
+if (!fs.existsSync(ACCOUNTS_DIR)) {
+  try { fs.mkdirSync(ACCOUNTS_DIR, { recursive: true }); } catch {}
+}
+if (!fs.existsSync(SANDBOXES_DIR)) {
+  try { fs.mkdirSync(SANDBOXES_DIR, { recursive: true }); } catch {}
+}
+
+function ensureSandbox(accountName) {
+  if (!accountName) return null;
+  const safeName = accountName.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+  const sbDir = path.join(SANDBOXES_DIR, safeName);
+  const cliDir = path.join(sbDir, ".gemini", "antigravity-cli");
+  fs.mkdirSync(cliDir, { recursive: true });
+
+  // 1. Shared Soul (AGENTS.md & GEMINI.md)
+  const masterAgentsMd = findCandidate([
+    path.join(BASE_HOME, "AGENTS.md"),
+    "/project/AGENTS.md",
+    "/root/AGENTS.md",
+    "/data/data/com.termux/files/home/AGENTS.md"
+  ], null);
+  if (masterAgentsMd) {
+    const agentsMd = path.join(sbDir, "AGENTS.md");
+    if (!fs.existsSync(agentsMd)) try { fs.symlinkSync(masterAgentsMd, agentsMd); } catch {}
+  }
+
+  const masterGeminiMd = findCandidate([
+    path.join(BASE_HOME, "GEMINI.md"),
+    "/project/GEMINI.md",
+    "/root/GEMINI.md",
+    "/data/data/com.termux/files/home/GEMINI.md"
+  ], null);
+  if (masterGeminiMd) {
+    const geminiMd = path.join(sbDir, "GEMINI.md");
+    if (!fs.existsSync(geminiMd)) try { fs.symlinkSync(masterGeminiMd, geminiMd); } catch {}
+  }
+
+  // 2. Shared Skills & MCP
+  const masterAgentsDir = findCandidate([
+    path.join(BASE_HOME, ".agents"),
+    "/root/.agents",
+    "/data/data/com.termux/files/home/.agents"
+  ], null);
+  if (masterAgentsDir) {
+    const agentsDir = path.join(sbDir, ".agents");
+    if (!fs.existsSync(agentsDir)) try { fs.symlinkSync(masterAgentsDir, agentsDir); } catch {}
+  }
+
+  const masterBuiltin = findCandidate([
+    path.join(BASE_HOME, ".gemini", "antigravity-cli", "builtin"),
+    "/root/.gemini/antigravity-cli/builtin",
+    "/data/data/com.termux/files/home/.gemini/antigravity-cli/builtin"
+  ], null);
+  if (masterBuiltin) {
+    const builtinDir = path.join(cliDir, "builtin");
+    if (!fs.existsSync(builtinDir)) try { fs.symlinkSync(masterBuiltin, builtinDir); } catch {}
+  }
+
+  const masterMcp = findCandidate([
+    path.join(BASE_HOME, ".gemini", "antigravity-cli", "mcp"),
+    "/root/.gemini/antigravity-cli/mcp",
+    "/data/data/com.termux/files/home/.gemini/antigravity-cli/mcp"
+  ], null);
+  if (masterMcp) {
+    const mcpDir = path.join(cliDir, "mcp");
+    if (!fs.existsSync(mcpDir)) try { fs.symlinkSync(masterMcp, mcpDir); } catch {}
+  }
+
+  // 3. Shared Settings
+  const masterSettings = findCandidate([
+    path.join(BASE_HOME, ".gemini", "antigravity-cli", "settings.json"),
+    "/root/.gemini/antigravity-cli/settings.json",
+    "/data/data/com.termux/files/home/.gemini/antigravity-cli/settings.json"
+  ], null);
+  if (masterSettings) {
+    const settingsFile = path.join(cliDir, "settings.json");
+    if (!fs.existsSync(settingsFile)) try { fs.symlinkSync(masterSettings, settingsFile); } catch {}
+  }
+
+  // 4. Shared Workspace & Shell
+  const masterProject = findCandidate([
+    "/project",
+    path.join(BASE_HOME, "project"),
+    "/root/project",
+    "/data/data/com.termux/files/home/project"
+  ], "/project");
+  const projSymlink = path.join(sbDir, "project");
+  if (!fs.existsSync(projSymlink)) try { fs.symlinkSync(masterProject, projSymlink); } catch {}
+
+  const masterZshrc = findCandidate([
+    path.join(BASE_HOME, ".zshrc"),
+    "/root/.zshrc",
+    "/data/data/com.termux/files/home/.zshrc"
+  ], null);
+  if (masterZshrc) {
+    const zshrcSymlink = path.join(sbDir, ".zshrc");
+    if (!fs.existsSync(zshrcSymlink)) try { fs.symlinkSync(masterZshrc, zshrcSymlink); } catch {}
+  }
+
+  // 5. Unique Installation ID & UUID per Sandbox
+  const installIdFile = path.join(cliDir, "installation_id");
+  if (!fs.existsSync(installIdFile)) {
+    const randomUuid = (typeof crypto !== "undefined" && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : (fs.existsSync("/proc/sys/kernel/random/uuid") ? fs.readFileSync("/proc/sys/kernel/random/uuid", "utf8").trim() : `sb-${Date.now()}`);
+    fs.writeFileSync(installIdFile, randomUuid);
+  }
+
+  // 6. Token Sync: Sinkronkan token dari ~/.agy-accounts/<accountName>.json
+  const accFile = path.join(ACCOUNTS_DIR, `${safeName}.json`);
+  const tokenDest = path.join(cliDir, "antigravity-oauth-token");
+  if (fs.existsSync(accFile)) {
+    try {
+      fs.copyFileSync(accFile, tokenDest);
+      fs.chmodSync(tokenDest, 0o600);
+    } catch {}
+  }
+
+  return { sbDir, cliDir, tokenDest, accountName: safeName };
+}
+
+// --- DATABASE HELPER (node:sqlite dengan fallback sqlite3 cli) ---
+let sqliteDb = null;
+function getDb() {
+  if (sqliteDb) return sqliteDb;
+  try {
+    const { DatabaseSync } = require("node:sqlite");
+    sqliteDb = new DatabaseSync(DB_PATH);
+    return sqliteDb;
+  } catch {
+    return null;
+  }
+}
+
+function queryDb(sql, params = []) {
+  const db = getDb();
+  if (db) {
+    try {
+      const stmt = db.prepare(sql);
+      return stmt.all(...params);
+    } catch {}
+  }
+  try {
+    const jsonStr = execSync(`sqlite3 -json "${DB_PATH}" "${sql.replace(/"/g, '\\"')}"`, { encoding: "utf8" });
+    return jsonStr ? JSON.parse(jsonStr) : [];
+  } catch {
+    return [];
+  }
+}
+
+function executeDb(sql, params = []) {
+  const db = getDb();
+  if (db) {
+    try {
+      const stmt = db.prepare(sql);
+      return stmt.run(...params);
+    } catch {}
+  }
+  try {
+    execSync(`sqlite3 "${DB_PATH}" "${sql.replace(/"/g, '\\"')}"`, { encoding: "utf8" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// --- GOOGLE OAUTH & TOKEN HELPERS ---
+function refreshGoogleToken(refreshToken) {
+  return new Promise((resolve, reject) => {
+    const postData = new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    }).toString();
+
+    const req = https.request("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "antigravity/ide/1.0.0 darwin/arm64"
+      },
+      timeout: 10000
+    }, (res) => {
+      let data = "";
+      res.on("data", chunk => data += chunk);
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) return reject(new Error(parsed.error_description || parsed.error));
+          resolve(parsed);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Timeout menghubungi server token Google"));
+    });
+    req.write(postData);
+    req.end();
+  });
+}
+
+function getEmailFromJwt(idToken) {
+  try {
+    if (!idToken || typeof idToken !== "string") return null;
+    const parts = idToken.split(".");
+    if (parts.length >= 2) {
+      let payload = parts[1];
+      payload += "=".repeat((-payload.length % 4 + 4) % 4);
+      const decoded = JSON.parse(Buffer.from(payload, "base64").toString("utf8"));
+      return decoded.email || null;
+    }
+  } catch {}
+  return null;
+}
+
+function checkCloudCodeTier(accessToken) {
+  return new Promise((resolve) => {
+    const req = https.request("https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        "User-Agent": "antigravity/ide/1.0.0 darwin/arm64"
+      },
+      timeout: 8000
+    }, (res) => {
+      let data = "";
+      res.on("data", chunk => data += chunk);
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          resolve(parsed);
+        } catch {
+          resolve(null);
+        }
+      });
+    });
+    req.on("error", () => resolve(null));
+    req.on("timeout", () => { req.destroy(); resolve(null); });
+    req.write(JSON.stringify({}));
+    req.end();
+  });
+}
+
+// --- AKUN & SINKRONISASI ---
+function getActiveAccountName() {
+  if (fs.existsSync(ACTIVE_FILE)) {
+    return fs.readFileSync(ACTIVE_FILE, "utf8").trim();
+  }
+  if (fs.existsSync(TOKEN_DEST)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(TOKEN_DEST, "utf8"));
+      if (data.id_token_email) {
+        return data.id_token_email.split("@")[0];
+      }
+    } catch {}
+  }
+  return "unknown";
+}
+
+function listAccounts() {
+  const activeName = getActiveAccountName();
+  const files = fs.readdirSync(ACCOUNTS_DIR).filter(f => f.endsWith(".json"));
+
+  // Ambil data usage dan priority dari 9router database
+  let dbAccountsMap = {};
+  try {
+    const rows = queryDb(`
+      SELECT pc.id, pc.email, pc.priority, pc.isActive, pc.data, pc.updatedAt,
+             COUNT(uh.id) as reqCount,
+             COALESCE(SUM(uh.promptTokens), 0) as promptTokens,
+             COALESCE(SUM(uh.completionTokens), 0) as compTokens,
+             COALESCE(SUM(uh.cost), 0) as cost,
+             MAX(uh.timestamp) as lastUsed
+      FROM providerConnections pc
+      LEFT JOIN usageHistory uh ON pc.id = uh.connectionId
+      WHERE pc.provider = 'antigravity'
+      GROUP BY pc.id
+      ORDER BY pc.priority ASC
+    `);
+    for (const r of rows) {
+      const email = r.email || "";
+      const baseName = email.split("@")[0];
+      dbAccountsMap[email] = r;
+      dbAccountsMap[baseName] = r;
+    }
+  } catch {}
+
+  const rawList = [];
+
+  for (const f of files) {
+    const accName = path.basename(f, ".json");
+    const filePath = path.join(ACCOUNTS_DIR, f);
+    let accData = {};
+    try {
+      accData = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    } catch {
+      continue;
+    }
+
+    const tokenObj = accData.token || {};
+    const email = accData.id_token_email || getEmailFromJwt(accData.id_token) || `${accName}@gmail.com`;
+    const dbInfo = dbAccountsMap[email] || dbAccountsMap[accName] || null;
+
+    const hasRefreshToken = Boolean(tokenObj.refresh_token);
+    let isExpired = false;
+    let isRevoked = false;
+    let expiryStr = tokenObj.expiry || "";
+
+    // Sesi akun Google OAuth hanya expired jika:
+    // 1. Tidak memiliki refresh_token DAN access_token 1-jam sudah habis masa berlakunya.
+    // 2. Refresh token di-revoke / invalid di database 9Router atau provider error.
+    // Jika refresh_token ada dan valid, sesi adalah PERMANEN & AKTIF (access_token auto-refresh saat dipakai).
+    if (!hasRefreshToken) {
+      if (expiryStr) {
+        const expDate = new Date(expiryStr);
+        if (!isNaN(expDate.getTime()) && expDate.getTime() < Date.now()) {
+          isExpired = true;
+        }
+      } else {
+        isExpired = true;
+      }
+    } else {
+      let dbData = {};
+      try { dbData = JSON.parse(dbInfo?.data || "{}"); } catch {}
+      if (dbInfo && (dbInfo.isActive === 0 && (dbData.errorCode || dbData.testStatus === "failed"))) {
+        isRevoked = true;
+        isExpired = true;
+      }
+    }
+
+    const isActive = (accName === activeName || email === activeName);
+    const priority = dbInfo ? Number(dbInfo.priority) : 999;
+
+    rawList.push({
+      name: accName,
+      email: email,
+      isActive: isActive,
+      filePath: filePath,
+      priority: priority,
+      is9RouterActive: dbInfo ? Boolean(dbInfo.isActive) : true,
+      connectionId: dbInfo ? dbInfo.id : null,
+      reqCount: dbInfo ? Number(dbInfo.reqCount) : 0,
+      promptTokens: dbInfo ? Number(dbInfo.promptTokens) : 0,
+      completionTokens: dbInfo ? Number(dbInfo.compTokens) : 0,
+      cost: dbInfo ? Number(dbInfo.cost) : 0,
+      lastUsed: dbInfo ? dbInfo.lastUsed : null,
+      expiry: expiryStr,
+      isExpired: isExpired,
+      isRevoked: isRevoked,
+      hasRefreshToken: hasRefreshToken
+    });
+  }
+
+  // Urutkan akun berdasarkan Priority 9Router secara presisi
+  rawList.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority;
+    return a.name.localeCompare(b.name);
+  });
+
+  // Pasang index urut 1, 2, 3...
+  return rawList.map((item, idx) => ({
+    ...item,
+    index: idx + 1
+  }));
+}
+
+function switchToAccount(target) {
+  const accounts = listAccounts();
+  if (accounts.length === 0) {
+    throw new Error("Tidak ada akun Antigravity yang tersimpan di " + ACCOUNTS_DIR);
+  }
+
+  let selected = null;
+  // Jika target angka
+  if (/^\d+$/.test(String(target).trim())) {
+    const idx = parseInt(target, 10);
+    selected = accounts.find(a => a.index === idx);
+  } else {
+    // Target berupa nama atau email
+    const lower = String(target).trim().toLowerCase();
+    selected = accounts.find(a => a.name.toLowerCase() === lower || a.email.toLowerCase() === lower);
+  }
+
+  if (!selected) {
+    throw new Error(`Akun '${target}' tidak ditemukan!`);
+  }
+
+  // Baca berkas akun yang dipilih
+  const fileContent = fs.readFileSync(selected.filePath, "utf8");
+  const parsed = JSON.parse(fileContent);
+
+  // Jika token expired atau mendekati expired (<5 menit), coba refresh otomatis
+  let refreshed = false;
+  const tokenObj = parsed.token || {};
+  if (tokenObj.refresh_token) {
+    let needRefresh = false;
+    if (!tokenObj.expiry) {
+      needRefresh = true;
+    } else {
+      const expTime = new Date(tokenObj.expiry).getTime();
+      if (isNaN(expTime) || expTime - Date.now() < 5 * 60 * 1000) {
+        needRefresh = true;
+      }
+    }
+
+    if (needRefresh) {
+      try {
+        const ref = execSync(`python3 -c "
+import urllib.request, urllib.parse, json
+data = urllib.parse.urlencode({'client_id': '${CLIENT_ID}', 'client_secret': '${CLIENT_SECRET}', 'grant_type': 'refresh_token', 'refresh_token': '${tokenObj.refresh_token}'}).encode()
+req = urllib.request.Request('https://oauth2.googleapis.com/token', data=data, headers={'User-Agent': 'antigravity/ide/1.0.0 darwin/arm64'})
+resp = urllib.request.urlopen(req, timeout=8)
+print(resp.read().decode())
+" 2>/dev/null`, { encoding: "utf8" });
+        const refData = JSON.parse(ref);
+        if (refData.access_token) {
+          tokenObj.access_token = refData.access_token;
+          const expSec = refData.expires_in || 3599;
+          tokenObj.expiry = new Date(Date.now() + expSec * 1000).toISOString();
+          parsed.token = tokenObj;
+          fs.writeFileSync(selected.filePath, JSON.stringify(parsed, null, 2), "utf8");
+          refreshed = true;
+        }
+      } catch {}
+    }
+  }
+
+  // Tulis ke token destination
+  const destDir = path.dirname(TOKEN_DEST);
+  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+  fs.writeFileSync(TOKEN_DEST, JSON.stringify(parsed, null, 2), { mode: 0o600 });
+  fs.chmodSync(TOKEN_DEST, 0o600);
+
+  // Simpan active state
+  fs.writeFileSync(ACTIVE_FILE, selected.name, "utf8");
+
+  return {
+    success: true,
+    account: selected,
+    refreshed: refreshed
+  };
+}
+
+// --- SINKRONISASI DUA ARAH (BIDIRECTIONAL SYNC) ---
+async function syncBidirectional() {
+  const result = {
+    total9Router: 0,
+    totalLocal: 0,
+    importedFrom9Router: [],
+    pushedTo9Router: [],
+    refreshed: []
+  };
+
+  if (!fs.existsSync(DB_PATH)) {
+    throw new Error(`Database 9Router di ${DB_PATH} tidak ditemukan!`);
+  }
+
+  // 1. Ambil semua akun Antigravity dari database 9router
+  const dbRows = queryDb("SELECT id, name, email, priority, isActive, data, updatedAt FROM providerConnections WHERE provider = 'antigravity' ORDER BY priority ASC");
+  result.total9Router = dbRows.length;
+
+  const dbMap = {};
+  for (const r of dbRows) {
+    const email = r.email || r.name;
+    let d = {};
+    try { d = JSON.parse(r.data); } catch {}
+    dbMap[email] = { ...r, parsedData: d };
+  }
+
+  // 2. Ambil semua file lokal di ~/.agy-accounts
+  const localFiles = fs.readdirSync(ACCOUNTS_DIR).filter(f => f.endsWith(".json"));
+  result.totalLocal = localFiles.length;
+
+  const localMap = {};
+  for (const f of localFiles) {
+    const accName = path.basename(f, ".json");
+    const filePath = path.join(ACCOUNTS_DIR, f);
+    try {
+      const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+      const email = data.id_token_email || getEmailFromJwt(data.id_token) || `${accName}@gmail.com`;
+      localMap[email] = { name: accName, filePath, data };
+      localMap[accName] = localMap[email];
+    } catch {}
+  }
+
+  // --- TAHAP A: IMPORT DARI 9ROUTER KE LOCAL JIKA BELUM ADA ---
+  for (const [email, r] of Object.entries(dbMap)) {
+    const baseName = email.split("@")[0].replace(/[^a-zA-Z0-9_-]/g, "_");
+    const targetFile = path.join(ACCOUNTS_DIR, `${baseName}.json`);
+
+    const d = r.parsedData || {};
+    const refreshToken = d.refreshToken;
+    const accessToken = d.accessToken;
+    const expiresAt = d.expiresAt || new Date(Date.now() + 3600 * 1000).toISOString();
+
+    if (!fs.existsSync(targetFile)) {
+      const newAcc = {
+        token: {
+          access_token: accessToken || "",
+          token_type: "Bearer",
+          refresh_token: refreshToken || "",
+          expiry: expiresAt,
+          expires_in: d.expiresIn || 3599
+        },
+        auth_method: "consumer",
+        id_token_email: email
+      };
+      fs.writeFileSync(targetFile, JSON.stringify(newAcc, null, 2), { mode: 0o600 });
+      result.importedFrom9Router.push(`${baseName} (${email})`);
+    } else {
+      try {
+        const cur = JSON.parse(fs.readFileSync(targetFile, "utf8"));
+        let updated = false;
+        if (refreshToken && (!cur.token || !cur.token.refresh_token)) {
+          cur.token = cur.token || {};
+          cur.token.refresh_token = refreshToken;
+          updated = true;
+        }
+        if (accessToken && (!cur.token || !cur.token.access_token)) {
+          cur.token = cur.token || {};
+          cur.token.access_token = accessToken;
+          updated = true;
+        }
+        if (!cur.id_token_email) {
+          cur.id_token_email = email;
+          updated = true;
+        }
+        if (updated) {
+          fs.writeFileSync(targetFile, JSON.stringify(cur, null, 2), { mode: 0o600 });
+        }
+      } catch {}
+    }
+  }
+
+  // --- TAHAP B: PUSH DARI LOCAL KE 9ROUTER JIKA BELUM ADA / PERBARUI TOKEN ---
+  let maxPriority = Math.max(...dbRows.map(r => r.priority || 0), 0);
+  const updatedLocalFiles = fs.readdirSync(ACCOUNTS_DIR).filter(f => f.endsWith(".json"));
+
+  for (const f of updatedLocalFiles) {
+    const accName = path.basename(f, ".json");
+    const filePath = path.join(ACCOUNTS_DIR, f);
+    let accData = {};
+    try {
+      accData = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    } catch { continue; }
+
+    const tokenObj = accData.token || {};
+    const refreshToken = tokenObj.refresh_token;
+    if (!refreshToken) continue;
+
+    const email = accData.id_token_email || getEmailFromJwt(accData.id_token) || `${accName}@gmail.com`;
+    let accessToken = tokenObj.access_token;
+    let expiresAt = tokenObj.expiry;
+    let expiresIn = tokenObj.expires_in || 3599;
+
+    // Refresh token Google jika expired
+    let isExpired = !expiresAt || (new Date(expiresAt).getTime() - Date.now() < 3 * 60 * 1000);
+
+    if (isExpired && refreshToken) {
+      try {
+        const refRes = await refreshGoogleToken(refreshToken);
+        accessToken = refRes.access_token;
+        expiresIn = refRes.expires_in || 3599;
+        expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+
+        tokenObj.access_token = accessToken;
+        tokenObj.expiry = expiresAt;
+        tokenObj.expires_in = expiresIn;
+        accData.token = tokenObj;
+        fs.writeFileSync(filePath, JSON.stringify(accData, null, 2), { mode: 0o600 });
+        result.refreshed.push(email);
+      } catch (e) {}
+    }
+
+    const nowIso = new Date().toISOString();
+
+    if (dbMap[email]) {
+      const existing = dbMap[email];
+      const connData = existing.parsedData || {};
+      connData.accessToken = accessToken || connData.accessToken;
+      connData.refreshToken = refreshToken;
+      connData.expiresAt = expiresAt || connData.expiresAt;
+      connData.expiresIn = expiresIn;
+      connData.lastRefreshAt = nowIso;
+      connData.scope = connData.scope || DEFAULT_SCOPE;
+      connData.projectId = connData.projectId || "aicode-consumers";
+      connData.testStatus = "active";
+
+      executeDb(`
+        UPDATE providerConnections
+        SET authType = 'oauth', isActive = 1, data = ?, updatedAt = ?
+        WHERE id = ?
+      `, [JSON.stringify(connData), nowIso, existing.id]);
+    } else {
+      maxPriority++;
+      const { randomUUID } = require("node:crypto");
+      const newId = randomUUID();
+      const connData = {
+        accessToken: accessToken || "",
+        refreshToken: refreshToken,
+        expiresAt: expiresAt || nowIso,
+        expiresIn: expiresIn,
+        scope: DEFAULT_SCOPE,
+        projectId: "aicode-consumers",
+        testStatus: "active",
+        lastRefreshAt: nowIso,
+        errorCode: null,
+        backoffLevel: 0
+      };
+
+      executeDb(`
+        INSERT INTO providerConnections (id, provider, authType, name, email, priority, isActive, data, createdAt, updatedAt)
+        VALUES (?, 'antigravity', 'oauth', ?, ?, ?, 1, ?, ?, ?)
+      `, [newId, email, email, maxPriority, JSON.stringify(connData), nowIso, nowIso]);
+
+      result.pushedTo9Router.push(`${accName} (${email})`);
+    }
+  }
+
+  // Jika active file belum diset, set ke akun pertama
+  if (!fs.existsSync(ACTIVE_FILE)) {
+    const allNow = listAccounts();
+    if (allNow.length > 0) {
+      fs.writeFileSync(ACTIVE_FILE, allNow[0].name, "utf8");
+    }
+  }
+
+  // Otomatis sinkronkan / inisialisasi sandbox vault untuk seluruh akun
+  try {
+    const allFiles = fs.readdirSync(ACCOUNTS_DIR).filter(f => f.endsWith(".json"));
+    for (const f of allFiles) {
+      ensureSandbox(path.basename(f, ".json"));
+    }
+  } catch (_) {}
+
+  return result;
+}
+
+// --- USAGE & QUOTA ANALYTICS ---
+function getUsageAnalytics() {
+  const overall = queryDb(`
+    SELECT COUNT(*) as totalRequests,
+           COALESCE(SUM(promptTokens), 0) as totalPromptTokens,
+           COALESCE(SUM(completionTokens), 0) as totalCompTokens,
+           COALESCE(SUM(cost), 0) as totalCost
+    FROM usageHistory
+  `)[0] || { totalRequests: 0, totalPromptTokens: 0, totalCompTokens: 0, totalCost: 0 };
+
+  const perAccount = queryDb(`
+    SELECT pc.id, pc.name, pc.email, pc.priority, pc.isActive,
+           COUNT(uh.id) as reqCount,
+           COALESCE(SUM(uh.promptTokens), 0) as promptTokens,
+           COALESCE(SUM(uh.completionTokens), 0) as compTokens,
+           COALESCE(SUM(uh.cost), 0) as cost,
+           MAX(uh.timestamp) as lastUsed
+    FROM providerConnections pc
+    LEFT JOIN usageHistory uh ON pc.id = uh.connectionId
+    WHERE pc.provider = 'antigravity'
+    GROUP BY pc.id
+    ORDER BY pc.priority ASC
+  `);
+
+  const recentLogs = queryDb(`
+    SELECT id, timestamp, model, connectionId, promptTokens, completionTokens, cost, status
+    FROM usageHistory
+    WHERE provider = 'antigravity'
+    ORDER BY id DESC
+    LIMIT 20
+  `);
+
+  return {
+    overall: {
+      totalRequests: Number(overall.totalRequests),
+      totalPromptTokens: Number(overall.totalPromptTokens),
+      totalCompTokens: Number(overall.totalCompTokens),
+      totalCost: Number(overall.totalCost)
+    },
+    perAccount: perAccount.map(a => ({
+      id: a.id,
+      name: a.name || a.email.split("@")[0],
+      email: a.email,
+      priority: a.priority,
+      isActive: Boolean(a.isActive),
+      reqCount: Number(a.reqCount),
+      promptTokens: Number(a.promptTokens),
+      completionTokens: Number(a.compTokens),
+      cost: Number(a.cost),
+      lastUsed: a.lastUsed
+    })),
+    recentLogs
+  };
+}
+
+// --- TAMBAH AKUN BARU ---
+async function addNewAccount(name, rawInput) {
+  if (!name || typeof name !== "string") {
+    throw new Error("Nama akun wajib diisi!");
+  }
+  const cleanName = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+  const targetPath = path.join(ACCOUNTS_DIR, `${cleanName}.json`);
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(rawInput);
+  } catch {}
+
+  let refreshToken = "";
+  let accessToken = "";
+  let email = `${cleanName}@gmail.com`;
+
+  if (parsed && typeof parsed === "object") {
+    if (parsed.token) {
+      refreshToken = parsed.token.refresh_token || "";
+      accessToken = parsed.token.access_token || "";
+    } else if (parsed.refreshToken) {
+      refreshToken = parsed.refreshToken;
+      accessToken = parsed.accessToken || "";
+    } else if (parsed.refresh_token) {
+      refreshToken = parsed.refresh_token;
+      accessToken = parsed.access_token || "";
+    }
+    if (parsed.id_token_email) {
+      email = parsed.id_token_email;
+    } else if (parsed.id_token) {
+      email = getEmailFromJwt(parsed.id_token) || email;
+    } else if (parsed.email) {
+      email = parsed.email;
+    }
+  } else {
+    refreshToken = String(rawInput).trim();
+  }
+
+  if (!refreshToken) {
+    throw new Error("Refresh token Google tidak ditemukan pada input!");
+  }
+
+  let expiresIn = 3599;
+  let expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+  try {
+    const ref = await refreshGoogleToken(refreshToken);
+    accessToken = ref.access_token;
+    expiresIn = ref.expires_in || 3599;
+    expiresAt = new Date(Date.now() + expiresIn * 1000).toISOString();
+  } catch (e) {
+    throw new Error("Gagal memvalidasi refresh token ke Google: " + e.message);
+  }
+
+  const accountPayload = {
+    token: {
+      access_token: accessToken,
+      token_type: "Bearer",
+      refresh_token: refreshToken,
+      expiry: expiresAt,
+      expires_in: expiresIn
+    },
+    auth_method: "consumer",
+    id_token_email: email
+  };
+
+  fs.writeFileSync(targetPath, JSON.stringify(accountPayload, null, 2), { mode: 0o600 });
+  await syncBidirectional();
+
+  return {
+    success: true,
+    name: cleanName,
+    email: email
+  };
+}
+
+// --- UI DASHBOARD (HTML & CSS SERASI DENGAN 9ROUTER - FIT WEBVIEW) ---
+const UI_HTML_PATH = path.join(ACCOUNTS_DIR, "ui.html");
+function renderDashboardHtml() {
+  if (fs.existsSync(UI_HTML_PATH)) {
+    try {
+      return fs.readFileSync(UI_HTML_PATH, "utf8");
+    } catch {}
+  }
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AGY Ganti - Multi-Account & Quota Tracker</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --card-bg: #11141c;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(99, 102, 241, 0.3);
+      --primary: #6366f1;
+      --primary-gradient: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%);
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.2);
+      --amber: #f59e0b;
+      --rose: #f43f5e;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --glass: rgba(17, 20, 28, 0.92);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      max-width: 100vw;
+      overflow-x: hidden;
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      -webkit-text-size-adjust: 100%;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Ambient background glow */
+    body::before {
+      content: "";
+      position: fixed;
+      top: -100px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 320px;
+      height: 200px;
+      background: radial-gradient(ellipse at center, rgba(99, 102, 241, 0.2), transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--glass);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mac-dots {
+      display: flex;
+      gap: 4px;
+    }
+    .mac-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .mac-dot.red { background: #ff5f56; }
+    .mac-dot.yellow { background: #ffbd2e; }
+    .mac-dot.green { background: #27c93f; }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: inherit;
+      text-decoration: none;
+    }
+    .brand-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--primary-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 11px;
+      color: white;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    }
+    .brand-text h1 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .badge-tag {
+      font-size: 9px;
+      padding: 1px 4px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 8px;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 5px 9px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      user-select: none;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary {
+      background: var(--primary-gradient);
+      color: white;
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+    }
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: var(--card-border);
+      color: var(--text-main);
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+    .btn-emerald {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+
+    main {
+      flex: 1;
+      padding: 10px;
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+      z-index: 1;
+    }
+
+    /* Quick Switcher Keypad Row */
+    .quick-bar-wrapper {
+      margin-bottom: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .active-pill-text {
+      color: #34d399;
+      font-size: 10px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 60%;
+    }
+
+    /* Keypad Grid (Fits in 1 Row) */
+    .keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 5px;
+      width: 100%;
+    }
+    .keypad-btn {
+      width: 100%;
+      aspect-ratio: 1;
+      max-height: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      color: var(--text-main);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      padding: 2px;
+    }
+    .keypad-btn:active { transform: scale(0.92); }
+    .keypad-btn .num {
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1;
+    }
+    .keypad-btn .label {
+      font-size: 8px;
+      color: var(--text-muted);
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: 1;
+      margin-top: 2px;
+    }
+    .keypad-btn.active {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: var(--emerald);
+      color: #34d399;
+      box-shadow: 0 0 10px var(--emerald-glow);
+    }
+    .keypad-btn.active .label {
+      color: #34d399;
+      font-weight: 700;
+    }
+
+    /* Nav Tabs */
+    .nav-tabs {
+      display: flex;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid var(--card-border);
+      margin-bottom: 12px;
+      width: 100%;
+    }
+    .tab-item {
+      flex: 1;
+      padding: 6px 4px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .tab-item.active {
+      background: var(--card-bg);
+      color: var(--text-main);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    /* Account List Cards (Mobile-first full width) */
+    .account-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+    .account-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.15s ease;
+      width: 100%;
+    }
+    .account-card.is-active {
+      border-color: var(--emerald);
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, var(--card-bg) 100%);
+      box-shadow: 0 2px 12px var(--emerald-glow);
+    }
+
+    .card-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .acc-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .acc-number-pill {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(99, 102, 241, 0.15);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      flex-shrink: 0;
+    }
+    .account-card.is-active .acc-number-pill {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .acc-name-text {
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .status-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+    .status-badge.active {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+    .status-badge.standby {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-dim);
+    }
+
+    .acc-email-text {
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+
+    .card-row-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      gap: 6px;
+    }
+    .acc-stats-text {
+      font-size: 10px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .acc-switch-btn {
+      padding: 4px 10px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    /* Metric Grid (2 Columns on Mobile) */
+    .metric-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+      width: 100%;
+    }
+    .metric-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .metric-card span {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .metric-card h2 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.3px;
+    }
+
+    /* Usage Cards (Responsive List instead of wide table) */
+    .usage-item {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 8px;
+      width: 100%;
+    }
+    .usage-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+    .usage-header strong { font-size: 12px; }
+    .usage-cost-pill {
+      font-size: 10px;
+      font-weight: 700;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.1);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .progress-track {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--primary-gradient);
+      border-radius: 2px;
+    }
+    .usage-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 14px;
+      z-index: 200;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #131722;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 360px;
+      padding: 16px;
+      box-shadow: 0 16px 32px rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-header h3 { font-size: 14px; font-weight: 700; }
+    .close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 18px;
+      cursor: pointer;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .form-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .form-input, .form-textarea {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--text-main);
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      width: 100%;
+    }
+    .form-input:focus, .form-textarea:focus {
+      border-color: var(--primary);
+    }
+    .form-textarea {
+      resize: vertical;
+      min-height: 80px;
+      font-family: monospace;
+      font-size: 10px;
+    }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed;
+      bottom: 16px;
+      left: 12px;
+      right: 12px;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .toast {
+      background: #181d28;
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 11px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: auto;
+      animation: slideIn 0.2s ease forwards;
+    }
+    .toast.success { border-color: rgba(16, 185, 129, 0.5); }
+    .toast.error { border-color: rgba(244, 63, 94, 0.5); }
+    @keyframes slideIn {
+      from { transform: translateY(15px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-top">
+      <div class="brand-section">
+        <div class="mac-dots">
+          <div class="mac-dot red"></div>
+          <div class="mac-dot yellow"></div>
+          <div class="mac-dot green"></div>
+        </div>
+        <div class="brand-logo">
+          <div class="brand-icon">AG</div>
+          <div class="brand-text">
+            <h1>AGY Ganti <span class="badge-tag">v2.0</span></h1>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-outline" id="btnSync" onclick="triggerSync()">
+          <span>🔄</span> <span>Sync</span>
+        </button>
+        <button class="btn btn-primary" onclick="openAddModal()">
+          <span>➕</span> <span>Akun</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Keypad Quick Switcher Row (1 Row 7 Buttons) -->
+    <div class="quick-bar-wrapper">
+      <div class="section-label">
+        <span>Ganti Akun Cepat</span>
+        <span class="active-pill-text" id="activeBadgeText">● Memuat...</span>
+      </div>
+      <div class="keypad-grid" id="keypadGrid">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="nav-tabs">
+      <div class="tab-item active" onclick="switchTab('accounts')" id="tabBtn-accounts">👥 Akun</div>
+      <div class="tab-item" onclick="switchTab('usage')" id="tabBtn-usage">📈 Usage</div>
+      <div class="tab-item" onclick="switchTab('quota')" id="tabBtn-quota">⚡ Quota</div>
+    </div>
+
+    <!-- TAB 1: ACCOUNTS -->
+    <section id="view-accounts">
+      <div class="account-list" id="accountList">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- TAB 2: USAGE -->
+    <section id="view-usage" style="display: none;">
+      <div class="metric-grid">
+        <div class="metric-card">
+          <span>Requests</span>
+          <h2 id="metricRequests">0</h2>
+        </div>
+        <div class="metric-card">
+          <span>Biaya (USD)</span>
+          <h2 id="metricCost">$0.00</h2>
+        </div>
+        <div class="metric-card">
+          <span>Prompt Tokens</span>
+          <h2 id="metricPromptTokens">0</h2>
+        </div>
+        <div class="metric-card">
+          <span>Comp Tokens</span>
+          <h2 id="metricCompTokens">0</h2>
+        </div>
+      </div>
+
+      <div class="section-label" style="margin-bottom: 8px;">Penggunaan per Akun (9Router)</div>
+      <div id="usageList">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+
+    <!-- TAB 3: QUOTA -->
+    <section id="view-quota" style="display: none;">
+      <div class="section-label" style="margin-bottom: 8px;">
+        <span>Status Tier & Quota Google</span>
+        <button class="btn btn-outline" style="padding: 2px 6px; font-size: 10px;" onclick="fetchQuotaStatus()">Cek Live</button>
+      </div>
+      <div class="account-list" id="quotaList">
+        <!-- Rendered by JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal Tambah Akun -->
+  <div class="modal-overlay" id="addModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Tambah Akun Antigravity</h3>
+        <button class="close-btn" onclick="closeAddModal()">&times;</button>
+      </div>
+      <div class="form-group">
+        <label>Nama / Alias Akun</label>
+        <input type="text" class="form-input" id="inputAccName" placeholder="contoh: akun-baru">
+      </div>
+      <div class="form-group">
+        <label>JSON Token Antigravity / Google Refresh Token</label>
+        <textarea class="form-textarea" id="inputTokenData" placeholder='Tempelkan JSON {"token": {...}} atau Refresh Token (1//...)'></textarea>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 4px;">
+        <button class="btn btn-outline" onclick="closeAddModal()">Batal</button>
+        <button class="btn btn-primary" onclick="submitAddAccount()">Simpan & Sync</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    let currentAccounts = [];
+    let currentActive = "";
+
+    function showToast(msg, type = "success") {
+      const container = document.getElementById("toastContainer");
+      const t = document.createElement("div");
+      t.className = "toast " + type;
+      t.innerHTML = (type === "success" ? "✅ " : "❌ ") + msg;
+      container.appendChild(t);
+      setTimeout(() => {
+        t.style.opacity = "0";
+        setTimeout(() => t.remove(), 250);
+      }, 3000);
+    }
+
+    function switchTab(tab) {
+      document.getElementById("view-accounts").style.display = tab === "accounts" ? "block" : "none";
+      document.getElementById("view-usage").style.display = tab === "usage" ? "block" : "none";
+      document.getElementById("view-quota").style.display = tab === "quota" ? "block" : "none";
+
+      document.querySelectorAll(".tab-item").forEach(el => el.classList.remove("active"));
+      document.getElementById("tabBtn-" + tab).classList.add("active");
+
+      if (tab === "usage") loadUsageData();
+      if (tab === "quota") loadQuotaData();
+    }
+
+    async function loadAccounts() {
+      try {
+        const res = await fetch("/api/accounts");
+        const data = await res.json();
+        currentAccounts = data.accounts || [];
+        currentActive = data.activeAccount || "";
+
+        renderKeypad();
+        renderAccountCards();
+        document.getElementById("activeBadgeText").innerText = "● " + currentActive;
+      } catch (e) {
+        showToast("Gagal memuat akun: " + e.message, "error");
+      }
+    }
+
+    function renderKeypad() {
+      const grid = document.getElementById("keypadGrid");
+      grid.innerHTML = "";
+      currentAccounts.forEach(acc => {
+        const btn = document.createElement("button");
+        btn.className = "keypad-btn " + (acc.isActive ? "active" : "");
+        btn.onclick = () => doSwitch(acc.index);
+        const shortName = acc.name.length > 5 ? acc.name.slice(0, 4) + ".." : acc.name;
+        btn.innerHTML = \`<span class="num">\${acc.index}</span><span class="label">\${shortName}</span>\`;
+        grid.appendChild(btn);
+      });
+    }
+
+    function renderAccountCards() {
+      const list = document.getElementById("accountList");
+      list.innerHTML = "";
+      currentAccounts.forEach(acc => {
+        const card = document.createElement("div");
+        card.className = "account-card " + (acc.isActive ? "is-active" : "");
+        card.innerHTML = \`
+          <div class="card-row-top">
+            <div class="acc-pill">
+              <span class="acc-number-pill">#\${acc.index}</span>
+              <span class="acc-name-text">\${acc.name}</span>
+            </div>
+            <span class="status-badge \${acc.isActive ? "active" : "standby"}">
+              \${acc.isActive ? "● AKTIF" : "Standby"}
+            </span>
+          </div>
+          <div class="acc-email-text">\${acc.email}</div>
+          <div class="card-row-bottom">
+            <span class="acc-stats-text">Prio: \${acc.priority} • Req: \${acc.reqCount || 0}</span>
+            <div>
+              \${acc.isActive 
+                ? \`<button class="btn btn-emerald acc-switch-btn" disabled>✓ Aktif</button>\` 
+                : \`<button class="btn btn-primary acc-switch-btn" onclick="doSwitch(\${acc.index})">Pilih</button>\`
+              }
+            </div>
+          </div>
+        \`;
+        list.appendChild(card);
+      });
+    }
+
+    async function doSwitch(target) {
+      try {
+        const res = await fetch("/api/switch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target: target })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showToast("Aktif: #" + d.account.index + " " + d.account.name + (d.refreshed ? " (Refreshed)" : ""));
+          loadAccounts();
+        } else {
+          showToast(d.error || "Gagal switch akun", "error");
+        }
+      } catch (e) {
+        showToast("Error switch: " + e.message, "error");
+      }
+    }
+
+    async function triggerSync() {
+      const btn = document.getElementById("btnSync");
+      btn.innerHTML = "<span>⏳</span>";
+      btn.disabled = true;
+      try {
+        const res = await fetch("/api/sync", { method: "POST" });
+        const d = await res.json();
+        if (d.success) {
+          showToast("Sync sukses! (9R: " + d.total9Router + " | Lok: " + d.totalLocal + ")");
+          loadAccounts();
+        } else {
+          showToast(d.error || "Gagal sinkronisasi", "error");
+        }
+      } catch (e) {
+        showToast("Gagal sync: " + e.message, "error");
+      } finally {
+        btn.innerHTML = "<span>🔄</span> <span>Sync</span>";
+        btn.disabled = false;
+      }
+    }
+
+    async function loadUsageData() {
+      try {
+        const res = await fetch("/api/usage");
+        const d = await res.json();
+        if (!d.overall) return;
+
+        document.getElementById("metricRequests").innerText = d.overall.totalRequests.toLocaleString();
+        document.getElementById("metricCost").innerText = "$" + d.overall.totalCost.toFixed(4);
+        document.getElementById("metricPromptTokens").innerText = (d.overall.totalPromptTokens / 1000000).toFixed(2) + "M";
+        document.getElementById("metricCompTokens").innerText = (d.overall.totalCompTokens / 1000).toFixed(1) + "K";
+
+        const container = document.getElementById("usageList");
+        container.innerHTML = "";
+        const maxReq = Math.max(...d.perAccount.map(a => a.reqCount), 1);
+
+        d.perAccount.forEach(a => {
+          const pct = Math.round((a.reqCount / maxReq) * 100);
+          const item = document.createElement("div");
+          item.className = "usage-item";
+          item.innerHTML = \`
+            <div class="usage-header">
+              <div>
+                <strong>\${a.name}</strong>
+                <span style="color:var(--text-dim);font-size:10px;margin-left:4px;">\${a.email}</span>
+              </div>
+              <span class="usage-cost-pill">$\${a.cost.toFixed(4)}</span>
+            </div>
+            <div class="progress-track">
+              <div class="progress-fill" style="width: \${pct}%;"></div>
+            </div>
+            <div class="usage-meta">
+              <span>\${a.reqCount.toLocaleString()} requests</span>
+              <span>\${(a.promptTokens / 1000000).toFixed(2)}M in / \${(a.completionTokens / 1000).toFixed(1)}K out</span>
+            </div>
+          \`;
+          container.appendChild(item);
+        });
+      } catch (e) {
+        showToast("Gagal memuat usage: " + e.message, "error");
+      }
+    }
+
+    async function loadQuotaData() {
+      const list = document.getElementById("quotaList");
+      list.innerHTML = "";
+      currentAccounts.forEach(acc => {
+        const card = document.createElement("div");
+        card.className = "account-card";
+        card.innerHTML = \`
+          <div class="card-row-top">
+            <div class="acc-pill">
+              <span class="acc-number-pill">#\${acc.index}</span>
+              <span class="acc-name-text">\${acc.name}</span>
+            </div>
+            <span class="status-badge active">Antigravity</span>
+          </div>
+          <div class="acc-email-text">\${acc.email}</div>
+          <div class="card-row-bottom">
+            <span class="acc-stats-text">Project: aicode-consumers</span>
+            <span class="acc-stats-text" style="color: #34d399;">
+              \${acc.hasRefreshToken ? "✓ Refresh OK" : "No Refresh"}
+            </span>
+          </div>
+        \`;
+        list.appendChild(card);
+      });
+    }
+
+    async function fetchQuotaStatus() {
+      showToast("Memeriksa live quota ke Google...");
+      try {
+        const res = await fetch("/api/quota");
+        const d = await res.json();
+        showToast("Quota & Tier sukses diperbarui!");
+      } catch (e) {
+        showToast("Gagal cek quota: " + e.message, "error");
+      }
+    }
+
+    function openAddModal() {
+      document.getElementById("addModal").classList.add("open");
+    }
+    function closeAddModal() {
+      document.getElementById("addModal").classList.remove("open");
+    }
+
+    async function submitAddAccount() {
+      const name = document.getElementById("inputAccName").value.trim();
+      const raw = document.getElementById("inputTokenData").value.trim();
+      if (!name || !raw) {
+        showToast("Harap isi nama dan token!", "error");
+        return;
+      }
+      try {
+        const res = await fetch("/api/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, tokenData: raw })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showToast("Akun " + d.name + " berhasil ditambahkan!");
+          closeAddModal();
+          document.getElementById("inputAccName").value = "";
+          document.getElementById("inputTokenData").value = "";
+          loadAccounts();
+        } else {
+          showToast(d.error || "Gagal menambah akun", "error");
+        }
+      } catch (e) {
+        showToast("Error tambah akun: " + e.message, "error");
+      }
+    }
+
+    // Init
+    loadAccounts();
+  </script>
+</body>
+</html>`;
+}
+
+// --- HTTP SERVER ---
+function startServer() {
+  const server = http.createServer(async (req, res) => {
+    const parsedUrl = new URL(req.url, `http://localhost:${PORT}`);
+    const pathname = parsedUrl.pathname;
+
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      return res.end();
+    }
+
+    const sendJson = (status, payload) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(payload));
+    };
+
+    const readBody = () => new Promise((resolve) => {
+      let b = "";
+      req.on("data", chunk => b += chunk);
+      req.on("end", () => {
+        try { resolve(JSON.parse(b)); } catch { resolve({}); }
+      });
+    });
+
+    try {
+      if (pathname === "/" || pathname === "/index.html") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        return res.end(renderDashboardHtml());
+      }
+
+      if (pathname === "/api/accounts" && req.method === "GET") {
+        const accs = listAccounts();
+        const active = getActiveAccountName();
+        return sendJson(200, { accounts: accs, activeAccount: active });
+      }
+
+      if (pathname === "/api/switch" && req.method === "POST") {
+        const body = await readBody();
+        const sw = switchToAccount(body.target);
+        return sendJson(200, sw);
+      }
+
+      if (pathname === "/api/sync" && req.method === "POST") {
+        const syncRes = await syncBidirectional();
+        return sendJson(200, { success: true, ...syncRes });
+      }
+
+      if (pathname === "/api/usage" && req.method === "GET") {
+        const usage = getUsageAnalytics();
+        return sendJson(200, usage);
+      }
+
+      if (pathname === "/api/quota" && req.method === "GET") {
+        const accs = listAccounts();
+        const active = accs.find(a => a.isActive);
+        let tierInfo = null;
+        if (active) {
+          try {
+            const curFile = JSON.parse(fs.readFileSync(active.filePath, "utf8"));
+            if (curFile.token && curFile.token.access_token) {
+              tierInfo = await checkCloudCodeTier(curFile.token.access_token);
+            }
+          } catch {}
+        }
+        return sendJson(200, { success: true, activeAccount: active, tierInfo });
+      }
+
+      if (pathname === "/api/add" && req.method === "POST") {
+        const body = await readBody();
+        const addRes = await addNewAccount(body.name, body.tokenData);
+        return sendJson(200, addRes);
+      }
+
+      sendJson(404, { error: "Not found" });
+    } catch (e) {
+      sendJson(500, { error: e.message });
+    }
+  });
+
+  server.listen(PORT, "127.0.0.1", () => {
+    fs.writeFileSync(PID_FILE, String(process.pid), "utf8");
+    console.log(`[✓] AGY-Ganti Server aktif di http://127.0.0.1:${PORT} (PID: ${process.pid})`);
+  });
+
+  server.on("error", (e) => {
+    if (e.code === "EADDRINUSE") {
+      console.log(`[!] Port ${PORT} sudah digunakan.`);
+      process.exit(0);
+    } else {
+      console.error("Server error:", e.message);
+      process.exit(1);
+    }
+  });
+}
+
+function isPortRunning(port) {
+  return new Promise((resolve) => {
+    const s = net.connect({ port, host: "127.0.0.1" }, () => {
+      s.destroy();
+      resolve(true);
+    });
+    s.on("error", () => {
+      s.destroy();
+      resolve(false);
+    });
+  });
+}
+
+function waitPort(port, timeout = 5000) {
+  const start = Date.now();
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      const s = net.connect({ port, host: "127.0.0.1" }, () => {
+        s.destroy();
+        resolve(true);
+      });
+      s.on("error", () => {
+        s.destroy();
+        if (Date.now() - start > timeout) return reject(new Error("Timeout"));
+        setTimeout(check, 100);
+      });
+    };
+    check();
+  });
+}
+
+function launchWebView(isAgent = false) {
+  const url = `http://127.0.0.1:${PORT}`;
+
+  if (isAgent) {
+    console.log(`\n🌐 [Agent Mode] Membuka AGY-Ganti WebUI di tab baru: ${url}...`);
+    try {
+      execSync(`termux-ipc tab new "AGY-Ganti" "termux-ipc webview ${url}" 2>/dev/null`, { stdio: "ignore" });
+      console.log("[✓] Tab baru 'AGY-Ganti' berhasil dibuka bersama Termux WebView!");
+      return;
+    } catch {}
+  }
+
+  // Eksekusi Manual oleh Tuan Eso: langsung buka webview di tab aktif tanpa membuat tab baru
+  console.log(`\n🌐 Membuka AGY-Ganti WebUI: ${url}...`);
+  try {
+    execSync(`termux-ipc webview "${url}" 2>/dev/null`, { stdio: "ignore" });
+    console.log("[✓] WebView diluncurkan di tab saat ini.");
+  } catch (e) {
+    console.log(`[+] Silakan buka di browser Anda: ${url}`);
+  }
+}
+
+async function ensureDaemonRunning() {
+  const running = await isPortRunning(PORT);
+  if (!running) {
+    const out = fs.openSync(LOG_FILE, "a");
+    const err = fs.openSync(LOG_FILE, "a");
+    const child = spawn(process.execPath, [__filename, "server", "start"], {
+      detached: true,
+      stdio: ["ignore", out, err]
+    });
+    child.unref();
+    try {
+      await waitPort(PORT, 5000);
+    } catch {}
+  }
+}
+
+// --- CLI DISPATCHER ---
+async function main() {
+  const args = process.argv.slice(2);
+  const cmd = args[0] ? args[0].toLowerCase() : "";
+
+  // 1. Sinkronisasi CLI
+  if (cmd === "sync" || cmd === "sync-9router") {
+    console.log("⚡ [AGY-GANTI] Memulai sinkronisasi dua arah dengan 9Router...");
+    try {
+      const res = await syncBidirectional();
+      console.log(`\n================ SINKRONISASI SELESAI ================`);
+      console.log(`Akun di 9Router Database : ${res.total9Router} Akun`);
+      console.log(`Akun di ~/.agy-accounts  : ${res.totalLocal} Akun`);
+      if (res.importedFrom9Router.length > 0) {
+        console.log(`Diimpor dari 9Router     : ${res.importedFrom9Router.join(", ")}`);
+      }
+      if (res.pushedTo9Router.length > 0) {
+        console.log(`Ditambahkan ke 9Router   : ${res.pushedTo9Router.join(", ")}`);
+      }
+      if (res.refreshed.length > 0) {
+        console.log(`Token Google Di-refresh  : ${res.refreshed.join(", ")}`);
+      }
+      console.log(`======================================================\n`);
+      console.log("✅ Seluruh akun telah sinkron 100%!");
+    } catch (e) {
+      console.error("❌ Gagal sinkronisasi:", e.message);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // 2. Daftar Akun (List)
+  if (cmd === "list" || cmd === "ls") {
+    const accs = listAccounts();
+    console.log("\n========================================================");
+    console.log("             DAFTAR AKUN ANTIGRAVITY (AGY)              ");
+    console.log("========================================================");
+    accs.forEach(a => {
+      const badge = a.isActive ? "👉 [AKTIF]" : "  [STANDBY]";
+      let expStatus = "✓ OK";
+      if (a.isRevoked) {
+        expStatus = "❌ REVOKED";
+      } else if (a.isExpired) {
+        expStatus = "⚠️ EXPIRED";
+      }
+      console.log(
+        `${String(a.index).padStart(2, " ")}. ` +
+        `${a.name.padEnd(16, " ")} ` +
+        `${badge} ` +
+        `Prio:${a.priority} ` +
+        `(${a.email}) ` +
+        `[${expStatus}]`
+      );
+    });
+    console.log("========================================================");
+    console.log("💡 Ganti akun cepat : agy-ganti <nomor|nama>");
+    console.log("   Contoh           : agy-ganti 1   atau   agy-ganti devikarina69");
+    console.log("   Buka WebUI       : agy-ganti ui");
+    console.log("   Buka Sandbox     : agy-ganti sandbox <nomor|nama>");
+    console.log("   Sinkronisasi     : agy-ganti sync\n");
+    return;
+  }
+
+  // 2B. Sandbox Execution: agy-ganti sandbox <nomor|nama> [args...]
+  if (cmd === "sandbox" || cmd === "sb" || cmd === "run") {
+    const target = args[1];
+    if (!target) {
+      console.log("\n========================================================");
+      console.log("            AGY SANDBOX RUNNER (ISOLATED INSTANCE)      ");
+      console.log("========================================================");
+      const accs = listAccounts();
+      accs.forEach(a => {
+        const sbPath = path.join(SANDBOXES_DIR, a.name);
+        const hasSb = fs.existsSync(sbPath) ? "🟢 READY" : "⚪ AUTO-CREATE";
+        console.log(`  ${String(a.index).padStart(2, " ")}. ${a.name.padEnd(16, " ")} [${hasSb}] (${a.email})`);
+      });
+      console.log("========================================================");
+      console.log("💡 Cara Menjalankan Sandbox:");
+      console.log("   Buka shell AGY di sandbox : agy-ganti sandbox <nomor|nama>");
+      console.log("   Jalankan prompt langsung   : agy-ganti sandbox <nomor|nama> -p \"prompt koding\"");
+      console.log("   Shortcut praktis           : agy-sandbox <nomor|nama>\n");
+      return;
+    }
+
+    let selected = null;
+    const accs = listAccounts();
+    const idx = parseInt(target, 10);
+    if (!isNaN(idx) && idx >= 1 && idx <= accs.length) {
+      selected = accs[idx - 1];
+    } else {
+      selected = accs.find(a => a.name.toLowerCase() === target.toLowerCase() || (a.email && a.email.toLowerCase().includes(target.toLowerCase())));
+    }
+
+    if (!selected) {
+      console.error(`❌ Akun '${target}' tidak ditemukan.`);
+      console.log("Gunakan 'agy-ganti list' untuk melihat daftar akun yang tersedia.");
+      process.exit(1);
+    }
+
+    // Refresh token jika perlu
+    try {
+      switchToAccount(selected.name);
+    } catch (_) {}
+
+    const sb = ensureSandbox(selected.name);
+    console.log(`\n🚀 [AGY SANDBOX] Meluncurkan instance terisolasi: ${selected.name} (${selected.email})`);
+    console.log(`📁 Sandbox Vault : ${sb.sbDir}`);
+    console.log(`🧠 Shared Soul   : AGENTS.md & GEMINI.md (100% sinkron)`);
+    console.log(`⚡ Shared Skills : ${path.join(sb.sbDir, ".agents", "skills")} (Semua skill aktif)`);
+    console.log(`📂 Workspace     : /project (Symlink ke root project)\n`);
+
+    const agyBin = [process.env.AGY_BIN, '/usr/local/bin/agy', '/root/.local/bin/agy', path.join(BASE_HOME, '.local', 'bin', 'agy'), '/data/data/com.termux/files/usr/bin/agy'].find(b => b && fs.existsSync(b)) || 'agy';
+    const subArgs = args.slice(2);
+
+    const child = spawn(agyBin, subArgs, {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        HOME: sb.sbDir,
+        AGY_SANDBOX: selected.name
+      }
+    });
+
+    child.on("exit", (code) => {
+      process.exit(code || 0);
+    });
+    return;
+  }
+
+  // 3. Simpan Akun Saat Ini
+  if (cmd === "simpan" || cmd === "save") {
+    const targetName = args[1];
+    if (!targetName) {
+      console.error("❌ Harap masukkan nama akun! Contoh: agy-ganti simpan akun-baru");
+      process.exit(1);
+    }
+    if (!fs.existsSync(TOKEN_DEST)) {
+      console.error(`❌ Token Antigravity belum ada di ${TOKEN_DEST}`);
+      process.exit(1);
+    }
+    const dest = path.join(ACCOUNTS_DIR, `${targetName}.json`);
+    fs.copyFileSync(TOKEN_DEST, dest);
+    fs.chmodSync(dest, 0o600);
+    fs.writeFileSync(ACTIVE_FILE, targetName, "utf8");
+    console.log(`✅ Akun saat ini berhasil disimpan sebagai '${targetName}'!`);
+    console.log("[*] Menyinkronkan ke 9Router...");
+    await syncBidirectional();
+    return;
+  }
+
+  // 4. Server Management
+  if (cmd === "server") {
+    const sub = args[1] || "status";
+    if (sub === "start") {
+      startServer();
+    } else if (sub === "stop") {
+      if (fs.existsSync(PID_FILE)) {
+        try {
+          const p = parseInt(fs.readFileSync(PID_FILE, "utf8").trim(), 10);
+          process.kill(p, "SIGTERM");
+          console.log(`[✓] Server PID ${p} dihentikan.`);
+        } catch {}
+        try { fs.unlinkSync(PID_FILE); } catch {}
+      }
+      try { execSync(`fuser -k ${PORT}/tcp 2>/dev/null || true`); } catch {}
+    } else if (sub === "restart") {
+      try { execSync(`agy-ganti server stop`, { stdio: "ignore" }); } catch {}
+      await ensureDaemonRunning();
+      console.log("[✓] Server berhasil di-restart.");
+    } else {
+      const running = await isPortRunning(PORT);
+      console.log(`AGY-Ganti Server (Port ${PORT}): ${running ? "🟢 AKTIF" : "⚪ MATI"}`);
+    }
+    return;
+  }
+
+  // 5. Usage Stats CLI
+  if (cmd === "usage") {
+    const u = getUsageAnalytics();
+    console.log("\n=================== USAGE TRACKER ===================");
+    console.log(`Total Requests          : ${u.overall.totalRequests.toLocaleString()}`);
+    console.log(`Total Prompt Tokens     : ${(u.overall.totalPromptTokens / 1000000).toFixed(2)}M`);
+    console.log(`Total Completion Tokens : ${(u.overall.totalCompTokens / 1000).toFixed(1)}K`);
+    console.log(`Total Estimasi Biaya    : $${u.overall.totalCost.toFixed(4)}`);
+    console.log("-----------------------------------------------------");
+    u.perAccount.forEach(a => {
+      console.log(` • [Prio ${a.priority}] ${a.name.padEnd(15)} : ${a.reqCount} req | $${a.cost.toFixed(4)} (${a.email})`);
+    });
+    console.log("=====================================================\n");
+    return;
+  }
+
+  // 6. Quota CLI
+  if (cmd === "quota") {
+    console.log("[*] Memeriksa status tier & quota Google Cloud Code...");
+    const accs = listAccounts();
+    const active = accs.find(a => a.isActive);
+    if (!active) {
+      console.log("Tidak ada akun aktif.");
+      return;
+    }
+    try {
+      const curFile = JSON.parse(fs.readFileSync(active.filePath, "utf8"));
+      const tier = await checkCloudCodeTier(curFile.token.access_token);
+      console.log(`Akun Aktif : ${active.name} (${active.email})`);
+      if (tier && tier.currentTier) {
+        console.log(`Tier       : ${tier.currentTier.name} (${tier.currentTier.id})`);
+        console.log(`Project    : ${tier.cloudaicompanionProject}`);
+      } else {
+        console.log("Gagal mengambil tier langsung dari Google API.");
+      }
+    } catch (e) {
+      console.log("Error:", e.message);
+    }
+    return;
+  }
+
+  // 7. Ganti Akun Cepat jika ada argumen angka atau nama
+  if (cmd && cmd !== "ui" && cmd !== "web") {
+    try {
+      const sw = switchToAccount(cmd);
+      console.log(`\n✅ Berhasil beralih ke akun #${sw.account.index}: ${sw.account.name} (${sw.account.email})`);
+      if (sw.refreshed) {
+        console.log("⚡ Token Google berhasil diperbarui secara otomatis!");
+      }
+      console.log("💡 Sesi baru telah diterapkan langsung ke Antigravity CLI!\n");
+    } catch (e) {
+      console.error(`❌ ${e.message}\n`);
+      const accs = listAccounts();
+      console.log("Daftar akun yang tersedia:");
+      accs.forEach(a => console.log(`  ${a.index}. ${a.name} (${a.email})`));
+      console.log("\nGunakan: agy-ganti <nomor|nama>");
+      process.exit(1);
+    }
+    return;
+  }
+
+  // 8. Jika dipanggil tanpa argumen atau 'ui' / 'web':
+  try { await syncBidirectional(); } catch {}
+  await ensureDaemonRunning();
+
+  const isAgent = args.includes("--agent") ||
+                  args.includes("--new-tab") ||
+                  args.includes("tab") ||
+                  Boolean(process.env.AGENT_MODE) ||
+                  Boolean(process.env.AI_AGENT) ||
+                  (!process.stdin.isTTY && !args.includes("--manual"));
+
+  launchWebView(isAgent);
+
+  const accs = listAccounts();
+  console.log("\n========================================================");
+  console.log("              AGY GANTI - QUICK SWITCHER                ");
+  console.log("========================================================");
+  accs.forEach(a => {
+    const badge = a.isActive ? "👉 [AKTIF]" : "         ";
+    console.log(`  ${String(a.index).padStart(2, " ")}. ${a.name.padEnd(16, " ")} ${badge} (${a.email})`);
+  });
+  console.log("========================================================");
+  console.log(`🌐 WebUI Server : http://127.0.0.1:${PORT}`);
+  console.log("💡 Ganti Cepat   : agy-ganti <nomor|nama>  (contoh: agy-ganti 1)");
+  console.log("   Sinkronisasi  : agy-ganti sync");
+  console.log("   Daftar Akun   : agy-ganti list\n");
+}
+
+main().catch(err => {
+  console.error("Fatal Error:", err);
+  process.exit(1);
+});

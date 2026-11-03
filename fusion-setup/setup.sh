@@ -461,6 +461,79 @@ else
 fi
 
 # ==============================================================================
+# DETEKSI & KONFIGURASI ANTIGRAVITY CLI (AGY) & MULTI-ACCOUNT SANDBOX
+# ==============================================================================
+INSTALL_AGY_NONROOT=0
+INSTALL_AGY_CONTAINER=0
+WIRE_AGY_CONTAINER=0
+CONTAINER_HAS_AGY=0
+
+if [ $IS_ROOT -eq 0 ]; then
+    # NON-ROOT MODE: Hanya pasang AGY & Sandbox jika user menghendaki
+    echo -e "\n  ${MAGENTA}🤖 Antigravity CLI (AGY) Termux Native (Non-Root)${RESET}"
+    echo -e "  ${GRAY}Port Termux mandiri tanpa butuh root/PRoot (wallentx/antigravity-cli-termux)${RESET}"
+    echo -e "  1) Pasang Antigravity CLI & Aktifkan Multi-Account Sandbox [Direkomendasikan]"
+    echo -e "  2) Lewati (Jangan pasang AGY, jaga Termux tetap murni & minimal)"
+    read -p "  Pilih [1/2, default: 1]: " NONROOT_AGY_CHOICE
+    [ -z "$NONROOT_AGY_CHOICE" ] && NONROOT_AGY_CHOICE="1"
+    if [ "$NONROOT_AGY_CHOICE" = "1" ]; then
+        INSTALL_AGY_NONROOT=1
+        echo -e "  ${GREEN}➔ Antigravity CLI & Sandbox: Terjadwal untuk dipasang di Termux Native${RESET}"
+    else
+        echo -e "  ${YELLOW}➔ Antigravity CLI & Sandbox: Dilewati (Termux tetap bersih tanpa AGY)${RESET}"
+    fi
+
+else
+    # ROOT MODE (Chroot / Droidspaces / Container Linux): Cek dulu apakah AGY sudah ada
+    echo -e "\n  ${MAGENTA}🤖 Deteksi Antigravity CLI (AGY) di Container Linux Root${RESET}"
+
+    # 1. Cek langsung di filesystem rootfs container
+    if [ -n "$CONTAINER_ROOTFS" ]; then
+        for c_agy in "$CONTAINER_ROOTFS/root/.local/bin/agy" "$CONTAINER_ROOTFS/usr/local/bin/agy" "$CONTAINER_ROOTFS/usr/bin/agy"; do
+            if su -c "[ -x '$c_agy' ]" 2>/dev/null; then
+                CONTAINER_HAS_AGY=1
+                break
+            fi
+        done
+    fi
+
+    # 2. Cek via command chroot / droidspaces exec jika filesystem terisolasi
+    if [ $CONTAINER_HAS_AGY -eq 0 ]; then
+        if [ "$CUSTOM_LINUX_NAME" = "NetHunter" ] || [[ "$CUSTOM_LINUX_CMD" =~ bashnh ]]; then
+            if su -mm -c "chroot $CONTAINER_ROOTFS /bin/bash -c 'command -v agy'" >/dev/null 2>&1; then
+                CONTAINER_HAS_AGY=1
+            fi
+        elif [[ "$CUSTOM_LINUX_CMD" =~ droidspaces ]]; then
+            if su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$CUSTOM_LINUX_NAME\" exec -- which agy" >/dev/null 2>&1; then
+                CONTAINER_HAS_AGY=1
+            fi
+        elif command -v agy >/dev/null 2>&1; then
+            CONTAINER_HAS_AGY=1
+        fi
+    fi
+
+    if [ $CONTAINER_HAS_AGY -eq 1 ]; then
+        echo -e "  ${GREEN}✔ Antigravity CLI (AGY) sudah aktif & terdeteksi di container Linux ($CUSTOM_LINUX_NAME)${RESET}"
+        WIRE_AGY_CONTAINER=1
+    else
+        echo -e "  ${YELLOW}ℹ Antigravity CLI (AGY) belum terdeteksi di dalam container Linux ($CUSTOM_LINUX_NAME)${RESET}"
+        echo -e "    1) Pasang Antigravity CLI Resmi (Google AGY) ke Container [Direkomendasikan]"
+        echo -e "    2) Lewati (Jangan pasang AGY di container)"
+        read -p "    Pilih [1/2, default: 1]: " CONTAINER_AGY_CHOICE
+        [ -z "$CONTAINER_AGY_CHOICE" ] && CONTAINER_AGY_CHOICE="1"
+        if [ "$CONTAINER_AGY_CHOICE" = "1" ]; then
+            INSTALL_AGY_CONTAINER=1
+            WIRE_AGY_CONTAINER=1
+            echo -e "    ${GREEN}➔ Antigravity CLI: Terjadwal untuk dipasang di Container Linux${RESET}"
+        else
+            INSTALL_AGY_CONTAINER=0
+            WIRE_AGY_CONTAINER=0
+            echo -e "    ${YELLOW}➔ Antigravity CLI: Dilewati di Container Linux${RESET}"
+        fi
+    fi
+fi
+
+# ==============================================================================
 # TAHAP 4: INSTALASI TOOLS & PAYLOAD OFFLINE DI TERMUX
 # ==============================================================================
 echo -e "\n${CYAN}● [4/8] Pasang Tools & Payload${RESET}"
@@ -800,9 +873,51 @@ exit 1
 EOF_9R
 chmod 755 "$PREFIX/bin/9router"
 
-# Pasang copilot symlink jika ada
-if [ -f "$PREFIX/bin/agy-copilot" ]; then
-    ln -sf "$PREFIX/bin/agy-copilot" "$PREFIX/bin/copilot"
+# Pasang AGY Suite & Sandbox hanya jika mode Root atau Non-Root yang memilih pasang AGY
+if [ $IS_ROOT -eq 1 ] || [ "$INSTALL_AGY_NONROOT" = "1" ]; then
+    for agy_tool in agy-ganti agy-sandbox agy-copilot; do
+        if [ -f "$SCRIPT_DIR/$agy_tool" ]; then
+            cp -f "$SCRIPT_DIR/$agy_tool" "$PREFIX/bin/$agy_tool"
+            chmod 755 "$PREFIX/bin/$agy_tool"
+        elif [ -f "$FUSION_HOME/bin/$agy_tool" ]; then
+            cp -f "$FUSION_HOME/bin/$agy_tool" "$PREFIX/bin/$agy_tool"
+            chmod 755 "$PREFIX/bin/$agy_tool"
+        fi
+    done
+    [ -f "$PREFIX/bin/agy-copilot" ] && ln -sf "$PREFIX/bin/agy-copilot" "$PREFIX/bin/copilot"
+    [ -f "$PREFIX/bin/agy-sandbox" ] && ln -sf "$PREFIX/bin/agy-sandbox" "$PREFIX/bin/sandbox"
+    [ -f "$PREFIX/bin/agy-sandbox" ] && ln -sf "$PREFIX/bin/agy-sandbox" "$PREFIX/bin/agy-sb"
+    [ -f "$PREFIX/bin/agy-ganti" ] && ln -sf "$PREFIX/bin/agy-ganti" "$PREFIX/bin/ganti"
+    [ -f "$PREFIX/bin/agy-ganti" ] && ln -sf "$PREFIX/bin/agy-ganti" "$PREFIX/bin/ganti-akun"
+fi
+
+# Tool installer on-demand (agy-install) selalu disematkan di $PREFIX/bin
+if [ -f "$SCRIPT_DIR/agy-install" ]; then
+    cp -f "$SCRIPT_DIR/agy-install" "$PREFIX/bin/agy-install"
+    chmod 755 "$PREFIX/bin/agy-install"
+elif [ -f "$FUSION_HOME/bin/agy-install" ]; then
+    cp -f "$FUSION_HOME/bin/agy-install" "$PREFIX/bin/agy-install"
+    chmod 755 "$PREFIX/bin/agy-install"
+fi
+[ -f "$PREFIX/bin/agy-install" ] && ln -sf "$PREFIX/bin/agy-install" "$PREFIX/bin/install-agy"
+
+# Tool eso (buku panduan & status live) selalu disematkan di $PREFIX/bin
+if [ -f "$SCRIPT_DIR/eso" ]; then
+    cp -f "$SCRIPT_DIR/eso" "$PREFIX/bin/eso"
+    chmod 755 "$PREFIX/bin/eso"
+elif [ -f "$FUSION_HOME/bin/eso" ]; then
+    cp -f "$FUSION_HOME/bin/eso" "$PREFIX/bin/eso"
+    chmod 755 "$PREFIX/bin/eso"
+fi
+
+# Eksekusi Pemasangan AGY Standalone di Non-Root jika disetujui user
+if [ "$INSTALL_AGY_NONROOT" = "1" ]; then
+    echo -e "\n  ${CYAN}● Memasang Antigravity CLI (AGY) Standalone di Termux Native...${RESET}"
+    if [ -x "$PREFIX/bin/agy-install" ]; then
+        "$PREFIX/bin/agy-install" || true
+    elif [ -f "$SCRIPT_DIR/agy-install" ]; then
+        bash "$SCRIPT_DIR/agy-install" || true
+    fi
 fi
 
 # Pasang login script
@@ -940,6 +1055,32 @@ echo "9router (.cjs atau npm binary) tidak ditemukan di sistem."
 exit 1
 EOF_C9
             chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/9router"
+
+            # Pasang AGY Suite ke Container PRoot jika dipilih
+            if [ "$INSTALL_AGY_NONROOT" = "1" ]; then
+                for agy_tool in agy-ganti agy-sandbox agy-copilot; do
+                    if [ -f "$SCRIPT_DIR/$agy_tool" ]; then
+                        cp -f "$SCRIPT_DIR/$agy_tool" "$CONTAINER_ROOTFS/usr/local/bin/$agy_tool"
+                        chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/$agy_tool"
+                    elif [ -f "$PREFIX/bin/$agy_tool" ]; then
+                        cp -f "$PREFIX/bin/$agy_tool" "$CONTAINER_ROOTFS/usr/local/bin/$agy_tool"
+                        chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/$agy_tool"
+                    fi
+                done
+                [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-copilot" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-copilot" "$CONTAINER_ROOTFS/usr/local/bin/copilot"
+                [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" "$CONTAINER_ROOTFS/usr/local/bin/sandbox"
+                [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" "$CONTAINER_ROOTFS/usr/local/bin/agy-sb"
+                [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" "$CONTAINER_ROOTFS/usr/local/bin/ganti"
+                [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" "$CONTAINER_ROOTFS/usr/local/bin/ganti-akun"
+            fi
+            if [ -f "$SCRIPT_DIR/agy-install" ]; then
+                cp -f "$SCRIPT_DIR/agy-install" "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+                chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+            elif [ -f "$PREFIX/bin/agy-install" ]; then
+                cp -f "$PREFIX/bin/agy-install" "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+                chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+            fi
+            [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-install" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-install" "$CONTAINER_ROOTFS/usr/local/bin/install-agy"
 
             # Pasang Smart Touch Rofi Wrapper & Hook di PRoot
             mkdir -p "$CONTAINER_ROOTFS/usr/local/lib" "$CONTAINER_ROOTFS/usr/local/src"
@@ -1084,22 +1225,58 @@ elif [ -f \"\$WDIR/pemantau.cjs\" ]; then
   cd \"\$WDIR\" && exec node pemantau.cjs \"\$@\"
 fi
 EOF_RP
-                cat << 'EOF_R9' > '$CONTAINER_ROOTFS/usr/local/bin/9router'
+                cat << 'EOF_R9' > "$CONTAINER_ROOTFS/usr/local/bin/9router"
 #!/usr/bin/env bash
 [ -f /root/.fusion_env ] && . /root/.fusion_env
-WDIR=\"\${FUSION_WALLET_DIR:-/root/wallet}\"
-if [ ! -d \"\$WDIR\" ]; then
-  for cand in /wallet /root/wallet \"\$HOME/wallet\" /data/data/com.termux/files/home/wallet; do
-    if [ -d \"\$cand\" ]; then WDIR=\"\$cand\"; break; fi
+WDIR="${FUSION_WALLET_DIR:-/root/wallet}"
+if [ ! -d "$WDIR" ]; then
+  for cand in /wallet /root/wallet "$HOME/wallet" /data/data/com.termux/files/home/wallet; do
+    if [ -d "$cand" ]; then WDIR="$cand"; break; fi
   done
 fi
-if [ -f \"\$WDIR/9router.cjs\" ]; then
-  cd \"\$WDIR\" && exec node 9router.cjs \"\$@\"
+if [ -f "$WDIR/9router.cjs" ]; then
+  cd "$WDIR" && exec node 9router.cjs "$@"
 fi
-if command -v 9router >/dev/null 2>&1 && [ \"\$(command -v 9router)\" != \"\$0\" ]; then
-  exec 9router \"\$@\"
+if command -v 9router >/dev/null 2>&1 && [ "$(command -v 9router)" != "$0" ]; then
+  exec 9router "$@"
 fi
 EOF_R9
+                chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/9router"
+
+                # Pasang AGY Suite ke Container Root jika AGY aktif
+                if [ "$WIRE_AGY_CONTAINER" = "1" ]; then
+                    for agy_tool in agy-ganti agy-sandbox agy-copilot; do
+                        if [ -f "$SCRIPT_DIR/\$agy_tool" ]; then
+                            cp -f "$SCRIPT_DIR/\$agy_tool" "$CONTAINER_ROOTFS/usr/local/bin/\$agy_tool"
+                            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/\$agy_tool"
+                        elif [ -f "$PREFIX/bin/\$agy_tool" ]; then
+                            cp -f "$PREFIX/bin/\$agy_tool" "$CONTAINER_ROOTFS/usr/local/bin/\$agy_tool"
+                            chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/\$agy_tool"
+                        fi
+                    done
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-copilot" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-copilot" "$CONTAINER_ROOTFS/usr/local/bin/copilot"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" "$CONTAINER_ROOTFS/usr/local/bin/sandbox"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-sandbox" "$CONTAINER_ROOTFS/usr/local/bin/agy-sb"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" "$CONTAINER_ROOTFS/usr/local/bin/ganti"
+                    [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-ganti" "$CONTAINER_ROOTFS/usr/local/bin/ganti-akun"
+                fi
+
+                # Tool installer on-demand selalu tersedia
+                if [ -f "$SCRIPT_DIR/agy-install" ]; then
+                    cp -f "$SCRIPT_DIR/agy-install" "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+                    chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+                elif [ -f "$PREFIX/bin/agy-install" ]; then
+                    cp -f "$PREFIX/bin/agy-install" "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+                    chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/agy-install"
+                fi
+                [ -f "$CONTAINER_ROOTFS/usr/local/bin/agy-install" ] && ln -sf "$CONTAINER_ROOTFS/usr/local/bin/agy-install" "$CONTAINER_ROOTFS/usr/local/bin/install-agy"
+                if [ -f "$SCRIPT_DIR/eso" ]; then
+                    cp -f "$SCRIPT_DIR/eso" "$CONTAINER_ROOTFS/usr/local/bin/eso"
+                    chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/eso"
+                elif [ -f "$PREFIX/bin/eso" ]; then
+                    cp -f "$PREFIX/bin/eso" "$CONTAINER_ROOTFS/usr/local/bin/eso"
+                    chmod 755 "$CONTAINER_ROOTFS/usr/local/bin/eso"
+                fi
                 mkdir -p '$CONTAINER_ROOTFS/usr/local/lib' '$CONTAINER_ROOTFS/usr/local/src'
                 if [ -f "$SCRIPT_DIR/librofitouch.c" ]; then
                     cp -f "$SCRIPT_DIR/librofitouch.c" '$CONTAINER_ROOTFS/usr/local/src/librofitouch.c' 2>/dev/null || true
@@ -1159,6 +1336,19 @@ EOF_FCITX
                 echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) disinkronkan ke $CUSTOM_LINUX_NAME (/root/.config/)${RESET}"
             fi
             echo -e "  ${GREEN}✔ Shims & Audio Bridge terinjeksi langsung ke $CUSTOM_LINUX_NAME (/usr/local/bin/)${RESET}"
+
+            # Instalasi Antigravity CLI Resmi di Container Linux jika disetujui user
+            if [ "$INSTALL_AGY_CONTAINER" = "1" ]; then
+                echo -e "  ${CYAN}● Memasang Antigravity CLI Resmi (Google AGY) ke Container...${RESET}"
+                if [ "$CUSTOM_LINUX_NAME" = "NetHunter" ] || [[ "$CUSTOM_LINUX_CMD" =~ bashnh ]]; then
+                    su -mm -c "chroot '$CONTAINER_ROOTFS' /bin/bash -c 'curl -fsSL https://antigravity.google/cli/install.sh | bash'" 2>/dev/null || true
+                elif [[ "$CUSTOM_LINUX_CMD" =~ droidspaces ]]; then
+                    su -c "/data/local/Droidspaces/bin/droidspaces --name=\"$CUSTOM_LINUX_NAME\" exec -- /bin/bash -c 'curl -fsSL https://antigravity.google/cli/install.sh | bash'" 2>/dev/null || true
+                else
+                    su -c "chroot '$CONTAINER_ROOTFS' /bin/bash -c 'curl -fsSL https://antigravity.google/cli/install.sh | bash'" 2>/dev/null || true
+                fi
+                su -c "[ -f '$CONTAINER_ROOTFS/root/.local/bin/agy' ] && ln -sf /root/.local/bin/agy '$CONTAINER_ROOTFS/usr/local/bin/agy'" 2>/dev/null || true
+            fi
         fi
 
         # Jalankan termux-ipc-bridge jika Droidspaces container digunakan
@@ -1508,6 +1698,93 @@ alias bashnh="bashnh"
 alias login="login"
 alias bspwm="termux-bspwm"
 '
+
+if [ $IS_ROOT -eq 1 ] || [ "$INSTALL_AGY_NONROOT" = "1" ]; then
+    ALIAS_SNIPPET="${ALIAS_SNIPPET}"'
+alias agy-ganti="agy-ganti"
+alias ganti="agy-ganti"
+alias ganti-akun="agy-ganti"
+alias agy-sandbox="agy-sandbox"
+alias sandbox="agy-sandbox"
+alias agy-sb="agy-sandbox"
+alias agy-install="agy-install"
+alias install-agy="agy-install"
+
+# Smart AGY Auto-Sandbox (Universal Root & Non-Root)
+agy() {
+  local first_arg="$1"
+  if [[ "$first_arg" == "list" || "$first_arg" == "ls" || "$first_arg" == "accounts" || "$first_arg" == "acc" ]]; then
+    agy-ganti list
+    return
+  fi
+  if [[ "$first_arg" == "sync" || "$first_arg" == "sync-9router" ]]; then
+    agy-ganti sync
+    return
+  fi
+  if [[ "$first_arg" == "ui" || "$first_arg" == "web" ]]; then
+    agy-ganti ui
+    return
+  fi
+  if [[ "$first_arg" == "sandbox" || "$first_arg" == "sb" ]]; then
+    shift
+    agy-sandbox "$@"
+    return
+  fi
+  if [[ "$first_arg" == "switch" || "$first_arg" == "ganti" ]]; then
+    agy-ganti "$2"
+    return
+  fi
+  if [[ "$first_arg" =~ ^[0-9]+$ && -z "$2" ]]; then
+    agy-sandbox "$first_arg"
+    return
+  fi
+
+  local base_dir="${HOME:-/root}"
+  local active_file="${base_dir}/.agy-accounts/.active"
+  [ ! -f "$active_file" ] && active_file="/root/.agy-accounts/.active"
+  [ ! -f "$active_file" ] && active_file="/data/data/com.termux/files/home/.agy-accounts/.active"
+
+  local active_acc=""
+  if [[ -f "$active_file" ]]; then
+    active_acc="$(cat "$active_file" 2>/dev/null | tr -d "[:space:]")"
+  fi
+
+  local sb_dir="${base_dir}/.gemini/sandboxes/${active_acc}"
+  [ ! -d "$sb_dir" ] && sb_dir="/root/.gemini/sandboxes/${active_acc}"
+  [ ! -d "$sb_dir" ] && sb_dir="/data/data/com.termux/files/home/.gemini/sandboxes/${active_acc}"
+
+  local agy_bin=""
+  for b_cand in "${base_dir}/.local/bin/agy" "/root/.local/bin/agy" "${PREFIX:-/data/data/com.termux/files/usr}/bin/agy" "/usr/local/bin/agy"; do
+    if [[ -x "$b_cand" ]]; then
+      agy_bin="$b_cand"
+      break
+    fi
+  done
+  if [[ -z "$agy_bin" ]] && command -v agy >/dev/null 2>&1; then
+    agy_bin="agy"
+  fi
+
+  if [[ -z "$agy_bin" ]] || (! command -v "$agy_bin" >/dev/null 2>&1 && [[ ! -x "$agy_bin" ]]); then
+    echo -e "\033[33m[!] Antigravity CLI (agy) belum terpasang di sistem.\033[0m"
+    echo -e "Untuk memasang di Termux Native, ketik: \033[36magy-install\033[0m"
+    echo -e "atau via script: \033[32mcurl -fsSL https://raw.githubusercontent.com/wallentx/antigravity-cli-termux/dev/install.sh | bash\033[0m"
+    return 1
+  fi
+
+  if [[ -n "$active_acc" && -d "$sb_dir" && "$first_arg" != "--raw" && "$first_arg" != "--no-sandbox" ]]; then
+    HOME="$sb_dir" AGY_SANDBOX="$active_acc" "$agy_bin" "$@"
+  else
+    "$agy_bin" "$@"
+  fi
+}
+'
+else
+    ALIAS_SNIPPET="${ALIAS_SNIPPET}"'
+alias agy-install="agy-install"
+alias install-agy="agy-install"
+alias agy="echo -e \"\033[33m[!] Antigravity CLI belum dipasang di Termux Native.\033[0m Ketik: \033[36magy-install\033[0m\""
+'
+fi
 
 if [ $USE_ZSH -eq 1 ]; then
     ZSHRC_FILE="$HOME/.zshrc"

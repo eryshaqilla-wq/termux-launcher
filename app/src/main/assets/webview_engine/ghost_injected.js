@@ -3843,7 +3843,7 @@
             }
         }
         if (!wAddr) {
-            wAddr = "0xd184F5Eb1F94378410BCAd0D9D33e3C03c3550d9";
+            wAddr = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
         }
 
         // 1. Deteksi input yang sedang aktif / fokus

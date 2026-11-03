@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+import os
+import sys
+import json
+import time
+import socket
+import threading
+import subprocess
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+PORT = 3334
+BASE_HOME = os.environ.get("HOME") or ("/data/data/com.termux/files/home" if os.path.exists("/data/data/com.termux/files/home") else "/root")
+PID_FILE = os.path.join(BASE_HOME, ".agy_copilot.pid")
+TASK_IN_PROGRESS = False
+
+def log(msg):
+    ts = time.strftime("%H:%M:%S")
+    print(f"\033[96m[{ts}]\033[0m \033[1m[AGY Co-Pilot]\033[0m {msg}", flush=True)
+
+def notify_hud(title, subtitle, status_type="running"):
+    safe_title = json.dumps(title)
+    safe_sub = json.dumps(subtitle)
+    safe_type = json.dumps(status_type)
+    js = f"window.AgyBridge && window.AgyBridge.updateHUD({safe_title}, {safe_sub}, {safe_type});"
+    try:
+        subprocess.run(["browser", "eval", js], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+    except Exception:
+        pass
+
+def notify_toast(msg):
+    try:
+        subprocess.run(["termux-ipc", "toast", msg], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+    except Exception:
+        pass
+
+def handle_task_async(task):
+    global TASK_IN_PROGRESS
+    TASK_IN_PROGRESS = True
+    prompt = task.get("prompt", "")
+    url = task.get("url", "")
+    title = task.get("title", "")
+    
+    log(f"📥 Menerima tugas baru dari Tuan Eso: \033[92m{prompt}\033[0m")
+    log(f"🌐 Halaman aktif: {url} ({title})")
+    
+    notify_hud("🤖 AGY Co-Pilot", f"Memproses: {prompt[:35]}...", "running")
+    notify_toast(f"AGY: Memproses '{prompt[:25]}...'")
+
+    instruction = f"""Kamu adalah AGY Co-Pilot, asisten AI otonom pengendali browser Termux untuk Tuan Eso.
+Instruksi dari Tuan Eso: '{prompt}'
+Halaman web aktif di browser: {url} ({title}).
+
+Kamu memiliki akses penuh ke perintah terminal untuk mengontrol browser:
+1. 'browser dom' untuk membaca snapshot elemen DOM halaman saat ini jika diperlukan.
+2. 'browser eval "<code>"' untuk menjalankan JavaScript di halaman aktif (mencari elemen tombol/link/form dengan document.querySelector atau document.querySelectorAll, lalu click() atau mengisi nilai value).
+3. 'browser autofill', 'browser claim', 'browser switch-tab <index>', dll.
+
+Tugasmu:
+- Analisis maksud Tuan Eso dan jalankan langkah-langkah yang diminta pada halaman web aktif menggunakan 'browser eval'.
+- Buat kode JS di browser eval yang tangguh (bisa mendeteksi teks tombol dalam berbagai variasi bahasa seperti login/masuk/sign in, connect/hubungkan, swap/tukar, dll).
+- Setelah selesai, perbarui HUD di browser dengan memanggil:
+  browser eval "window.AgyBridge && window.AgyBridge.updateHUD('🤖 AGY Co-Pilot', 'Selesai: {prompt[:30]}', 'success');"
+- Laporkan secara ringkas tindakan yang telah kamu lakukan."""
+
+    copilot_home = "/tmp/agy_copilot_env"
+    copilot_cli_dir = os.path.join(copilot_home, ".gemini", "antigravity-cli")
+    os.makedirs(copilot_cli_dir, exist_ok=True)
+    real_cli_candidates = [
+        os.path.join(BASE_HOME, ".gemini", "antigravity-cli"),
+        "/root/.gemini/antigravity-cli",
+        "/data/data/com.termux/files/home/.gemini/antigravity-cli"
+    ]
+    real_cli_dir = next((d for d in real_cli_candidates if os.path.exists(d)), real_cli_candidates[0])
+
+    # Dynamic token selection: prefer standby worker from pool to avoid touching active account
+    acc_candidates = [
+        os.path.join(BASE_HOME, ".agy-accounts"),
+        "/root/.agy-accounts",
+        "/data/data/com.termux/files/home/.agy-accounts"
+    ]
+    acc_dir = next((d for d in acc_candidates if os.path.isdir(d)), None)
+    token_src = None
+    if acc_dir:
+        try:
+            active_file = os.path.join(acc_dir, ".active")
+            active_name = open(active_file).read().strip() if os.path.exists(active_file) else ""
+            acc_files = [f for f in os.listdir(acc_dir) if f.endswith(".json")]
+            workers = [f for f in acc_files if not f.startswith(active_name)]
+            chosen = workers[0] if workers else (acc_files[0] if acc_files else None)
+            if chosen:
+                token_src = os.path.join(acc_dir, chosen)
+        except Exception:
+            token_src = None
+
+    if not token_src:
+        token_src = os.path.join(real_cli_dir, "antigravity-oauth-token")
+
+    dst_token = os.path.join(copilot_cli_dir, "antigravity-oauth-token")
+    if token_src and os.path.exists(token_src):
+        try:
+            import shutil
+            shutil.copy2(token_src, dst_token)
+            os.chmod(dst_token, 0o600)
+        except Exception:
+            pass
+
+    # Settings
+    settings_src = os.path.join(real_cli_dir, "settings.json")
+    dst_settings = os.path.join(copilot_cli_dir, "settings.json")
+    if os.path.exists(settings_src) and not os.path.exists(dst_settings):
+        try:
+            os.symlink(settings_src, dst_settings)
+        except Exception:
+            try:
+                import shutil
+                shutil.copy2(settings_src, dst_settings)
+            except Exception:
+                pass
+
+    env = os.environ.copy()
+    env["HOME"] = copilot_home
+    env["AGY_EPHEMERAL"] = "1"
+
+    cmd = [
+        "agy",
+        "-p",
+        instruction,
+        "--effort", "low",
+        "--dangerously-skip-permissions",
+        "--disable-slash-commands"
+    ]
+    
+    try:
+        log("🚀 Menjalankan Antigravity Agent (effort: low, isolated sandbox)...")
+        res = subprocess.run(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=180)
+        if res.returncode == 0:
+            log("✅ Selesai dieksekusi oleh Antigravity!")
+            notify_hud("🤖 AGY Co-Pilot", f"Selesai: {prompt[:30]}", "success")
+            notify_toast("AGY Co-Pilot: Tugas selesai dieksekusi!")
+        else:
+            log(f"⚠️ Respon non-zero: {res.stderr[:200]}")
+            notify_hud("🤖 AGY Co-Pilot", "Selesai dieksekusi", "success")
+    except subprocess.TimeoutExpired:
+        log("⏱️ Batas waktu eksekusi habis (180s)")
+        notify_hud("🤖 AGY Co-Pilot", "Batas waktu eksekusi habis", "warning")
+    except Exception as e:
+        log(f"❌ Exception: {e}")
+        notify_hud("🤖 AGY Co-Pilot", f"Error: {str(e)[:30]}", "warning")
+    finally:
+        # 🛡️ ANTI-ZOMBIE: Selesai tugas langsung bunuh diri secara bersih!
+        log("🧹 Anti-Zombie: Tugas selesai! Mematikan daemon secara otomatis...")
+        time.sleep(1.5)
+        if os.path.exists(PID_FILE):
+            try:
+                os.remove(PID_FILE)
+            except Exception:
+                pass
+        log("🛑 Daemon resmi dimatikan. Bebas zombie & 0 MB RAM!")
+        os._exit(0)
+
+class AgyHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args):
+        pass
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(json.dumps({"status": "ok", "service": "AGY Co-Pilot Daemon", "port": PORT}).encode("utf-8"))
+
+    def do_POST(self):
+        content_length = int(self.headers.get("Content-Length", 0))
+        post_data = self.rfile.read(content_length)
+        
+        try:
+            task = json.loads(post_data.decode("utf-8"))
+        except Exception:
+            task = {"prompt": post_data.decode("utf-8", errors="ignore")}
+
+        # Segera balas ke client Android agar thread UI/Native tidak hanging
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        resp = {"status": "received", "prompt": task.get("prompt", "")}
+        self.wfile.write(json.dumps(resp).encode("utf-8"))
+
+        # Eksekusi Antigravity di background thread
+        t = threading.Thread(target=handle_task_async, args=(task,), daemon=True)
+        t.start()
+
+def is_running():
+    if os.path.exists(PID_FILE):
+        try:
+            with open(PID_FILE, "r") as f:
+                pid = int(f.read().strip())
+            os.kill(pid, 0)
+            return pid
+        except Exception:
+            return None
+    return None
+
+def stop_daemon():
+    pid = is_running()
+    if pid:
+        try:
+            os.kill(pid, 15)
+            time.sleep(0.5)
+            if os.path.exists(PID_FILE):
+                os.remove(PID_FILE)
+            print(f"\033[92m[AGY Co-Pilot] Daemon (PID {pid}) berhasil dihentikan.\033[0m")
+        except Exception as e:
+            print(f"\033[91m[AGY Co-Pilot] Gagal menghentikan PID {pid}: {e}\033[0m")
+    else:
+        print("\033[93m[AGY Co-Pilot] Daemon sedang tidak aktif.\033[0m")
+
+def status_daemon():
+    pid = is_running()
+    if pid:
+        print(f"\033[92m[AGY Co-Pilot] Status: AKTIF (PID {pid}, Port {PORT})\033[0m")
+    else:
+        print("\033[90m[AGY Co-Pilot] Status: NONAKTIF\033[0m")
+
+def start_server():
+    server = HTTPServer(("127.0.0.1", PORT), AgyHandler)
+    with open(PID_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    
+    print("\033[96m" + "="*50 + "\033[0m")
+    print("\033[92m   🤖 AGY CO-PILOT AUTONOMOUS DAEMON (PORT 3334)   \033[0m")
+    print("\033[96m" + "="*50 + "\033[0m")
+    print(f" ├─ Port API  : \033[92mhttp://127.0.0.1:{PORT}\033[0m")
+    print(f" ├─ PID       : \033[93m{os.getpid()}\033[0m")
+    print(f" ├─ Mode      : \033[92m100% AGY Co-Pilot (Effort: Low, Fast Execution)\033[0m")
+    print(f" ├─ Fitur     : \033[93mSelf-Terminate (Mati otomatis setelah tugas selesai)\033[0m")
+    print(f" └─ Menunggu perintah dari BOT Drawer WebView Termux...")
+    print("\033[90m Tekan CTRL+C untuk menghentikan daemon.\033[0m\n")
+
+    # 🛡️ WATCHDOG IDLE TIMER: Jika dalam 60s tidak ada tugas yang masuk, matikan diri!
+    def idle_watchdog(timeout=60):
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if TASK_IN_PROGRESS:
+                return
+            time.sleep(1)
+        if not TASK_IN_PROGRESS:
+            log(f"⏱️ Idle watchdog ({timeout}s) tercapai tanpa tugas. Mematikan daemon (Anti-Zombie)...")
+            if os.path.exists(PID_FILE):
+                try:
+                    os.remove(PID_FILE)
+                except Exception:
+                    pass
+            os._exit(0)
+
+    t_watch = threading.Thread(target=idle_watchdog, daemon=True)
+    t_watch.start()
+    
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if os.path.exists(PID_FILE):
+            os.remove(PID_FILE)
+        print("\n\033[93m[AGY Co-Pilot] Daemon dihentikan.\033[0m")
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        arg = sys.argv[1].lower()
+        if arg == "--run-daemon":
+            start_server()
+            sys.exit(0)
+        elif arg in ["--stop", "stop"]:
+            stop_daemon()
+            sys.exit(0)
+        elif arg in ["--status", "status"]:
+            status_daemon()
+            sys.exit(0)
+        elif arg in ["--bg", "bg", "-d"]:
+            existing = is_running()
+            if existing:
+                print(f"\033[93m[AGY Co-Pilot] Daemon sudah berjalan di background (PID {existing})\033[0m")
+                sys.exit(0)
+            log_path = os.path.join(BASE_HOME, ".agy_copilot.log")
+            with open(log_path, "a") as logfile:
+                p = subprocess.Popen([sys.executable, "/usr/local/bin/agy-copilot", "--run-daemon"], stdout=logfile, stderr=logfile, start_new_session=True)
+            time.sleep(0.5)
+            print(f"\033[92m[AGY Co-Pilot] Daemon diluncurkan di background (PID {p.pid}). Log: {log_path}\033[0m")
+            sys.exit(0)
+    
+    existing = is_running()
+    if existing:
+        print(f"\033[93m[AGY Co-Pilot] Daemon sudah berjalan di PID {existing}. Hentikan dulu dengan: agy-copilot stop\033[0m")
+        sys.exit(0)
+        
+    start_server()

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+if command -v agy-ganti >/dev/null 2>&1; then
+    exec agy-ganti sandbox "$@"
+elif [ -f "/usr/local/bin/agy-ganti" ]; then
+    exec node /usr/local/bin/agy-ganti sandbox "$@"
+elif [ -n "$PREFIX" ] && [ -f "$PREFIX/bin/agy-ganti" ]; then
+    exec node "$PREFIX/bin/agy-ganti" sandbox "$@"
+elif [ -f "/data/data/com.termux/files/usr/bin/agy-ganti" ]; then
+    exec node "/data/data/com.termux/files/usr/bin/agy-ganti" sandbox "$@"
+else
+    echo "agy-ganti tidak ditemukan di PATH"
+    exit 1
+fi
