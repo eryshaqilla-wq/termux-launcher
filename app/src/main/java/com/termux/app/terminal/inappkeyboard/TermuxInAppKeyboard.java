@@ -1589,6 +1589,11 @@ public final class TermuxInAppKeyboard {
     /** The last palette handed to the view, for {@link #setGlassFace} to compare against. */
     @Nullable private juloo.keyboard2.Theme.Palette mAppliedPalette;
 
+    @Nullable
+    public juloo.keyboard2.Theme.Palette getAppliedPalette() {
+        return mAppliedPalette;
+    }
+
     /** Whether two palettes draw the same legends and caps, all that a face can move. */
     static boolean sameInks(@NonNull juloo.keyboard2.Theme.Palette a,
                             @NonNull juloo.keyboard2.Theme.Palette b) {

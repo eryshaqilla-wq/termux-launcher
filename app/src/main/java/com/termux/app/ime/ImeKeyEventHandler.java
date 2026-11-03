@@ -58,6 +58,16 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             }
         }
 
+        if (value.getKind() == KeyValue.Kind.Launcher_tool) {
+            handleLauncherTool(value.getLauncherTool(), mService.getCurrentInputConnection());
+            return;
+        }
+
+        if (value.getKind() == KeyValue.Kind.Event) {
+            handleEvent(value.getEvent(), mService.getCurrentInputConnection());
+            return;
+        }
+
         InputConnection ic = mService.getCurrentInputConnection();
         if (ic == null) return;
 
@@ -74,14 +84,8 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             case Editing:
                 handleEditing(value.getEditing(), ic);
                 break;
-            case Event:
-                handleEvent(value.getEvent(), ic);
-                break;
             case Slider:
                 handleSlider(value.getSlider(), value.getSliderRepeat());
-                break;
-            case Launcher_tool:
-                handleLauncherTool(value.getLauncherTool(), ic);
                 break;
             default:
                 break;
@@ -358,6 +362,12 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 mService.startActivity(intent);
                 break;
+            case SWITCH_CLIPBOARD:
+                mService.showClipboardPanel();
+                break;
+            case SWITCH_BACK_CLIPBOARD:
+                mService.hideClipboardPanel();
+                break;
             case SWITCH_VOICE_TYPING:
             case SWITCH_VOICE_TYPING_CHOOSER:
                 mService.toggleVoiceTyping(event == KeyValue.Event.SWITCH_VOICE_TYPING_CHOOSER);
@@ -372,6 +382,10 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
         String id = tool.toolId;
         if ("voice.dictate".equalsIgnoreCase(id)) {
             mService.toggleVoiceTyping(false);
+            return;
+        }
+        if ("keyboard.clipboard".equalsIgnoreCase(id) || "clipboard".equalsIgnoreCase(id)) {
+            mService.toggleClipboardPanel();
             return;
         }
     }

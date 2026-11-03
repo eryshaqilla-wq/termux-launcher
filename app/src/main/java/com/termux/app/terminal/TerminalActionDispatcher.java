@@ -1563,10 +1563,6 @@ public final class TerminalActionDispatcher {
                     return ok().put("form", form.storageValue());
                 }
                 case TOOL_KEYBOARD_CLIPBOARD: {
-                    if (!host.isInAppKeyboardEnabled())
-                        return error(409, "unavailable", "The in-app keyboard is not enabled");
-                    // Flip; a false answer with the keyboard down means there was nothing to
-                    // stand the panel over, which the caller can fix with keyboard.show first.
                     boolean shown = host.toggleKeyboardClipboard();
                     return ok().put("shown", shown);
                 }

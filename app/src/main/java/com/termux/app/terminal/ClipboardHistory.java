@@ -154,6 +154,7 @@ public final class ClipboardHistory {
     public boolean record(@Nullable String text) {
         if (!fits(text)) return false;
         if (mPinned.contains(text)) return true;
+        if (!mRecent.isEmpty() && text.equals(mRecent.get(0))) return true;
         mRecent.remove(text);
         mRecent.add(0, text);
         while (mRecent.size() > MAX_RECENT) mRecent.remove(mRecent.size() - 1);

@@ -131,6 +131,10 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             com.termux.app.terminal.TerminalSessionBrowser.toggle(mActivity);
         } else if ("PASTE".equals(key)) {
             pasteWhereTheKeyboardPastes(mActivity);
+        } else if ("CLIPBOARD".equals(key) || "switch_clipboard".equals(key)) {
+            mActivity.toggleKeyboardClipboard();
+        } else if ("VOICE".equalsIgnoreCase(key) || "DICTATE".equalsIgnoreCase(key) || "voice_typing".equalsIgnoreCase(key)) {
+            mActivity.toggleVoiceDictation();
         } else if ("SCROLL".equals(key)) {
             TerminalView terminalView = mActivity.getTerminalView();
             if (terminalView != null && terminalView.mEmulator != null)

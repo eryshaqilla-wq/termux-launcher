@@ -313,9 +313,15 @@ function saveCachedPassword(url, password, source = 'cli') {
 async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1, password = null) {
     const safeName = recipeName.replace(/[^a-zA-Z0-9_-]/g, '_');
     console.log(`[Modul Makro] Menyiapkan auto-play resep "${safeName}" (Loop: ${loopCount}x murni, tanpa switch wallet)...`);
+    const eventsStr = JSON.stringify(recipeEvents);
     if (password) {
-        console.log(`[Modul Makro] Menyertakan Password / 口令 Klaim: "${password}"`);
+        console.log(`[Modul Makro] 🔑 Menyertakan Password / 口令 Klaim: "${password}"`);
+    } else if (eventsStr.includes('{{PASSWORD}}') || eventsStr.includes('{{PWD}}')) {
+        console.log(`[Modul Makro] ⚠️ Resep butuh {{PASSWORD}}, tetapi Vault tidak memiliki password untuk URL ini (jalankan dengan --pwd "..." jika ada).`);
     }
+
+    const statusFile = '/root/wallet/.agy_recipe_status.json';
+    try { if (fs.existsSync(statusFile)) fs.unlinkSync(statusFile); } catch (_) {}
 
     const triggerJs = `(function() {
         if (window.__AGY_RECIPE_TRIGGERED__) return 'ALREADY_RUNNING';
@@ -324,9 +330,19 @@ async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1, p
         var events = ${JSON.stringify(recipeEvents)};
         window.__AGY_RECIPE_TRIGGERED__ = true;
         window.__AGY_RECIPE_STATUS__ = 'RUNNING';
+        try {
+            if (window.GhostBridge && window.GhostBridge.writeWalletFile) {
+                window.GhostBridge.writeWalletFile('.agy_recipe_status.json', JSON.stringify({status:'STARTED', recipe:'${safeName}', time:Date.now()}));
+            }
+        } catch(_) {}
         window.AgyBatchRunner.run(events, '${safeName}', '1', false, function(result) {
             window.__AGY_RECIPE_STATUS__ = 'COMPLETED';
             window.__AGY_RECIPE_RESULT__ = result;
+            try {
+                if (window.GhostBridge && window.GhostBridge.writeWalletFile) {
+                    window.GhostBridge.writeWalletFile('.agy_recipe_status.json', JSON.stringify({status:'COMPLETED', result:result, time:Date.now()}));
+                }
+            } catch(_) {}
         }, 'raw', ${loopCount});
         return 'STARTED';
     })()`;
@@ -334,11 +350,10 @@ async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1, p
     for (let attempt = 1; attempt <= 15; attempt++) {
         await sleep(1500);
         try {
-            const res = runIpc(`eval "${triggerJs.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`);
-            if (res && res.includes('STARTED')) {
-                console.log(`[Modul Makro] Resep "${safeName}" sukses diputar di WebView!`);
-                return true;
-            } else if (res && res.includes('ALREADY_RUNNING')) {
+            const cleanJs = triggerJs.replace(/\r?\n/g, ' ').replace(/"/g, '\\"');
+            const res = runIpc(`eval "${cleanJs}"`);
+            if (res && res.includes('OK')) {
+                console.log(`[Modul Makro] Resep "${safeName}" sukses dipicu di WebView!`);
                 return true;
             }
         } catch (_) {}
@@ -349,40 +364,46 @@ async function triggerRecipeInWebView(recipeName, recipeEvents, loopCount = 1, p
 
 async function waitForRecipeCompletion(timeoutMs = 180000) {
     const start = Date.now();
+    const statusFile = '/root/wallet/.agy_recipe_status.json';
+
     const checkJs = `(function() {
         var txt = (document.body && document.body.innerText) ? document.body.innerText : '';
-        if (txt.includes('口令错误') || txt.includes('密码错误') || txt.includes('Wrong password') || txt.includes('Password incorrect') || txt.includes('Kode salah') || txt.includes('Password salah')) {
-            return 'INVALID_PASSWORD';
+        var status = 'RUNNING';
+        if (txt.includes('口令错误') || txt.includes('密码错误') || txt.includes('Wrong password') || txt.includes('Password incorrect') || txt.includes('Kode salah') || txt.includes('Password salah') || txt.includes('口令不对')) {
+            status = 'INVALID_PASSWORD';
+        } else if (window.__AGY_RECIPE_STATUS__ === 'COMPLETED') {
+            status = 'COMPLETED';
+        } else if (!window.AgyBatchRunner || !window.AgyBatchRunner.isRunning) {
+            status = 'STOPPED';
         }
-        if (window.__AGY_RECIPE_STATUS__ === 'COMPLETED') return 'COMPLETED';
-        if (!window.AgyBatchRunner || !window.AgyBatchRunner.isRunning) return 'STOPPED';
-        return 'RUNNING';
+        try {
+            if (window.GhostBridge && window.GhostBridge.writeWalletFile) {
+                window.GhostBridge.writeWalletFile('.agy_recipe_status.json', JSON.stringify({status: status, time: Date.now()}));
+            }
+        } catch(_) {}
     })()`;
 
     while (Date.now() - start < timeoutMs) {
         await sleep(1500);
         try {
-            const res = runIpc(`eval "${checkJs.replace(/\n/g, ' ').replace(/"/g, '\\"')}"`);
-            if (res && res.includes('INVALID_PASSWORD')) {
+            const cleanCheck = checkJs.replace(/\r?\n/g, ' ').replace(/"/g, '\\"');
+            runIpc(`eval "${cleanCheck}"`);
+            await sleep(300);
+
+            let status = null;
+            if (fs.existsSync(statusFile)) {
+                try {
+                    const parsed = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+                    status = parsed.status;
+                } catch (_) {}
+            }
+
+            if (status === 'INVALID_PASSWORD') {
                 console.log(`[Modul Makro] ❌ ERROR: [AGY_ERROR: INVALID_PASSWORD] Password ditolak oleh situs web!`);
                 return 'INVALID_PASSWORD';
-            } else if (res && (res.includes('COMPLETED') || res.includes('STOPPED'))) {
-                const isCompleted = res.includes('COMPLETED');
+            } else if (status === 'COMPLETED' || status === 'STOPPED') {
+                const isCompleted = status === 'COMPLETED';
                 console.log(`[Modul Makro] Alur makro selesai (${isCompleted ? 'COMPLETED' : 'STOPPED'})!`);
-                try {
-                    const rewCheck = runIpc(`eval "(function(){ var r = window.__AGY_LAST_REWARD__; if (!r && typeof extractRewardFromDom === 'function') r = extractRewardFromDom({}); return (r && (r.amount || r.status !== 'UNKNOWN')) ? JSON.stringify(r) : ''; })()"`);
-                    if (rewCheck && rewCheck.trim()) {
-                        const parsedRew = JSON.parse(rewCheck.trim());
-                        if (parsedRew.amount || parsedRew.status !== 'UNKNOWN') {
-                            const amtStr = parsedRew.amount ? `${parsedRew.amount} ${parsedRew.token || ''}`.trim() : '';
-                            console.log(`\n🎁 [HASIL KLAIM / REWARD]`);
-                            if (amtStr) console.log(`   └─ Nominal Token : ${amtStr}`);
-                            if (parsedRew.status) console.log(`   └─ Status Klaim  : ${parsedRew.status}`);
-                            if (parsedRew.text && parsedRew.text !== amtStr) console.log(`   └─ Keterangan    : ${parsedRew.text}`);
-                            saveRewardToLoopState(parsedRew);
-                        }
-                    }
-                } catch (_) {}
                 return true;
             }
         } catch (_) {}
@@ -1352,6 +1373,7 @@ async function executeSingleProfile(url, extraFlags = []) {
     let stopNotWord = null;
     let passwordArg = null;
     let explicitPassword = false;
+    let contextText = '';
 
     for (let i = 0; i < extraFlags.length; i++) {
         const flag = extraFlags[i];
@@ -1416,6 +1438,13 @@ async function executeSingleProfile(url, extraFlags = []) {
             }
         } else if (flag.startsWith('--stop-not=')) {
             stopNotWord = flag.split('=')[1] || null;
+        } else if (flag === '--context' || flag === '--text' || flag === '--msg') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                contextText = extraFlags[i + 1];
+                i++;
+            }
+        } else if (flag.startsWith('--context=') || flag.startsWith('--text=') || flag.startsWith('--msg=')) {
+            contextText = flag.split('=').slice(1).join('=') || '';
         } else if (flag === '--ai' || flag === '--engine') {
             if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
                 setAiEngineState(extraFlags[i + 1]);
@@ -1468,6 +1497,16 @@ async function executeSingleProfile(url, extraFlags = []) {
     if (recipe || modulQuery || explicitPassword) {
         if (!passwordArg && url) {
             passwordArg = getCachedPassword(url);
+            if (!passwordArg) {
+                try {
+                    const pwdResolver = require('/root/wallet/password_resolver.cjs');
+                    passwordArg = await pwdResolver.resolvePassword({
+                        url,
+                        text: contextText,
+                        allowInteractive: false
+                    });
+                } catch (_) {}
+            }
         }
         if (explicitPassword && passwordArg && url) {
             saveCachedPassword(url, passwordArg, 'cli');

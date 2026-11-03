@@ -30,12 +30,22 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.termux.R;
+import com.termux.ai.TaiModelSpec;
+import com.termux.ai.TaiSettings;
+import com.termux.ai.TaiSpeechModels;
+import com.termux.app.TermuxActivity;
+import com.termux.app.terminal.ClipboardHistory;
+import com.termux.app.terminal.inappkeyboard.ClipboardPanelController;
+import com.termux.app.terminal.inappkeyboard.ClipboardPanelView;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardColorScheme;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardExtraKeys;
 import com.termux.app.terminal.inappkeyboard.InAppKeyboardPaletteFactory;
 import com.termux.app.terminal.inappkeyboard.KeyPopupController;
 import com.termux.app.terminal.inappkeyboard.KeyPopupPalette;
 import com.termux.app.terminal.inappkeyboard.LauncherKeyboardLayouts;
+import com.termux.app.terminal.inappkeyboard.voice.VoiceInputSession;
+import com.termux.app.terminal.inappkeyboard.voice.VoiceLanguage;
+import com.termux.app.terminal.inappkeyboard.voice.VoiceMicSensitivity;
 import com.termux.app.theme.TermuxThemeManager;
 import com.termux.shared.termux.font.FileTypefaces;
 import com.termux.shared.termux.font.NerdFontSpans;
@@ -43,6 +53,7 @@ import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Locale;
 
 import juloo.keyboard2.Config;
 import juloo.keyboard2.Keyboard2View;
@@ -64,6 +75,8 @@ public class TermuxInputMethodService extends InputMethodService {
     private ImeKeyEventHandler mKeyEventHandler;
     private String mAppliedSettingsSignature = "";
     private SpeechRecognizer mSpeechRecognizer;
+    private VoiceInputSession mVoiceInputSession;
+    private ClipboardPanelController mClipboardPanel;
     private boolean mIsListeningVoice;
     private int mSelectionStart = -1;
     private int mSelectionEnd = -1;
@@ -154,6 +167,10 @@ public class TermuxInputMethodService extends InputMethodService {
         if (mKeyPopup != null) {
             mKeyPopup.destroy();
             mKeyPopup = null;
+        }
+        if (mClipboardPanel != null) {
+            mClipboardPanel.drop();
+            mClipboardPanel = null;
         }
         mInputContainer.removeAllViews();
 
@@ -355,6 +372,10 @@ public class TermuxInputMethodService extends InputMethodService {
     public void onDestroy() {
         super.onDestroy();
         stopVoiceTyping();
+        if (mClipboardPanel != null) {
+            mClipboardPanel.drop();
+            mClipboardPanel = null;
+        }
         if (mKeyPopup != null) {
             mKeyPopup.destroy();
             mKeyPopup = null;
@@ -428,6 +449,9 @@ public class TermuxInputMethodService extends InputMethodService {
     public void onFinishInputView(boolean finishingInput) {
         super.onFinishInputView(finishingInput);
         stopVoiceTyping();
+        if (mClipboardPanel != null && mClipboardPanel.isShowing()) {
+            mClipboardPanel.hide();
+        }
         clearSelectionState();
         if (mKeyEventHandler != null) {
             mKeyEventHandler.reset();
@@ -467,6 +491,86 @@ public class TermuxInputMethodService extends InputMethodService {
         mKeyboardView.setEditorAction(effectiveAction, label);
     }
 
+    public void showClipboardPanel() {
+        clipboardPanel().show();
+    }
+
+    public void hideClipboardPanel() {
+        if (mClipboardPanel != null) {
+            mClipboardPanel.hide();
+        }
+    }
+
+    public void toggleClipboardPanel() {
+        ClipboardPanelController panel = clipboardPanel();
+        if (panel.isShowing()) {
+            panel.hide();
+        } else {
+            panel.show();
+        }
+    }
+
+    private ClipboardPanelController clipboardPanel() {
+        if (mClipboardPanel == null) {
+            mClipboardPanel = new ClipboardPanelController(new ClipboardPanelController.Host() {
+                @Nullable
+                @Override
+                public FrameLayout keyboardViewHost() {
+                    return mKeyboardWrapper;
+                }
+
+                @Nullable
+                @Override
+                public View keyboardView() {
+                    return mKeyboardView;
+                }
+
+                @Override
+                public boolean isCard() {
+                    return false;
+                }
+
+                @Override
+                public boolean isReducedMotionEnabled() {
+                    return false;
+                }
+
+                @NonNull
+                @Override
+                public ClipboardPanelView.Palette palette() {
+                    String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : "system";
+                    Context context = TermuxInputMethodService.this;
+                    int surfaceColor;
+                    if (InAppKeyboardPaletteFactory.isSolidTheme(theme)) {
+                        surfaceColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(context, theme);
+                    } else {
+                        surfaceColor = InAppKeyboardPaletteFactory.resolveDockGlassBaseColor(context) | 0xFF000000;
+                    }
+                    int onSurface = 0xFFFFFFFF;
+                    int accent = 0xFF38BDF8;
+                    if (mKeyboardView != null && mKeyboardView.palette() != null) {
+                        Theme.Palette p = mKeyboardView.palette();
+                        if (p.labelColor != 0) onSurface = p.labelColor;
+                        if (p.accent != 0) accent = p.accent;
+                    }
+                    return new ClipboardPanelView.Palette(surfaceColor, onSurface, accent);
+                }
+
+                @Override
+                public void pasteFromHistory(@NonNull String text) {
+                    commitVoiceTranscript(text);
+                }
+
+                @Override
+                public int defaultHeightPx() {
+                    DisplayMetrics dm = getResources().getDisplayMetrics();
+                    return Math.round(260f * dm.density);
+                }
+            }, ClipboardHistory.getInstance(this));
+        }
+        return mClipboardPanel;
+    }
+
     public void toggleVoiceTyping(boolean chooser) {
         if (mIsListeningVoice) {
             stopVoiceTyping();
@@ -480,9 +584,140 @@ public class TermuxInputMethodService extends InputMethodService {
                 android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this,
                 R.string.voice_input_permission_denied, Toast.LENGTH_SHORT).show();
+            try {
+                Intent intent = new Intent(this, TermuxActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.putExtra("request_mic_permission", true);
+                startActivity(intent);
+            } catch (Exception ignored) {}
             return;
         }
 
+        // Try on-device Tai/Whisper voice engine first if model is resolved or configured
+        if (!chooser && voiceUsesOnDevice()) {
+            if (startOnDeviceVoiceTyping()) {
+                return;
+            }
+        }
+
+        // Fall back to Android SpeechRecognizer
+        startAndroidSpeechRecognizer(chooser);
+    }
+
+    private boolean voiceUsesOnDevice() {
+        if (mPreferences != null && mPreferences.isInAppKeyboardVoiceEngineChosen()) {
+            return mPreferences.isInAppKeyboardVoiceOnDevice();
+        }
+        return TaiSpeechModels.resolveActive(this) != null;
+    }
+
+    private boolean startOnDeviceVoiceTyping() {
+        TaiModelSpec model = TaiSpeechModels.resolveActive(this);
+        if (model == null) return false;
+
+        String modelId = model.id;
+        int windowSeconds = TaiSpeechModels.windowSeconds(model);
+        if (windowSeconds <= 0) {
+            TaiSettings tai = new TaiSettings(this);
+            windowSeconds = tai.getSttWindowSeconds();
+        }
+
+        String langSetting = mPreferences != null ? mPreferences.getInAppKeyboardVoiceLanguage() : null;
+        VoiceLanguage.Choice language = VoiceLanguage.Choice.NONE;
+        if (!TaiSpeechModels.isEnglishOnly(model)) {
+            VoiceLanguage.Resolution resolution = VoiceLanguage.resolve(langSetting, null, Locale.getDefault());
+            language = VoiceLanguage.Choice.forWhisper(resolution);
+        }
+
+        VoiceInputSession.Config config = new VoiceInputSession.Config(
+            modelId,
+            language.forced,
+            language.hint,
+            mPreferences != null ? mPreferences.getInAppKeyboardVoicePauseMs() : 600,
+            windowSeconds,
+            mPreferences != null ? mPreferences.getInAppKeyboardVoiceSilenceTimeoutMs() : 0,
+            mPreferences != null && mPreferences.isInAppKeyboardVoiceSoundsEnabled(),
+            mPreferences != null && mPreferences.isInAppKeyboardHapticsEnabled(),
+            VoiceMicSensitivity.NORMAL
+        );
+
+        VoiceInputSession session = new VoiceInputSession(this, config, new VoiceInputSession.Host() {
+            @Override
+            public void onListening() {
+                mIsListeningVoice = true;
+                if (mKeyboardView != null) {
+                    mKeyboardView.setVoiceTypingActive(true);
+                }
+                Toast.makeText(TermuxInputMethodService.this,
+                    R.string.voice_input_listening, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onSegmentCaptured() {}
+
+            @Override
+            public void onSegmentSettled() {}
+
+            @Override
+            public void onSpeechReady() {}
+
+            @Override
+            public void onLevel(float rms, boolean voiced, float noiseFloor) {}
+
+            @Override
+            public void onSpeechLanguage(@NonNull String iso, boolean differsFromHint) {}
+
+            @Override
+            public void onTranscript(@NonNull String text) {
+                commitVoiceTranscript(text);
+            }
+
+            @Override
+            public void onDraining() {}
+
+            @Override
+            public void onFailure(@NonNull String code, @NonNull String message, boolean anyTranscriptDelivered) {
+                stopVoiceTyping();
+                if (!anyTranscriptDelivered) {
+                    // Try android speech recognizer fallback
+                    startAndroidSpeechRecognizer(false);
+                } else {
+                    Toast.makeText(TermuxInputMethodService.this, message, Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onEnded(@NonNull VoiceInputSession.EndReason reason) {
+                stopVoiceTyping();
+            }
+        });
+
+        if (!session.start()) {
+            return false;
+        }
+
+        mVoiceInputSession = session;
+        return true;
+    }
+
+    private void commitVoiceTranscript(@NonNull String text) {
+        InputConnection ic = getCurrentInputConnection();
+        if (ic != null && text != null && !text.isEmpty()) {
+            CharSequence before = null;
+            try {
+                before = ic.getTextBeforeCursor(1, 0);
+            } catch (Exception ignored) {}
+            if (before != null && before.length() > 0) {
+                char last = before.charAt(before.length() - 1);
+                if (!Character.isWhitespace(last) && last != '(' && last != '[' && last != '{') {
+                    text = " " + text;
+                }
+            }
+            ic.commitText(text, 1);
+        }
+    }
+
+    private void startAndroidSpeechRecognizer(boolean chooser) {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             Toast.makeText(this,
                 R.string.voice_typing_unavailable, Toast.LENGTH_SHORT).show();
@@ -492,11 +727,19 @@ public class TermuxInputMethodService extends InputMethodService {
         try {
             destroySpeechRecognizer();
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
-                mSpeechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
-            } else {
+            boolean created = false;
+            if (!chooser && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                try {
+                    mSpeechRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(this);
+                    created = true;
+                } catch (Throwable t) {
+                    mSpeechRecognizer = null;
+                }
+            }
+            if (!created || mSpeechRecognizer == null) {
                 mSpeechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
             }
+
             mSpeechRecognizer.setRecognitionListener(new RecognitionListener() {
                 @Override
                 public void onReadyForSpeech(Bundle params) {
@@ -547,21 +790,7 @@ public class TermuxInputMethodService extends InputMethodService {
                     if (results != null) {
                         ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                         if (matches != null && !matches.isEmpty()) {
-                            String text = matches.get(0);
-                            InputConnection ic = getCurrentInputConnection();
-                            if (ic != null && text != null && !text.isEmpty()) {
-                                CharSequence before = null;
-                                try {
-                                    before = ic.getTextBeforeCursor(1, 0);
-                                } catch (Exception ignored) {}
-                                if (before != null && before.length() > 0) {
-                                    char last = before.charAt(before.length() - 1);
-                                    if (!Character.isWhitespace(last) && last != '(' && last != '[' && last != '{') {
-                                        text = " " + text;
-                                    }
-                                }
-                                ic.commitText(text, 1);
-                            }
+                            commitVoiceTranscript(matches.get(0));
                         }
                     }
                     destroySpeechRecognizer();
@@ -605,6 +834,14 @@ public class TermuxInputMethodService extends InputMethodService {
         mIsListeningVoice = false;
         if (mKeyboardView != null) {
             mKeyboardView.setVoiceTypingActive(false);
+        }
+        if (mVoiceInputSession != null) {
+            try {
+                if (!mVoiceInputSession.isStopRequested()) {
+                    mVoiceInputSession.stop(VoiceInputSession.EndReason.USER);
+                }
+            } catch (Exception ignored) {}
+            mVoiceInputSession = null;
         }
         if (mSpeechRecognizer != null) {
             try {

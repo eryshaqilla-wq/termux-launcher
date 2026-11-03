@@ -109,8 +109,8 @@ public final class ClipboardPanelView extends FrameLayout implements ClipboardHi
         mCard = card;
         mListener = listener;
         mSymbols = NerdFontSpans.typeface(context);
-        // Opaque in both shapes, like the pad: the panel lies over the place, never over glass.
-        mFillPaint.setColor(ColorUtils.setAlphaComponent(palette.surface, 255));
+        // If surface color has alpha > 0, paint it; otherwise transparent so underlying frosted glass shows through
+        mFillPaint.setColor(palette.surface);
         setWillNotDraw(false);
         // The keys are still under the panel; a touch that lands between rows must stop here.
         setClickable(true);
@@ -255,8 +255,10 @@ public final class ClipboardPanelView extends FrameLayout implements ClipboardHi
     @Override
     protected void onDraw(@NonNull Canvas canvas) {
         super.onDraw(canvas);
-        float radius = dpF(RADIUS_DP);
-        canvas.drawRoundRect(mBounds, radius, radius, mFillPaint);
+        if (mFillPaint.getColor() != 0) {
+            float radius = dpF(RADIUS_DP);
+            canvas.drawRoundRect(mBounds, radius, radius, mFillPaint);
+        }
     }
 
     /** Lays every row out again from the history. Bounded input, so one pass is cheap. */
@@ -310,10 +312,13 @@ public final class ClipboardPanelView extends FrameLayout implements ClipboardHi
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(dp(44));
         row.setPaddingRelative(dp(12), dp(4), dp(4), dp(4));
-        // A pinned row sits on a faint wash of the accent; a recent one on the panel itself.
+        // A pinned row sits on a wash of the accent; a recent one on a translucent key chip.
         GradientDrawable background = new GradientDrawable();
         background.setCornerRadius(dp(12));
-        background.setColor(item.pinned ? ColorUtils.setAlphaComponent(mPalette.accent, 24) : 0);
+        int rowBg = item.pinned
+            ? ColorUtils.setAlphaComponent(mPalette.accent, 36)
+            : ColorUtils.setAlphaComponent(mPalette.onSurface, 14);
+        background.setColor(rowBg);
         row.setBackground(background);
         row.setClickable(true);
         String preview = preview(item.text);

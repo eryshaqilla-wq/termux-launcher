@@ -42,6 +42,10 @@ public final class ClipboardPanelController {
 
         /** Paste {@code text} where the keyboard's own paste key pastes, clipboard included. */
         void pasteFromHistory(@NonNull String text);
+
+        default int defaultHeightPx() { return 0; }
+
+        default void onPanelHidden(boolean fromImeMode) {}
     }
 
     private static final float ENTER_OFFSET_DP = 12f;
@@ -75,7 +79,11 @@ public final class ClipboardPanelController {
         if (mPanel != null) return;
         FrameLayout host = mHost.keyboardViewHost();
         View keys = mHost.keyboardView();
-        if (host == null || keys == null) return;
+        if (host == null) return;
+        int height = keys != null && keys.getHeight() > 0 ? keys.getHeight() : mHost.defaultHeightPx();
+        if (height <= 0) {
+            height = Math.round(260 * host.getResources().getDisplayMetrics().density);
+        }
         ClipboardPanelView panel = new ClipboardPanelView(host.getContext(), mHost.palette(),
             mHost.isCard(), new ClipboardPanelView.Listener() {
                 @Override public void onPasteRequested(@NonNull String text) {
@@ -90,15 +98,19 @@ public final class ClipboardPanelController {
             });
         panel.bind(mHistory);
         mPanel = panel;
-        host.addView(panel, params(keys.getHeight()));
-        follow(keys);
+        host.addView(panel, params(height));
+        if (keys != null) {
+            follow(keys);
+        }
 
         long duration = Motion.FLOAT_DEPTH_MS;
         Interpolator settle = Motion.settle();
         boolean reduced = mHost.isReducedMotionEnabled();
-        keys.animate().cancel();
-        if (reduced) keys.setAlpha(0f);
-        else keys.animate().alpha(0f).setDuration(duration).setInterpolator(settle).start();
+        if (keys != null) {
+            keys.animate().cancel();
+            if (reduced) keys.setAlpha(0f);
+            else keys.animate().alpha(0f).setDuration(duration).setInterpolator(settle).start();
+        }
         panel.animate().cancel();
         if (reduced) {
             panel.setAlpha(1f);
@@ -127,7 +139,10 @@ public final class ClipboardPanelController {
             if (reduced) keys.setAlpha(1f);
             else keys.animate().alpha(1f).setDuration(duration).setInterpolator(settle).start();
         }
-        Runnable detach = () -> detach(panel);
+        Runnable detach = () -> {
+            detach(panel);
+            mHost.onPanelHidden(keys == null);
+        };
         panel.animate().cancel();
         if (reduced) {
             detach.run();
@@ -149,6 +164,7 @@ public final class ClipboardPanelController {
         unfollow();
         panel.animate().cancel();
         detach(panel);
+        mHost.onPanelHidden(mHost.keyboardView() == null);
     }
 
     private static void detach(@NonNull View panel) {

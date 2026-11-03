@@ -564,7 +564,9 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-switch")):
             lp = os.path.join(d_target, lk)
             if os.path.islink(lp) or os.path.exists(lp):
                 os.remove(lp)
-            os.symlink("agy-switch", lp)
+            with open(lp, "w") as f:
+                f.write("#!/usr/bin/env bash\nexec agy-switch \"$@\"\n")
+            os.chmod(lp, 0o755)
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-copilot")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-copilot"), os.path.join(ASSETS_DIR, "agy-copilot"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-copilot"), os.path.join(FUSION_SETUP_DIR, "agy-copilot"))

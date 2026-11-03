@@ -1792,6 +1792,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         com.termux.webview.FusionBootstrapHelper.extractSetupIfNeeded(this);
         com.termux.app.TermuxIpcServer.startServer(this);
         com.termux.webview.FusionWebViewManager.init(this);
+        initClipboardSync();
         com.termux.app.x11.ChrootDistro.setOnSyncCompleted(() -> runOnUiThread(() -> refreshLinuxApps(false)));
         // The window's content root holds the shell and every overlay placed over it by absolute
         // geometry (the layout editor's frame, the hide zone, the dictation pill), so it stays left
@@ -9765,6 +9766,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     public void onDestroy() {
         super.onDestroy();
         Logger.logDebug(LOG_TAG, "onDestroy");
+        cleanupClipboardSync();
         com.termux.app.x11.ChrootDistro.setOnSyncCompleted(null);
         if (sLiveActivity != null && sLiveActivity.get() == this) sLiveActivity = null;
         // First: what follows (the keyboard's teardown among it) must not book passes or holds
@@ -17781,7 +17783,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      */
     private void startOnDeviceVoiceInput(boolean fromKeyboard) {
         if (mVoiceInput != null) return;
-        if (fromKeyboard && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) return;
+        if (fromKeyboard && (mInAppKeyboard == null || !mInAppKeyboard.isVisible()) && !isImeVisible()) return;
         com.termux.ai.TaiSettings tai = new com.termux.ai.TaiSettings(this);
         // The settings' choice, or another installed speech model when that one's files are gone.
         com.termux.ai.TaiModelSpec model = com.termux.ai.TaiSpeechModels.resolveActive(this);
@@ -17836,7 +17838,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             getWindow().getDecorView().removeCallbacks(mVoicePillAutoClose);
         }
         mVoiceInput = session;
-        mVoiceTiedToKeyboard = fromKeyboard;
+        mVoiceTiedToKeyboard = fromKeyboard && !isImeVisible();
         mVoiceDictation.start(base);
         // Phrases collect as heard; with cleanup on, the chat model resolves on its own thread. A
         // model already resident is warmed now and cleans what was said so far at phrase pauses
@@ -17867,6 +17869,80 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      *
      * @return whether a dictation is listening now
      */
+    public boolean toggleKeyboardClipboard() {
+        ClipboardPanelController panel = clipboardPanel();
+        if (panel.isShowing()) {
+            panel.hide();
+            return false;
+        }
+        if (mInAppKeyboard != null && mInAppKeyboard.isVisible()) {
+            panel.show();
+            return true;
+        }
+        // In IME mode (or in-app keyboard not on screen):
+        if (isImeVisible() && getWindow() != null) {
+            mSystemImeHiddenForClipboard = true;
+            androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView())
+                .hide(androidx.core.view.WindowInsetsCompat.Type.ime());
+        }
+        View container = findViewById(R.id.inapp_keyboard_container);
+        FrameLayout host = findViewById(R.id.inapp_keyboard_view_host);
+        if (container != null) {
+            container.setVisibility(View.VISIBLE);
+            if (container.getLayoutParams() != null) {
+                container.getLayoutParams().height = ViewGroup.LayoutParams.WRAP_CONTENT;
+            }
+        }
+        if (host != null) {
+            host.setVisibility(View.VISIBLE);
+        }
+        dressInAppKeyboardHost();
+        panel.show();
+        return true;
+    }
+
+    private android.content.ClipboardManager.OnPrimaryClipChangedListener mGlobalPrimaryClipListener;
+
+    private void initClipboardSync() {
+        try {
+            android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null) return;
+            mGlobalPrimaryClipListener = this::syncPrimaryClipToHistory;
+            clipboard.addPrimaryClipChangedListener(mGlobalPrimaryClipListener);
+            syncPrimaryClipToHistory();
+        } catch (Throwable ignored) {}
+    }
+
+    private void cleanupClipboardSync() {
+        try {
+            if (mGlobalPrimaryClipListener != null) {
+                android.content.ClipboardManager clipboard =
+                    (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                if (clipboard != null) {
+                    clipboard.removePrimaryClipChangedListener(mGlobalPrimaryClipListener);
+                }
+                mGlobalPrimaryClipListener = null;
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private void syncPrimaryClipToHistory() {
+        try {
+            android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null && clipboard.hasPrimaryClip()) {
+                android.content.ClipData clip = clipboard.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0) {
+                    CharSequence cs = clip.getItemAt(0).getText();
+                    if (cs != null && cs.length() > 0) {
+                        ClipboardHistory.get(this).record(cs.toString());
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
     boolean toggleVoiceDictation() {
         VoiceInputSession session = mVoiceInput;
         if (session != null) {
@@ -23438,18 +23514,57 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 return TermuxActivity.this.isReducedMotionEnabled();
             }
 
+            @Override public int defaultHeightPx() {
+                if (mKeyboardGeometry != null && mKeyboardGeometry.lastMeasuredHeight() > 0) {
+                    return mKeyboardGeometry.lastMeasuredHeight();
+                }
+                return Math.round(dpToPx(260));
+            }
+
+            @Override public void onPanelHidden(boolean fromImeMode) {
+                if (fromImeMode || mSystemImeHiddenForClipboard) {
+                    View container = findViewById(R.id.inapp_keyboard_container);
+                    if (container != null && (mInAppKeyboard == null || !mInAppKeyboard.isVisible())) {
+                        container.setVisibility(View.GONE);
+                    }
+                    if (mSystemImeHiddenForClipboard) {
+                        mSystemImeHiddenForClipboard = false;
+                        if (getWindow() != null) {
+                            onSystemImeRequested();
+                            androidx.core.view.WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView())
+                                .show(androidx.core.view.WindowInsetsCompat.Type.ime());
+                        }
+                    }
+                }
+            }
+
             @Override @NonNull public ClipboardPanelView.Palette palette() {
-                // The touchpad's roles: the overlay surface the drawer and the popups use, its
-                // on-surface pair, and the terminal place's accent for the pill and the pins.
-                return new ClipboardPanelView.Palette(
-                    getTermuxThemeColor(com.termux.shared.R.attr.termuxColorSurfacePanelHigh,
-                        R.color.termux_surface_panel_high),
-                    getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface,
-                        R.color.termux_on_surface),
-                    getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurfaceVariant,
-                        R.color.termux_on_surface_variant),
-                    com.termux.app.statusbar.StatusBarLensView.accentFor(TermuxActivity.this,
-                        com.termux.app.wall.PaneWallPage.TERMINAL));
+                // If in-app keyboard is present, adapt its applied palette so clipboard perfectly matches keyboard theme!
+                int surfaceColor = 0; // Default transparent so underlying frosted glass / theme of surfaceHost shows through
+                int onSurface = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurface,
+                    R.color.termux_on_surface);
+                int onSurfaceVariant = getTermuxThemeColor(com.termux.shared.R.attr.termuxColorOnSurfaceVariant,
+                    R.color.termux_on_surface_variant);
+                int accent = com.termux.app.statusbar.StatusBarLensView.accentFor(TermuxActivity.this,
+                    com.termux.app.wall.PaneWallPage.TERMINAL);
+
+                if (mInAppKeyboard != null) {
+                    juloo.keyboard2.Theme.Palette kp = mInAppKeyboard.getAppliedPalette();
+                    if (kp != null) {
+                        onSurface = kp.labelColor;
+                        onSurfaceVariant = kp.subLabelColor;
+                        if (kp.actionKeyBackground != 0) {
+                            accent = kp.actionKeyBackground;
+                        }
+                        String theme = mPreferences != null ? mPreferences.getInAppKeyboardTheme() : null;
+                        if (InAppKeyboardPaletteFactory.isSolidTheme(theme)) {
+                            surfaceColor = InAppKeyboardPaletteFactory.getSolidBackgroundColor(TermuxActivity.this, theme);
+                        } else {
+                            surfaceColor = 0; // Frosted glass shines through
+                        }
+                    }
+                }
+                return new ClipboardPanelView.Palette(surfaceColor, onSurface, onSurfaceVariant, accent);
             }
 
             @Override public void pasteFromHistory(@NonNull String text) {
@@ -28155,11 +28270,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         @Override public boolean toggleKeyboardClipboard() {
-            // The panel has no size of its own: it needs keys on screen to stand over.
-            if (mInAppKeyboard == null || !mInAppKeyboard.isVisible()) return false;
-            ClipboardPanelController panel = clipboardPanel();
-            panel.toggle();
-            return panel.isShowing();
+            return TermuxActivity.this.toggleKeyboardClipboard();
         }
 
         @Override public boolean displayTakesSystemKeyboard() {
@@ -28320,6 +28431,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         postReturnHoldFrame();
         if (hasFocus) {
             applyFullscreenMode();
+            syncPrimaryClipToHistory();
         }
         if (!hasFocus || mIsInvalidState || !mIsVisible) {
             return;
@@ -28819,6 +28931,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** The drawer dismissed a visible system IME on engage; restored when the drawer goes. */
     private boolean mSystemImeHiddenForDrawer;
+    /** The clipboard panel dismissed a visible system IME on engage; restored when the panel goes. */
+    private boolean mSystemImeHiddenForClipboard;
 
     private boolean isImeVisible() {
         View content = findViewById(android.R.id.content);
