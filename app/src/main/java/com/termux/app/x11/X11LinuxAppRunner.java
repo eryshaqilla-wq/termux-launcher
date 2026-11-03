@@ -1,6 +1,7 @@
 package com.termux.app.x11;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -12,6 +13,7 @@ import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.TermuxConstants;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -399,7 +401,25 @@ public final class X11LinuxAppRunner {
             // desktop has ever heard of, so the whole retry stays out of a session's way.
             boolean noSandbox = !app.session && shouldStartWithNoSandbox(app);
             String display = X11DisplayHostController.displayName();
-            List<String> env = installedEnv(X11GpuProbe.probe(context));
+            List<String> env = new ArrayList<>(installedEnv(X11GpuProbe.probe(context)));
+            if (!app.session) {
+                ChrootDistro.syncKioskScaleEnv(context);
+                SharedPreferences prefs = context.getSharedPreferences(
+                    TermuxConstants.TERMUX_DEFAULT_PREFERENCES_FILE_BASENAME_WITHOUT_EXTENSION,
+                    Context.MODE_PRIVATE);
+                String scaling = prefs.getString(ChrootDistro.KEY_KIOSK_SCALING, ChrootDistro.DEFAULT_KIOSK_SCALING);
+                float scale = "follow".equals(scaling) ? ChrootDistro.readSavedDesktopScale(context) : 1.25f;
+                if (!"follow".equals(scaling)) {
+                    try { scale = Float.parseFloat(scaling); } catch (Exception ignored) {}
+                }
+                int cursor = Math.round(24f * scale);
+                int gdkScale = (scale >= 1.5f) ? 2 : 1;
+                float gdkDpiScale = (scale >= 1.5f) ? (1.0f / gdkScale) : 1.0f;
+                env.add("GDK_SCALE=" + gdkScale);
+                env.add(String.format(java.util.Locale.US, "GDK_DPI_SCALE=%.2f", gdkDpiScale));
+                env.add(String.format(java.util.Locale.US, "QT_SCALE_FACTOR=%.2f", scale));
+                env.add("XCURSOR_SIZE=" + cursor);
+            }
             // Reading the setting and looking for the binary are both file work, so they happen
             // here beside the probe rather than on the main thread when the desktop ends.
             String configured = app.session || displayJustStarted ? configuredWindowManager() : "";

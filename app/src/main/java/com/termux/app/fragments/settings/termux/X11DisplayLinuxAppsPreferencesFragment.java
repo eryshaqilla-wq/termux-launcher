@@ -216,5 +216,17 @@ public class X11DisplayLinuxAppsPreferencesFragment extends X11DisplayPreference
                 });
             });
         }
+
+        androidx.preference.ListPreference kioskPref = findPreference(ChrootDistro.KEY_KIOSK_SCALING);
+        if (kioskPref != null) {
+            String savedScaling = prefs.getString(ChrootDistro.KEY_KIOSK_SCALING, ChrootDistro.DEFAULT_KIOSK_SCALING);
+            kioskPref.setValue(savedScaling);
+            kioskPref.setOnPreferenceChangeListener((pref, newVal) -> {
+                String val = String.valueOf(newVal);
+                prefs.edit().putString(ChrootDistro.KEY_KIOSK_SCALING, val).apply();
+                ChrootDistro.syncKioskScaleEnv(context);
+                return true;
+            });
+        }
     }
 }

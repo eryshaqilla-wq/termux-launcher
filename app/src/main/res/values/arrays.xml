@@ -516,4 +516,20 @@
         <item>minimize</item>
         <item>none</item>
     </string-array>
+    <string-array name="kiosk_scaling_entries">
+        <item>Ikuti Desktop Terpilih (Default)</item>
+        <item>1.0x (96 DPI - Standar)</item>
+        <item>1.25x (120 DPI - Ringan)</item>
+        <item>1.5x (144 DPI - Sedang)</item>
+        <item>1.75x (168 DPI - Besar)</item>
+        <item>2.0x (192 DPI - Ekstra Besar)</item>
+    </string-array>
+    <string-array name="kiosk_scaling_values">
+        <item>follow</item>
+        <item>1.0</item>
+        <item>1.25</item>
+        <item>1.5</item>
+        <item>1.75</item>
+        <item>2.0</item>
+    </string-array>
 </resources>

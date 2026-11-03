@@ -46,6 +46,18 @@
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 
+    <PreferenceCategory
+        app:key="x11_group_kiosk_cat"
+        app:title="@string/settings_x11_group_kiosk">
+        <ListPreference
+            app:key="kiosk_scaling"
+            app:title="@string/settings_kiosk_scaling_title"
+            android:defaultValue="follow"
+            app:entries="@array/kiosk_scaling_entries"
+            app:entryValues="@array/kiosk_scaling_values"
+            app:useSimpleSummaryProvider="true" />
+    </PreferenceCategory>
+
     <Preference
         app:key="x11_window_manager_hint"
         app:summary="@string/settings_x11_window_manager_hint"
