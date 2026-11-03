@@ -1385,6 +1385,15 @@ public final class SuggestionBarView extends GridLayout
         this.folderRenameHost = host;
     }
 
+    public interface HomeShortcutHost {
+        boolean isHomeGridAvailable();
+        boolean addAppShortcutToHome(@NonNull LauncherAppEntry entry);
+    }
+    @Nullable private HomeShortcutHost homeShortcutHost;
+    public void setHomeShortcutHost(@Nullable HomeShortcutHost host) {
+        this.homeShortcutHost = host;
+    }
+
     /** No-op when nothing hosts the rename flow (the popup is then just a folder grid). */
     private void cancelFolderRename() {
         if (folderRenameHost != null) folderRenameHost.cancelFolderRename();
@@ -5506,6 +5515,21 @@ public final class SuggestionBarView extends GridLayout
             addResetAppIconRowIfNeeded(shell, context.entry, tintBase);
         }
 
+        if (homeShortcutHost != null && homeShortcutHost.isHomeGridAvailable()) {
+            TextView addToHomeRow = menuRows.addActionRow(shell, "Tambah ke Home", R.drawable.ic_dock_menu_pin, false, tintBase, () -> {
+                dismissAppContextPopup();
+                if (homeShortcutHost.addAppShortcutToHome(context.entry)) {
+                    android.widget.Toast.makeText(getContext(), context.entry.label + " ditambahkan ke Home", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
+            pendingMenuRows.add(new MenuRow(addToHomeRow, () -> {
+                dismissAppContextPopup();
+                if (homeShortcutHost.addAppShortcutToHome(context.entry)) {
+                    android.widget.Toast.makeText(getContext(), context.entry.label + " ditambahkan ke Home", android.widget.Toast.LENGTH_SHORT).show();
+                }
+            }, false));
+        }
+
         if (context.categoryAction != null) {
             Runnable categoryAction = context.categoryAction;
             TextView categoryRow = menuRows.addActionRow(shell,
@@ -5544,6 +5568,124 @@ public final class SuggestionBarView extends GridLayout
 
         appContextMenu.show(MenuSpec.of(shell, tintBase).rows(pendingMenuRows).build(),
             context.anchor);
+    }
+
+    public void showHomeShortcutContextPopup(
+        @NonNull View anchor,
+        @NonNull LauncherAppEntry entry,
+        int appWidgetId,
+        @NonNull Runnable onRemoveFromHome,
+        @NonNull Runnable onMoveAction
+    ) {
+        dismissAppContextPopup();
+        boolean linuxApp = com.termux.app.x11.X11Apps.isLinuxApp(entry.appRef);
+        List<ShortcutInfo> shortcuts = linuxApp ? java.util.Collections.<ShortcutInfo>emptyList()
+            : queryEntryShortcuts(entry);
+        boolean hasShortcuts = !shortcuts.isEmpty();
+
+        AppMenuContext context = new AppMenuContext(entry, anchor, -1, null, null);
+        LinearLayout shell = menuRows.newShell();
+        pendingMenuRows.clear();
+        menuHighlight.clear();
+        shortcutsMainRowView = null;
+        activeAppMenuContext = context;
+        activeAppMenuShortcuts = shortcuts;
+
+        TextView header = new TextView(getContext());
+        header.setText(entry.label);
+        header.setTextColor(resolveLauncherTextColor());
+        header.setTextSize(12f);
+        header.setTypeface(Typeface.DEFAULT_BOLD);
+        header.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(8), dp(6), dp(8), dp(7));
+        Drawable headerIcon = resolveMenuHeaderIcon(entry);
+        if (headerIcon != null) {
+            headerIcon.setBounds(0, 0, dp(22), dp(22));
+            header.setCompoundDrawablesRelative(headerIcon, null, null, null);
+            header.setCompoundDrawablePadding(dp(10));
+        }
+        shell.addView(header, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        int tintBase = inheritedTintColor & 0x00FFFFFF;
+        menuHighlight.setTintBase(tintBase);
+
+        // 1. Hapus dari Home
+        TextView removeRow = menuRows.addActionRow(shell, "Hapus dari Home", R.drawable.ic_dock_menu_uninstall, false, tintBase, () -> {
+            dismissAppContextPopup();
+            onRemoveFromHome.run();
+        });
+        pendingMenuRows.add(new MenuRow(removeRow, () -> {
+            dismissAppContextPopup();
+            onRemoveFromHome.run();
+        }, false));
+
+        // 2. Atur Posisi (Pindah)
+        TextView moveRow = menuRows.addActionRow(shell, "Atur Posisi", R.drawable.ic_dock_menu_move, false, tintBase, () -> {
+            dismissAppContextPopup();
+            onMoveAction.run();
+        });
+        pendingMenuRows.add(new MenuRow(moveRow, () -> {
+            dismissAppContextPopup();
+            onMoveAction.run();
+        }, false));
+
+        // 3. Uninstall & App info (if not linuxApp)
+        if (!linuxApp) {
+            TextView uninstallRow = menuRows.addActionRow(shell, "Uninstall", R.drawable.ic_dock_menu_uninstall, false, tintBase, () -> {
+                dismissAppContextPopup();
+                requestUninstall(entry);
+            });
+            pendingMenuRows.add(new MenuRow(uninstallRow, () -> {
+                dismissAppContextPopup();
+                requestUninstall(entry);
+            }, false));
+
+            TextView appInfoRow = menuRows.addActionRow(shell, "App info", R.drawable.ic_dock_menu_info, false, tintBase, () -> {
+                dismissAppContextPopup();
+                openAppInfo(entry);
+            });
+            pendingMenuRows.add(new MenuRow(appInfoRow, () -> {
+                dismissAppContextPopup();
+                openAppInfo(entry);
+            }, false));
+        }
+
+        // 4. Change app icon
+        TextView changeIconRow = menuRows.addActionRow(shell, "Change app icon", R.drawable.ic_dock_menu_change_icon, false, tintBase, () -> {
+            dismissAppContextPopup();
+            changeAppIconForEntry(entry);
+        });
+        pendingMenuRows.add(new MenuRow(changeIconRow, () -> {
+            dismissAppContextPopup();
+            changeAppIconForEntry(entry);
+        }, false));
+        addResetAppIconRowIfNeeded(shell, entry, tintBase);
+
+        // 5. Shortcuts
+        if (hasShortcuts) {
+            menuRows.addDivider(shell);
+            TextView shortcutsRow = menuRows.addActionRow(shell, "Shortcuts", R.drawable.ic_dock_menu_shortcuts, true, tintBase, () -> {
+                if (shortcutsMenu.isShowing()) {
+                    dismissShortcutsPopup();
+                    menuHighlight.clear();
+                } else {
+                    showShortcutsPopup(context, shortcuts, shortcutsMainRowView);
+                }
+            });
+            shortcutsMainRowView = shortcutsRow;
+            pendingMenuRows.add(new MenuRow(shortcutsRow, () -> {
+                if (!shortcutsMenu.isShowing()) {
+                    showShortcutsPopup(context, shortcuts, shortcutsMainRowView);
+                }
+            }, true));
+        }
+
+        int rowWidth = MenuRowWidths.normalize(pendingMenuRows);
+        int contentWidth = MenuRowWidths.constrainHeader(header, rowWidth);
+        MenuRowWidths.constrainRows(pendingMenuRows, contentWidth);
+
+        appContextMenu.show(MenuSpec.of(shell, tintBase).rows(pendingMenuRows).build(),
+            anchor);
     }
 
     @Nullable

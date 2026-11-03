@@ -40,6 +40,14 @@ public final class BuiltinWidgetServices {
         default void onSystemImeRequested() { }
         /** That dialog is gone: the keyboard with it, and the terminal's own arrangement back. */
         default void onSystemImeReleased() { }
+        /** Launch an application entry from a shortcut. */
+        default void launchAppShortcut(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry, @NonNull View sourceView) { }
+        /** Resolves app entry for package/activity/userId. */
+        @Nullable default com.termux.app.launcher.model.LauncherAppEntry findAppByRef(@NonNull com.termux.app.launcher.model.AppRef ref) { return null; }
+        /** Resolves rendered icon for app entry into ImageView. */
+        default void bindAppIcon(@NonNull android.widget.ImageView imageView, @NonNull com.termux.app.launcher.model.LauncherAppEntry entry, int sizePx) { }
+        /** Resolves current launcher text color. */
+        default int launcherTextColor() { return android.graphics.Color.WHITE; }
     }
 
     /** A once-a-minute heartbeat, aligned to the system's minute tick. */

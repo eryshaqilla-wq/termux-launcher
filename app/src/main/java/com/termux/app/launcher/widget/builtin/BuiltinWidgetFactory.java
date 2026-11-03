@@ -24,6 +24,7 @@ public final class BuiltinWidgetFactory {
             case TASKS: return new TasksWidgetView(context, services, style);
             case NOTES: return new NotesWidgetView(context, services, style);
             case CALENDAR: return new CalendarWidgetView(context, services, style);
+            case APP_SHORTCUT: return new AppShortcutWidgetView(context, services, style);
             default: throw new IllegalArgumentException("unknown kind " + kind);
         }
     }

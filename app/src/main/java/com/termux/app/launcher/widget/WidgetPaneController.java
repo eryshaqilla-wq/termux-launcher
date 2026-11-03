@@ -59,6 +59,9 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         default boolean isWidgetSurfaceGlass() { return false; }
         /** The activity-side services the built-in widgets need; null keeps them inert. */
         @Nullable default BuiltinWidgetServices.Host builtinWidgetHost() { return null; }
+        /** Called when an app shortcut widget on the home grid is long-pressed. */
+        default void onShortcutLongPressed(int appWidgetId, @NonNull LauncherWidgetRecord record,
+                                           @NonNull View cellView, float rawX, float rawY) { }
     }
 
     private final WidgetPaneView pane;
@@ -104,6 +107,14 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         pane.picker().setSearchFocusListener(this::relayEditorFocus);
         pane.grid().setListener(new WidgetGridView.Listener() {
             @Override public void onWidgetLongPressed(int appWidgetId, float rawX, float rawY) {
+                LauncherWidgetRecord record = widgets.repository().get(appWidgetId);
+                WidgetCellView cell = pane.grid().cellForId(appWidgetId);
+                if (record != null && record.isBuiltin()
+                    && com.termux.app.launcher.widget.builtin.BuiltinWidgetKind.APP_SHORTCUT.id.equals(record.builtinKind)
+                    && cell != null) {
+                    host.onShortcutLongPressed(appWidgetId, record, cell, rawX, rawY);
+                    return;
+                }
                 enterEditMode(appWidgetId, rawX, rawY);
             }
             @Override public void onWidgetEditDragMove(int appWidgetId, float rawX, float rawY) {
@@ -354,6 +365,56 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         if (!widgets.repository().removePage(currentPage)) return;
         currentPage = Math.max(0, Math.min(widgets.repository().pageCount() - 1, currentPage));
         render();
+    }
+
+    public void enterEditModePublic(int appWidgetId, float rawX, float rawY) {
+        enterEditMode(appWidgetId, rawX, rawY);
+    }
+
+    public void removeWidgetPublic(int appWidgetId) {
+        exitEditMode();
+        widgets.removeWidget(appWidgetId);
+        render();
+    }
+
+    public boolean addAppShortcut(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry) {
+        int targetPage = -1;
+        WidgetCellRect targetRect = null;
+        int pages = widgets.repository().pageCount();
+        for (int p = 0; p < pages; p++) {
+            WidgetGridPlacementPolicy.Result res = WidgetGridPlacementPolicy.findPlacement(
+                widgets.repository().gridDefinition(),
+                widgets.repository().recordsOnPage(p),
+                1, 1);
+            if (res.outcome == WidgetGridPlacementPolicy.Outcome.PLACED && res.rect != null) {
+                targetPage = p;
+                targetRect = res.rect;
+                break;
+            }
+        }
+        if (targetRect == null) {
+            int newPage = widgets.repository().addFreshPage();
+            if (newPage >= 0) {
+                targetPage = newPage;
+                targetRect = new WidgetCellRect(0, 0, 1, 1);
+            }
+        }
+        if (targetRect == null || targetPage < 0) {
+            return false;
+        }
+        android.os.Bundle config = new android.os.Bundle();
+        config.putString("package", entry.appRef.packageName);
+        config.putString("activity", entry.appRef.activityName);
+        config.putInt("userId", entry.appRef.userId);
+        config.putString("label", entry.label);
+        LauncherWidgetHostController.AddResult addResult = widgets.addBuiltin(
+            com.termux.app.launcher.widget.builtin.BuiltinWidgetKind.APP_SHORTCUT.id,
+            targetRect, targetPage, widgets.repository().revision(), config);
+        if (addResult == LauncherWidgetHostController.AddResult.READY) {
+            render();
+            return true;
+        }
+        return false;
     }
 
     private void relayEditorFocus(@Nullable View editor) {

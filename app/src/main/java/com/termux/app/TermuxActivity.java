@@ -10346,6 +10346,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         mSuggestionBarView.setAppDataProvider(mLauncherAppDataProvider);
         mSuggestionBarView.setConfigRepository(mLauncherConfigRepository);
+        mSuggestionBarView.setHomeShortcutHost(new SuggestionBarView.HomeShortcutHost() {
+            @Override public boolean isHomeGridAvailable() {
+                return isWidgetsPageWanted() && mWidgetPaneController != null;
+            }
+            @Override public boolean addAppShortcutToHome(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry) {
+                if (mWidgetPaneController != null) {
+                    return mWidgetPaneController.addAppShortcut(entry);
+                }
+                return false;
+            }
+        });
         mSuggestionBarView.setAppCatalogChangedListener(() -> {
             syncAzScrubLettersAndTint();
             syncPinnedAppsHost();
@@ -11332,6 +11343,17 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mSuggestionBarView.setMostUsedPageEnabled(mPreferences.isAppLauncherMostUsedPageEnabled());
         mSuggestionBarView.setAppDataProvider(mLauncherAppDataProvider);
         mSuggestionBarView.setConfigRepository(mLauncherConfigRepository);
+        mSuggestionBarView.setHomeShortcutHost(new SuggestionBarView.HomeShortcutHost() {
+            @Override public boolean isHomeGridAvailable() {
+                return isWidgetsPageWanted() && mWidgetPaneController != null;
+            }
+            @Override public boolean addAppShortcutToHome(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry) {
+                if (mWidgetPaneController != null) {
+                    return mWidgetPaneController.addAppShortcut(entry);
+                }
+                return false;
+            }
+        });
         mSuggestionBarView.setAppCatalogChangedListener(() -> {
             syncAzScrubLettersAndTint();
             syncPinnedAppsHost();
@@ -24334,7 +24356,63 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                             TerminalView view = getTerminalView();
                             return view == null ? null : view.getTerminalTypeface();
                         }
+                        @Override
+                        public void launchAppShortcut(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry, @NonNull View sourceView) {
+                            if (mSuggestionBarView != null) {
+                                mSuggestionBarView.launchEntryFromDrawer(sourceView, entry);
+                            } else {
+                                com.termux.app.launcher.LauncherAppLauncher.launchEntry(TermuxActivity.this, entry);
+                            }
+                        }
+                        @Nullable
+                        @Override
+                        public com.termux.app.launcher.model.LauncherAppEntry findAppByRef(@NonNull com.termux.app.launcher.model.AppRef ref) {
+                            return mLauncherAppDataProvider != null ? mLauncherAppDataProvider.findByRef(ref) : null;
+                        }
+                        @Override
+                        public void bindAppIcon(@NonNull android.widget.ImageView imageView, @NonNull com.termux.app.launcher.model.LauncherAppEntry entry, int sizePx) {
+                            if (mSuggestionBarView != null) {
+                                mSuggestionBarView.bindRenderedIcon(imageView, entry, sizePx);
+                                mSuggestionBarView.applyIconColorFilter(imageView);
+                            } else {
+                                imageView.setImageDrawable(entry.icon);
+                            }
+                        }
+                        @Override
+                        public int launcherTextColor() {
+                            return mSuggestionBarView != null ? mSuggestionBarView.getLauncherTextColor() : android.graphics.Color.WHITE;
+                        }
                     };
+                }
+                @Override
+                public void onShortcutLongPressed(int appWidgetId,
+                                                  @NonNull com.termux.app.launcher.widget.LauncherWidgetRecord record,
+                                                  @NonNull View cellView, float rawX, float rawY) {
+                    if (mSuggestionBarView == null) return;
+                    android.os.Bundle cfg = record.sizeOptions();
+                    String pkg = cfg.getString("package", "");
+                    String act = cfg.getString("activity", "");
+                    int userId = cfg.getInt("userId", -1);
+                    String label = cfg.getString("label", "");
+                    com.termux.app.launcher.model.AppRef ref = new com.termux.app.launcher.model.AppRef(pkg, act, userId, -1L, false, "");
+                    com.termux.app.launcher.model.LauncherAppEntry entry = mLauncherAppDataProvider != null
+                        ? mLauncherAppDataProvider.findByRef(ref) : null;
+                    if (entry == null) {
+                        entry = new com.termux.app.launcher.model.LauncherAppEntry(ref, label.isEmpty() ? pkg : label, null);
+                    }
+                    final com.termux.app.launcher.model.LauncherAppEntry finalEntry = entry;
+                    mSuggestionBarView.showHomeShortcutContextPopup(cellView, finalEntry, appWidgetId,
+                        () -> {
+                            if (mWidgetPaneController != null) {
+                                mWidgetPaneController.removeWidgetPublic(appWidgetId);
+                                android.widget.Toast.makeText(TermuxActivity.this, finalEntry.label + " dihapus dari Home", android.widget.Toast.LENGTH_SHORT).show();
+                            }
+                        },
+                        () -> {
+                            if (mWidgetPaneController != null) {
+                                mWidgetPaneController.enterEditModePublic(appWidgetId, rawX, rawY);
+                            }
+                        });
                 }
             });
         // The grid preference was applied in onCreate, before this controller existed, straight

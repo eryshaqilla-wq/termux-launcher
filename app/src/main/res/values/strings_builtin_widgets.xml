@@ -13,6 +13,7 @@
     <string name="builtin_widget_tasks">Tasks</string>
     <string name="builtin_widget_notes">Scratchpad</string>
     <string name="builtin_widget_calendar">Calendar</string>
+    <string name="builtin_widget_shortcut">Shortcut</string>
 
     <string name="builtin_widget_settings_save">Save</string>
     <string name="builtin_widget_settings_title">%1$s settings</string>
