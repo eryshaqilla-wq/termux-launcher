@@ -23,7 +23,7 @@
     <boolean name="surface_inherit_canvas_blur" value="true" />
     <string name="displayResolutionExact">1280x1024</string>
     <boolean name="app_launcher_most_used_page" value="true" />
-    <string name="touchMode">1</string>
+    <string name="touchMode">2</string>
     <boolean name="first_boot_tour_skipped" value="true" />
     <int name="status_bar_opacity" value="79" />
     <int name="first_boot_tour_step" value="-1" />
