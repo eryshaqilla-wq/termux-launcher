@@ -33,6 +33,63 @@ public class FusionRecPillHelper {
     public static TextView sWipeBtn;
     public static TextView sFpBtn;
     public static TextView sStopIfBtn;
+    public static TextView sSolveBtn;
+    public static TextView sRewardBtn;
+    public static TextView sAiEngineBtn;
+    public static String sCurrentAiEngine = "auto";
+
+    public static void loadAiEngineState() {
+        try {
+            String raw = GhostBridgeInterface.readFileFromWalletDir("ai_engine.json");
+            if (raw != null && !raw.trim().isEmpty()) {
+                org.json.JSONObject obj = new org.json.JSONObject(raw);
+                if (obj.has("activeEngine")) {
+                    sCurrentAiEngine = obj.getString("activeEngine");
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public static void persistAiEngineState(String engine) {
+        try {
+            GhostBridgeInterface.writeWalletFileStatic("ai_engine.json", "{\"activeEngine\":\"" + engine + "\",\"updatedAt\":" + System.currentTimeMillis() + "}");
+        } catch (Throwable ignored) {}
+    }
+
+    public static void cycleAiEngineMode() {
+        if ("auto".equals(sCurrentAiEngine)) {
+            sCurrentAiEngine = "deepseek";
+        } else if ("deepseek".equals(sCurrentAiEngine)) {
+            sCurrentAiEngine = "9router";
+        } else if ("9router".equals(sCurrentAiEngine)) {
+            sCurrentAiEngine = "agy";
+        } else if ("agy".equals(sCurrentAiEngine)) {
+            sCurrentAiEngine = "off";
+        } else {
+            sCurrentAiEngine = "auto";
+        }
+        persistAiEngineState(sCurrentAiEngine);
+    }
+
+    public static void updateAiEngineButtonUi(TextView btn) {
+        if (btn == null) return;
+        if ("auto".equals(sCurrentAiEngine)) {
+            btn.setText(" 🤖 AI: AUTO ");
+            FusionUiHelper.setSolidAccentBtn(btn, -7741973, -15192780);
+        } else if ("deepseek".equals(sCurrentAiEngine)) {
+            btn.setText(" 🤖 AI: DEEPSEEK ");
+            FusionUiHelper.setSolidAccentBtn(btn, -7752454, -14800838);
+        } else if ("9router".equals(sCurrentAiEngine)) {
+            btn.setText(" 🤖 AI: 9ROUTER ");
+            FusionUiHelper.setSolidAccentBtn(btn, -5840223, -14800092);
+        } else if ("agy".equals(sCurrentAiEngine)) {
+            btn.setText(" 🤖 AI: AGY ");
+            FusionUiHelper.setSolidAccentBtn(btn, -3430665, -14015942);
+        } else {
+            btn.setText(" 🤖 AI: OFF ");
+            FusionUiHelper.setSolidBtn(btn);
+        }
+    }
 
     public static void hideRecPill() {
         LinearLayout container = sRecContainer;
@@ -314,6 +371,71 @@ public class FusionRecPillHelper {
         stopLp.setMargins(1, 0, 1, 0);
         stepPill.addView(stopIfBtn, stopLp);
 
+        // SOLVE > (AI & Regex Captcha Solver)
+        TextView solveBtn = new TextView(appCompatActivity);
+        sSolveBtn = solveBtn;
+        solveBtn.setText(" SOLVE > ");
+        FusionUiHelper.setSolidAccentBtn(solveBtn, -3430665, -13998792);
+        solveBtn.setTextSize(2, 10.0f);
+        solveBtn.setPadding(6, 3, 6, 3);
+        solveBtn.setClickable(true);
+        solveBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                WebView webView = fusionWebViewManager.mActiveWebView;
+                if (webView != null) {
+                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.startChallengeSelector) { window.AgyRecorder.startChallengeSelector(); }", null);
+                }
+            }
+        });
+        LinearLayout.LayoutParams solveLp = new LinearLayout.LayoutParams(-2, -2);
+        solveLp.setMargins(1, 0, 1, 0);
+        stepPill.addView(solveBtn, solveLp);
+
+        // 🎁 HASIL (Smart Claim Result & Token Extractor)
+        TextView rewardBtn = new TextView(appCompatActivity);
+        sRewardBtn = rewardBtn;
+        rewardBtn.setText(" 🎁 HASIL ");
+        FusionUiHelper.setSolidAccentBtn(rewardBtn, -5840223, -14733788);
+        rewardBtn.setTextSize(2, 10.0f);
+        rewardBtn.setPadding(6, 3, 6, 3);
+        rewardBtn.setClickable(true);
+        rewardBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                WebView webView = fusionWebViewManager.mActiveWebView;
+                if (webView != null) {
+                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.startRewardSelector) { window.AgyRecorder.startRewardSelector(); }", null);
+                }
+            }
+        });
+        LinearLayout.LayoutParams rewardLp = new LinearLayout.LayoutParams(-2, -2);
+        rewardLp.setMargins(1, 0, 1, 0);
+        stepPill.addView(rewardBtn, rewardLp);
+
+        // 🤖 SAKLAR GLOBAL AI TRILOGY & HEAL (Persisten & Siklik)
+        loadAiEngineState();
+        final TextView aiEngineBtn = new TextView(appCompatActivity);
+        sAiEngineBtn = aiEngineBtn;
+        updateAiEngineButtonUi(aiEngineBtn);
+        aiEngineBtn.setTextSize(2, 10.0f);
+        aiEngineBtn.setPadding(6, 3, 6, 3);
+        aiEngineBtn.setClickable(true);
+        aiEngineBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                cycleAiEngineMode();
+                updateAiEngineButtonUi(aiEngineBtn);
+                WebView webView = fusionWebViewManager.mActiveWebView;
+                if (webView != null) {
+                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.setAiEngine) { window.AgyRecorder.setAiEngine('" + sCurrentAiEngine + "'); }", null);
+                }
+            }
+        });
+        LinearLayout.LayoutParams aiLp = new LinearLayout.LayoutParams(-2, -2);
+        aiLp.setMargins(1, 0, 1, 0);
+        stepPill.addView(aiEngineBtn, aiLp);
+
         // 3. Baris Bawah: sRecPill (Ketua / Baris Utama) - Ukuran Senada 100% dengan sStepPill
         LinearLayout linearLayout2 = new LinearLayout(appCompatActivity);
         sRecPill = linearLayout2;
@@ -455,6 +577,12 @@ public class FusionRecPillHelper {
                 if (sWipeBtn != null) sWipeBtn.setVisibility(stepVisibility);
                 if (sFpBtn != null) sFpBtn.setVisibility(stepVisibility);
                 if (sStopIfBtn != null) sStopIfBtn.setVisibility(stepVisibility);
+                if (sSolveBtn != null) sSolveBtn.setVisibility(stepVisibility);
+                if (sRewardBtn != null) sRewardBtn.setVisibility(stepVisibility);
+                if (sAiEngineBtn != null) {
+                    sAiEngineBtn.setVisibility(stepVisibility);
+                    updateAiEngineButtonUi(sAiEngineBtn);
+                }
             }
         }
 

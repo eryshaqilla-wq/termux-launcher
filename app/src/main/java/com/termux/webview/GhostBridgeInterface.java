@@ -492,6 +492,10 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public boolean writeWalletFile(String str, String str2) {
+        return writeWalletFileStatic(str, str2);
+    }
+
+    public static boolean writeWalletFileStatic(String str, String str2) {
         if (str != null && str2 != null) {
             boolean written = false;
             String[] targetDirs = str.startsWith("/")

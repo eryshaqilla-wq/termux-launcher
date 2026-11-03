@@ -1248,6 +1248,21 @@
                             sessionStorage.removeItem("__agy_active_recipe_run__");
                             localStorage.removeItem("__agy_active_recipe_run__");
                         } catch(_) {}
+                        try {
+                            var autoRew = extractRewardFromDom({});
+                            if (autoRew && (autoRew.amount || autoRew.status !== "UNKNOWN")) {
+                                window.__AGY_LAST_REWARD__ = autoRew;
+                                if (autoRew.status === "EMPTY" || autoRew.status === "ALREADY_CLAIMED") {
+                                    var autoStopReason = (autoRew.status === "EMPTY") ? "Kuota Habis" : "Sudah Pernah Klaim";
+                                    updateAgyHUD("🛑 Auto-Stop Terpicu (" + autoStopReason + ")", (autoRew.text || "Mengakhiri putaran..."), "warning");
+                                    self.registerTimer(setTimeout(function() {
+                                        if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+                                        doneCallback(true, true); // stop loop queue!
+                                    }, 400));
+                                    return;
+                                }
+                            }
+                        } catch(_) {}
                         self.registerTimer(setTimeout(function() {
                             if (self.isAborted || window.__AGY_ABORT_RUN__) return;
                             doneCallback(true);
@@ -1481,8 +1496,105 @@
                         return;
                     }
 
-                    smartWaitForElementWithTimeout(ev, stepNum, eventsList.length, maxTimeout, function(targetEl) {
-                        if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+                    if (ev.type === "solve_challenge") {
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Memecahkan Captcha/Tantangan...", "running");
+
+                        var chEl = ev.challengeSelector ? document.querySelector(ev.challengeSelector) : null;
+                        var chText = chEl ? (chEl.innerText || chEl.textContent || chEl.value || "").trim() : (ev.challengeSample || "");
+                        var inEl = ev.inputSelector ? document.querySelector(ev.inputSelector) : null;
+
+                        function fillSolution(answer) {
+                            if (inEl && answer !== undefined && answer !== null && answer !== "") {
+                                inEl.focus();
+                                var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set ||
+                                             Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                                if (setter) setter.call(inEl, String(answer));
+                                else inEl.value = String(answer);
+                                inEl.dispatchEvent(new Event("input", { bubbles: true }));
+                                inEl.dispatchEvent(new Event("change", { bubbles: true }));
+                            }
+                            updateAgyHUD("✅ Solver Sukses", "Jawaban: " + answer, "success");
+                            self.registerTimer(setTimeout(function() {
+                                waitDocReady(runNextStep);
+                            }, stepDelay));
+                        }
+
+                        // 1. Coba Solver Matematika Lokal Cepat (0ms, tanpa kuota AI)
+                        var mathSol = solveSimpleMathLocally(chText);
+                        if (mathSol) {
+                            fillSolution(mathSol.answer);
+                            return;
+                        }
+
+                        // 2. Coba Solver AI (DeepSeek / 9Router)
+                        requestAiChallengeSolve(chText, function(aiRes) {
+                            if (aiRes && aiRes.success && aiRes.answer) {
+                                fillSolution(aiRes.answer);
+                            } else {
+                                // 3. FALLBACK MANUAL: Jika AI gagal, minta user solve manual di layar
+                                showManualSolvePill("AI gagal memecahkan. Silakan isi jawaban manual:", function() {
+                                    updateAgyHUD("Melanjutkan", "Melanjutkan langkah berikutnya...", "running");
+                                    self.registerTimer(setTimeout(function() {
+                                        waitDocReady(runNextStep);
+                                    }, 400));
+                                });
+                            }
+                        });
+                        return;
+                    }
+
+                    if (ev.type === "reward_extractor") {
+                        updateAgyHUD(runTitle, "Langkah " + stepNum + "/" + eventsList.length + ": Memeriksa Hasil Klaim / Reward...", "running");
+
+                        function handleParsedReward(finalRew, newRegex) {
+                            if (finalRew && (finalRew.amount || finalRew.status !== "UNKNOWN")) {
+                                window.__AGY_LAST_REWARD__ = finalRew;
+                                updateAgyHUD("🎁 Hasil Klaim", finalRew.text || (finalRew.amount + " " + finalRew.token), "success");
+                            }
+                            if (newRegex && !ev.regex) {
+                                ev.regex = newRegex; // Simpan rumus regex buatan AI ke resep untuk putaran berikutnya!
+                            }
+
+                            // 🔥 HASIL BERTINDAK SEBAGAI STOP-IF CERDAS:
+                            var shouldAutoStop = (finalRew && (finalRew.status === "EMPTY" || finalRew.status === "ALREADY_CLAIMED")) || (ev.stopOnSuccess && finalRew && finalRew.status === "SUCCESS");
+                            if (shouldAutoStop) {
+                                var stopLabel = (finalRew.status === "EMPTY") ? "Kuota Habis / Sold Out" : ((finalRew.status === "ALREADY_CLAIMED") ? "Sudah Pernah Klaim" : "Target Sukses Tercapai");
+                                updateAgyHUD("🛑 Auto-Stop Terpicu (" + stopLabel + ")", (finalRew.text || "Mengakhiri seluruh putaran loop..."), "warning");
+                                try {
+                                    sessionStorage.removeItem("__agy_active_recipe_run__");
+                                    localStorage.removeItem("__agy_active_recipe_run__");
+                                } catch(_) {}
+                                self.registerTimer(setTimeout(function() {
+                                    doneCallback(true, true);
+                                }, 500));
+                                return;
+                            }
+
+                            self.registerTimer(setTimeout(function() {
+                                waitDocReady(runNextStep);
+                            }, stepDelay));
+                        }
+
+                        var rew = extractRewardFromDom(ev);
+                        // Jika lokal regex sudah berhasil (0ms), langsung proses tanpa panggil AI!
+                        if (rew && (rew.amount || rew.status === "EMPTY" || rew.status === "ALREADY_CLAIMED" || rew.status === "SUCCESS")) {
+                            handleParsedReward(rew);
+                            return;
+                        }
+
+                        // AI First-Run Fallback: Jika teks asing / status UNKNOWN, panggil AI sekali saja
+                        var sampleText = ((document.body && (document.body.innerText || document.body.textContent)) || "").substring(0, 1000);
+                        requestAiRewardParse(sampleText, function(aiRes) {
+                            if (aiRes && aiRes.success) {
+                                handleParsedReward(aiRes.reward, aiRes.generatedRegex);
+                            } else {
+                                handleParsedReward(rew);
+                            }
+                        });
+                        return;
+                    }
+
+                    function executeResolvedTarget(targetEl) {
                         if (!targetEl) {
                             self.registerTimer(setTimeout(runNextStep, 400));
                             return;
@@ -1587,6 +1699,52 @@
                                 waitDocReady(runNextStep);
                             }, stepDelay));
                         }
+                    }
+
+                    smartWaitForElementWithTimeout(ev, stepNum, eventsList.length, maxTimeout, function(targetEl) {
+                        if (self.isAborted || window.__AGY_ABORT_RUN__) return;
+                        if (!targetEl) {
+                            var aiEngine = getAIEngine();
+                            if (aiEngine !== "off") {
+                                updateAgyHUD("🤖 AI-Heal (" + aiEngine.toUpperCase() + ")", "Langkah " + stepNum + " macet. Menganalisis layar...", "running");
+                                tryAiSelfHealing(ev, eventsList, idx, runTitle, function(healedEl, newSel) {
+                                    if (healedEl) {
+                                        updateAgyHUD("✨ AI-Heal Sukses!", "Langkah " + stepNum + " sembuh ➔ " + newSel, "success");
+                                        ev.selector = newSel;
+                                        ev.healed = true;
+                                        try {
+                                            var rName = sessionStorage.getItem("__agy_active_recipe_name__");
+                                            if (rName && typeof RecipeStore !== "undefined") {
+                                                RecipeStore.save(rName, eventsList, window.location.href);
+                                            }
+                                        } catch(_) {}
+                                        executeResolvedTarget(healedEl);
+                                    } else {
+                                        showManualHealPill(ev, function(manualEl) {
+                                            if (manualEl) {
+                                                var manSel = getCssSelector(manualEl);
+                                                ev.selector = manSel;
+                                                ev.healed = true;
+                                                try {
+                                                    var rName = sessionStorage.getItem("__agy_active_recipe_name__");
+                                                    if (rName && typeof RecipeStore !== "undefined") {
+                                                        RecipeStore.save(rName, eventsList, window.location.href);
+                                                    }
+                                                } catch(_) {}
+                                                executeResolvedTarget(manualEl);
+                                            } else {
+                                                self.registerTimer(setTimeout(runNextStep, 400));
+                                            }
+                                        });
+                                    }
+                                });
+                                return;
+                            }
+                            self.registerTimer(setTimeout(runNextStep, 400));
+                            return;
+                        }
+
+                        executeResolvedTarget(targetEl);
                     });
                 }
 
@@ -2292,6 +2450,570 @@
         return path.join(" > ");
     }
 
+    // --- 4B. SMART CHALLENGE & REWARD SOLVER HELPERS ---
+    function solveSimpleMathLocally(text) {
+        if (!text) return null;
+        var clean = text.replace(/[\?？\=＝]/g, " ").trim();
+        var m = clean.match(/(\d+)\s*([\+\-\*\/xX]|—)\s*(\d+)/);
+        if (m) {
+            var a = parseInt(m[1], 10);
+            var op = m[2];
+            var b = parseInt(m[3], 10);
+            var ans = null;
+            if (op === "+") ans = a + b;
+            else if (op === "-" || op === "—") ans = a - b;
+            else if (op === "*" || op === "x" || op === "X") ans = a * b;
+            else if (op === "/") ans = Math.floor(a / b);
+            if (ans !== null && !isNaN(ans)) {
+                return {
+                    answer: String(ans),
+                    formula: "math:" + op
+                };
+            }
+        }
+        return null;
+    }
+
+    function showManualSolvePill(promptText, onContinue) {
+        var old = document.getElementById("__agy_manual_solve_pill__");
+        if (old) old.remove();
+
+        var pill = document.createElement("div");
+        pill.id = "__agy_manual_solve_pill__";
+        pill.style.position = "fixed";
+        pill.style.top = "14px";
+        pill.style.left = "50%";
+        pill.style.transform = "translateX(-50%)";
+        pill.style.zIndex = "99999999";
+        pill.style.background = "rgba(24, 24, 37, 0.95)";
+        pill.style.backdropFilter = "blur(10px)";
+        pill.style.webkitBackdropFilter = "blur(10px)";
+        pill.style.border = "1.5px solid #fab387";
+        pill.style.borderRadius = "24px";
+        pill.style.padding = "8px 16px";
+        pill.style.boxShadow = "0 8px 24px rgba(0,0,0,0.6)";
+        pill.style.display = "flex";
+        pill.style.alignItems = "center";
+        pill.style.gap = "10px";
+        pill.style.color = "#cdd6f4";
+        pill.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        pill.style.fontSize = "12px";
+
+        var icon = document.createElement("span");
+        icon.innerText = "⚠️";
+        icon.style.fontSize = "14px";
+        pill.appendChild(icon);
+
+        var label = document.createElement("span");
+        label.innerText = promptText || "Isi captcha manual:";
+        label.style.fontWeight = "600";
+        label.style.color = "#fab387";
+        pill.appendChild(label);
+
+        var contBtn = document.createElement("button");
+        contBtn.innerText = "Lanjut ▶";
+        contBtn.style.background = "#fab387";
+        contBtn.style.color = "#11111b";
+        contBtn.style.border = "none";
+        contBtn.style.borderRadius = "14px";
+        contBtn.style.padding = "5px 12px";
+        contBtn.style.fontWeight = "bold";
+        contBtn.style.fontSize = "11px";
+        contBtn.style.cursor = "pointer";
+        contBtn.onclick = function() {
+            pill.remove();
+            if (onContinue) onContinue();
+        };
+        pill.appendChild(contBtn);
+
+        var skipBtn = document.createElement("button");
+        skipBtn.innerText = "Lewati";
+        skipBtn.style.background = "#313244";
+        skipBtn.style.color = "#bac2de";
+        skipBtn.style.border = "none";
+        skipBtn.style.borderRadius = "14px";
+        skipBtn.style.padding = "5px 10px";
+        skipBtn.style.fontSize = "11px";
+        skipBtn.style.cursor = "pointer";
+        skipBtn.onclick = function() {
+            pill.remove();
+            if (onContinue) onContinue();
+        };
+        pill.appendChild(skipBtn);
+
+        (document.body || document.documentElement).appendChild(pill);
+    }
+
+    function extractRewardFromDom(ev) {
+        var result = { amount: "", token: "", status: "UNKNOWN", text: "", isBusy: false };
+        try {
+            var bodyTxt = (document.body && (document.body.innerText || document.body.textContent)) || "";
+
+            // 1. Cek SIBUK (Busy) - Pola 100% persis gate.js
+            if (bodyTxt.includes('当前抢红包人数太多啦') || bodyTxt.includes('稍后重试') || bodyTxt.includes('Server busy') || bodyTxt.includes('Too many requests')) {
+                result.text = '当前抢红包人数太多啦，请稍后重试 (Server Sibuk)';
+                result.status = 'BUSY';
+                result.isBusy = true;
+                return result;
+            }
+
+            // 2. Cek HABIS (Empty) - Pola 100% persis gate.js
+            if (bodyTxt.includes('红包已领完') || bodyTxt.includes('Sold out') || bodyTxt.includes('Habis') || bodyTxt.includes('All claimed')) {
+                result.text = '红包已领完，下次早点哦 (Habis)';
+                result.status = 'EMPTY';
+                return result;
+            }
+
+            // 3. Cek Custom Regex jika pengguna tentukan (di mode text regex)
+            if (ev && (ev.regex || ev.pattern)) {
+                try {
+                    var customReg = new RegExp(ev.regex || ev.pattern, "i");
+                    var cm = bodyTxt.match(customReg);
+                    if (cm) {
+                        result.amount = cm[1] || cm[0];
+                        if (cm[2]) result.token = cm[2].toUpperCase();
+                        result.status = 'SUCCESS';
+                        result.text = cm[0];
+                        return result;
+                    }
+                } catch(_) {}
+            }
+
+            // 4. Cek SUKSES & Ekstrak Token dari Body Text (Pola gate.js: "领取成功" + USDT/token)
+            if ((bodyTxt.includes('领取成功') && bodyTxt.includes('奖励在')) || bodyTxt.includes('领取成功') || bodyTxt.includes('Claim successful') || bodyTxt.includes('Berhasil klaim') || bodyTxt.includes('Congratulations')) {
+                var matchGate = bodyTxt.match(/([0-9]+(?:\.[0-9]+)?)\s*(USDT|BEM|USDC|BNB|BTC|ETH|SOL|TON|DOGE|TRX|[A-Za-z0-9_]{2,10})/i);
+                if (matchGate) {
+                    result.amount = matchGate[1];
+                    result.token = matchGate[2].toUpperCase();
+                    result.text = "领取成功 | " + matchGate[0];
+                } else {
+                    result.text = "领取成功";
+                }
+                result.status = 'SUCCESS';
+                return result;
+            }
+
+            // 5. Cek Elemen DOM Spesifik jika ada (misal Tapexo: #got-amt, #got-sym)
+            if (ev && ev.amountSelector) {
+                var el = document.querySelector(ev.amountSelector);
+                if (el) {
+                    var txt = (el.innerText || el.textContent || "").trim();
+                    var m = txt.match(/([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z0-9_]+)?/);
+                    if (m) {
+                        result.amount = m[1];
+                        if (m[2]) result.token = m[2];
+                    } else {
+                        result.amount = txt;
+                    }
+                }
+            }
+
+            var gotAmtEl = document.getElementById("got-amt");
+            var gotSymEl = document.getElementById("got-sym");
+            var payStateEl = document.getElementById("pay-state");
+            var hintEl = document.getElementById("hint");
+
+            if (gotAmtEl && (gotAmtEl.innerText || "").trim()) {
+                result.amount = (gotAmtEl.innerText || "").trim();
+                if (gotSymEl) result.token = (gotSymEl.innerText || "").trim();
+                if (payStateEl && (payStateEl.innerText || "").trim()) result.status = payStateEl.innerText.trim();
+                else result.status = "SUCCESS";
+                result.text = result.amount + " " + (result.token || "") + (result.status ? (" (" + result.status + ")") : "");
+                return result;
+            }
+
+            if (hintEl && (hintEl.innerText || "").trim()) {
+                var hTxt = hintEl.innerText.trim();
+                if (hTxt.includes("你已领过") || hTxt.includes("已领过") || hTxt.includes("Sudah diklaim") || hTxt.includes("Already claimed")) {
+                    result.status = "ALREADY_CLAIMED";
+                    result.text = hTxt;
+                    return result;
+                }
+            }
+
+            // 6. Universal Web3 / Crypto Token Pattern Scanner di Text
+            var genericMatch = bodyTxt.match(/(?:Reward|Claimed|You received|Bonus|Received|Dapat|Hadiah)[:\s]*([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z0-9_]{2,10})/i);
+            if (genericMatch) {
+                result.status = "SUCCESS";
+                result.amount = genericMatch[1];
+                result.token = genericMatch[2].toUpperCase();
+                result.text = genericMatch[0];
+                return result;
+            }
+
+            // 7. Fallback: Toast / Popup Scanner dari bawah ke atas (100% Persis gate.js lines 507-528)
+            var elements = Array.from(document.querySelectorAll('div, span, p'));
+            for (var i = elements.length - 1; i >= 0; i--) {
+                var tEl = elements[i];
+                if (!tEl.innerText || tEl.innerText.trim() === '' || tEl.offsetParent === null) continue;
+                var text = tEl.innerText.trim();
+                if (text.length > 120 || text.includes('买币') || text.includes('福利中心')) continue;
+
+                var style = window.getComputedStyle(tEl);
+                var isRed = style.color === 'rgb(255, 0, 0)' || style.color === 'rgb(239, 68, 68)' || style.color.includes('245, 63, 63');
+                var isToast = (style.position === 'fixed' || style.position === 'absolute') && parseInt(style.zIndex || '0') > 10;
+
+                if (isRed || isToast) {
+                    if (text.length >= 2) {
+                        var tm = text.match(/([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z0-9_]{2,10})/);
+                        if (tm) {
+                            result.amount = tm[1];
+                            result.token = tm[2].toUpperCase();
+                        }
+                        result.text = text;
+                        result.status = isRed ? 'ERROR' : 'TOAST';
+                        return result;
+                    }
+                }
+            }
+        } catch(err) {
+            console.warn("[RewardExtractor] Error:", err);
+        }
+        return result;
+    }
+
+    // --- 4C. TRI-ENGINE AI CASCADE & GLOBAL HEAL ENGINE ---
+    function getAIEngine() {
+        try {
+            var local = localStorage.getItem("__agy_ai_engine__");
+            if (local) return local.toLowerCase();
+            if (typeof GhostBridge !== "undefined" && GhostBridge.readWalletFile) {
+                var raw = GhostBridge.readWalletFile("ai_engine.json");
+                if (raw) {
+                    var obj = JSON.parse(raw);
+                    if (obj.activeEngine) return obj.activeEngine.toLowerCase();
+                }
+            }
+        } catch(_) {}
+        return "auto";
+    }
+
+    function setAIEngineGlobal(engine) {
+        var clean = (engine || "auto").toLowerCase();
+        try {
+            localStorage.setItem("__agy_ai_engine__", clean);
+            if (typeof GhostBridge !== "undefined" && GhostBridge.writeWalletFile) {
+                GhostBridge.writeWalletFile("ai_engine.json", JSON.stringify({ activeEngine: clean, updatedAt: Date.now() }));
+            }
+        } catch(_) {}
+        updateAgyHUD("🤖 AI Engine", "Aktif: " + clean.toUpperCase() + " (Permanen)", "success");
+    }
+
+    function queryTriEngineCascade(promptText, systemPrompt, callback) {
+        var engine = getAIEngine();
+        if (engine === "off") {
+            if (callback) callback({ success: false, text: null });
+            return;
+        }
+
+        // 1. Coba 9Router (Local Port 20128)
+        function try9Router(next) {
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "http://127.0.0.1:20128/v1/chat/completions", true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.timeout = 4000;
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            var content = resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
+                            if (content) {
+                                callback({ success: true, text: content.trim(), engine: "9Router" });
+                                return;
+                            }
+                        } catch(_) {}
+                    }
+                    next();
+                };
+                xhr.onerror = next;
+                xhr.ontimeout = next;
+                xhr.send(JSON.stringify({
+                    model: "antigravity",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: promptText }
+                    ],
+                    max_tokens: 150
+                }));
+            } catch(_) { next(); }
+        }
+
+        // 2. Coba DeepSeek (Direct via ai_config.json)
+        function tryDeepSeek(next) {
+            var cfg = null;
+            try {
+                if (typeof GhostBridge !== "undefined" && GhostBridge.readWalletFile) {
+                    var rawCfg = GhostBridge.readWalletFile("ai_config.json");
+                    if (rawCfg) cfg = JSON.parse(rawCfg);
+                }
+            } catch(_) {}
+
+            if (!cfg || !cfg.apiKey) {
+                next();
+                return;
+            }
+
+            try {
+                var base = (cfg.baseUrl || "https://api.deepseek.com").replace(/\/+$/, "");
+                var url = base.endsWith("/chat/completions") ? base : (base + "/chat/completions");
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", url, true);
+                xhr.setRequestHeader("Content-Type", "application/json");
+                xhr.setRequestHeader("Authorization", "Bearer " + cfg.apiKey);
+                xhr.timeout = 5000;
+                xhr.onload = function() {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            var resp = JSON.parse(xhr.responseText);
+                            var content = resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
+                            if (content) {
+                                callback({ success: true, text: content.trim(), engine: "DeepSeek" });
+                                return;
+                            }
+                        } catch(_) {}
+                    }
+                    next();
+                };
+                xhr.onerror = next;
+                xhr.ontimeout = next;
+                xhr.send(JSON.stringify({
+                    model: cfg.model || "deepseek-flash",
+                    messages: [
+                        { role: "system", content: systemPrompt },
+                        { role: "user", content: promptText }
+                    ],
+                    max_tokens: 150
+                }));
+            } catch(_) { next(); }
+        }
+
+        // 3. Coba AGY Copilot (Wake up via GhostBridge)
+        function tryAgyCopilot() {
+            try {
+                if (typeof GhostBridge !== "undefined" && GhostBridge.wakeUpAgy) {
+                    GhostBridge.wakeUpAgy();
+                }
+            } catch(_) {}
+            if (callback) callback({ success: false, text: null, engine: "None" });
+        }
+
+        // Jalankan sesuai preferensi Tuan
+        if (engine === "deepseek") {
+            tryDeepSeek(function() { try9Router(tryAgyCopilot); });
+        } else if (engine === "9router") {
+            try9Router(function() { tryDeepSeek(tryAgyCopilot); });
+        } else {
+            // Mode AUTO (Cascade: 9Router lokal -> DeepSeek -> AGY Copilot)
+            try9Router(function() { tryDeepSeek(tryAgyCopilot); });
+        }
+    }
+
+    function requestAiChallengeSolve(chText, callback) {
+        if (!chText) {
+            if (callback) callback({ success: false, error: "Empty challenge" });
+            return;
+        }
+        queryTriEngineCascade(
+            "Solve this captcha/math puzzle: " + chText + ". Output strictly ONLY the single final answer without explanation.",
+            "You are a captcha and math solver. Output strictly ONLY the answer value.",
+            function(res) {
+                if (res && res.success && res.text) {
+                    var cleanAns = res.text.replace(/^["'`]|["'`]$/g, "").trim();
+                    callback({ success: true, answer: cleanAns, engine: res.engine });
+                } else {
+                    callback({ success: false, error: "AI failed" });
+                }
+            }
+        );
+    }
+
+    function requestAiRewardParse(sampleText, callback) {
+        if (!sampleText || sampleText.length < 5) {
+            if (callback) callback({ success: false });
+            return;
+        }
+        queryTriEngineCascade(
+            "Analyze this page text after claim:\n" + sampleText + "\nOutput strictly JSON:\n{\"status\":\"SUCCESS\"|\"EMPTY\"|\"ALREADY_CLAIMED\"|\"UNKNOWN\",\"amount\":\"number or empty\",\"token\":\"symbol or empty\",\"regex\":\"regex pattern to extract amount and token next time\",\"reason\":\"short explanation\"}",
+            "You are a web3 claim reward analyzer. Output strictly JSON.",
+            function(res) {
+                if (res && res.success && res.text) {
+                    try {
+                        var jsonMatch = res.text.match(/\{[\s\S]*\}/);
+                        if (jsonMatch) {
+                            var parsed = JSON.parse(jsonMatch[0]);
+                            callback({
+                                success: true,
+                                reward: {
+                                    amount: parsed.amount || "",
+                                    token: (parsed.token || "").toUpperCase(),
+                                    status: parsed.status || "SUCCESS",
+                                    text: parsed.reason || (parsed.amount + " " + parsed.token)
+                                },
+                                generatedRegex: parsed.regex || null,
+                                engine: res.engine
+                            });
+                            return;
+                        }
+                    } catch(_) {}
+                }
+                callback({ success: false });
+            }
+        );
+    }
+
+    function tryAiSelfHealing(ev, eventsList, stepIdx, runTitle, callback) {
+        var candidates = [];
+        try {
+            var allInter = Array.from(document.querySelectorAll("button, a, input, [role='button'], [tabindex='0']"));
+            for (var i = 0; i < allInter.length; i++) {
+                var el = allInter[i];
+                if (isInternalUI(el)) continue;
+                if (el.offsetParent === null) continue;
+                var rect = el.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) continue;
+                var txt = (el.innerText || el.value || el.placeholder || el.getAttribute("aria-label") || "").trim();
+                if (!txt && !el.id && !el.className) continue;
+                candidates.push({
+                    tag: el.tagName.toLowerCase(),
+                    text: txt.substring(0, 30),
+                    id: el.id || "",
+                    selector: getCssSelector(el)
+                });
+                if (candidates.length >= 20) break;
+            }
+        } catch(_) {}
+
+        // Cek popup modal penutup
+        var modalCloseBtn = null;
+        try {
+            var popups = Array.from(document.querySelectorAll("[class*='modal'], [class*='popup'], [class*='dialog'], [role='dialog']"));
+            for (var pi = 0; pi < popups.length; pi++) {
+                var pEl = popups[pi];
+                if (pEl.offsetParent !== null) {
+                    var cBtn = pEl.querySelector("button, [class*='close'], [aria-label*='close'], [aria-label*='Close']");
+                    if (cBtn && cBtn.offsetParent !== null) {
+                        modalCloseBtn = cBtn;
+                        break;
+                    }
+                }
+            }
+        } catch(_) {}
+
+        if (modalCloseBtn) {
+            updateAgyHUD("🛡️ AI-Heal: Menutup Popup...", "Mengeklik penutup modal penghalang...", "running");
+            try { modalCloseBtn.click(); } catch(_) {}
+            setTimeout(function() {
+                var retryEl = ev.selector ? document.querySelector(ev.selector) : null;
+                if (retryEl) {
+                    callback(retryEl, ev.selector);
+                    return;
+                }
+                askAiForCandidate();
+            }, 600);
+            return;
+        }
+
+        askAiForCandidate();
+
+        function askAiForCandidate() {
+            if (!candidates.length) {
+                callback(null);
+                return;
+            }
+            var promptMsg = "Langkah makro gagal mencari target: type=" + ev.type + ", teks='" + (ev.text || "") + "', selector='" + (ev.selector || "") + "'.\n" +
+                "Kandidat elemen tombol/input yang tampak di layar saat ini:\n" +
+                JSON.stringify(candidates, null, 2) + "\n" +
+                "Tentukan selector yang paling tepat menggantikan target yang gagal. Balas HANYA JSON:\n" +
+                "{\"found\":true,\"selector\":\"<selector_tepat>\"}\n" +
+                "Jika tidak ada yang cocok, balas: {\"found\":false}";
+
+            queryTriEngineCascade(promptMsg, "You are a web automation self-healing copilot. Output strictly JSON.", function(aiAns) {
+                if (aiAns && aiAns.text) {
+                    try {
+                        var jsonM = aiAns.text.match(/\{[\s\S]*\}/);
+                        if (jsonM) {
+                            var parsed = JSON.parse(jsonM[0]);
+                            if (parsed.found && parsed.selector) {
+                                var newTarget = document.querySelector(parsed.selector);
+                                if (newTarget) {
+                                    callback(newTarget, parsed.selector);
+                                    return;
+                                }
+                            }
+                        }
+                    } catch(_) {}
+                }
+                callback(null);
+            });
+        }
+    }
+
+    function showManualHealPill(ev, onChosen) {
+        var old = document.getElementById("__agy_manual_heal_pill__");
+        if (old) old.remove();
+
+        var pill = document.createElement("div");
+        pill.id = "__agy_manual_heal_pill__";
+        pill.style.position = "fixed";
+        pill.style.top = "14px";
+        pill.style.left = "50%";
+        pill.style.transform = "translateX(-50%)";
+        pill.style.zIndex = "99999999";
+        pill.style.background = "rgba(24, 24, 37, 0.95)";
+        pill.style.backdropFilter = "blur(10px)";
+        pill.style.webkitBackdropFilter = "blur(10px)";
+        pill.style.border = "1.5px solid #89dceb";
+        pill.style.borderRadius = "24px";
+        pill.style.padding = "8px 16px";
+        pill.style.boxShadow = "0 8px 24px rgba(0,0,0,0.6)";
+        pill.style.display = "flex";
+        pill.style.alignItems = "center";
+        pill.style.gap = "10px";
+        pill.style.color = "#cdd6f4";
+        pill.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+        pill.style.fontSize = "12px";
+
+        var icon = document.createElement("span");
+        icon.innerText = "🩹";
+        icon.style.fontSize = "14px";
+        pill.appendChild(icon);
+
+        var label = document.createElement("span");
+        label.innerText = "Sentuh tombol/elemen pengganti di layar:";
+        label.style.fontWeight = "600";
+        label.style.color = "#89dceb";
+        pill.appendChild(label);
+
+        var skipBtn = document.createElement("button");
+        skipBtn.innerText = "Lewati";
+        skipBtn.style.background = "#313244";
+        skipBtn.style.color = "#bac2de";
+        skipBtn.style.border = "none";
+        skipBtn.style.borderRadius = "14px";
+        skipBtn.style.padding = "5px 10px";
+        skipBtn.style.fontSize = "11px";
+        skipBtn.style.cursor = "pointer";
+        skipBtn.onclick = function() {
+            document.removeEventListener("click", onTouchTarget, true);
+            pill.remove();
+            if (onChosen) onChosen(null);
+        };
+        pill.appendChild(skipBtn);
+
+        function onTouchTarget(e) {
+            if (isInternalUI(e.target)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            document.removeEventListener("click", onTouchTarget, true);
+            pill.remove();
+            if (onChosen) onChosen(e.target);
+        }
+
+        document.addEventListener("click", onTouchTarget, true);
+        (document.body || document.documentElement).appendChild(pill);
+    }
+
     // --- 5. DEBOUNCED & UNIFIED LIVE RECORDER ---
     var AgyRecorder = {
         isRecording: false,
@@ -2587,6 +3309,180 @@
                 });
                 updateAgyHUD("Auto-Stop Tersisip", "Loop berhenti jika ada: \"" + textVal + "\"", "success");
             };
+        },
+
+        startChallengeSelector: function() {
+            var self = this;
+            var isRec = this.isRecording || window.__FUSION_RECORDING__;
+            if (!isRec) {
+                alert("Nyalakan mode REC terlebih dahulu!");
+                return;
+            }
+
+            updateAgyHUD("🎯 Mode Solver (1/2)", "Sentuh elemen Soal / Pertanyaan / Captcha di layar", "recording");
+
+            var pickedChallenge = null;
+            var origBorder = "";
+
+            function onPickStep(e) {
+                if (isInternalUI(e.target)) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                var target = e.target;
+                if (!pickedChallenge) {
+                    pickedChallenge = target;
+                    origBorder = target.style.outline;
+                    target.style.outline = "3px dashed #cba6f7";
+                    updateAgyHUD("🎯 Mode Solver (2/2)", "Soal terpilih! Sekarang sentuh kolom INPUT jawaban", "recording");
+                } else {
+                    var inputTarget = target;
+                    if (pickedChallenge) {
+                        pickedChallenge.style.outline = origBorder;
+                    }
+                    var inSel = getCssSelector(inputTarget);
+                    var chSel = getCssSelector(pickedChallenge);
+                    var chText = (pickedChallenge.innerText || pickedChallenge.textContent || "").substring(0, 60).trim();
+
+                    document.removeEventListener("click", onPickStep, true);
+
+                    self.recordEvent({
+                        type: "solve_challenge",
+                        challengeSelector: chSel,
+                        inputSelector: inSel,
+                        challengeSample: chText,
+                        solverType: "ai_math_regex",
+                        timestamp: Date.now(),
+                        desc: "AI/Regex Solver: " + (chText || chSel).substring(0, 20) + " ➔ " + (inSel || "input")
+                    });
+
+                    updateAgyHUD("✅ Solver Tersisip", "Tantangan akan di-solve otomatis oleh AI/Regex!", "success");
+                }
+            }
+
+            document.addEventListener("click", onPickStep, true);
+        },
+
+        startRewardSelector: function() {
+            var self = this;
+            var isRec = this.isRecording || window.__FUSION_RECORDING__;
+            if (!isRec) {
+                alert("Nyalakan mode REC terlebih dahulu!");
+                return;
+            }
+
+            var existing = document.getElementById("__agy_reward_modal__");
+            if (existing) existing.remove();
+
+            var modal = document.createElement("div");
+            modal.id = "__agy_reward_modal__";
+            modal.style.position = "fixed";
+            modal.style.top = "0";
+            modal.style.left = "0";
+            modal.style.width = "100%";
+            modal.style.height = "100%";
+            modal.style.background = "rgba(10, 10, 18, 0.75)";
+            modal.style.backdropFilter = "blur(6px)";
+            modal.style.webkitBackdropFilter = "blur(6px)";
+            modal.style.display = "flex";
+            modal.style.alignItems = "center";
+            modal.style.justifyContent = "center";
+            modal.style.zIndex = "99999999";
+            modal.style.padding = "16px";
+            modal.style.boxSizing = "border-box";
+
+            var card = document.createElement("div");
+            card.style.background = "#181825";
+            card.style.border = "1px solid #a6e3a1";
+            card.style.borderRadius = "16px";
+            card.style.padding = "20px";
+            card.style.width = "100%";
+            card.style.maxWidth = "360px";
+            card.style.boxShadow = "0 10px 30px rgba(0,0,0,0.6)";
+            card.style.color = "#cdd6f4";
+            card.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+            card.innerHTML = "<div style='display:flex; align-items:center; gap:8px; margin-bottom:12px;'>" +
+                "<span style='font-size:20px;'>🎁</span>" +
+                "<div>" +
+                    "<div style='font-weight:bold; font-size:15px; color:#a6e3a1;'>Ekstrak Hasil Klaim / Reward</div>" +
+                    "<div style='font-size:11px; color:#a6adc8;'>Tangkap token dari Teks (gate.js) atau Elemen DOM</div>" +
+                "</div>" +
+            "</div>" +
+            "<div style='font-size:11px; color:#bac2de; margin-bottom:6px;'>REGEX PENCARI TOKEN (KOSONGKAN UNTUK AUTO-SCAN):</div>" +
+            "<input id='__agy_reward_regex_input__' type='text' placeholder='Misal: ([0-9.]+)\\s*USDT atau kosongkan' " +
+                "style='width:100%; box-sizing:border-box; background:#11111b; border:1px solid #45475a; border-radius:10px; color:#cdd6f4; padding:10px 12px; font-size:13px; margin-bottom:14px; outline:none;' />" +
+            "<div style='display:flex; flex-direction:column; gap:8px;'>" +
+                "<button id='__agy_reward_btn_text__' style='background:#a6e3a1; color:#11111b; border:none; border-radius:10px; padding:11px; font-weight:bold; font-size:12px; cursor:pointer;'>⚡ Simpan Auto-Text Scanner (gate.js)</button>" +
+                "<button id='__agy_reward_btn_dom__' style='background:#313244; color:#cdd6f4; border:1px solid #45475a; border-radius:10px; padding:10px; font-weight:600; font-size:12px; cursor:pointer;'>🎯 Sentuh Elemen di Layar</button>" +
+                "<button id='__agy_reward_btn_cancel__' style='background:transparent; color:#6c7086; border:none; padding:6px; font-size:11px; cursor:pointer;'>Batal</button>" +
+            "</div>";
+
+            modal.appendChild(card);
+            (document.body || document.documentElement).appendChild(modal);
+
+            card.querySelector("#__agy_reward_btn_cancel__").onclick = function() { modal.remove(); };
+
+            // OPSI 1: Auto-Text / Regex Scanner (Pola gate.js)
+            card.querySelector("#__agy_reward_btn_text__").onclick = function() {
+                var regexVal = (card.querySelector("#__agy_reward_regex_input__").value || "").trim();
+                modal.remove();
+                self.recordEvent({
+                    type: "reward_extractor",
+                    mode: "text_regex",
+                    regex: regexVal || "([0-9]+(?:\\.[0-9]+)?)\\s*([A-Za-z0-9_]{2,10})",
+                    timestamp: Date.now(),
+                    desc: "Scan Text/Toast: " + (regexVal || "Auto-Token (gate.js)")
+                });
+                updateAgyHUD("✅ Text Reward Tersisip", "Mesin akan scan teks halaman & toast secara otomatis (gate.js)!", "success");
+            };
+
+            // OPSI 2: Sentuh Elemen DOM
+            card.querySelector("#__agy_reward_btn_dom__").onclick = function() {
+                modal.remove();
+                updateAgyHUD("🎁 Mode Sentuh Elemen", "Sentuh elemen NOMINAL / TOKEN di layar", "recording");
+
+                function onPickReward(e) {
+                    if (isInternalUI(e.target)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    var target = e.target;
+                    var rSel = getCssSelector(target);
+                    var sample = (target.innerText || target.textContent || "").substring(0, 40).trim();
+
+                    document.removeEventListener("click", onPickReward, true);
+
+                    self.recordEvent({
+                        type: "reward_extractor",
+                        mode: "dom_selector",
+                        amountSelector: rSel,
+                        sampleText: sample,
+                        timestamp: Date.now(),
+                        desc: "Ekstrak Elemen: " + (sample || rSel).substring(0, 24)
+                    });
+
+                    updateAgyHUD("✅ Reward Tersisip", "Nominal (" + (sample || rSel) + ") akan dicatat tiap loop!", "success");
+                }
+
+                document.addEventListener("click", onPickReward, true);
+            };
+        },
+
+        setAiEngine: function(eng) {
+            setAIEngineGlobal(eng);
+        },
+
+        cycleAiEngine: function() {
+            var cur = getAIEngine();
+            var next = "auto";
+            if (cur === "auto") next = "deepseek";
+            else if (cur === "deepseek") next = "9router";
+            else if (cur === "9router") next = "agy";
+            else if (cur === "agy") next = "off";
+            else next = "auto";
+            setAIEngineGlobal(next);
+            return next;
         },
 
         showRecordingHUD: function() {
@@ -7373,6 +8269,12 @@
                 } else if (ev.type === "stop_if" || ev.type === "stop_not") {
                     typeBadge = "<span style='font-size:10px; background:#D32F2F; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>STOP-IF</span>";
                     desc = "Berhenti jika " + (ev.type === "stop_not" ? "hilang: " : "ada: ") + "\"" + (ev.text || "teks") + "\"";
+                } else if (ev.type === "solve_challenge") {
+                    typeBadge = "<span style='font-size:10px; background:#7C4DFF; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>SOLVER</span>";
+                    desc = "AI/Regex: " + (ev.challengeSample || ev.challengeSelector || "soal") + " ➔ " + (ev.inputSelector || "input");
+                } else if (ev.type === "reward_extractor") {
+                    typeBadge = "<span style='font-size:10px; background:#00E676; color:#111; padding:2px 5px; border-radius:4px; margin-right:4px; font-weight:bold; flex-shrink:0;'>REWARD</span>";
+                    desc = "Ekstrak: " + (ev.sampleText || ev.amountSelector || "hasil");
                 } else {
                     typeBadge = "<span style='font-size:10px; background:#1E88E5; color:#FFF; padding:2px 5px; border-radius:4px; margin-right:4px; flex-shrink:0;'>KLIK</span>";
                     desc = ev.text || ev.ariaLabel || ev.name || ev.id || ev.selector || "elemen";

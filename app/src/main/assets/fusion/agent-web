@@ -121,6 +121,48 @@ function saveRecipeToDisk(recipe) {
     }
 }
 
+function getAiEngineState() {
+    const candidates = [
+        '/root/wallet/ai_engine.json',
+        '/data/local/nhsystem/kali-arm64/root/wallet/ai_engine.json',
+        '/data/data/com.termux/files/home/wallet/ai_engine.json',
+        '/wallet/ai_engine.json'
+    ];
+    for (const f of candidates) {
+        if (fs.existsSync(f)) {
+            try {
+                const data = JSON.parse(fs.readFileSync(f, 'utf8'));
+                if (data && data.activeEngine) return data.activeEngine.toLowerCase();
+            } catch (_) {}
+        }
+    }
+    return 'auto';
+}
+
+function setAiEngineState(engine) {
+    const clean = (engine || 'auto').toLowerCase();
+    const payload = JSON.stringify({ activeEngine: clean, updatedAt: Date.now() }, null, 2);
+    const dirs = [
+        '/root/wallet',
+        '/data/local/nhsystem/kali-arm64/root/wallet',
+        '/data/data/com.termux/files/home/wallet',
+        '/wallet'
+    ];
+    let written = false;
+    for (const d of dirs) {
+        if (fs.existsSync(d)) {
+            try {
+                fs.writeFileSync(path.join(d, 'ai_engine.json'), payload, 'utf8');
+                written = true;
+            } catch (_) {}
+        }
+    }
+    try {
+        evalJs(`if(typeof localStorage!=='undefined')localStorage.setItem('__agy_ai_engine__','${clean}')`);
+    } catch (_) {}
+    return { success: written, engine: clean };
+}
+
 function loadRecipe(recipeQuery) {
     if (!recipeQuery) return null;
     const query = String(recipeQuery).trim();
@@ -322,17 +364,51 @@ async function waitForRecipeCompletion(timeoutMs = 180000) {
             if (res && res.includes('INVALID_PASSWORD')) {
                 console.log(`[Modul Makro] ❌ ERROR: [AGY_ERROR: INVALID_PASSWORD] Password ditolak oleh situs web!`);
                 return 'INVALID_PASSWORD';
-            } else if (res && res.includes('COMPLETED')) {
-                console.log(`[Modul Makro] Seluruh alur makro telah selesai (COMPLETED)!`);
-                return true;
-            } else if (res && res.includes('STOPPED')) {
-                console.log(`[Modul Makro] Alur makro selesai / berhenti.`);
+            } else if (res && (res.includes('COMPLETED') || res.includes('STOPPED'))) {
+                const isCompleted = res.includes('COMPLETED');
+                console.log(`[Modul Makro] Alur makro selesai (${isCompleted ? 'COMPLETED' : 'STOPPED'})!`);
+                try {
+                    const rewCheck = runIpc(`eval "(function(){ var r = window.__AGY_LAST_REWARD__; if (!r && typeof extractRewardFromDom === 'function') r = extractRewardFromDom({}); return (r && (r.amount || r.status !== 'UNKNOWN')) ? JSON.stringify(r) : ''; })()"`);
+                    if (rewCheck && rewCheck.trim()) {
+                        const parsedRew = JSON.parse(rewCheck.trim());
+                        if (parsedRew.amount || parsedRew.status !== 'UNKNOWN') {
+                            const amtStr = parsedRew.amount ? `${parsedRew.amount} ${parsedRew.token || ''}`.trim() : '';
+                            console.log(`\n🎁 [HASIL KLAIM / REWARD]`);
+                            if (amtStr) console.log(`   └─ Nominal Token : ${amtStr}`);
+                            if (parsedRew.status) console.log(`   └─ Status Klaim  : ${parsedRew.status}`);
+                            if (parsedRew.text && parsedRew.text !== amtStr) console.log(`   └─ Keterangan    : ${parsedRew.text}`);
+                            saveRewardToLoopState(parsedRew);
+                        }
+                    }
+                } catch (_) {}
                 return true;
             }
         } catch (_) {}
     }
     console.log(`[Modul Makro] Batas waktu pemantauan (${timeoutMs / 1000}s) tercapai.`);
     return false;
+}
+
+function saveRewardToLoopState(rewardObj) {
+    const candidates = [
+        '/proc/1/root/data/data/com.termux/files/home/wallet/loop_state.json',
+        '/root/wallet/loop_state.json',
+        '/data/data/com.termux/files/home/wallet/loop_state.json'
+    ];
+    for (const p of candidates) {
+        try {
+            if (fs.existsSync(path.dirname(p))) {
+                let curData = {};
+                if (fs.existsSync(p)) {
+                    try { curData = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) {}
+                }
+                curData.last_reward = rewardObj;
+                curData.last_update = new Date().toISOString();
+                fs.writeFileSync(p, JSON.stringify(curData, null, 2), 'utf8');
+                break;
+            }
+        } catch (_) {}
+    }
 }
 
 function getAllSessionDirs() {
@@ -1092,6 +1168,13 @@ async function executeSingleProfile(url, extraFlags = []) {
             }
         } else if (flag.startsWith('--stop-not=')) {
             stopNotWord = flag.split('=')[1] || null;
+        } else if (flag === '--ai' || flag === '--engine') {
+            if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
+                setAiEngineState(extraFlags[i + 1]);
+                i++;
+            }
+        } else if (flag.startsWith('--ai=') || flag.startsWith('--engine=')) {
+            setAiEngineState(flag.split('=')[1]);
         } else {
             flagsWithoutProfile.push(flag);
         }
@@ -1293,11 +1376,41 @@ async function main() {
         console.log(`  web snapshot                  (Ambil DOM dump aktif)`);
         console.log(`  web clear-cookies             (Bersihkan cookies & cache aktif)`);
         console.log(`  web eval "kode JS"            (Eksekusi JavaScript di WebView)`);
+        console.log(`  web --ai [mode]               (Atur mode AI Engine permanen: auto|deepseek|9router|agy|off)`);
         console.log(`  web close                     (Tutup WebView)\n`);
         console.log(`Contoh Integrasi Telegram / Sniper:`);
         console.log(`  web --wallet Master --modul web3_claim "https://web3.claim/gift/gsisbsi"`);
         console.log(`  web --modul giftedstock_claim --loop 5 "https://giftedstock.com/gift"`);
         console.log(`  web --wallet --modul gacha_box --stop-if "Out of stock" --loop 20 "https://dapp.xyz/box"\n`);
+        process.exit(0);
+    }
+
+    const isAiCmd = (
+        cmd === '--ai' ||
+        cmd === 'ai' ||
+        cmd === '--engine' ||
+        cmd === 'engine'
+    );
+
+    if (isAiCmd) {
+        const targetEng = args[1] ? args[1].toLowerCase() : null;
+        const validEngines = ['auto', 'deepseek', '9router', 'agy', 'off'];
+        if (!targetEng) {
+            const current = getAiEngineState();
+            console.log(`\n🤖 [AI CO-PILOT & SOLVER STATE]`);
+            console.log(`├─ Mode Aktif Saat Ini : ${GREEN}${current.toUpperCase()}${RESET}`);
+            console.log(`├─ Pilihan Tersedia    : auto, deepseek, 9router, agy, off`);
+            console.log(`└─ Cara Mengubah       : ${GREEN}web --ai <auto|deepseek|9router|agy|off>${RESET}\n`);
+            process.exit(0);
+        }
+        if (!validEngines.includes(targetEng)) {
+            console.error(`${RED}Error: Mode AI tidak valid "${targetEng}"!${RESET}`);
+            console.error(`Pilihan yang didukung: auto, deepseek, 9router, agy, off`);
+            process.exit(1);
+        }
+        setAiEngineState(targetEng);
+        console.log(`\n${GREEN}✅ AI Engine berhasil diubah ke: [${targetEng.toUpperCase()}]${RESET}`);
+        console.log(`Pengaturan disimpan secara permanen di vault (/root/wallet/ai_engine.json) & WebView.\n`);
         process.exit(0);
     }
 
@@ -1554,10 +1667,11 @@ async function main() {
         process.exit(0);
     }
 
-    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost)
+    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost / --ai / --engine)
     const isUrlOrAutomation = args.some(a => 
         a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
         a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
+        a.startsWith('--ai') || a.startsWith('--engine') ||
         a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
         a === 'home' || a === 'beranda' ||
@@ -1570,7 +1684,7 @@ async function main() {
         let passFlags = [];
         for (let i = 0; i < args.length; i++) {
             const item = args[i];
-            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password') {
+            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine') {
                 passFlags.push(item);
                 if (args[i + 1] && !args[i + 1].startsWith('--')) {
                     // Cek jika item adalah option yang mengambil value
