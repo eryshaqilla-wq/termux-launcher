@@ -78,6 +78,14 @@ public class FusionWebViewClient extends WebViewClient {
             return false;
         }
 
+        // Intercept link pemasangan Userscript (.user.js) misal dari GreasyFork atau GitHub
+        if (url.endsWith(".user.js") || url.contains(".user.js?")) {
+            com.termux.app.TermuxActivity act = (this.mManager != null) ? this.mManager.mActivity : null;
+            if (FusionUserscriptHelper.promptInstallUserscript(act, webView, url)) {
+                return true;
+            }
+        }
+
         // Protokol web standar dimuat langsung di dalam WebView
         if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("file://") || url.startsWith("about:") || url.startsWith("javascript:") || url.startsWith("data:")) {
             return false;

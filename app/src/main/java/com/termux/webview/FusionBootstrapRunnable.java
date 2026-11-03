@@ -19,6 +19,8 @@ public class FusionBootstrapRunnable implements Runnable {
             // Salin binary langsung ke $PREFIX/bin/ (executable 755)
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/termux-ipc", "/data/data/com.termux/files/usr/bin/termux-ipc", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/browser", "/data/data/com.termux/files/usr/bin/browser", true, true);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/web", "/data/data/com.termux/files/usr/bin/web", true, true);
+            FusionBootstrapHelper.copyAssetToFile(context, "fusion/agent-web", "/data/data/com.termux/files/usr/bin/agent-web", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/x", "/data/data/com.termux/files/usr/bin/x", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/wallet", "/data/data/com.termux/files/usr/bin/wallet", true, true);
             FusionBootstrapHelper.copyAssetToFile(context, "fusion/pemantau", "/data/data/com.termux/files/usr/bin/pemantau", true, true);

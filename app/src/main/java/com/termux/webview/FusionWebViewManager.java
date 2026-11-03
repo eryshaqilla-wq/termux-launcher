@@ -1151,10 +1151,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             }));
 
-            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🧩", "Ekstensi (Extensions)", new View.OnClickListener() {
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🧩", "Userscript Ekstensi", new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    showExtensionsDialog();
+                    showUserscriptsDialog();
                 }
             }));
 
@@ -1475,6 +1475,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + tabProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "ghost_injected.js");
+        FusionUserscriptHelper.injectMatchingScripts(webView, webView.getUrl());
     }
 
     public void killActiveTab() {
@@ -2325,26 +2326,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         b.show();
     }
 
+    public void showUserscriptsDialog() {
+        FusionUserscriptHelper.showUserscriptsDialog(this.mActivity, this);
+    }
+
     public void showExtensionsDialog() {
-        TermuxActivity act = this.mActivity;
-        if (act == null) return;
-        AlertDialog.Builder b = new AlertDialog.Builder(act);
-        b.setTitle("🧩 Ekstensi (Extensions)");
-        b.setMessage("Fusion WebView Engine berbasis Chromium.\n\n" +
-                "• Ekstensi Chrome Web Store & Userscripts didukung melalui injeksi script.\n" +
-                "• Injeksi otomatis: webview_engine/ (GhostBridge, Web3, Macro, CDP).\n" +
-                "• Kunjungi Chrome Web Store untuk melihat katalog ekstensi.");
-        b.setPositiveButton("Buka Web Store", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                closeAllDrawers();
-                if (mActiveWebView != null) {
-                    mActiveWebView.loadUrl("https://chromewebstore.google.com");
-                }
-            }
-        });
-        b.setNegativeButton("Tutup", null);
-        b.show();
+        showUserscriptsDialog();
     }
 
     public boolean onBackPressed() {

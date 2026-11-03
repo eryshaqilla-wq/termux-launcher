@@ -412,11 +412,14 @@ function getActiveProfile() {
         '/data/data/com.termux/files/home/wallet/.active_profile',
         '/wallet/.active_profile'
     ];
+    const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
     for (const p of candidates) {
         try {
             if (fs.existsSync(p)) {
                 const val = fs.readFileSync(p, 'utf8').trim();
-                if (val) return val;
+                if (val && !blacklist.includes(val.toLowerCase()) && !val.endsWith('.device') && !val.startsWith('fp_') && !val.startsWith('fresh_')) {
+                    return val;
+                }
             }
         } catch (_) {}
     }
@@ -425,6 +428,10 @@ function getActiveProfile() {
 
 function setActiveProfile(profile) {
     if (!profile) return;
+    const clean = profile.trim().toLowerCase();
+    const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
+    const finalProfile = (blacklist.includes(clean) || clean.endsWith('.device') || clean.startsWith('fresh_') || clean.startsWith('fp_')) ? 'default' : profile.trim();
+
     const paths = [
         '/root/wallet/.active_profile',
         '/data/data/com.termux/files/home/wallet/.active_profile',
@@ -434,14 +441,17 @@ function setActiveProfile(profile) {
         try {
             const dir = path.dirname(p);
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(p, profile.trim(), 'utf8');
+            fs.writeFileSync(p, finalProfile, 'utf8');
             try { fs.chmodSync(p, 0o666); } catch (_) {}
         } catch (_) {}
     }
 }
 
 function registerProfile(profile) {
-    if (!profile || profile === 'default' || profile.startsWith('fresh_')) return;
+    if (!profile) return;
+    const clean = profile.trim().toLowerCase();
+    const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
+    if (blacklist.includes(clean) || clean.endsWith('.device') || clean.startsWith('fresh_') || clean.startsWith('fp_')) return;
     const paths = [
         '/root/wallet/webview_profiles.json',
         '/data/data/com.termux/files/home/wallet/webview_profiles.json',
@@ -454,15 +464,99 @@ function registerProfile(profile) {
                 try { list = JSON.parse(fs.readFileSync(p, 'utf8')); } catch (_) {}
             }
             if (!Array.isArray(list)) list = [];
+            list = list.filter(x => x && !blacklist.includes(x.toLowerCase()) && !x.endsWith('.device') && !x.startsWith('fresh_') && !x.startsWith('fp_'));
             if (!list.includes(profile)) {
                 list.push(profile);
-                const dir = path.dirname(p);
-                if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-                fs.writeFileSync(p, JSON.stringify(list, null, 2), 'utf8');
-                try { fs.chmodSync(p, 0o666); } catch (_) {}
             }
+            const dir = path.dirname(p);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(p, JSON.stringify(list, null, 2), 'utf8');
+            try { fs.chmodSync(p, 0o666); } catch (_) {}
         } catch (_) {}
     }
+}
+
+function checkProfileSessionInfo(prof) {
+    if (!prof) return { hasSession: false };
+    const dirs = getAllSessionDirs();
+    let filePath = null;
+    for (const d of dirs) {
+        const candidate = path.join(d, `${prof}.json`);
+        if (fs.existsSync(candidate)) { filePath = candidate; break; }
+    }
+    if (!filePath && (prof === 'shaqilla' || prof === 'default')) {
+        const legacy = '/root/wallet/x_session.json';
+        if (fs.existsSync(legacy)) filePath = legacy;
+    }
+    if (!filePath) return { hasSession: false };
+    try {
+        const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        const cookies = raw.cookies || [];
+        const auth = cookies.find(c => c.name === 'auth_token' && (c.domain.includes('x.com') || c.domain.includes('twitter.com')));
+        if (!auth || !auth.value || auth.value.length < 20) return { hasSession: false };
+        if (auth.expires && auth.expires > 0 && auth.expires * 1000 < Date.now()) return { hasSession: false };
+        const twid = cookies.find(c => c.name === 'twid');
+        let handle = null;
+        if (twid && twid.value) {
+            const rawTwid = decodeURIComponent(twid.value).replace(/["']/g, '');
+            const uid = rawTwid.replace(/^u=/, '');
+            const knownHandles = {
+                '1314621600': '@shaqilla_emilia',
+                '1533016831161606144': '@Eryziggy',
+                '1604449944899063809': '@0xjamrud'
+            };
+            handle = knownHandles[uid] || rawTwid;
+        }
+        return { hasSession: true, handle };
+    } catch (_) {
+        return { hasSession: false };
+    }
+}
+
+function deleteProfileFromVault(prof) {
+    if (!prof) return { success: false, message: 'Nama profil kosong.' };
+    const clean = prof.trim();
+    let deletedFiles = [];
+
+    // 1. Hapus dari webview_profiles.json di semua path
+    const profileFiles = [
+        '/root/wallet/webview_profiles.json',
+        '/data/data/com.termux/files/home/wallet/webview_profiles.json',
+        '/wallet/webview_profiles.json'
+    ];
+    for (const pf of profileFiles) {
+        if (fs.existsSync(pf)) {
+            try {
+                let list = JSON.parse(fs.readFileSync(pf, 'utf8'));
+                if (Array.isArray(list) && list.includes(clean)) {
+                    list = list.filter(p => p !== clean);
+                    fs.writeFileSync(pf, JSON.stringify(list, null, 2), 'utf8');
+                    deletedFiles.push(path.basename(pf));
+                }
+            } catch (_) {}
+        }
+    }
+
+    // 2. Hapus berkas sesi dan device di direktori session
+    const dirs = getAllSessionDirs();
+    for (const d of dirs) {
+        const sessionFile = path.join(d, `${clean}.json`);
+        if (fs.existsSync(sessionFile)) {
+            try { fs.unlinkSync(sessionFile); deletedFiles.push(`sessions/${clean}.json`); } catch (_) {}
+        }
+        const devFile = path.join(d, `${clean}.device.json`);
+        if (fs.existsSync(devFile)) {
+            try { fs.unlinkSync(devFile); deletedFiles.push(`sessions/${clean}.device.json`); } catch (_) {}
+        }
+    }
+
+    // 3. Reset .active_profile jika profil yang dihapus sedang aktif
+    const active = getActiveProfile();
+    if (active === clean) {
+        setActiveProfile('default');
+    }
+
+    return { success: true, deletedFiles: Array.from(new Set(deletedFiles)) };
 }
 
 const DEVICE_POOL = [
@@ -938,12 +1032,18 @@ async function executeSingleProfile(url, extraFlags = []) {
     for (let i = 0; i < extraFlags.length; i++) {
         const flag = extraFlags[i];
         if (flag === '--profile' && extraFlags[i + 1]) {
-            targetProfile = extraFlags[i + 1];
-            explicitProfile = true;
+            const nextP = extraFlags[i + 1];
+            if (nextP.toLowerCase() !== 'list' && nextP.toLowerCase() !== 'ls') {
+                targetProfile = nextP;
+                explicitProfile = true;
+            }
             i++;
         } else if (flag.startsWith('--profile=')) {
-            targetProfile = flag.split('=')[1] || 'default';
-            explicitProfile = true;
+            const nextP = flag.split('=')[1] || 'default';
+            if (nextP.toLowerCase() !== 'list' && nextP.toLowerCase() !== 'ls') {
+                targetProfile = nextP;
+                explicitProfile = true;
+            }
         } else if (flag === '--pwd' || flag === '--password') {
             if (extraFlags[i + 1] && !extraFlags[i + 1].startsWith('--')) {
                 passwordArg = extraFlags[i + 1];
@@ -1047,7 +1147,7 @@ async function executeSingleProfile(url, extraFlags = []) {
         targetProfile = 'default';
     }
 
-    if (targetProfile && targetProfile !== 'default') {
+    if (targetProfile && targetProfile !== 'default' && targetProfile !== 'list') {
         process.env.FUSION_ACTIVE_PROFILE = targetProfile;
         if (!isWorkerTab) {
             setActiveProfile(targetProfile);
@@ -1122,7 +1222,7 @@ async function executeSingleProfile(url, extraFlags = []) {
 
     // Cleanup: Jika sesi berjalan di dalam tab worker terisolasi, tutup webview & tab worker
     if (isWorkerTab) {
-        if (targetProfile && targetProfile !== 'default') {
+        if (targetProfile && targetProfile !== 'default' && targetProfile !== 'list') {
             try {
                 runIpc(`save-session ${targetProfile}`);
             } catch (_) {}
@@ -1214,24 +1314,120 @@ async function main() {
         process.exit(0);
     }
 
-    if (cmd === 'profile' || cmd === 'profiles') {
-        const targetProf = args[1] || getActiveProfile();
-        if (targetProf && targetProf !== 'list' && targetProf !== 'default') {
-            printProfileBanner(targetProf);
-        }
+    const isProfileListCmd = (
+        cmd === '--profile-list' ||
+        cmd === 'profile-list' ||
+        cmd === '--profiles-list' ||
+        cmd === 'profiles-list' ||
+        cmd === 'profiles' ||
+        (cmd === 'profile' && (!args[1] || args[1].toLowerCase() === 'list' || args[1].toLowerCase() === 'ls')) ||
+        (cmd === '--profile' && (!args[1] || args[1].toLowerCase() === 'list' || args[1].toLowerCase() === 'ls'))
+    );
+
+    if (isProfileListCmd) {
         const active = getActiveProfile();
         const dirs = getAllSessionDirs();
         const profiles = new Set();
+        const blacklist = ['list', 'ls', 'default', 'undefined', 'null'];
+
+        const profileFiles = [
+            '/root/wallet/webview_profiles.json',
+            '/data/data/com.termux/files/home/wallet/webview_profiles.json',
+            '/wallet/webview_profiles.json'
+        ];
+        for (const pf of profileFiles) {
+            if (fs.existsSync(pf)) {
+                try {
+                    const list = JSON.parse(fs.readFileSync(pf, 'utf8'));
+                    if (Array.isArray(list)) {
+                        list.forEach(p => {
+                            if (p && typeof p === 'string' && !blacklist.includes(p.toLowerCase()) && !p.endsWith('.device') && !p.startsWith('fp_') && !p.startsWith('fresh_')) {
+                                profiles.add(p);
+                            }
+                        });
+                    }
+                } catch (_) {}
+            }
+        }
+
         for (const d of dirs) {
             try {
                 const files = fs.readdirSync(d);
                 for (const f of files) {
-                    if (f.endsWith('.json') && !f.endsWith('.device.json')) profiles.add(f.replace('.json', ''));
+                    if (f.endsWith('.json') && !f.endsWith('.device.json') && f !== 'webview_profiles.json') {
+                        const p = f.replace('.json', '');
+                        if (!blacklist.includes(p.toLowerCase()) && !p.endsWith('.device') && !p.startsWith('fp_') && !p.startsWith('fresh_')) {
+                            profiles.add(p);
+                        }
+                    }
                 }
             } catch (_) {}
         }
-        console.log(`Profil aktif saat ini : ${active}`);
-        console.log(`Sesi tersimpan di vault: ${Array.from(profiles).join(', ') || '(belum ada)'}`);
+
+        const profileList = Array.from(profiles);
+        console.log(`\n${CYAN}[ESO BROWSER] Daftar Profil Tersimpan di Vault:${RESET}`);
+        console.log(`├─ Profil Aktif Saat Ini : ${GREEN}${active || 'default'}${RESET}\n`);
+
+        if (profileList.length === 0) {
+            console.log(`⚠️  Belum ada profil tersimpan di vault.\n`);
+        } else {
+            console.log(`Daftar Profil Tersedia:`);
+            const walletMap = {
+                'shaqilla': 'Wallet 1 (eso.ai)',
+                'eryziggy': 'Wallet 2 (eryziggy.ai)',
+                '0xjamrud': 'Wallet 3 (erikasopi.ai)'
+            };
+            profileList.forEach((p, idx) => {
+                const sess = checkProfileSessionInfo(p);
+                const isCurr = p === active ? ` ${GREEN}(AKTIF)${RESET}` : '';
+                const sessBadge = sess.hasSession
+                    ? `${GREEN}[✅ Sesi X: ${sess.handle || 'Aktif'}]${RESET}`
+                    : `${YELLOW}[⚠️  Belum Ada Sesi X]${RESET}`;
+                const wBadge = walletMap[p] ? ` ${CYAN}[${walletMap[p]}]${RESET}` : '';
+                console.log(`  [${idx + 1}] ${CYAN}${p.padEnd(12)}${RESET} ── ${sessBadge}${wBadge}${isCurr}`);
+            });
+            console.log();
+        }
+
+        console.log(`${CYAN}💡 CARA MENGGUNAKAN:${RESET}`);
+        console.log(`  Lihat daftar profil        : ${GREEN}web --profile-list${RESET}`);
+        console.log(`  Hapus profil tersimpan     : ${GREEN}web --profile-remove <nama_profil>${RESET}`);
+        console.log(`  Buka beranda dengan profil : ${GREEN}web --profile <nama_profil>${RESET}`);
+        console.log(`  Buka URL dengan profil     : ${GREEN}web --profile <nama_profil> <url>${RESET}`);
+        console.log(`  Load sesi ke browser aktif : ${GREEN}web load <nama_profil>${RESET}`);
+        console.log(`  Eject sesi aktif           : ${GREEN}web eject${RESET}\n`);
+        process.exit(0);
+    }
+
+    const isProfileRemoveCmd = (
+        cmd === '--profile-remove' ||
+        cmd === 'profile-remove' ||
+        cmd === '--remove-profile' ||
+        cmd === 'remove-profile' ||
+        cmd === '--profile-delete' ||
+        cmd === 'profile-delete' ||
+        cmd === 'delete-profile' ||
+        cmd === 'rm-profile' ||
+        cmd === 'del-profile' ||
+        (cmd === 'profile' && (args[1] === 'remove' || args[1] === 'rm' || args[1] === 'delete' || args[1] === 'del'))
+    );
+
+    if (isProfileRemoveCmd) {
+        const targetProf = (cmd === 'profile' ? args[2] : args[1]);
+        if (!targetProf) {
+            console.log(`${RED}Error: Tentukan nama profil yang ingin dihapus!${RESET}`);
+            console.log(`Contoh: web --profile-remove wallet_1`);
+            process.exit(1);
+        }
+        const res = deleteProfileFromVault(targetProf);
+        if (res.success) {
+            console.log(`\n${GREEN}✅ Profil "${targetProf}" berhasil dihapus dari vault WebView.${RESET}`);
+            if (res.deletedFiles.length > 0) {
+                console.log(`🗑️ Berkas dibersihkan: ${res.deletedFiles.join(', ')}\n`);
+            }
+        } else {
+            console.log(`\n${RED}❌ Gagal menghapus profil: ${res.message}${RESET}\n`);
+        }
         process.exit(0);
     }
 
