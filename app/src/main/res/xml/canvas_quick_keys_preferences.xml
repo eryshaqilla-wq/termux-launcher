@@ -8,7 +8,7 @@
             app:persistent="false"
             app:icon="@drawable/ic_symbol_apps"
             app:title="Edit Shortcut Statbar Kiri"
-            app:summary="Kustomisasi tombol shortcut, script, aplikasi, dan mode pesawat di statbar kanvas kiri" />
+            app:summary="Kustomisasi tombol shortcut, script, aplikasi, dan sakelar pesawat di statbar kanvas kiri" />
         <Preference
             app:key="pref_left_canvas_reset"
             app:persistent="false"
