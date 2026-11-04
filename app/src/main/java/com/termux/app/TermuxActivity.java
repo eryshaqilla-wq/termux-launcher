@@ -22370,6 +22370,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             launchAppByRefOrPackage(actionKey.substring(4));
             return;
         }
+        if ("AIRPLANE".equalsIgnoreCase(actionKey) || "tool:airplane.toggle".equalsIgnoreCase(actionKey)) {
+            FusionAirplaneModeHelper.toggle(this, null);
+            return;
+        }
         if ("BOOST".equalsIgnoreCase(actionKey)) {
             new Thread(() -> {
                 try {
@@ -22575,6 +22579,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             launchAppByRefOrPackage(actionKey.substring(4));
             return;
         }
+        if ("AIRPLANE".equalsIgnoreCase(actionKey) || "tool:airplane.toggle".equalsIgnoreCase(actionKey)) {
+            FusionAirplaneModeHelper.toggle(this, null);
+            return;
+        }
         if ("BOOST".equalsIgnoreCase(actionKey)) {
             new Thread(() -> {
                 try {
@@ -22590,12 +22598,93 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             String command = resolveIpcToolCommand(actionKey);
             String title = (key.display != null && !key.display.trim().isEmpty())
                 ? key.display.trim() : extractProgramName(command);
-            launchProgramInNewTabString(command, title, key.getResolvedEnv());
-        } else if (key.isNewTab()) {
-            launchProgramInNewTab(key);
+            launchScriptInBackground(command, title, key.getResolvedEnv());
         } else if (actionKey.endsWith("\n") || !actionKey.isEmpty()) {
-            launchProgramInNewTabString(actionKey, key.display, key.getResolvedEnv());
+            launchScriptInBackground(actionKey, key.display, key.getResolvedEnv());
         }
+    }
+
+    public void launchScriptInBackground(@NonNull String command, @Nullable String title, @Nullable String targetEnv) {
+        String cleanCmd = command.endsWith("\n") ? command.substring(0, command.length() - 1).trim() : command.trim();
+        if (cleanCmd.isEmpty()) return;
+
+        String displayTitle = (title != null && !title.trim().isEmpty())
+            ? title.trim()
+            : extractProgramName(cleanCmd);
+
+        String env = (targetEnv != null && !targetEnv.trim().isEmpty()) ? targetEnv.trim().toLowerCase(java.util.Locale.ROOT) : "auto";
+        List<String> cmdList = new ArrayList<>();
+
+        String bashnhPath = new java.io.File("/data/data/com.termux/files/usr/bin/bashnh").exists()
+            ? "/data/data/com.termux/files/usr/bin/bashnh"
+            : (new java.io.File(getFilesDir(), "usr/bin/bashnh").exists() ? new java.io.File(getFilesDir(), "usr/bin/bashnh").getAbsolutePath() : null);
+
+        if ("native".equalsIgnoreCase(env) || "termux".equalsIgnoreCase(env)) {
+            cmdList.add("/data/data/com.termux/files/usr/bin/sh");
+            cmdList.add("-c");
+            cmdList.add(cleanCmd);
+        } else if ("chroot".equalsIgnoreCase(env) || "nethunter".equalsIgnoreCase(env)) {
+            if (bashnhPath != null) {
+                cmdList.add(bashnhPath);
+                cmdList.add("chroot");
+                cmdList.add(cleanCmd);
+            } else {
+                cmdList.add("su");
+                cmdList.add("-mm");
+                cmdList.add("-c");
+                cmdList.add("chroot /data/local/nhsystem/kalifs /bin/bash -c " + android.database.DatabaseUtils.sqlEscapeString(cleanCmd));
+            }
+        } else if ("droidspaces".equalsIgnoreCase(env) || "ubuntu".equalsIgnoreCase(env)) {
+            if (bashnhPath != null) {
+                cmdList.add(bashnhPath);
+                cmdList.add("droidspaces");
+                cmdList.add(cleanCmd);
+            } else {
+                cmdList.add("su");
+                cmdList.add("-c");
+                cmdList.add("droidspaces run " + cleanCmd);
+            }
+        } else if ("proot".equalsIgnoreCase(env)) {
+            if (bashnhPath != null) {
+                cmdList.add(bashnhPath);
+                cmdList.add("proot");
+                cmdList.add(cleanCmd);
+            } else {
+                cmdList.add("/data/data/com.termux/files/usr/bin/sh");
+                cmdList.add("-c");
+                cmdList.add("proot-distro login -- " + cleanCmd);
+            }
+        } else {
+            // "auto" (Universal Auto-Detect)
+            if (bashnhPath != null) {
+                cmdList.add(bashnhPath);
+                cmdList.add(cleanCmd);
+            } else {
+                cmdList.add("/data/data/com.termux/files/usr/bin/sh");
+                cmdList.add("-c");
+                cmdList.add(cleanCmd);
+            }
+        }
+
+        FusionToast.show(this, "▶️ " + displayTitle + " (Background)");
+        new Thread(() -> {
+            try {
+                ProcessBuilder pb = new ProcessBuilder(cmdList);
+                Map<String, String> pbEnv = pb.environment();
+                pbEnv.put("PATH", "/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/applets:" + System.getenv("PATH"));
+                pbEnv.put("PREFIX", "/data/data/com.termux/files/usr");
+                pbEnv.put("HOME", "/data/data/com.termux/files/home");
+                pbEnv.put("TERM", "xterm-256color");
+                pb.redirectErrorStream(true);
+                Process process = pb.start();
+                int exitCode = process.waitFor();
+                if (exitCode != 0) {
+                    runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "⚠️ " + displayTitle + " selesai (exit: " + exitCode + ")"));
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "❌ Gagal: " + displayTitle + " (" + e.getMessage() + ")"));
+            }
+        }).start();
     }
 
     public void launchAppByRefOrPackage(@NonNull String spec) {
@@ -22723,28 +22812,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             cluster.addView(btn, lp);
         }
 
-        // Add [ ➕ ] button at the end of the cluster
-        TextView addBtn = new TextView(this);
-        addBtn.setText("＋");
-        if (nerdFont != null) addBtn.setTypeface(nerdFont);
-        addBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);
-        addBtn.setIncludeFontPadding(false);
-        addBtn.setTextColor(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 180));
-        addBtn.setGravity(android.view.Gravity.CENTER);
-
-        android.graphics.drawable.GradientDrawable addGd = new android.graphics.drawable.GradientDrawable();
-        addGd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-        addGd.setCornerRadius(cornerRadius);
-        addGd.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 25));
-        addGd.setStroke(strokeWidth, androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 70));
-        addBtn.setBackground(addGd);
-
-        addBtn.setWidth(btnSquareW);
-        addBtn.setOnClickListener(v -> openLeftCanvasQuickKeyEditor(-1, keys, cluster));
-        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(btnSquareW, btnHeight);
-        addLp.setMarginEnd(marginE);
-        addLp.gravity = android.view.Gravity.CENTER_VERTICAL;
-        cluster.addView(addBtn, addLp);
+        cluster.setOnLongClickListener(v -> {
+            openLeftCanvasQuickKeyEditor(-1, keys, cluster);
+            return true;
+        });
     }
 
     /** Whether a display server is up and connected to the Display page. */

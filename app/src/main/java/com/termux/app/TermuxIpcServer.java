@@ -527,6 +527,57 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.startsWith("AIRPLANE_MODE") || strTrim.startsWith("AIRPLANE")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act != null) {
+                                    String sub = strTrim.contains(" ") ? strTrim.substring(strTrim.indexOf(" ") + 1).trim().toLowerCase(java.util.Locale.ROOT) : "toggle";
+                                    if (sub.equals("status") || sub.equals("check") || sub.equals("get")) {
+                                        boolean on = FusionAirplaneModeHelper.isAirplaneModeOn(act);
+                                        FusionAirplaneModeHelper.Mode mode = FusionAirplaneModeHelper.detectMode(act);
+                                        String resp = "{\"status\":\"ok\",\"mode\":\"" + mode.name().toLowerCase(java.util.Locale.ROOT)
+                                            + "\",\"airplane_mode\":" + on + "}\n";
+                                        outputStream.write(resp.getBytes());
+                                    } else {
+                                        boolean targetOn;
+                                        if (sub.equals("on") || sub.equals("enable") || sub.equals("1")) {
+                                            targetOn = true;
+                                        } else if (sub.equals("off") || sub.equals("disable") || sub.equals("0")) {
+                                            targetOn = false;
+                                        } else {
+                                            targetOn = !FusionAirplaneModeHelper.isAirplaneModeOn(act);
+                                        }
+
+                                        final Object waitLock = new Object();
+                                        final String[] resultJson = new String[1];
+                                        FusionAirplaneModeHelper.setAirplaneMode(act, targetOn, (success, mode, message, state) -> {
+                                            synchronized (waitLock) {
+                                                resultJson[0] = "{\"status\":\"" + (success ? "ok" : "error")
+                                                    + "\",\"mode\":\"" + mode.name().toLowerCase(java.util.Locale.ROOT)
+                                                    + "\",\"airplane_mode\":" + state
+                                                    + ",\"message\":\"" + message + "\"}\n";
+                                                waitLock.notifyAll();
+                                            }
+                                        });
+
+                                        synchronized (waitLock) {
+                                            try {
+                                                if (resultJson[0] == null) {
+                                                    waitLock.wait(4000);
+                                                }
+                                            } catch (InterruptedException ignored) {}
+                                        }
+
+                                        if (resultJson[0] != null) {
+                                            outputStream.write(resultJson[0].getBytes());
+                                        } else {
+                                            outputStream.write("{\"status\":\"error\",\"message\":\"Timeout toggling airplane mode\"}\n".getBytes());
+                                        }
+                                    }
+                                } else {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"Activity not ready\"}\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
                             } else if (strTrim.startsWith("WEBVIEW_SAVE_SESSION ") || strTrim.startsWith("WEBVIEW_SAVE ")) {
                                 String prof = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
                                 TermuxActivity act = TermuxIpcServer.getActivity();

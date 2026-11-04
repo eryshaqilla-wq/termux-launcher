@@ -339,6 +339,7 @@ public final class TermuxPreferenceConstants {
             "{\"key\":\"tool:ipc.wallet\",\"display\":\"💰 Wallet\",\"target\":\"new_tab\",\"env\":\"auto\"}," +
             "{\"key\":\"tool:ipc.web\",\"display\":\"🌐 Web\",\"target\":\"new_tab\",\"env\":\"auto\"}," +
             "{\"key\":\"tool:ipc.telegram\",\"display\":\"✈️ Tele\",\"target\":\"new_tab\",\"env\":\"auto\"}," +
+            "{\"key\":\"AIRPLANE\",\"display\":\"✈️ Flight\"}," +
             "{\"key\":\"BOOST\",\"display\":\"⚡ Boost\"}]";
 
         /** Toggle for the session indicator box at the left corner of the status bar. */

@@ -28,6 +28,9 @@ public final class ExtraKeyActionLabels {
             return context.getString(R.string.settings_extra_keys_action_macro_title, key.key);
         }
         String spec = key.key;
+        if ("AIRPLANE".equalsIgnoreCase(spec) || "tool:airplane.toggle".equalsIgnoreCase(spec)) {
+            return "Mode Pesawat (Auto Root/Shizuku)";
+        }
         if (spec.startsWith("app:")) {
             return "Aplikasi: " + (key.display != null && !key.display.isEmpty() ? key.display : spec.substring(4));
         }

@@ -918,6 +918,27 @@ sys.exit(res.returncode)
     tab-rename)
         handle_tab "rename" "$@"
         ;;
+    airplane-mode|airplane|pesawat|mode-pesawat)
+        SUB="${1:-toggle}"
+        shift 2>/dev/null || true
+        case "$SUB" in
+            ""|toggle)
+                send_cmd "AIRPLANE_MODE toggle"
+                ;;
+            on|enable|1)
+                send_cmd "AIRPLANE_MODE on"
+                ;;
+            off|disable|0)
+                send_cmd "AIRPLANE_MODE off"
+                ;;
+            status|check|get)
+                send_cmd "AIRPLANE_MODE status"
+                ;;
+            *)
+                echo "Penggunaan: termux-ipc airplane-mode [on|off|toggle|status]"
+                ;;
+        esac
+        ;;
     launcherctl)
         SUB="${1:-status}"
         case "$SUB" in

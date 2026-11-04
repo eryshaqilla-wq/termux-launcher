@@ -215,6 +215,14 @@ public final class ExtraKeyActionPicker {
         renderNamedKeys(results, context.getString(R.string.settings_extra_keys_action_row_keys),
             ExtraKeysPresets.ROW_KEYS, needle, pick);
 
+        // System Fast Tools
+        if (needle.isEmpty() || matches("airplane", needle) || matches("mode pesawat", needle) || matches("pesawat", needle)) {
+            results.addView(entry("✈️ Mode Pesawat", "Toggle Mode Pesawat (Auto Root / Shizuku / Non-root)", () -> {
+                ExtraKeysLayoutModel.Key airplaneKey = new ExtraKeysLayoutModel.Key("AIRPLANE", false, "✈️", null);
+                pick.onPicked(airplaneKey);
+            }));
+        }
+
         Map<String, List<LauncherToolRegistry.ToolMetadata>> grouped =
             LauncherToolRegistry.getInstance().getUiToolsByCategory();
         for (Map.Entry<String, List<LauncherToolRegistry.ToolMetadata>> group : grouped.entrySet()) {
