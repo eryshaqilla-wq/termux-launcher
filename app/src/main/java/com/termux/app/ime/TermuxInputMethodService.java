@@ -30,6 +30,7 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.termux.R;
+import com.termux.app.FusionToast;
 import com.termux.ai.TaiModelSpec;
 import com.termux.ai.TaiSettings;
 import com.termux.ai.TaiSpeechModels;
@@ -582,7 +583,7 @@ public class TermuxInputMethodService extends InputMethodService {
     private void startVoiceTyping(boolean chooser) {
         if (ContextCompat.checkSelfPermission(this,
                 android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this,
+            FusionToast.makeText(this,
                 R.string.voice_input_permission_denied, Toast.LENGTH_SHORT).show();
             try {
                 Intent intent = new Intent(this, TermuxActivity.class);
@@ -648,7 +649,7 @@ public class TermuxInputMethodService extends InputMethodService {
                 if (mKeyboardView != null) {
                     mKeyboardView.setVoiceTypingActive(true);
                 }
-                Toast.makeText(TermuxInputMethodService.this,
+                FusionToast.makeText(TermuxInputMethodService.this,
                     R.string.voice_input_listening, Toast.LENGTH_SHORT).show();
             }
 
@@ -682,7 +683,7 @@ public class TermuxInputMethodService extends InputMethodService {
                     // Try android speech recognizer fallback
                     startAndroidSpeechRecognizer(false);
                 } else {
-                    Toast.makeText(TermuxInputMethodService.this, message, Toast.LENGTH_SHORT).show();
+                    FusionToast.makeText(TermuxInputMethodService.this, message, Toast.LENGTH_SHORT).show();
                 }
             }
 
@@ -719,7 +720,7 @@ public class TermuxInputMethodService extends InputMethodService {
 
     private void startAndroidSpeechRecognizer(boolean chooser) {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            Toast.makeText(this,
+            FusionToast.makeText(this,
                 R.string.voice_typing_unavailable, Toast.LENGTH_SHORT).show();
             return;
         }
@@ -747,7 +748,7 @@ public class TermuxInputMethodService extends InputMethodService {
                     if (mKeyboardView != null) {
                         mKeyboardView.setVoiceTypingActive(true);
                     }
-                    Toast.makeText(TermuxInputMethodService.this,
+                    FusionToast.makeText(TermuxInputMethodService.this,
                         R.string.voice_input_listening, Toast.LENGTH_SHORT).show();
                 }
 
@@ -776,7 +777,7 @@ public class TermuxInputMethodService extends InputMethodService {
                     }
                     destroySpeechRecognizer();
                     if (error != SpeechRecognizer.ERROR_NO_MATCH && error != SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                        Toast.makeText(TermuxInputMethodService.this,
+                        FusionToast.makeText(TermuxInputMethodService.this,
                             R.string.voice_typing_unavailable, Toast.LENGTH_SHORT).show();
                     }
                 }
@@ -825,7 +826,7 @@ public class TermuxInputMethodService extends InputMethodService {
                 mKeyboardView.setVoiceTypingActive(false);
             }
             destroySpeechRecognizer();
-            Toast.makeText(this,
+            FusionToast.makeText(this,
                 R.string.voice_typing_unavailable, Toast.LENGTH_SHORT).show();
         }
     }

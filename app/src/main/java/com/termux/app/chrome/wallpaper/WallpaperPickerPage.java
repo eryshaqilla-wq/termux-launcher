@@ -33,6 +33,7 @@ import com.google.android.material.color.MaterialColors;
 import com.google.android.material.imageview.ShapeableImageView;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 import com.termux.R;
+import com.termux.app.FusionToast;
 import com.termux.app.layouteditor.EditorM3;
 import com.termux.app.surfaces.AppearanceSurfaceController;
 import com.termux.shared.logger.Logger;
@@ -913,7 +914,7 @@ public final class WallpaperPickerPage implements AppearanceSurfaceController.Ov
      * full-screen page covers.
      */
     private void showError(int messageRes) {
-        android.widget.Toast.makeText(mContext, messageRes, android.widget.Toast.LENGTH_LONG).show();
+        FusionToast.makeText(mContext, messageRes, android.widget.Toast.LENGTH_LONG).show();
     }
 
     /**

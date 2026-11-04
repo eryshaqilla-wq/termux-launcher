@@ -383,7 +383,53 @@ public class Logger {
             presenter.showNotice(context, toastText, longDuration);
             return;
         }
-        new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(context, toastText, longDuration ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT).show());
+        new Handler(Looper.getMainLooper()).post(() -> buildAdaptiveToast(context, toastText, longDuration ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT).show());
+    }
+
+    @NonNull
+    public static Toast buildAdaptiveToast(@NonNull Context context, @NonNull CharSequence message, int duration) {
+        try {
+            int nightMode = context.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            boolean isDark = nightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            float density = context.getResources().getDisplayMetrics().density;
+            bg.setCornerRadius(22f * density);
+
+            android.widget.TextView tv = new android.widget.TextView(context);
+            tv.setText(message);
+            tv.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 14f);
+            tv.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+            tv.setGravity(android.view.Gravity.CENTER);
+
+            int padH = (int) (18f * density);
+            int padV = (int) (10f * density);
+            tv.setPadding(padH, padV, padH, padV);
+
+            if (isDark) {
+                bg.setColor(android.graphics.Color.parseColor("#E61E1E1E"));
+                bg.setStroke((int) (1f * density), android.graphics.Color.parseColor("#33FFFFFF"));
+                tv.setTextColor(android.graphics.Color.parseColor("#F4F3F7"));
+            } else {
+                bg.setColor(android.graphics.Color.parseColor("#F7FFFFFF"));
+                bg.setStroke((int) (1f * density), android.graphics.Color.parseColor("#22000000"));
+                tv.setTextColor(android.graphics.Color.parseColor("#1C1B1F"));
+            }
+
+            tv.setBackground(bg);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                tv.setElevation(4f * density);
+            }
+
+            Toast toast = new Toast(context);
+            toast.setDuration(duration);
+            toast.setView(tv);
+            toast.setGravity(android.view.Gravity.BOTTOM | android.view.Gravity.CENTER_HORIZONTAL, 0, (int) (75f * density));
+            return toast;
+        } catch (Throwable t) {
+            return Toast.makeText(context, message, duration);
+        }
     }
 
     public static CharSequence[] getLogLevelsArray() {

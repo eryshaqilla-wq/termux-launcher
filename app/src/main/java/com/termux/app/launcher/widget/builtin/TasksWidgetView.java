@@ -25,6 +25,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
+import com.termux.app.FusionToast;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -218,7 +219,7 @@ public class TasksWidgetView extends BuiltinWidgetView implements MarkdownFileSo
     }
 
     private void edit(@NonNull MarkdownFileSource.Edit edit) {
-        Runnable failed = () -> Toast.makeText(services.context(), R.string.bw_files_tasks_save_failed,
+        Runnable failed = () -> FusionToast.makeText(services.context(), R.string.bw_files_tasks_save_failed,
             Toast.LENGTH_SHORT).show();
         if (source != null) source.edit(edit, failed);
         else MarkdownFileSource.editDetached(services, path(), edit, failed);

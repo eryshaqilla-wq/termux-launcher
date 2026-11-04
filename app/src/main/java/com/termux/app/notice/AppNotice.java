@@ -20,6 +20,7 @@ import androidx.annotation.Nullable;
 import androidx.annotation.StringRes;
 
 import com.termux.R;
+import com.termux.app.FusionToast;
 
 import java.lang.ref.WeakReference;
 
@@ -288,7 +289,7 @@ public final class AppNotice {
             // is the only surface left, and losing the message outright would be worse.
             CharSequence text = TextUtils.isEmpty(item.sub)
                 ? item.title : item.title + " — " + item.sub;
-            Toast.makeText(appContext, text,
+            FusionToast.makeText(appContext, text,
                 item.durationMs >= AppNoticeHostView.HOLD_LONG_MS
                     ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT).show();
             return;
