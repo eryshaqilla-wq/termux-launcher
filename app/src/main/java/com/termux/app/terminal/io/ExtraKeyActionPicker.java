@@ -225,19 +225,26 @@ public final class ExtraKeyActionPicker {
 
         // Backup Profile Slots (.backup)
         if (needle.isEmpty() || matches("slot", needle) || matches("backup", needle) || matches("profile", needle)) {
-            results.addView(header("Profile Slots (.backup)"));
-            results.addView(entry("◀ Slot Sebelumnya", "Pindah langsung ke slot sebelumnya (.backup)", () -> {
-                ExtraKeysLayoutModel.Key prevKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PREV", false, "◀ Slot", null);
-                pick.onPicked(prevKey);
-            }));
-            results.addView(entry("🎯 Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (.backup)", () -> {
-                ExtraKeysLayoutModel.Key pickKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PICK", false, "🎯 Slot", null);
-                pick.onPicked(pickKey);
-            }));
-            results.addView(entry("Slot Berikutnya ▶", "Pindah langsung ke slot berikutnya (.backup)", () -> {
-                ExtraKeysLayoutModel.Key nextKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_NEXT", false, "Slot ▶", null);
-                pick.onPicked(nextKey);
-            }));
+            boolean isRoot = com.termux.app.FusionBackupSlotHelper.isRootAvailable();
+            results.addView(header(isRoot ? "Profile Slots (.backup)" : "Profile Slots (.backup) · Wajib Root"));
+            if (isRoot) {
+                results.addView(entry("◀ Slot Sebelumnya", "Pindah langsung ke slot sebelumnya (.backup)", () -> {
+                    ExtraKeysLayoutModel.Key prevKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PREV", false, "◀ Slot", null);
+                    pick.onPicked(prevKey);
+                }));
+                results.addView(entry("🎯 Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (.backup)", () -> {
+                    ExtraKeysLayoutModel.Key pickKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PICK", false, "🎯 Slot", null);
+                    pick.onPicked(pickKey);
+                }));
+                results.addView(entry("Slot Berikutnya ▶", "Pindah langsung ke slot berikutnya (.backup)", () -> {
+                    ExtraKeysLayoutModel.Key nextKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_NEXT", false, "Slot ▶", null);
+                    pick.onPicked(nextKey);
+                }));
+            } else {
+                results.addView(disabledEntry("◀ Slot Sebelumnya", "Pindah langsung ke slot sebelumnya (.backup) (Perlu Root)", "Non-Root"));
+                results.addView(disabledEntry("🎯 Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (Perlu Root)", "Non-Root"));
+                results.addView(disabledEntry("Slot Berikutnya ▶", "Pindah langsung ke slot berikutnya (.backup) (Perlu Root)", "Non-Root"));
+            }
         }
 
         Map<String, List<LauncherToolRegistry.ToolMetadata>> grouped =
@@ -512,6 +519,40 @@ public final class ExtraKeyActionPicker {
         primary.setText(label);
         M3.textAppearance(primary, com.google.android.material.R.attr.textAppearanceBodyLarge);
         primary.setTextColor(colorText);
+        entry.addView(primary);
+
+        if (summary != null && !summary.isEmpty()) {
+            TextView secondary = new TextView(context);
+            secondary.setText(summary);
+            M3.textAppearance(secondary, com.google.android.material.R.attr.textAppearanceBodySmall);
+            secondary.setTextColor(colorSubtle);
+            entry.addView(secondary);
+        }
+        return card;
+    }
+
+    private View disabledEntry(@NonNull String label, @Nullable String summary,
+                               @Nullable String reason) {
+        MaterialCardView card = M3.clickableCard(context, false);
+        card.setEnabled(false);
+        card.setClickable(false);
+        card.setFocusable(false);
+        card.setAlpha(0.38f);
+        LinearLayout.LayoutParams cardParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardParams.setMargins(0, pad(2), 0, pad(2));
+        card.setLayoutParams(cardParams);
+
+        LinearLayout entry = column();
+        entry.setMinimumHeight(pad(48));
+        entry.setGravity(Gravity.CENTER_VERTICAL);
+        entry.setPadding(pad(12), pad(8), pad(12), pad(8));
+        card.addView(entry);
+
+        TextView primary = new TextView(context);
+        primary.setText(reason != null ? (label + " · " + reason) : label);
+        M3.textAppearance(primary, com.google.android.material.R.attr.textAppearanceBodyLarge);
+        primary.setTextColor(colorSubtle);
         entry.addView(primary);
 
         if (summary != null && !summary.isEmpty()) {

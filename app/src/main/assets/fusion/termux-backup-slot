@@ -3,6 +3,17 @@
 # Works directly on Android host, PRoot, and NetHunter chroot / Droidspaces containers.
 
 PREF_FILE="/data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml"
+TERMUX_PREF="/data/data/com.termux/shared_prefs/fusion_slot_preferences.xml"
+
+check_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        return 0
+    fi
+    if command -v su >/dev/null 2>&1 && su -c "id" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
 
 run_sh() {
     if [ -f "$PREF_FILE" ]; then
@@ -12,7 +23,21 @@ run_sh() {
     fi
 }
 
+is_auto_clear_cache() {
+    if [ "$CLEAR_CACHE_OPT" = "1" ]; then
+        return 0
+    fi
+    if run_sh "[ -f '$TERMUX_PREF' ] && grep -q 'name=\"slot_auto_clear_cache\" value=\"true\"' '$TERMUX_PREF' 2>/dev/null"; then
+        return 0
+    fi
+    return 1
+}
+
 get_current() {
+    if ! check_root; then
+        echo "Error: Akses root (su) diperlukan untuk fitur slot .backup" >&2
+        return 1
+    fi
     curr=$(run_sh "grep 'name=\"currentProfile\"' /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null | sed -e 's/.*<string name=\"currentProfile\">//' -e 's/<\\/string>.*//'")
     if [ -z "$curr" ]; then
         curr=$(run_sh "readlink /data/data/com.kiwibrowser.browser/.data_profiles/.current 2>/dev/null")
@@ -22,6 +47,10 @@ get_current() {
 }
 
 get_all() {
+    if ! check_root; then
+        echo "Error: Akses root (su) diperlukan untuk fitur slot .backup" >&2
+        return 1
+    fi
     all=$(run_sh "grep 'name=\"profile\.' /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null | sed -e 's/.*name=\"profile\.//' -e 's/\".*//' | sort")
     if [ -z "$all" ]; then
         all=$(run_sh "ls -1 /data/data/com.kiwibrowser.browser/.data_profiles 2>/dev/null | grep -v '^\.' | sort")
@@ -30,6 +59,11 @@ get_all() {
 }
 
 switch_to() {
+    if ! check_root; then
+        echo "Error: Akses root (su) diperlukan untuk fitur slot .backup" >&2
+        return 1
+    fi
+
     target="$1"
     if [ -z "$target" ]; then
         echo "Error: target slot required" >&2
@@ -40,6 +74,16 @@ switch_to() {
     if [ "$curr" = "$target" ]; then
         echo "Already on slot $target"
         return 0
+    fi
+
+    local CLEAR_CMD=""
+    if is_auto_clear_cache; then
+        CLEAR_CMD="
+sync
+echo 3 > /proc/sys/vm/drop_caches
+am kill-all >/dev/null 2>&1 || true
+sysctl -w vm.shrink_memory=1 >/dev/null 2>&1 || true
+"
     fi
 
     local SCRIPT="
@@ -82,12 +126,17 @@ for pdir in \$(find /data/data -maxdepth 2 -name .data_profiles 2>/dev/null); do
   fi
 done
 /system/bin/am broadcast -a android.appwidget.action.APPWIDGET_UPDATE -n com.ery.ziggy/com.myrefucek.FufuFu.MyDataProfileWidget >/dev/null 2>&1 || true
+$CLEAR_CMD
 "
     run_sh "$SCRIPT"
 
     # Notify Termux IPC if available
     if command -v termux-ipc >/dev/null 2>&1; then
-        termux-ipc toast "🔄 Slot Aktif: $target" >/dev/null 2>&1 || true
+        local TOAST="🔄 Slot Aktif: $target"
+        if is_auto_clear_cache; then
+            TOAST="🔄 Slot Aktif: $target ⚡ (RAM Bersih)"
+        fi
+        termux-ipc toast "$TOAST" >/dev/null 2>&1 || true
     fi
 
     echo "Switched to slot $target"
@@ -150,6 +199,19 @@ next_slot() {
     fi
 }
 
+CLEAR_CACHE_OPT=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --clear-cache|--clean|-c)
+            CLEAR_CACHE_OPT=1
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
 CMD="${1:-get}"
 case "$CMD" in
     get|current|status)
@@ -168,13 +230,17 @@ case "$CMD" in
         next_slot
         ;;
     picker|pick)
+        if ! check_root; then
+            echo "Error: Akses root (su) diperlukan untuk membuka .backup" >&2
+            exit 1
+        fi
         run_sh "/system/bin/am start -a ACTION_SELECT_DATA_PROFILE -n com.ery.ziggy/o.ḟ >/dev/null 2>&1"
         ;;
     *)
         if [ -n "$CMD" ]; then
             switch_to "$CMD"
         else
-            echo "Usage: termux-backup-slot [get|list|set <slot>|prev|next|picker]"
+            echo "Usage: termux-backup-slot [--clear-cache] [get|list|set <slot>|prev|next|picker]"
         fi
         ;;
 esac

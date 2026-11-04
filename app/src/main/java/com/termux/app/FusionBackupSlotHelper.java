@@ -1,6 +1,7 @@
 package com.termux.app;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -26,7 +27,9 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.bottomsheet.BottomSheetDragHandleView;
 import com.google.android.material.button.MaterialButton;
+import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.color.MaterialColors;
+import com.google.android.material.materialswitch.MaterialSwitch;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
@@ -34,6 +37,7 @@ import com.termux.app.material.M3;
 import com.termux.shared.termux.font.NerdFontSpans;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -50,6 +54,8 @@ import java.util.regex.Pattern;
  * 1. Slot Sebelumnya (Previous Slot)
  * 2. Slot Default / Aktif (displays active slot number, opens picker dialog on click)
  * 3. Slot Berikutnya (Next Slot)
+ *
+ * Includes auto-clear RAM/Cache on switch (parity with ESC on login menu) and root validation.
  */
 public final class FusionBackupSlotHelper {
 
@@ -59,6 +65,9 @@ public final class FusionBackupSlotHelper {
     public static final String ACTION_SLOT_NEXT = "BACKUP_SLOT_NEXT";
     public static final String ACTION_SLOT_PICK = "BACKUP_SLOT_PICK";
     public static final String ACTION_SLOT_CURRENT = "BACKUP_SLOT_CURRENT";
+
+    public static final String PREFS_NAME = "fusion_slot_preferences";
+    public static final String KEY_AUTO_CLEAR_CACHE = "slot_auto_clear_cache";
 
     public interface OnSlotPicked {
         void onPicked(@NonNull String slot);
@@ -72,7 +81,60 @@ public final class FusionBackupSlotHelper {
     private static long sLastCacheUpdate = 0;
     private static final long CACHE_TTL_MS = 3000;
 
+    private static Boolean sCachedRootAvailable = null;
+    private static long sLastRootCheckTime = 0;
+
     private FusionBackupSlotHelper() {}
+
+    /**
+     * Check if root (su) access is available, cached with 30s TTL.
+     */
+    public static synchronized boolean isRootAvailable() {
+        long now = System.currentTimeMillis();
+        if (sCachedRootAvailable != null && (now - sLastRootCheckTime) < 30_000L) {
+            return sCachedRootAvailable;
+        }
+
+        boolean hasSu = false;
+        String[] suPaths = {
+            "/system/bin/su", "/system/xbin/su", "/sbin/su",
+            "/su/bin/su", "/data/local/xbin/su", "/data/local/bin/su"
+        };
+        for (String p : suPaths) {
+            if (new File(p).exists()) {
+                hasSu = true;
+                break;
+            }
+        }
+        if (hasSu) {
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
+                int code = p.waitFor();
+                hasSu = (code == 0);
+            } catch (Throwable ignored) {
+                hasSu = false;
+            }
+        }
+        sCachedRootAvailable = hasSu;
+        sLastRootCheckTime = now;
+        return hasSu;
+    }
+
+    /**
+     * Check if auto clear cache (ESC login parity) is enabled on slot switch.
+     */
+    public static boolean isAutoClearCacheEnabled(@NonNull Context context) {
+        SharedPreferences sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return sp.getBoolean(KEY_AUTO_CLEAR_CACHE, false);
+    }
+
+    /**
+     * Set auto clear cache on slot switch.
+     */
+    public static void setAutoClearCacheEnabled(@NonNull Context context, boolean enabled) {
+        SharedPreferences sp = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        sp.edit().putBoolean(KEY_AUTO_CLEAR_CACHE, enabled).apply();
+    }
 
     /**
      * Fast non-blocking synchronous getter for current cached slot (e.g. "01").
@@ -103,45 +165,47 @@ public final class FusionBackupSlotHelper {
     private static synchronized void loadSlotDataFromDisk() {
         String curr = null;
         List<String> all = new ArrayList<>();
-        try {
-            Process p = Runtime.getRuntime().exec(new String[]{
-                "su", "-c", "cat /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null"
-            });
-            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            String line;
-            Pattern currPat = Pattern.compile("<string name=\"currentProfile\">([^<]+)</string>");
-            Pattern profPat = Pattern.compile("<string name=\"profile\\.([^\"]+)\"");
-
-            while ((line = reader.readLine()) != null) {
-                Matcher mCurr = currPat.matcher(line);
-                if (mCurr.find()) {
-                    curr = mCurr.group(1).trim();
-                }
-                Matcher mProf = profPat.matcher(line);
-                if (mProf.find()) {
-                    all.add(mProf.group(1).trim());
-                }
-            }
-            reader.close();
-            p.waitFor();
-        } catch (Throwable t) {
-            Log.w(TAG, "Failed reading DataProfilesCache.xml via root", t);
-        }
-
-        // Fallback to reading Kiwi Browser .current if needed
-        if (curr == null || curr.isEmpty()) {
+        if (isRootAvailable()) {
             try {
                 Process p = Runtime.getRuntime().exec(new String[]{
-                    "su", "-c", "readlink /data/data/com.kiwibrowser.browser/.data_profiles/.current 2>/dev/null"
+                    "su", "-c", "cat /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null"
                 });
                 BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-                String line = reader.readLine();
-                if (line != null && !line.trim().isEmpty()) {
-                    curr = line.trim();
+                String line;
+                Pattern currPat = Pattern.compile("<string name=\"currentProfile\">([^<]+)</string>");
+                Pattern profPat = Pattern.compile("<string name=\"profile\\.([^\"]+)\"");
+
+                while ((line = reader.readLine()) != null) {
+                    Matcher mCurr = currPat.matcher(line);
+                    if (mCurr.find()) {
+                        curr = mCurr.group(1).trim();
+                    }
+                    Matcher mProf = profPat.matcher(line);
+                    if (mProf.find()) {
+                        all.add(mProf.group(1).trim());
+                    }
                 }
                 reader.close();
                 p.waitFor();
-            } catch (Throwable ignored) {}
+            } catch (Throwable t) {
+                Log.w(TAG, "Failed reading DataProfilesCache.xml via root", t);
+            }
+
+            // Fallback to reading Kiwi Browser .current if needed
+            if (curr == null || curr.isEmpty()) {
+                try {
+                    Process p = Runtime.getRuntime().exec(new String[]{
+                        "su", "-c", "readlink /data/data/com.kiwibrowser.browser/.data_profiles/.current 2>/dev/null"
+                    });
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                    String line = reader.readLine();
+                    if (line != null && !line.trim().isEmpty()) {
+                        curr = line.trim();
+                    }
+                    reader.close();
+                    p.waitFor();
+                } catch (Throwable ignored) {}
+            }
         }
 
         if (curr == null || curr.isEmpty()) {
@@ -166,14 +230,21 @@ public final class FusionBackupSlotHelper {
     public static void switchToSlot(@NonNull Context context, @NonNull String targetSlot,
                                     @Nullable Runnable onComplete) {
         final Context appCtx = context.getApplicationContext();
+        if (!isRootAvailable()) {
+            FusionToast.show(appCtx, "⚠️ Akses root diperlukan untuk mengganti slot .backup!");
+            return;
+        }
+
+        final boolean clearCache = isAutoClearCacheEnabled(appCtx);
         EXECUTOR.execute(() -> {
-            boolean success = executeSlotSwitch(targetSlot);
+            boolean success = executeSlotSwitch(targetSlot, clearCache);
             synchronized (FusionBackupSlotHelper.class) {
                 sCachedCurrentSlot = targetSlot;
             }
             MAIN_HANDLER.post(() -> {
                 if (success) {
-                    FusionToast.show(appCtx, "🔄 Slot Aktif: " + targetSlot);
+                    String msg = "🔄 Slot Aktif: " + targetSlot + (clearCache ? " ⚡ (RAM Bersih)" : "");
+                    FusionToast.show(appCtx, msg);
                 } else {
                     FusionToast.show(appCtx, "⚠️ Gagal mengganti slot: " + targetSlot);
                 }
@@ -189,6 +260,12 @@ public final class FusionBackupSlotHelper {
      */
     public static void prevSlot(@NonNull Context context, @Nullable Runnable onComplete) {
         final Context appCtx = context.getApplicationContext();
+        if (!isRootAvailable()) {
+            FusionToast.show(appCtx, "⚠️ Akses root diperlukan untuk mengganti slot .backup!");
+            return;
+        }
+
+        final boolean clearCache = isAutoClearCacheEnabled(appCtx);
         EXECUTOR.execute(() -> {
             ensureCacheLoaded();
             String curr = sCachedCurrentSlot;
@@ -202,13 +279,14 @@ public final class FusionBackupSlotHelper {
                 target = "00";
             }
 
-            boolean success = executeSlotSwitch(target);
+            boolean success = executeSlotSwitch(target, clearCache);
             synchronized (FusionBackupSlotHelper.class) {
                 sCachedCurrentSlot = target;
             }
             MAIN_HANDLER.post(() -> {
                 if (success) {
-                    FusionToast.show(appCtx, "◀ Slot Sebelumnya: " + target);
+                    String msg = "◀ Slot Sebelumnya: " + target + (clearCache ? " ⚡ (RAM Bersih)" : "");
+                    FusionToast.show(appCtx, msg);
                 } else {
                     FusionToast.show(appCtx, "⚠️ Gagal pindah ke slot sebelumnya: " + target);
                 }
@@ -224,6 +302,12 @@ public final class FusionBackupSlotHelper {
      */
     public static void nextSlot(@NonNull Context context, @Nullable Runnable onComplete) {
         final Context appCtx = context.getApplicationContext();
+        if (!isRootAvailable()) {
+            FusionToast.show(appCtx, "⚠️ Akses root diperlukan untuk mengganti slot .backup!");
+            return;
+        }
+
+        final boolean clearCache = isAutoClearCacheEnabled(appCtx);
         EXECUTOR.execute(() -> {
             ensureCacheLoaded();
             String curr = sCachedCurrentSlot;
@@ -237,13 +321,14 @@ public final class FusionBackupSlotHelper {
                 target = "01";
             }
 
-            boolean success = executeSlotSwitch(target);
+            boolean success = executeSlotSwitch(target, clearCache);
             synchronized (FusionBackupSlotHelper.class) {
                 sCachedCurrentSlot = target;
             }
             MAIN_HANDLER.post(() -> {
                 if (success) {
-                    FusionToast.show(appCtx, "Slot Berikutnya ▶: " + target);
+                    String msg = "Slot Berikutnya ▶: " + target + (clearCache ? " ⚡ (RAM Bersih)" : "");
+                    FusionToast.show(appCtx, msg);
                 } else {
                     FusionToast.show(appCtx, "⚠️ Gagal pindah ke slot berikutnya: " + target);
                 }
@@ -262,9 +347,10 @@ public final class FusionBackupSlotHelper {
     }
 
     /**
-     * Executes root shell sequence to switch slots for all apps with .data_profiles.
+     * Executes root shell sequence to switch slots for all apps with .data_profiles,
+     * optionally running clear RAM/Cache (ESC login parity).
      */
-    private static boolean executeSlotSwitch(@NonNull String targetSlot) {
+    private static boolean executeSlotSwitch(@NonNull String targetSlot, boolean clearCache) {
         StringBuilder script = new StringBuilder();
         script.append("TARGET=").append(targetSlot).append("\n");
         script.append("PREF='/data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml'\n");
@@ -306,6 +392,14 @@ public final class FusionBackupSlotHelper {
         script.append("done\n");
         script.append("/system/bin/am broadcast -a android.appwidget.action.APPWIDGET_UPDATE -n com.ery.ziggy/com.myrefucek.FufuFu.MyDataProfileWidget >/dev/null 2>&1\n");
 
+        if (clearCache) {
+            // Parity dengan shortcut ESC di login dashboard menu
+            script.append("sync\n");
+            script.append("echo 3 > /proc/sys/vm/drop_caches\n");
+            script.append("am kill-all >/dev/null 2>&1 || true\n");
+            script.append("sysctl -w vm.shrink_memory=1 >/dev/null 2>&1 || true\n");
+        }
+
         try {
             Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", script.toString()});
             int code = p.waitFor();
@@ -320,6 +414,10 @@ public final class FusionBackupSlotHelper {
      * Launch original Titanium Backup profile selection activity.
      */
     public static void openBackupAppPicker(@NonNull Context context) {
+        if (!isRootAvailable()) {
+            FusionToast.show(context, "⚠️ Akses root diperlukan untuk membuka .backup!");
+            return;
+        }
         EXECUTOR.execute(() -> {
             try {
                 Runtime.getRuntime().exec(new String[]{
@@ -335,6 +433,8 @@ public final class FusionBackupSlotHelper {
      * Material 3 Bottom Sheet Dialog to pick from all available slots.
      */
     public static void showSlotPicker(@NonNull Context context, @Nullable OnSlotPicked onPicked) {
+        final boolean rootOk = isRootAvailable();
+
         BottomSheetDialog dialog = new BottomSheetDialog(context);
         float density = context.getResources().getDisplayMetrics().density;
         int padH = Math.round(20 * density);
@@ -373,6 +473,10 @@ public final class FusionBackupSlotHelper {
         MaterialButton backupAppBtn = new MaterialButton(context, null,
             androidx.appcompat.R.attr.borderlessButtonStyle);
         backupAppBtn.setText("📱 .backup");
+        backupAppBtn.setEnabled(rootOk);
+        if (!rootOk) {
+            backupAppBtn.setAlpha(0.38f);
+        }
         backupAppBtn.setOnClickListener(v -> {
             dialog.dismiss();
             openBackupAppPicker(context);
@@ -381,11 +485,86 @@ public final class FusionBackupSlotHelper {
 
         root.addView(headerRow);
 
+        // Auto Clear RAM & Cache (ESC Parity) Menu Card
+        MaterialCardView clearCard = M3.clickableCard(context, false);
+        LinearLayout.LayoutParams clearCardLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        clearCardLp.setMargins(0, Math.round(8 * density), 0, Math.round(8 * density));
+        clearCard.setLayoutParams(clearCardLp);
+
+        LinearLayout clearRow = new LinearLayout(context);
+        clearRow.setOrientation(LinearLayout.HORIZONTAL);
+        clearRow.setGravity(Gravity.CENTER_VERTICAL);
+        clearRow.setPadding(Math.round(14 * density), Math.round(10 * density), Math.round(14 * density), Math.round(10 * density));
+
+        TextView clearIcon = new TextView(context);
+        clearIcon.setText("⚡");
+        clearIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f);
+        clearRow.addView(clearIcon);
+
+        LinearLayout clearCol = new LinearLayout(context);
+        clearCol.setOrientation(LinearLayout.VERTICAL);
+        clearCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        clearCol.setPadding(Math.round(12 * density), 0, Math.round(8 * density), 0);
+
+        TextView clearTitle = new TextView(context);
+        clearTitle.setText("Clear RAM & Cache (ESC)");
+        M3.textAppearance(clearTitle, com.google.android.material.R.attr.textAppearanceTitleSmall);
+        clearTitle.setTextColor(M3.onSurface(context));
+        clearCol.addView(clearTitle);
+
+        TextView clearDesc = new TextView(context);
+        clearDesc.setText("Auto drop_caches & optimasi RAM saat berganti slot");
+        M3.textAppearance(clearDesc, com.google.android.material.R.attr.textAppearanceBodySmall);
+        clearDesc.setTextColor(M3.onSurfaceVariant(context));
+        clearCol.addView(clearDesc);
+
+        clearRow.addView(clearCol);
+
+        MaterialSwitch clearSwitch = new MaterialSwitch(context);
+        clearSwitch.setChecked(isAutoClearCacheEnabled(context));
+        clearSwitch.setEnabled(rootOk);
+        clearSwitch.setOnCheckedChangeListener((v, isChecked) -> {
+            setAutoClearCacheEnabled(context, isChecked);
+            FusionToast.show(context, isChecked ? "⚡ Auto Clear Cache: AKTIF" : "Auto Clear Cache: NONAKTIF");
+        });
+        clearRow.addView(clearSwitch);
+        clearCard.addView(clearRow);
+
+        if (!rootOk) {
+            clearCard.setAlpha(0.38f);
+            clearCard.setEnabled(false);
+        }
+        root.addView(clearCard);
+
+        // Non-root Warning Banner
+        if (!rootOk) {
+            MaterialCardView warnCard = M3.clickableCard(context, false);
+            LinearLayout.LayoutParams warnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            warnLp.setMargins(0, 0, 0, Math.round(8 * density));
+            warnCard.setLayoutParams(warnLp);
+
+            LinearLayout warnRow = new LinearLayout(context);
+            warnRow.setOrientation(LinearLayout.HORIZONTAL);
+            warnRow.setGravity(Gravity.CENTER_VERTICAL);
+            warnRow.setPadding(Math.round(12 * density), Math.round(8 * density), Math.round(12 * density), Math.round(8 * density));
+
+            TextView warnText = new TextView(context);
+            warnText.setText("⚠️ Akses root tidak terdeteksi. Fitur rotasi slot (.backup) wajib memiliki akses root (su).");
+            M3.textAppearance(warnText, com.google.android.material.R.attr.textAppearanceBodySmall);
+            warnText.setTextColor(M3.error(context));
+            warnRow.addView(warnText);
+
+            warnCard.addView(warnRow);
+            root.addView(warnCard);
+        }
+
         // Search / Filter Input
         TextInputLayout searchLayout = new TextInputLayout(context);
         searchLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
         searchLayout.setHint("Cari slot (misal: 01, 15, 99)...");
-        searchLayout.setPadding(0, Math.round(12 * density), 0, Math.round(10 * density));
+        searchLayout.setPadding(0, 0, 0, Math.round(10 * density));
         TextInputEditText searchInput = new TextInputEditText(searchLayout.getContext());
         searchInput.setSingleLine(true);
         searchLayout.addView(searchInput, new LinearLayout.LayoutParams(
@@ -395,7 +574,7 @@ public final class FusionBackupSlotHelper {
         // Grid Scroller
         ScrollView scroller = new ScrollView(context);
         scroller.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, Math.round(360 * density)));
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.round(320 * density)));
         scroller.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
         final GridLayout grid = new GridLayout(context);
@@ -424,7 +603,7 @@ public final class FusionBackupSlotHelper {
 
             MAIN_HANDLER.post(() -> {
                 renderGridChips(context, grid, slots, "", activeSlot, primaryColor, surfaceVariant, onSurface,
-                    chipMargin, chipHeight, nerdFont, dialog, onPicked);
+                    chipMargin, chipHeight, nerdFont, dialog, onPicked, rootOk);
 
                 searchInput.addTextChangedListener(new TextWatcher() {
                     @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -432,7 +611,7 @@ public final class FusionBackupSlotHelper {
                     @Override public void afterTextChanged(Editable s) {
                         String filter = s != null ? s.toString().trim() : "";
                         renderGridChips(context, grid, slots, filter, activeSlot, primaryColor, surfaceVariant,
-                            onSurface, chipMargin, chipHeight, nerdFont, dialog, onPicked);
+                            onSurface, chipMargin, chipHeight, nerdFont, dialog, onPicked, rootOk);
                     }
                 });
             });
@@ -453,7 +632,7 @@ public final class FusionBackupSlotHelper {
                                         @NonNull String activeSlot, int primaryColor, int surfaceVariant,
                                         int onSurface, int chipMargin, int chipHeight,
                                         @Nullable Typeface nerdFont, @NonNull BottomSheetDialog dialog,
-                                        @Nullable OnSlotPicked onPicked) {
+                                        @Nullable OnSlotPicked onPicked, boolean rootOk) {
         grid.removeAllViews();
         String needle = filter.toLowerCase(Locale.ROOT);
 
@@ -475,7 +654,12 @@ public final class FusionBackupSlotHelper {
             gd.setShape(GradientDrawable.RECTANGLE);
             gd.setCornerRadius(chipHeight / 2.5f);
 
-            if (isActive) {
+            if (!rootOk) {
+                gd.setColor(ColorUtils.setAlphaComponent(surfaceVariant, 60));
+                gd.setStroke(1, ColorUtils.setAlphaComponent(onSurface, 30));
+                chip.setTextColor(ColorUtils.setAlphaComponent(onSurface, 90));
+                chip.setEnabled(false);
+            } else if (isActive) {
                 gd.setColor(ColorUtils.setAlphaComponent(primaryColor, 220));
                 gd.setStroke(0, Color.TRANSPARENT);
                 chip.setTextColor(Color.BLACK);
@@ -493,14 +677,18 @@ public final class FusionBackupSlotHelper {
             params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
             params.setMargins(chipMargin, chipMargin, chipMargin, chipMargin);
 
-            chip.setOnClickListener(v -> {
-                dialog.dismiss();
-                switchToSlot(context, slotTarget, () -> {
-                    if (onPicked != null) {
-                        onPicked.onPicked(slotTarget);
-                    }
+            if (rootOk) {
+                chip.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    switchToSlot(context, slotTarget, () -> {
+                        if (onPicked != null) {
+                            onPicked.onPicked(slotTarget);
+                        }
+                    });
                 });
-            });
+            } else {
+                chip.setAlpha(0.38f);
+            }
 
             grid.addView(chip, params);
         }
