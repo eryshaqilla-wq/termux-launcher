@@ -132,11 +132,25 @@ public final class LeftCanvasQuickKeysEditorSheet {
                 if (label == null || label.isEmpty()) {
                     if (key.key.startsWith("app:")) {
                         label = "📱 App";
+                    } else if ("AIRPLANE".equalsIgnoreCase(key.key)) {
+                        label = "✈️";
+                    } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_PREV.equalsIgnoreCase(key.key)) {
+                        label = "◀ Slot";
+                    } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_NEXT.equalsIgnoreCase(key.key)) {
+                        label = "Slot ▶";
+                    } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                        || com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                        label = "🎯 " + com.termux.app.FusionBackupSlotHelper.getCurrentSlotCached();
                     } else if (key.key.endsWith("\n")) {
                         String cmd = key.key.substring(0, key.key.length() - 1).trim();
                         label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
                     } else {
                         label = key.key;
+                    }
+                } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                    || com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                    if (label.equals("🎯 Slot") || label.equalsIgnoreCase("Slot")) {
+                        label = "🎯 " + com.termux.app.FusionBackupSlotHelper.getCurrentSlotCached();
                     }
                 }
                 btn.setText(NerdFontSpans.span(context, label));

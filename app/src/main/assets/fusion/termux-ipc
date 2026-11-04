@@ -939,6 +939,36 @@ sys.exit(res.returncode)
                 ;;
         esac
         ;;
+    slot|backup-slot)
+        SUB="${1:-status}"
+        shift 2>/dev/null || true
+        case "$SUB" in
+            get|status|current|"")
+                send_cmd "BACKUP_SLOT get"
+                ;;
+            list|all)
+                send_cmd "BACKUP_SLOT list"
+                ;;
+            next)
+                send_cmd "BACKUP_SLOT next"
+                ;;
+            prev|previous)
+                send_cmd "BACKUP_SLOT prev"
+                ;;
+            pick|picker)
+                send_cmd "BACKUP_SLOT pick"
+                ;;
+            app|backup-app)
+                send_cmd "BACKUP_SLOT app"
+                ;;
+            set|switch)
+                send_cmd "BACKUP_SLOT set $1"
+                ;;
+            *)
+                send_cmd "BACKUP_SLOT set $SUB"
+                ;;
+        esac
+        ;;
     launcherctl)
         SUB="${1:-status}"
         case "$SUB" in
@@ -961,7 +991,7 @@ sys.exit(res.returncode)
         ;;
     *)
         echo "Aksi tidak dikenal: $ACTION"
-        echo "Pilihan yang tersedia: toast, vibrate, clip-get, clip-set, run, input, mouse-on, mouse-off, keyboard-disable (disable), keyboard-enable (enable), keyboard-hide (hide), keyboard-show (show), webview, api, x11-start, x11-stop, x11-launch, x11-audio, ping"
+        echo "Pilihan yang tersedia: toast, vibrate, clip-get, clip-set, run, input, slot, airplane-mode, mouse-on, mouse-off, keyboard-disable (disable), keyboard-enable (enable), keyboard-hide (hide), keyboard-show (show), webview, api, x11-start, x11-stop, x11-launch, x11-audio, ping"
         echo "Untuk kontrol WebView: termux-ipc webview --help"
         exit 1
         ;;

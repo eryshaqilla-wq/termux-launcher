@@ -1,0 +1,180 @@
+#!/usr/bin/env bash
+# termux-backup-slot: Multi-profile / slot manager for Titanium Backup (.backup / com.ery.ziggy)
+# Works directly on Android host, PRoot, and NetHunter chroot / Droidspaces containers.
+
+PREF_FILE="/data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml"
+
+run_sh() {
+    if [ -f "$PREF_FILE" ]; then
+        sh -c "$*"
+    else
+        su -c "$*"
+    fi
+}
+
+get_current() {
+    curr=$(run_sh "grep 'name=\"currentProfile\"' /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null | sed -e 's/.*<string name=\"currentProfile\">//' -e 's/<\\/string>.*//'")
+    if [ -z "$curr" ]; then
+        curr=$(run_sh "readlink /data/data/com.kiwibrowser.browser/.data_profiles/.current 2>/dev/null")
+    fi
+    [ -z "$curr" ] && curr="01"
+    echo "$curr"
+}
+
+get_all() {
+    all=$(run_sh "grep 'name=\"profile\.' /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null | sed -e 's/.*name=\"profile\.//' -e 's/\".*//' | sort")
+    if [ -z "$all" ]; then
+        all=$(run_sh "ls -1 /data/data/com.kiwibrowser.browser/.data_profiles 2>/dev/null | grep -v '^\.' | sort")
+    fi
+    echo "$all"
+}
+
+switch_to() {
+    target="$1"
+    if [ -z "$target" ]; then
+        echo "Error: target slot required" >&2
+        return 1
+    fi
+
+    curr=$(get_current)
+    if [ "$curr" = "$target" ]; then
+        echo "Already on slot $target"
+        return 0
+    fi
+
+    local SCRIPT="
+TARGET='$target'
+PREF='/data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml'
+CURR=\$(grep 'name=\"currentProfile\"' \"\$PREF\" 2>/dev/null | sed -e 's/.*<string name=\"currentProfile\">//' -e 's/<\\/string>.*//')
+[ -z \"\$CURR\" ] && [ -L '/data/data/com.kiwibrowser.browser/.data_profiles/.current' ] && CURR=\$(readlink /data/data/com.kiwibrowser.browser/.data_profiles/.current 2>/dev/null)
+[ -f \"\$PREF\" ] && sed -i \"s/<string name=\\\"currentProfile\\\">.*<\\/string>/<string name=\\\"currentProfile\\\">\$TARGET<\\/string>/\" \"\$PREF\"
+for pdir in \$(find /data/data -maxdepth 2 -name .data_profiles 2>/dev/null); do
+  [ -d \"\$pdir\" ] || continue
+  pkg=\$(basename \"\$(dirname \"\$pdir\")\")
+  pkgdir=\$(dirname \"\$pdir\")
+  /system/bin/am force-stop \"\$pkg\" >/dev/null 2>&1 || am force-stop \"\$pkg\" >/dev/null 2>&1 || true
+  pkg_curr=\"\"
+  if [ -L \"\$pdir/.current\" ]; then
+    pkg_curr=\$(readlink \"\$pdir/.current\")
+  elif [ -f \"\$pdir/.current\" ]; then
+    pkg_curr=\$(cat \"\$pdir/.current\")
+  fi
+  [ -z \"\$pkg_curr\" ] && pkg_curr=\"\$CURR\"
+  if [ -n \"\$pkg_curr\" ] && [ \"\$pkg_curr\" != \"\$TARGET\" ]; then
+    mkdir -p \"\$pdir/\$pkg_curr\"
+    for item in \"\$pkgdir\"/*; do
+      [ -e \"\$item\" ] || continue
+      bname=\$(basename \"\$item\")
+      [ \"\$bname\" = \"lib\" ] && continue
+      [ \"\$bname\" = \".data_profiles\" ] && continue
+      mv \"\$item\" \"\$pdir/\$pkg_curr/\" 2>/dev/null || true
+    done
+    if [ -d \"\$pdir/\$TARGET\" ]; then
+      for item in \"\$pdir/\$TARGET\"/*; do
+        [ -e \"\$item\" ] || continue
+        mv \"\$item\" \"\$pkgdir/\" 2>/dev/null || true
+      done
+    else
+      mkdir -p \"\$pdir/\$TARGET\"
+    fi
+    rm -f \"\$pdir/.current\"
+    ln -s \"\$TARGET\" \"\$pdir/.current\" 2>/dev/null || true
+  fi
+done
+/system/bin/am broadcast -a android.appwidget.action.APPWIDGET_UPDATE -n com.ery.ziggy/com.myrefucek.FufuFu.MyDataProfileWidget >/dev/null 2>&1 || true
+"
+    run_sh "$SCRIPT"
+
+    # Notify Termux IPC if available
+    if command -v termux-ipc >/dev/null 2>&1; then
+        termux-ipc toast "🔄 Slot Aktif: $target" >/dev/null 2>&1 || true
+    fi
+
+    echo "Switched to slot $target"
+}
+
+prev_slot() {
+    curr=$(get_current)
+    all=$(get_all)
+    prev=""
+    last=""
+    target=""
+
+    for s in $all; do
+        if [ "$s" = "$curr" ]; then
+            target="$prev"
+        fi
+        prev="$s"
+        last="$s"
+    done
+
+    if [ -z "$target" ]; then
+        target="$last"
+    fi
+
+    if [ -n "$target" ]; then
+        switch_to "$target"
+    else
+        echo "No slots available" >&2
+        return 1
+    fi
+}
+
+next_slot() {
+    curr=$(get_current)
+    all=$(get_all)
+    first=""
+    target=""
+    take_next=0
+
+    for s in $all; do
+        [ -z "$first" ] && first="$s"
+        if [ $take_next -eq 1 ]; then
+            target="$s"
+            break
+        fi
+        if [ "$s" = "$curr" ]; then
+            take_next=1
+        fi
+    done
+
+    if [ -z "$target" ]; then
+        target="$first"
+    fi
+
+    if [ -n "$target" ]; then
+        switch_to "$target"
+    else
+        echo "No slots available" >&2
+        return 1
+    fi
+}
+
+CMD="${1:-get}"
+case "$CMD" in
+    get|current|status)
+        get_current
+        ;;
+    list|all)
+        get_all
+        ;;
+    set|switch)
+        switch_to "$2"
+        ;;
+    prev|previous)
+        prev_slot
+        ;;
+    next)
+        next_slot
+        ;;
+    picker|pick)
+        run_sh "/system/bin/am start -a ACTION_SELECT_DATA_PROFILE -n com.ery.ziggy/o.ḟ >/dev/null 2>&1"
+        ;;
+    *)
+        if [ -n "$CMD" ]; then
+            switch_to "$CMD"
+        else
+            echo "Usage: termux-backup-slot [get|list|set <slot>|prev|next|picker]"
+        fi
+        ;;
+esac

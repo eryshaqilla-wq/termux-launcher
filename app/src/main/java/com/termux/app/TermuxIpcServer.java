@@ -578,6 +578,86 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.startsWith("BACKUP_SLOT") || strTrim.startsWith("SLOT")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                String sub = strTrim.contains(" ") ? strTrim.substring(strTrim.indexOf(" ") + 1).trim() : "get";
+                                String subLower = sub.toLowerCase(java.util.Locale.ROOT);
+
+                                if (subLower.equals("get") || subLower.equals("status") || subLower.equals("current")) {
+                                    String curr = FusionBackupSlotHelper.getCurrentSlotCached();
+                                    outputStream.write(("{\"status\":\"ok\",\"current_slot\":\"" + curr + "\"}\n").getBytes());
+                                } else if (subLower.equals("list") || subLower.equals("all")) {
+                                    String curr = FusionBackupSlotHelper.getCurrentSlotCached();
+                                    outputStream.write(("{\"status\":\"ok\",\"current_slot\":\"" + curr + "\"}\n").getBytes());
+                                } else if (subLower.equals("next")) {
+                                    if (act != null) {
+                                        final Object waitLock = new Object();
+                                        FusionBackupSlotHelper.nextSlot(act, () -> {
+                                            act.refreshAllQuickKeysClusters();
+                                            synchronized (waitLock) {
+                                                waitLock.notifyAll();
+                                            }
+                                        });
+                                        synchronized (waitLock) {
+                                            try { waitLock.wait(4000); } catch (InterruptedException ignored) {}
+                                        }
+                                        String curr = FusionBackupSlotHelper.getCurrentSlotCached();
+                                        outputStream.write(("{\"status\":\"ok\",\"action\":\"next\",\"current_slot\":\"" + curr + "\"}\n").getBytes());
+                                    } else {
+                                        outputStream.write("{\"status\":\"error\",\"message\":\"Activity not ready\"}\n".getBytes());
+                                    }
+                                } else if (subLower.equals("prev") || subLower.equals("previous")) {
+                                    if (act != null) {
+                                        final Object waitLock = new Object();
+                                        FusionBackupSlotHelper.prevSlot(act, () -> {
+                                            act.refreshAllQuickKeysClusters();
+                                            synchronized (waitLock) {
+                                                waitLock.notifyAll();
+                                            }
+                                        });
+                                        synchronized (waitLock) {
+                                            try { waitLock.wait(4000); } catch (InterruptedException ignored) {}
+                                        }
+                                        String curr = FusionBackupSlotHelper.getCurrentSlotCached();
+                                        outputStream.write(("{\"status\":\"ok\",\"action\":\"prev\",\"current_slot\":\"" + curr + "\"}\n").getBytes());
+                                    } else {
+                                        outputStream.write("{\"status\":\"error\",\"message\":\"Activity not ready\"}\n".getBytes());
+                                    }
+                                } else if (subLower.equals("pick") || subLower.equals("picker")) {
+                                    if (act != null) {
+                                        act.runOnUiThread(() -> FusionBackupSlotHelper.showSlotPicker(act, (picked) -> act.refreshAllQuickKeysClusters()));
+                                        outputStream.write("{\"status\":\"ok\",\"message\":\"Slot picker dialog opened\"}\n".getBytes());
+                                    } else {
+                                        outputStream.write("{\"status\":\"error\",\"message\":\"Activity not ready\"}\n".getBytes());
+                                    }
+                                } else if (subLower.equals("app") || subLower.equals("backup-app")) {
+                                    if (act != null) {
+                                        FusionBackupSlotHelper.openBackupAppPicker(act);
+                                        outputStream.write("{\"status\":\"ok\",\"message\":\"Launched .backup app picker activity\"}\n".getBytes());
+                                    } else {
+                                        outputStream.write("{\"status\":\"error\",\"message\":\"Activity not ready\"}\n".getBytes());
+                                    }
+                                } else {
+                                    String target = subLower.startsWith("set ") ? sub.substring(4).trim()
+                                        : (subLower.startsWith("switch ") ? sub.substring(7).trim() : sub);
+                                    if (act != null) {
+                                        final Object waitLock = new Object();
+                                        FusionBackupSlotHelper.switchToSlot(act, target, () -> {
+                                            act.refreshAllQuickKeysClusters();
+                                            synchronized (waitLock) {
+                                                waitLock.notifyAll();
+                                            }
+                                        });
+                                        synchronized (waitLock) {
+                                            try { waitLock.wait(4000); } catch (InterruptedException ignored) {}
+                                        }
+                                        outputStream.write(("{\"status\":\"ok\",\"action\":\"set\",\"current_slot\":\"" + target + "\"}\n").getBytes());
+                                    } else {
+                                        outputStream.write("{\"status\":\"error\",\"message\":\"Activity not ready\"}\n".getBytes());
+                                    }
+                                }
+                                outputStream.flush();
+                                continue;
                             } else if (strTrim.startsWith("WEBVIEW_SAVE_SESSION ") || strTrim.startsWith("WEBVIEW_SAVE ")) {
                                 String prof = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
                                 TermuxActivity act = TermuxIpcServer.getActivity();

@@ -2503,6 +2503,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View contentView = findViewById(android.R.id.content);
         if (contentView != null)
             androidx.core.view.ViewCompat.requestApplyInsets(contentView);
+        FusionBackupSlotHelper.refreshCache(this, this::refreshAllQuickKeysClusters);
         // Preferences may have changed while the settings activity covered this one.
         if (!transientPause) initializeInAppKeyboard(null);
         syncDisplayKeyboardRoute();
@@ -22286,11 +22287,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
             String label = key.display;
             if (label == null || label.isEmpty()) {
-                if (key.key.endsWith("\n")) {
+                if ("AIRPLANE".equalsIgnoreCase(key.key)) {
+                    label = "✈️";
+                } else if (FusionBackupSlotHelper.ACTION_SLOT_PREV.equalsIgnoreCase(key.key)) {
+                    label = "◀ Slot";
+                } else if (FusionBackupSlotHelper.ACTION_SLOT_NEXT.equalsIgnoreCase(key.key)) {
+                    label = "Slot ▶";
+                } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                    || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
+                } else if (key.key.endsWith("\n")) {
                     String cmd = key.key.substring(0, key.key.length() - 1).trim();
                     label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
                 } else {
                     label = key.key;
+                }
+            } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                if (label.equals("🎯 Slot") || label.equalsIgnoreCase("Slot")) {
+                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
                 }
             }
             btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
@@ -22372,6 +22387,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         if ("AIRPLANE".equalsIgnoreCase(actionKey) || "tool:airplane.toggle".equalsIgnoreCase(actionKey)) {
             FusionAirplaneModeHelper.toggle(this, null);
+            return;
+        }
+        if (FusionBackupSlotHelper.ACTION_SLOT_PREV.equalsIgnoreCase(actionKey) || "tool:backup.prev".equalsIgnoreCase(actionKey)) {
+            FusionBackupSlotHelper.prevSlot(this, this::refreshAllQuickKeysClusters);
+            return;
+        }
+        if (FusionBackupSlotHelper.ACTION_SLOT_NEXT.equalsIgnoreCase(actionKey) || "tool:backup.next".equalsIgnoreCase(actionKey)) {
+            FusionBackupSlotHelper.nextSlot(this, this::refreshAllQuickKeysClusters);
+            return;
+        }
+        if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(actionKey)
+            || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(actionKey)
+            || "tool:backup.picker".equalsIgnoreCase(actionKey)) {
+            FusionBackupSlotHelper.showSlotPicker(this, (picked) -> refreshAllQuickKeysClusters());
             return;
         }
         if ("BOOST".equalsIgnoreCase(actionKey)) {
@@ -22583,6 +22612,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             FusionAirplaneModeHelper.toggle(this, null);
             return;
         }
+        if (FusionBackupSlotHelper.ACTION_SLOT_PREV.equalsIgnoreCase(actionKey) || "tool:backup.prev".equalsIgnoreCase(actionKey)) {
+            FusionBackupSlotHelper.prevSlot(this, this::refreshAllQuickKeysClusters);
+            return;
+        }
+        if (FusionBackupSlotHelper.ACTION_SLOT_NEXT.equalsIgnoreCase(actionKey) || "tool:backup.next".equalsIgnoreCase(actionKey)) {
+            FusionBackupSlotHelper.nextSlot(this, this::refreshAllQuickKeysClusters);
+            return;
+        }
+        if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(actionKey)
+            || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(actionKey)
+            || "tool:backup.picker".equalsIgnoreCase(actionKey)) {
+            FusionBackupSlotHelper.showSlotPicker(this, (picked) -> refreshAllQuickKeysClusters());
+            return;
+        }
         if ("BOOST".equalsIgnoreCase(actionKey)) {
             new Thread(() -> {
                 try {
@@ -22758,11 +22801,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (label == null || label.isEmpty()) {
                 if (key.key.startsWith("app:")) {
                     label = "📱";
+                } else if ("AIRPLANE".equalsIgnoreCase(key.key)) {
+                    label = "✈️";
+                } else if (FusionBackupSlotHelper.ACTION_SLOT_PREV.equalsIgnoreCase(key.key)) {
+                    label = "◀ Slot";
+                } else if (FusionBackupSlotHelper.ACTION_SLOT_NEXT.equalsIgnoreCase(key.key)) {
+                    label = "Slot ▶";
+                } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                    || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
                 } else if (key.key.endsWith("\n")) {
                     String cmd = key.key.substring(0, key.key.length() - 1).trim();
                     label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
                 } else {
                     label = key.key;
+                }
+            } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                if (label.equals("🎯 Slot") || label.equalsIgnoreCase("Slot")) {
+                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
                 }
             }
             btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
@@ -22815,6 +22872,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         cluster.setOnLongClickListener(v -> {
             openLeftCanvasQuickKeyEditor(-1, keys, cluster);
             return true;
+        });
+    }
+
+    public void refreshAllQuickKeysClusters() {
+        runOnUiThread(() -> {
+            LinearLayout leftCluster = findViewById(R.id.left_canvas_quick_keys_cluster);
+            if (leftCluster != null) {
+                populateLeftCanvasQuickKeys(leftCluster);
+            }
+            LinearLayout termCluster = findViewById(R.id.terminal_quick_keys_cluster);
+            if (termCluster != null) {
+                populateTerminalQuickKeys(termCluster);
+            }
         });
     }
 

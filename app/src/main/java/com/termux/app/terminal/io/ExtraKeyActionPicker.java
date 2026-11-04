@@ -223,6 +223,23 @@ public final class ExtraKeyActionPicker {
             }));
         }
 
+        // Backup Profile Slots (.backup)
+        if (needle.isEmpty() || matches("slot", needle) || matches("backup", needle) || matches("profile", needle)) {
+            results.addView(header("Profile Slots (.backup)"));
+            results.addView(entry("◀ Slot Sebelumnya", "Pindah langsung ke slot sebelumnya (.backup)", () -> {
+                ExtraKeysLayoutModel.Key prevKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PREV", false, "◀ Slot", null);
+                pick.onPicked(prevKey);
+            }));
+            results.addView(entry("🎯 Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (.backup)", () -> {
+                ExtraKeysLayoutModel.Key pickKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PICK", false, "🎯 Slot", null);
+                pick.onPicked(pickKey);
+            }));
+            results.addView(entry("Slot Berikutnya ▶", "Pindah langsung ke slot berikutnya (.backup)", () -> {
+                ExtraKeysLayoutModel.Key nextKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_NEXT", false, "Slot ▶", null);
+                pick.onPicked(nextKey);
+            }));
+        }
+
         Map<String, List<LauncherToolRegistry.ToolMetadata>> grouped =
             LauncherToolRegistry.getInstance().getUiToolsByCategory();
         for (Map.Entry<String, List<LauncherToolRegistry.ToolMetadata>> group : grouped.entrySet()) {
