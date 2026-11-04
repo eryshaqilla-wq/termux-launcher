@@ -46,6 +46,17 @@ public final class StatusBarPreferencesFragment extends MaterialPreferenceFragme
             editKeys.getExtras().putAll(args);
         }
 
+        Preference editLeftCanvasKeys = findPreference("edit_left_canvas_quick_extra_keys");
+        if (editLeftCanvasKeys != null) {
+            editLeftCanvasKeys.setOnPreferenceClickListener(preference -> {
+                Context ctx = getContext();
+                if (ctx != null) {
+                    LeftCanvasQuickKeysEditorSheet.show(ctx, null);
+                }
+                return true;
+            });
+        }
+
         Preference editTerminalKeys = findPreference("edit_terminal_quick_extra_keys");
         if (editTerminalKeys != null) {
             editTerminalKeys.setOnPreferenceClickListener(preference -> {

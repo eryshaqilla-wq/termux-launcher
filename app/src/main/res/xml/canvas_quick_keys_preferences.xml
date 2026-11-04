@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="Kanvas Kiri (Left Canvas - Eso Browser &amp; Widgets)">
+        <Preference
+            app:key="pref_left_canvas_keys"
+            app:persistent="false"
+            app:icon="@drawable/ic_symbol_apps"
+            app:title="Edit Shortcut Statbar Kiri"
+            app:summary="Kustomisasi tombol shortcut, script, aplikasi, dan mode pesawat di statbar kanvas kiri" />
+        <Preference
+            app:key="pref_left_canvas_reset"
+            app:persistent="false"
+            app:icon="@drawable/ic_symbol_settings_backup_restore"
+            app:title="Reset Shortcut Kanvas Kiri"
+            app:summary="Kembalikan susunan shortcut statbar kanvas kiri ke pengaturan default" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Kanvas Tengah (Middle Canvas - Terminal Linux)">
+        <Preference
+            app:key="pref_terminal_keys"
+            app:persistent="false"
+            app:icon="@drawable/ic_symbol_terminal"
+            app:title="Edit Shortcut Statbar Terminal"
+            app:summary="Kustomisasi tombol aksi, custom script, macro, dan alat terminal di statbar tengah" />
+        <Preference
+            app:key="pref_terminal_reset"
+            app:persistent="false"
+            app:icon="@drawable/ic_symbol_settings_backup_restore"
+            app:title="Reset Shortcut Kanvas Tengah"
+            app:summary="Kembalikan susunan shortcut terminal ke pengaturan default" />
+    </PreferenceCategory>
+
+    <PreferenceCategory app:title="Kanvas Kanan (Right Canvas - Display X11 Desktop)">
+        <Preference
+            app:key="pref_display_keys"
+            app:persistent="false"
+            app:icon="@drawable/ic_symbol_desktop_windows"
+            app:title="Edit Shortcut Statbar Display"
+            app:summary="Kustomisasi tombol mouse, keyboard, fullscreen, dan shortcut di statbar display" />
+        <Preference
+            app:key="pref_display_reset"
+            app:persistent="false"
+            app:icon="@drawable/ic_symbol_settings_backup_restore"
+            app:title="Reset Shortcut Kanvas Kanan"
+            app:summary="Kembalikan susunan tombol statbar display ke pengaturan default" />
+    </PreferenceCategory>
+
+</PreferenceScreen>

@@ -50,6 +50,13 @@
             app:fragment="com.termux.app.fragments.settings.termux.StatusBarPreferencesFragment" />
 
         <Preference
+            app:key="canvas_quick_keys_hub"
+            app:icon="@drawable/ic_symbol_keyboard"
+            app:title="Shortcut 3 Kanvas"
+            app:summary="Manajemen shortcut status bar Kanvas Kiri, Tengah, dan Kanan"
+            app:fragment="com.termux.app.fragments.settings.termux.CanvasQuickKeysPreferencesFragment" />
+
+        <Preference
             app:key="notifications"
             app:icon="@drawable/ic_symbol_notification_settings"
             app:title="@string/settings_destination_notifications"

@@ -33,17 +33,28 @@
             app:dependency="status_bar_swipe_expansion_enabled" />
     </PreferenceCategory>
 
-    <PreferenceCategory app:title="@string/settings_terminal_quick_keys_header">
+    <PreferenceCategory app:title="Manajemen Shortcut Status Bar (3 Kanvas)">
+        <Preference
+            app:key="canvas_quick_keys_hub"
+            app:persistent="false"
+            app:title="Pusat Manajemen Shortcut 3 Kanvas"
+            app:summary="Atur &amp; reset shortcut statbar Kanvas Kiri, Tengah, dan Kanan dalam satu tempat"
+            app:fragment="com.termux.app.fragments.settings.termux.CanvasQuickKeysPreferencesFragment" />
+        <Preference
+            app:key="edit_left_canvas_quick_extra_keys"
+            app:persistent="false"
+            app:title="Kanvas Kiri (Eso Browser &amp; Widgets)"
+            app:summary="Kustomisasi tombol shortcut, custom script, aplikasi, dan mode pesawat" />
         <Preference
             app:key="edit_terminal_quick_extra_keys"
             app:persistent="false"
-            app:title="@string/settings_terminal_quick_keys_title"
-            app:summary="@string/settings_terminal_quick_keys_summary" />
+            app:title="Kanvas Tengah (Terminal Linux)"
+            app:summary="Kustomisasi tombol aksi, custom script, macro, dan alat terminal" />
         <Preference
             app:key="edit_display_quick_extra_keys"
             app:persistent="false"
-            app:title="Kustomisasi Tombol Statbar Display (Kanvas Kanan)"
-            app:summary="Atur tombol aksi mouse (klik kanan, klik kiri, scroll), fullscreen, keyboard, dan shortcut status bar kanan" />
+            app:title="Kanvas Kanan (Display X11 Desktop)"
+            app:summary="Kustomisasi tombol mouse, keyboard, fullscreen, dan shortcut display" />
     </PreferenceCategory>
 
     <PreferenceCategory app:title="@string/settings_status_gestures_header">

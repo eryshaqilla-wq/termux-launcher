@@ -22253,20 +22253,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
     }
 
+    public int getQuickKeysThemePrimary() {
+        return com.google.android.material.color.MaterialColors.getColor(this,
+            com.termux.shared.R.attr.termuxColorPrimary,
+            com.termux.app.material.M3.primary(this));
+    }
+
     private void populateTerminalQuickKeys(@NonNull ViewGroup cluster) {
         List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getTerminalQuickKeysList();
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
 
-        int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
-        int defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
-            ? windowBar.getSelectedStrokeColor()
-            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
-        int defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
-            ? windowBar.getSelectedFillColor()
-            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
-        int defaultInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
-            ? windowBar.getSelectedTextColor()
-            : primary;
+        int primary = getQuickKeysThemePrimary();
+        int defaultStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 180);
+        int defaultBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 80);
+        int defaultInk = primary;
 
         int btnHeight = Math.round(dpToPx(20));
         int btnSquareW = Math.round(dpToPx(20));
@@ -22791,16 +22791,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getLeftCanvasQuickKeysList();
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
 
-        int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
-        int defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
-            ? windowBar.getSelectedStrokeColor()
-            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
-        int defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
-            ? windowBar.getSelectedFillColor()
-            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
-        int defaultInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
-            ? windowBar.getSelectedTextColor()
-            : primary;
+        int primary = getQuickKeysThemePrimary();
+        int defaultStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 180);
+        int defaultBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 80);
+        int defaultInk = primary;
 
         int btnHeight = Math.round(dpToPx(20));
         int btnSquareW = Math.round(dpToPx(20));
