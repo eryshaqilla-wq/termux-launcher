@@ -242,8 +242,8 @@ public final class ExtraKeyActionPicker {
                     ExtraKeysLayoutModel.Key prevKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PREV", false, "◀ Slot", null);
                     pick.onPicked(prevKey);
                 }));
-                results.addView(entry("🎯 Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (.backup)", () -> {
-                    ExtraKeysLayoutModel.Key pickKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PICK", false, "🎯 Slot", null);
+                results.addView(entry("Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (.backup)", () -> {
+                    ExtraKeysLayoutModel.Key pickKey = new ExtraKeysLayoutModel.Key("BACKUP_SLOT_PICK", false, "Slot", null);
                     pick.onPicked(pickKey);
                 }));
                 results.addView(entry("Slot Berikutnya ▶", "Pindah langsung ke slot berikutnya (.backup)", () -> {
@@ -252,7 +252,7 @@ public final class ExtraKeyActionPicker {
                 }));
             } else {
                 results.addView(disabledEntry("◀ Slot Sebelumnya", "Pindah langsung ke slot sebelumnya (.backup) (Perlu Root)", "Non-Root"));
-                results.addView(disabledEntry("🎯 Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (Perlu Root)", "Non-Root"));
+                results.addView(disabledEntry("Slot Picker / Aktif", "Tampilkan slot aktif & buka picker pilihan slot (Perlu Root)", "Non-Root"));
                 results.addView(disabledEntry("Slot Berikutnya ▶", "Pindah langsung ke slot berikutnya (.backup) (Perlu Root)", "Non-Root"));
             }
         }

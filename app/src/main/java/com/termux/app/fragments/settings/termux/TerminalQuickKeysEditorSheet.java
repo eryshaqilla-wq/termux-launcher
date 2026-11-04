@@ -108,7 +108,7 @@ public final class TerminalQuickKeysEditorSheet {
 
         root.addView(actionRow);
 
-        int primary = MaterialColors.getColor(context, com.termux.shared.R.attr.termuxColorPrimary, 0xFFCDD6F4);
+        int primary = com.termux.app.statusbar.StatusBarLensView.accentFor(context, com.termux.app.wall.PaneWallPage.TERMINAL);
         Typeface nerdFont = NerdFontSpans.typeface(context);
 
         final Runnable[] refreshChips = new Runnable[1];
@@ -131,27 +131,46 @@ public final class TerminalQuickKeysEditorSheet {
                 TextView btn = new TextView(context);
                 String label = key.display;
                 if (label == null || label.isEmpty()) {
-                    if (key.key.endsWith("\n")) {
+                    if ("AIRPLANE".equalsIgnoreCase(key.key)) {
+                        label = "✈️";
+                    } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_PREV.equalsIgnoreCase(key.key)) {
+                        label = "◀ Slot";
+                    } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_NEXT.equalsIgnoreCase(key.key)) {
+                        label = "Slot ▶";
+                    } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                        || com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                        label = com.termux.app.FusionBackupSlotHelper.getCurrentSlotCached();
+                    } else if (key.key.endsWith("\n")) {
                         String cmd = key.key.substring(0, key.key.length() - 1).trim();
                         label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
                     } else {
                         label = key.key;
                     }
+                } else if (com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
+                    || com.termux.app.FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
+                    if (label.contains("🎯")) {
+                        label = label.replace("🎯", "").trim();
+                    }
+                    if (label.equals("Slot") || label.equalsIgnoreCase("Slot") || label.isEmpty()) {
+                        label = com.termux.app.FusionBackupSlotHelper.getCurrentSlotCached();
+                    }
                 }
                 btn.setText(NerdFontSpans.span(context, label));
-                if (nerdFont != null) btn.setTypeface(nerdFont);
+                if (nerdFont != null) {
+                    btn.setTypeface(nerdFont, Typeface.BOLD);
+                } else {
+                    btn.setTypeface(Typeface.DEFAULT_BOLD, Typeface.BOLD);
+                }
                 btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
                 btn.setGravity(Gravity.CENTER);
 
-                int strokeColor = ColorUtils.setAlphaComponent(primary, 140);
-                int bgFill = ColorUtils.setAlphaComponent(primary, 40);
-                int textColor = primary;
+                int strokeColor = ColorUtils.setAlphaComponent(primary, 112);
+                int bgFill = ColorUtils.setAlphaComponent(primary, 58);
+                int textColor = 0xFFFFFFFF;
                 if (key.color != null) {
                     int roleBg = key.color.background(context);
-                    int roleLabel = key.color.label(context);
-                    strokeColor = ColorUtils.setAlphaComponent(roleBg, 200);
-                    bgFill = ColorUtils.setAlphaComponent(roleBg, 90);
-                    textColor = roleLabel;
+                    strokeColor = ColorUtils.setAlphaComponent(roleBg, 112);
+                    bgFill = ColorUtils.setAlphaComponent(roleBg, 58);
                 }
                 btn.setTextColor(textColor);
 

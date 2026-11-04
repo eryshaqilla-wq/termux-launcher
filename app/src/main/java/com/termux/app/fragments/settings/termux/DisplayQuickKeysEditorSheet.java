@@ -186,7 +186,7 @@ public final class DisplayQuickKeysEditorSheet {
 
         root.addView(actionRow);
 
-        int primary = MaterialColors.getColor(context, com.termux.shared.R.attr.termuxColorPrimary, 0xFFCDD6F4);
+        int primary = com.termux.app.statusbar.StatusBarLensView.accentFor(context, com.termux.app.wall.PaneWallPage.DISPLAY);
         Typeface nerdFont = NerdFontSpans.typeface(context);
 
         final Runnable[] refreshChips = new Runnable[1];
@@ -207,19 +207,21 @@ public final class DisplayQuickKeysEditorSheet {
                     label = resolveDisplayGlyph(key.key);
                 }
                 btn.setText(NerdFontSpans.span(context, label));
-                if (nerdFont != null) btn.setTypeface(nerdFont);
+                if (nerdFont != null) {
+                    btn.setTypeface(nerdFont, Typeface.BOLD);
+                } else {
+                    btn.setTypeface(Typeface.DEFAULT_BOLD, Typeface.BOLD);
+                }
                 btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
                 btn.setGravity(Gravity.CENTER);
 
-                int strokeColor = ColorUtils.setAlphaComponent(primary, 140);
-                int bgFill = ColorUtils.setAlphaComponent(primary, 40);
-                int textColor = primary;
+                int strokeColor = ColorUtils.setAlphaComponent(primary, 112);
+                int bgFill = ColorUtils.setAlphaComponent(primary, 58);
+                int textColor = 0xFFFFFFFF;
                 if (key.color != null) {
                     int roleBg = key.color.background(context);
-                    int roleLabel = key.color.label(context);
-                    strokeColor = ColorUtils.setAlphaComponent(roleBg, 200);
-                    bgFill = ColorUtils.setAlphaComponent(roleBg, 90);
-                    textColor = roleLabel;
+                    strokeColor = ColorUtils.setAlphaComponent(roleBg, 112);
+                    bgFill = ColorUtils.setAlphaComponent(roleBg, 58);
                 }
                 btn.setTextColor(textColor);
 

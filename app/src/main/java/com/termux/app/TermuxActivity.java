@@ -21372,14 +21372,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
         boolean windowsShown = page != com.termux.app.wall.PaneWallPage.WIDGETS;
         boolean isWidgetsPage = page == com.termux.app.wall.PaneWallPage.WIDGETS;
-        View leftScroll = findViewById(R.id.left_canvas_quick_keys_scroll);
-        ViewGroup leftCluster = findViewById(R.id.left_canvas_quick_keys_cluster);
-        if (leftScroll != null) {
-            leftScroll.setVisibility(isWidgetsPage && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
-            if (isWidgetsPage && leftCluster != null) {
-                populateLeftCanvasQuickKeys(leftCluster);
-            }
-        }
         com.termux.app.terminal.TerminalWindowBar bar = findViewById(R.id.terminal_window_bar);
         if (bar != null) {
             // The chips are drawn on glass, so they ask the chrome what they are standing on
@@ -21389,6 +21381,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             bar.setVisibility(windowsShown && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
             // The plus opens a terminal window; the display's apps come from the drawer.
             bar.setCreateButtonShown(page == com.termux.app.wall.PaneWallPage.TERMINAL);
+        }
+        View leftScroll = findViewById(R.id.left_canvas_quick_keys_scroll);
+        ViewGroup leftCluster = findViewById(R.id.left_canvas_quick_keys_cluster);
+        if (leftScroll != null) {
+            leftScroll.setVisibility(isWidgetsPage && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
+            if (isWidgetsPage && leftCluster != null) {
+                populateLeftCanvasQuickKeys(leftCluster);
+            }
         }
         com.termux.app.statusbar.StatusBarWindowColumn windowColumn =
             findViewById(R.id.terminal_status_window_column);
@@ -22068,7 +22068,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getDisplayQuickKeysList();
 
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
-        int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
+        int accent = com.termux.app.statusbar.StatusBarLensView.accentFor(this, com.termux.app.wall.PaneWallPage.DISPLAY);
+        int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : accent;
         int muted = mDisplayQuickKeysMutedInk != 0 ? mDisplayQuickKeysMutedInk : 0xFF6C7086;
 
         int defaultStroke;
@@ -22081,9 +22082,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
                 ? windowBar.getSelectedFillColor()
                 : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
-            defaultInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
-                ? windowBar.getSelectedTextColor()
-                : primary;
+            defaultInk = 0xFFFFFFFF;
         } else {
             defaultStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(muted, 40);
             defaultBg = android.graphics.Color.TRANSPARENT;
@@ -22099,7 +22098,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int marginE = Math.round(dpToPx(3));
 
         quickCluster.removeAllViews();
-        android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
+        android.graphics.Typeface terminalFont = com.termux.app.terminal.TerminalLabelFaces.current().regular;
 
         for (int i = 0; i < keys.size(); i++) {
             final com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key = keys.get(i);
@@ -22111,7 +22110,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 label = resolveDisplayKeyGlyph(key.key);
             }
             btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
-            if (nerdFont != null) btn.setTypeface(nerdFont);
+            if (terminalFont != null) {
+                btn.setTypeface(terminalFont, android.graphics.Typeface.BOLD);
+            } else {
+                btn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD, android.graphics.Typeface.BOLD);
+            }
             btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f);
             btn.setIncludeFontPadding(false);
 
@@ -22120,10 +22123,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int btnInk = defaultInk;
             if (isRunning && key.color != null) {
                 int roleBg = key.color.background(this);
-                int roleLabel = key.color.label(this);
-                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 180);
-                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 80);
-                btnInk = roleLabel;
+                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 112);
+                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 58);
             }
             btn.setTextColor(btnInk);
             btn.setGravity(android.view.Gravity.CENTER);
@@ -22142,18 +22143,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 key.popup != null ? () -> executeDisplayQuickKey(key.popup) : null,
                 this::openDisplayQuickKeyEditor);
 
-            boolean isTextKey = label != null && label.length() > 2;
-            int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
-            if (isTextKey) {
-                btn.setMinWidth(btnSquareW);
-                int padH = Math.round(dpToPx(4));
-                btn.setPadding(padH, 0, padH, 0);
-            } else {
-                btn.setWidth(btnSquareW);
-                btn.setPadding(0, 0, 0, 0);
-            }
+            btn.setMinWidth(btnSquareW);
+            int padH = Math.round(dpToPx(3.5f));
+            btn.setPadding(padH, 0, padH, 0);
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(lpWidth, btnHeight);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
             lp.setMarginEnd(marginE);
             lp.gravity = android.view.Gravity.CENTER_VERTICAL;
             quickCluster.addView(btn, lp);
@@ -22254,19 +22249,21 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public int getQuickKeysThemePrimary() {
-        return com.google.android.material.color.MaterialColors.getColor(this,
-            com.termux.shared.R.attr.termuxColorPrimary,
-            com.termux.app.material.M3.primary(this));
+        return com.termux.app.statusbar.StatusBarLensView.accentFor(this, currentWallPage());
     }
 
     private void populateTerminalQuickKeys(@NonNull ViewGroup cluster) {
         List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getTerminalQuickKeysList();
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
 
-        int primary = getQuickKeysThemePrimary();
-        int defaultStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 180);
-        int defaultBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 80);
-        int defaultInk = primary;
+        int accent = com.termux.app.statusbar.StatusBarLensView.accentFor(this, com.termux.app.wall.PaneWallPage.TERMINAL);
+        int defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+            ? windowBar.getSelectedStrokeColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 112);
+        int defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+            ? windowBar.getSelectedFillColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 58);
+        int defaultInk = 0xFFFFFFFF;
 
         int btnHeight = Math.round(dpToPx(20));
         int btnSquareW = Math.round(dpToPx(20));
@@ -22277,7 +22274,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int marginE = Math.round(dpToPx(3));
 
         cluster.removeAllViews();
-        android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
+        android.graphics.Typeface terminalFont = com.termux.app.terminal.TerminalLabelFaces.current().regular;
 
         for (int i = 0; i < keys.size(); i++) {
             final int keyIndex = i;
@@ -22295,7 +22292,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     label = "Slot ▶";
                 } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
                     || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
-                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
+                    label = FusionBackupSlotHelper.getCurrentSlotCached();
                 } else if (key.key.endsWith("\n")) {
                     String cmd = key.key.substring(0, key.key.length() - 1).trim();
                     label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
@@ -22304,12 +22301,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
                 || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
-                if (label.equals("🎯 Slot") || label.equalsIgnoreCase("Slot")) {
-                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
+                if (label.contains("🎯")) {
+                    label = label.replace("🎯", "").trim();
+                }
+                if (label.equals("Slot") || label.equalsIgnoreCase("Slot") || label.isEmpty()) {
+                    label = FusionBackupSlotHelper.getCurrentSlotCached();
                 }
             }
             btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
-            if (nerdFont != null) btn.setTypeface(nerdFont);
+            if (terminalFont != null) {
+                btn.setTypeface(terminalFont, android.graphics.Typeface.BOLD);
+            } else {
+                btn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD, android.graphics.Typeface.BOLD);
+            }
             btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f);
             btn.setIncludeFontPadding(false);
 
@@ -22318,10 +22322,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int btnInk = defaultInk;
             if (key.color != null) {
                 int roleBg = key.color.background(this);
-                int roleLabel = key.color.label(this);
-                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 180);
-                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 80);
-                btnInk = roleLabel;
+                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 112);
+                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 58);
             }
             btn.setTextColor(btnInk);
             btn.setGravity(android.view.Gravity.CENTER);
@@ -22338,18 +22340,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 key.popup != null ? () -> executeTerminalQuickKey(key.popup) : null,
                 () -> openTerminalQuickKeyEditor(keyIndex, keys, cluster));
 
-            boolean isTextKey = label != null && label.length() > 2;
-            int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
-            if (isTextKey) {
-                btn.setMinWidth(btnSquareW);
-                int padH = Math.round(dpToPx(4));
-                btn.setPadding(padH, 0, padH, 0);
-            } else {
-                btn.setWidth(btnSquareW);
-                btn.setPadding(0, 0, 0, 0);
-            }
+            btn.setMinWidth(btnSquareW);
+            int padH = Math.round(dpToPx(3.5f));
+            btn.setPadding(padH, 0, padH, 0);
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(lpWidth, btnHeight);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
             lp.setMarginEnd(marginE);
             lp.gravity = android.view.Gravity.CENTER_VERTICAL;
             cluster.addView(btn, lp);
@@ -22791,10 +22787,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getLeftCanvasQuickKeysList();
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
 
-        int primary = getQuickKeysThemePrimary();
-        int defaultStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 180);
-        int defaultBg = androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 80);
-        int defaultInk = primary;
+        int accent = com.termux.app.statusbar.StatusBarLensView.accentFor(this, com.termux.app.wall.PaneWallPage.WIDGETS);
+        int defaultStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 112);
+        int defaultBg = androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 58);
+        int defaultInk = 0xFFFFFFFF;
 
         int btnHeight = Math.round(dpToPx(20));
         int btnSquareW = Math.round(dpToPx(20));
@@ -22802,10 +22798,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             ? windowBar.getStatusBarRadiusPx()
             : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
         int strokeWidth = Math.round(dpToPx(1));
-        int marginE = Math.round(dpToPx(4));
+        int marginE = Math.round(dpToPx(3));
 
         cluster.removeAllViews();
-        android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
+        android.graphics.Typeface terminalFont = com.termux.app.terminal.TerminalLabelFaces.current().regular;
 
         for (int i = 0; i < keys.size(); i++) {
             final int keyIndex = i;
@@ -22825,7 +22821,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     label = "Slot ▶";
                 } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
                     || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
-                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
+                    label = FusionBackupSlotHelper.getCurrentSlotCached();
                 } else if (key.key.endsWith("\n")) {
                     String cmd = key.key.substring(0, key.key.length() - 1).trim();
                     label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
@@ -22834,12 +22830,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 }
             } else if (FusionBackupSlotHelper.ACTION_SLOT_PICK.equalsIgnoreCase(key.key)
                 || FusionBackupSlotHelper.ACTION_SLOT_CURRENT.equalsIgnoreCase(key.key)) {
-                if (label.equals("🎯 Slot") || label.equalsIgnoreCase("Slot")) {
-                    label = "🎯 " + FusionBackupSlotHelper.getCurrentSlotCached();
+                if (label.contains("🎯")) {
+                    label = label.replace("🎯", "").trim();
+                }
+                if (label.equals("Slot") || label.equalsIgnoreCase("Slot") || label.isEmpty()) {
+                    label = FusionBackupSlotHelper.getCurrentSlotCached();
                 }
             }
             btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
-            if (nerdFont != null) btn.setTypeface(nerdFont);
+            if (terminalFont != null) {
+                btn.setTypeface(terminalFont, android.graphics.Typeface.BOLD);
+            } else {
+                btn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD, android.graphics.Typeface.BOLD);
+            }
             btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f);
             btn.setIncludeFontPadding(false);
 
@@ -22848,10 +22851,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int btnInk = defaultInk;
             if (key.color != null) {
                 int roleBg = key.color.background(this);
-                int roleLabel = key.color.label(this);
-                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 180);
-                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 80);
-                btnInk = roleLabel;
+                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 112);
+                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 58);
             }
             btn.setTextColor(btnInk);
             btn.setGravity(android.view.Gravity.CENTER);
@@ -22868,18 +22869,12 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 key.popup != null ? () -> executeLeftCanvasQuickKey(key.popup) : null,
                 () -> openLeftCanvasQuickKeyEditor(keyIndex, keys, cluster));
 
-            boolean isTextKey = label != null && label.length() > 2;
-            int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
-            if (isTextKey) {
-                btn.setMinWidth(btnSquareW);
-                int padH = Math.round(dpToPx(5));
-                btn.setPadding(padH, 0, padH, 0);
-            } else {
-                btn.setWidth(btnSquareW);
-                btn.setPadding(0, 0, 0, 0);
-            }
+            btn.setMinWidth(btnSquareW);
+            int padH = Math.round(dpToPx(3.5f));
+            btn.setPadding(padH, 0, padH, 0);
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(lpWidth, btnHeight);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
             lp.setMarginEnd(marginE);
             lp.gravity = android.view.Gravity.CENTER_VERTICAL;
             cluster.addView(btn, lp);
