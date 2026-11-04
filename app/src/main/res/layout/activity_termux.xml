@@ -280,6 +280,29 @@
                             android:layout_marginTop="6dp"
                             android:visibility="gone"
                             android:contentDescription="@string/termux_window_bar_content_description" />
+
+                        <!-- Left Canvas Status Bar Shortcuts (Full Width) -->
+                        <HorizontalScrollView
+                            android:id="@+id/left_canvas_quick_keys_scroll"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:layout_marginStart="6dp"
+                            android:scrollbars="none"
+                            android:overScrollMode="never"
+                            android:clipChildren="false"
+                            android:clipToPadding="false"
+                            android:visibility="gone">
+
+                            <LinearLayout
+                                android:id="@+id/left_canvas_quick_keys_cluster"
+                                android:layout_width="wrap_content"
+                                android:layout_height="match_parent"
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical"
+                                android:clipChildren="false"
+                                android:clipToPadding="false" />
+                        </HorizontalScrollView>
                     </com.termux.app.statusbar.PlaceContentStrip>
 
                     <!-- The CPU/RAM/weather cluster: CPU · RAM · Weather at the row's end

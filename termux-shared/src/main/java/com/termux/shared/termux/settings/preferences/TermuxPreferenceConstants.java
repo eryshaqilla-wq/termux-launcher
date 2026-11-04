@@ -331,6 +331,16 @@ public final class TermuxPreferenceConstants {
         public static final String DEFAULT_TERMINAL_QUICK_EXTRA_KEYS =
             "[{\"key\":\"BOOST\",\"display\":\"⚡\"},{\"key\":\"KEYBOARD\",\"display\":\"⌨\"},{\"key\":\"clear\\n\",\"display\":\"CLR\"}]";
 
+        /** Quick extra keys / shortcuts for the Left Canvas (Kanvas Kiri / Home) status bar. */
+        public static final String KEY_LEFT_CANVAS_QUICK_EXTRA_KEYS = "left_canvas_quick_extra_keys";
+
+        public static final String DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS =
+            "[{\"key\":\"tool:ipc.ai\",\"display\":\"🤖 AI\",\"target\":\"new_tab\",\"env\":\"auto\"}," +
+            "{\"key\":\"tool:ipc.wallet\",\"display\":\"💰 Wallet\",\"target\":\"new_tab\",\"env\":\"auto\"}," +
+            "{\"key\":\"tool:ipc.web\",\"display\":\"🌐 Web\",\"target\":\"new_tab\",\"env\":\"auto\"}," +
+            "{\"key\":\"tool:ipc.telegram\",\"display\":\"✈️ Tele\",\"target\":\"new_tab\",\"env\":\"auto\"}," +
+            "{\"key\":\"BOOST\",\"display\":\"⚡ Boost\"}]";
+
         /** Toggle for the session indicator box at the left corner of the status bar. */
         public static final String KEY_STATUS_BAR_SHOW_SESSION_INDICATOR = "status_bar_show_session_indicator";
         public static final boolean DEFAULT_STATUS_BAR_SHOW_SESSION_INDICATOR = true;

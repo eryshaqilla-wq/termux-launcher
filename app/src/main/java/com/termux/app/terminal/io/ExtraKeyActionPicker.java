@@ -263,6 +263,35 @@ public final class ExtraKeyActionPicker {
             }
         }
 
+        // Installed Apps section
+        try {
+            com.termux.app.launcher.data.LauncherAppDataProvider provider =
+                com.termux.app.launcher.data.LauncherAppDataProvider.getInstance(context);
+            if (provider != null) {
+                List<com.termux.app.launcher.model.LauncherAppEntry> allApps = provider.getAllAppsBlocking();
+                if (allApps != null && !allApps.isEmpty()) {
+                    boolean appHeaderWritten = false;
+                    for (com.termux.app.launcher.model.LauncherAppEntry app : allApps) {
+                        if (app == null || app.appRef == null) continue;
+                        if (!needle.isEmpty() && !matches(app.label, needle)
+                            && !matches(app.appRef.packageName, needle)) {
+                            continue;
+                        }
+                        if (!appHeaderWritten) {
+                            results.addView(header("Aplikasi Terinstall (Apps)"));
+                            appHeaderWritten = true;
+                        }
+                        final com.termux.app.launcher.model.LauncherAppEntry pickedApp = app;
+                        results.addView(entry(app.label, app.appRef.packageName, () -> {
+                            ExtraKeysLayoutModel.Key key = new ExtraKeysLayoutModel.Key(
+                                "app:" + pickedApp.appRef.stableId(), false, pickedApp.label, null);
+                            pick.onPicked(key);
+                        }));
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
         if (results.getChildCount() == 0) {
             results.addView(header(context.getString(R.string.settings_extra_keys_action_no_match)));
         }

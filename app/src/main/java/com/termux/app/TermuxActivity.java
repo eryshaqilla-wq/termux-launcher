@@ -21370,6 +21370,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             sessions.setVisibility(showSession ? View.VISIBLE : View.GONE);
         }
         boolean windowsShown = page != com.termux.app.wall.PaneWallPage.WIDGETS;
+        boolean isWidgetsPage = page == com.termux.app.wall.PaneWallPage.WIDGETS;
+        View leftScroll = findViewById(R.id.left_canvas_quick_keys_scroll);
+        ViewGroup leftCluster = findViewById(R.id.left_canvas_quick_keys_cluster);
+        if (leftScroll != null) {
+            leftScroll.setVisibility(isWidgetsPage && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
+            if (isWidgetsPage && leftCluster != null) {
+                populateLeftCanvasQuickKeys(leftCluster);
+            }
+        }
         com.termux.app.terminal.TerminalWindowBar bar = findViewById(R.id.terminal_window_bar);
         if (bar != null) {
             // The chips are drawn on glass, so they ask the chrome what they are standing on
@@ -22357,6 +22366,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void executeTerminalQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
         String actionKey = key.key;
+        if (actionKey != null && actionKey.startsWith("app:")) {
+            launchAppByRefOrPackage(actionKey.substring(4));
+            return;
+        }
         if ("BOOST".equalsIgnoreCase(actionKey)) {
             new Thread(() -> {
                 try {
@@ -22497,6 +22510,241 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             populateTerminalQuickKeys(cluster);
         });
         sheet.show();
+    }
+
+    @NonNull
+    public List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> getLeftCanvasQuickKeysList() {
+        String json = mPreferences != null ? mPreferences.getLeftCanvasQuickExtraKeys() : null;
+        List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list =
+            com.termux.app.terminal.io.ExtraKeysLayoutModel.parseKeyList(json);
+        if (list.isEmpty()) {
+            list = com.termux.app.terminal.io.ExtraKeysLayoutModel.parseKeyList(
+                com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS);
+        }
+        return list;
+    }
+
+    public void saveLeftCanvasQuickKeysList(@NonNull List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list) {
+        String json = com.termux.app.terminal.io.ExtraKeysLayoutModel.serializeKeyList(list);
+        if (mPreferences != null) {
+            mPreferences.setLeftCanvasQuickExtraKeys(json);
+        }
+    }
+
+    public void openLeftCanvasQuickKeyEditor(int index, @NonNull List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list, @NonNull ViewGroup cluster) {
+        if (index < 0) {
+            com.termux.app.fragments.settings.termux.LeftCanvasQuickKeysEditorSheet.show(this, () -> {
+                populateLeftCanvasQuickKeys(cluster);
+            });
+            return;
+        }
+        final com.termux.app.terminal.io.ExtraKeysLayoutModel.Key targetKey = list.get(index);
+        final int targetIndex = index;
+        com.termux.shared.termux.extrakeys.ExtraKeysConstants.ExtraKeyDisplayMap displayMap =
+            com.termux.shared.termux.extrakeys.ExtraKeysConstants.EXTRA_KEY_DISPLAY_MAPS.DEFAULT_CHAR_DISPLAY;
+
+        com.termux.app.terminal.io.ExtraKeyDetailSheet sheet =
+            new com.termux.app.terminal.io.ExtraKeyDetailSheet(this, targetKey, displayMap,
+                new com.termux.app.terminal.io.ExtraKeyDetailSheet.Host() {
+                    @Override
+                    public void onKeyChanged() {
+                        saveLeftCanvasQuickKeysList(list);
+                        populateLeftCanvasQuickKeys(cluster);
+                    }
+
+                    @Override
+                    public void onRemoveKey() {
+                        if (targetIndex >= 0 && targetIndex < list.size()) {
+                            list.remove(targetIndex);
+                            saveLeftCanvasQuickKeysList(list);
+                            populateLeftCanvasQuickKeys(cluster);
+                        }
+                    }
+                });
+
+        sheet.setOnDismissListener(() -> {
+            saveLeftCanvasQuickKeysList(list);
+            populateLeftCanvasQuickKeys(cluster);
+        });
+        sheet.show();
+    }
+
+    public void executeLeftCanvasQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
+        String actionKey = key.key != null ? key.key : "";
+        if (actionKey.startsWith("app:")) {
+            launchAppByRefOrPackage(actionKey.substring(4));
+            return;
+        }
+        if ("BOOST".equalsIgnoreCase(actionKey)) {
+            new Thread(() -> {
+                try {
+                    Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
+                } catch (Exception ignored) {}
+                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!"));
+            }).start();
+        } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
+            if (mTermuxTerminalViewClient != null) {
+                mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
+            }
+        } else if (isIpcToolKey(actionKey)) {
+            String command = resolveIpcToolCommand(actionKey);
+            String title = (key.display != null && !key.display.trim().isEmpty())
+                ? key.display.trim() : extractProgramName(command);
+            launchProgramInNewTabString(command, title, key.getResolvedEnv());
+        } else if (key.isNewTab()) {
+            launchProgramInNewTab(key);
+        } else if (actionKey.endsWith("\n") || !actionKey.isEmpty()) {
+            launchProgramInNewTabString(actionKey, key.display, key.getResolvedEnv());
+        }
+    }
+
+    public void launchAppByRefOrPackage(@NonNull String spec) {
+        com.termux.app.launcher.model.LauncherAppEntry entry = null;
+        if (mLauncherAppDataProvider != null) {
+            if (spec.contains("/")) {
+                String pkg = spec.substring(0, spec.indexOf('/'));
+                String rest = spec.substring(spec.indexOf('/') + 1);
+                String act = rest.contains("#") ? rest.substring(0, rest.indexOf('#')) : rest;
+                entry = mLauncherAppDataProvider.findByRef(new com.termux.app.launcher.model.AppRef(pkg, act));
+            }
+            if (entry == null) {
+                String pkg = spec.contains("/") ? spec.substring(0, spec.indexOf('/')) : (spec.contains("#") ? spec.substring(0, spec.indexOf('#')) : spec);
+                entry = mLauncherAppDataProvider.findDefaultByPackage(pkg);
+            }
+        }
+        if (entry != null) {
+            if (mSuggestionBarView != null) {
+                mSuggestionBarView.launchEntryFromDrawer(null, entry);
+            } else {
+                com.termux.app.launcher.LauncherAppLauncher.launchEntry(TermuxActivity.this, entry);
+            }
+        } else {
+            try {
+                String pkg = spec.contains("/") ? spec.substring(0, spec.indexOf('/')) : (spec.contains("#") ? spec.substring(0, spec.indexOf('#')) : spec);
+                android.content.Intent launchIntent = getPackageManager().getLaunchIntentForPackage(pkg);
+                if (launchIntent != null) {
+                    startActivity(launchIntent);
+                } else {
+                    FusionToast.show(this, "Aplikasi tidak ditemukan: " + spec);
+                }
+            } catch (Exception e) {
+                FusionToast.show(this, "Gagal membuka aplikasi: " + e.getMessage());
+            }
+        }
+    }
+
+    public void populateLeftCanvasQuickKeys(@NonNull ViewGroup cluster) {
+        List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getLeftCanvasQuickKeysList();
+        com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
+
+        int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : 0xFFCDD6F4;
+        int defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+            ? windowBar.getSelectedStrokeColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
+        int defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+            ? windowBar.getSelectedFillColor()
+            : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
+        int defaultInk = (windowBar != null && windowBar.getSelectedTextColor() != 0)
+            ? windowBar.getSelectedTextColor()
+            : primary;
+
+        int btnHeight = Math.round(dpToPx(20));
+        int btnSquareW = Math.round(dpToPx(20));
+        float cornerRadius = (windowBar != null && windowBar.getStatusBarRadiusPx() >= 0)
+            ? windowBar.getStatusBarRadiusPx()
+            : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
+        int strokeWidth = Math.round(dpToPx(1));
+        int marginE = Math.round(dpToPx(4));
+
+        cluster.removeAllViews();
+        android.graphics.Typeface nerdFont = com.termux.shared.termux.font.NerdFontSpans.typeface(this);
+
+        for (int i = 0; i < keys.size(); i++) {
+            final int keyIndex = i;
+            final com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key = keys.get(i);
+            TextView btn = new TextView(this);
+            btn.setTag(key);
+
+            String label = key.display;
+            if (label == null || label.isEmpty()) {
+                if (key.key.startsWith("app:")) {
+                    label = "📱";
+                } else if (key.key.endsWith("\n")) {
+                    String cmd = key.key.substring(0, key.key.length() - 1).trim();
+                    label = cmd.length() <= 4 ? cmd.toUpperCase(java.util.Locale.ROOT) : ">_";
+                } else {
+                    label = key.key;
+                }
+            }
+            btn.setText(com.termux.shared.termux.font.NerdFontSpans.span(this, label));
+            if (nerdFont != null) btn.setTypeface(nerdFont);
+            btn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10.5f);
+            btn.setIncludeFontPadding(false);
+
+            int btnStroke = defaultStroke;
+            int btnBg = defaultBg;
+            int btnInk = defaultInk;
+            if (key.color != null) {
+                int roleBg = key.color.background(this);
+                int roleLabel = key.color.label(this);
+                btnStroke = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 180);
+                btnBg = androidx.core.graphics.ColorUtils.setAlphaComponent(roleBg, 80);
+                btnInk = roleLabel;
+            }
+            btn.setTextColor(btnInk);
+            btn.setGravity(android.view.Gravity.CENTER);
+
+            android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+            gd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+            gd.setCornerRadius(cornerRadius);
+            gd.setColor(btnBg);
+            gd.setStroke(strokeWidth, btnStroke);
+            btn.setBackground(gd);
+
+            setupQuickKeyTouchListener(btn, key,
+                () -> executeLeftCanvasQuickKey(key),
+                key.popup != null ? () -> executeLeftCanvasQuickKey(key.popup) : null,
+                () -> openLeftCanvasQuickKeyEditor(keyIndex, keys, cluster));
+
+            boolean isTextKey = label != null && label.length() > 2;
+            int lpWidth = isTextKey ? LinearLayout.LayoutParams.WRAP_CONTENT : btnSquareW;
+            if (isTextKey) {
+                btn.setMinWidth(btnSquareW);
+                int padH = Math.round(dpToPx(5));
+                btn.setPadding(padH, 0, padH, 0);
+            } else {
+                btn.setWidth(btnSquareW);
+                btn.setPadding(0, 0, 0, 0);
+            }
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(lpWidth, btnHeight);
+            lp.setMarginEnd(marginE);
+            lp.gravity = android.view.Gravity.CENTER_VERTICAL;
+            cluster.addView(btn, lp);
+        }
+
+        // Add [ ➕ ] button at the end of the cluster
+        TextView addBtn = new TextView(this);
+        addBtn.setText("＋");
+        if (nerdFont != null) addBtn.setTypeface(nerdFont);
+        addBtn.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 11f);
+        addBtn.setIncludeFontPadding(false);
+        addBtn.setTextColor(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 180));
+        addBtn.setGravity(android.view.Gravity.CENTER);
+
+        android.graphics.drawable.GradientDrawable addGd = new android.graphics.drawable.GradientDrawable();
+        addGd.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        addGd.setCornerRadius(cornerRadius);
+        addGd.setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 25));
+        addGd.setStroke(strokeWidth, androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 70));
+        addBtn.setBackground(addGd);
+
+        addBtn.setWidth(btnSquareW);
+        addBtn.setOnClickListener(v -> openLeftCanvasQuickKeyEditor(-1, keys, cluster));
+        LinearLayout.LayoutParams addLp = new LinearLayout.LayoutParams(btnSquareW, btnHeight);
+        addLp.setMarginEnd(marginE);
+        addLp.gravity = android.view.Gravity.CENTER_VERTICAL;
+        cluster.addView(addBtn, addLp);
     }
 
     /** Whether a display server is up and connected to the Display page. */

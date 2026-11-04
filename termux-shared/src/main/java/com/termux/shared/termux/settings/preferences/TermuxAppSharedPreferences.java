@@ -1474,6 +1474,17 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             value == null ? TERMUX_APP.DEFAULT_TERMINAL_QUICK_EXTRA_KEYS : value.trim(), false);
     }
 
+    public String getLeftCanvasQuickExtraKeys() {
+        return SharedPreferenceUtils.getString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_QUICK_EXTRA_KEYS, TERMUX_APP.DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS, false);
+    }
+
+    public void setLeftCanvasQuickExtraKeys(@Nullable String value) {
+        SharedPreferenceUtils.setString(mSharedPreferences,
+            TERMUX_APP.KEY_LEFT_CANVAS_QUICK_EXTRA_KEYS,
+            value == null ? TERMUX_APP.DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS : value.trim(), false);
+    }
+
     public boolean isStatusBarShowSessionIndicatorEnabled() {
         return SharedPreferenceUtils.getBoolean(mSharedPreferences,
             TERMUX_APP.KEY_STATUS_BAR_SHOW_SESSION_INDICATOR,

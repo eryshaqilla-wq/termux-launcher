@@ -28,6 +28,9 @@ public final class ExtraKeyActionLabels {
             return context.getString(R.string.settings_extra_keys_action_macro_title, key.key);
         }
         String spec = key.key;
+        if (spec.startsWith("app:")) {
+            return "Aplikasi: " + (key.display != null && !key.display.isEmpty() ? key.display : spec.substring(4));
+        }
         if (spec.startsWith(TOOL_PREFIX)) {
             String rest = spec.substring(TOOL_PREFIX.length());
             int argumentStart = rest.indexOf(':');
@@ -48,6 +51,7 @@ public final class ExtraKeyActionLabels {
     @Nullable
     public static String detail(@NonNull ExtraKeysLayoutModel.Key key) {
         if (key.macro) return null;
+        if (key.key.startsWith("app:")) return key.key;
         if (key.key.startsWith(TOOL_PREFIX)) return key.key;
         return null;
     }
@@ -58,6 +62,9 @@ public final class ExtraKeyActionLabels {
                                  @NonNull ExtraKeysConstants.ExtraKeyDisplayMap displayMap) {
         if (key.display != null && !key.display.isEmpty()) {
             return key.display;
+        }
+        if (key.key.startsWith("app:")) {
+            return "📱";
         }
         if (key.key.endsWith("\n")) {
             String cmd = key.key.substring(0, key.key.length() - 1).trim();

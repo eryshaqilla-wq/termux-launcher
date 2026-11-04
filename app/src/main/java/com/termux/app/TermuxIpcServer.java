@@ -473,6 +473,60 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.startsWith("LEFT_CANVAS_KEYS") || strTrim.startsWith("LEFT_CANVAS keys")) {
+                                TermuxActivity act = TermuxIpcServer.getActivity();
+                                if (act != null) {
+                                    String sub = strTrim.contains(" ") ? strTrim.substring(strTrim.indexOf(" ") + 1).trim() : "";
+                                    if (sub.startsWith("keys ")) sub = sub.substring(5).trim();
+                                    if (sub.equalsIgnoreCase("list") || sub.isEmpty()) {
+                                        String json = act.getLeftCanvasQuickKeysList() != null
+                                            ? com.termux.app.terminal.io.ExtraKeysLayoutModel.serializeKeyList(act.getLeftCanvasQuickKeysList())
+                                            : "[]";
+                                        outputStream.write((json + "\n").getBytes());
+                                    } else if (sub.equalsIgnoreCase("reset")) {
+                                        if (act.mPreferences != null) {
+                                            act.mPreferences.setLeftCanvasQuickExtraKeys(
+                                                com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS);
+                                        }
+                                        act.runOnUiThread(() -> {
+                                            android.view.ViewGroup cluster = act.findViewById(R.id.left_canvas_quick_keys_cluster);
+                                            if (cluster != null) act.populateLeftCanvasQuickKeys(cluster);
+                                        });
+                                        outputStream.write("{\"status\":\"ok\",\"action\":\"reset\"}\n".getBytes());
+                                    } else if (sub.startsWith("set ")) {
+                                        String val = sub.substring(4).trim();
+                                        if (act.mPreferences != null) {
+                                            act.mPreferences.setLeftCanvasQuickExtraKeys(val);
+                                        }
+                                        act.runOnUiThread(() -> {
+                                            android.view.ViewGroup cluster = act.findViewById(R.id.left_canvas_quick_keys_cluster);
+                                            if (cluster != null) act.populateLeftCanvasQuickKeys(cluster);
+                                        });
+                                        outputStream.write("{\"status\":\"ok\",\"action\":\"set\"}\n".getBytes());
+                                    } else if (sub.startsWith("add ")) {
+                                        String keyJson = sub.substring(4).trim();
+                                        java.util.List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> list = act.getLeftCanvasQuickKeysList();
+                                        java.util.List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> toAdd =
+                                            com.termux.app.terminal.io.ExtraKeysLayoutModel.parseKeyList(keyJson);
+                                        if (!toAdd.isEmpty()) {
+                                            list.addAll(toAdd);
+                                            act.saveLeftCanvasQuickKeysList(list);
+                                            act.runOnUiThread(() -> {
+                                                android.view.ViewGroup cluster = act.findViewById(R.id.left_canvas_quick_keys_cluster);
+                                                if (cluster != null) act.populateLeftCanvasQuickKeys(cluster);
+                                            });
+                                            outputStream.write(("{\"status\":\"ok\",\"action\":\"add\",\"count\":" + list.size() + "}\n").getBytes());
+                                        } else {
+                                            outputStream.write("{\"status\":\"error\",\"message\":\"Invalid key json\"}\n".getBytes());
+                                        }
+                                    } else {
+                                        outputStream.write("{\"status\":\"error\",\"message\":\"Unknown keys action\"}\n".getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"Activity not ready\"}\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
                             } else if (strTrim.startsWith("WEBVIEW_SAVE_SESSION ") || strTrim.startsWith("WEBVIEW_SAVE ")) {
                                 String prof = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
                                 TermuxActivity act = TermuxIpcServer.getActivity();
