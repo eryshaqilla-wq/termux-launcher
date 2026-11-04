@@ -185,6 +185,8 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
             mPreferences.setStatusBarHorizontalSwipeAction(value != null ? value : "wall");
         } else if ("terminal_back_key_action".equals(key)) {
             mPreferences.setTerminalBackKeyAction(value != null ? value : "sessions");
+        } else if ("status_bar_cutout_mode".equals(key)) {
+            mPreferences.setStatusBarCutoutMode(value);
         }
     }
 
@@ -205,6 +207,31 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
         }
         if ("terminal_back_key_action".equals(key)) {
             return mPreferences.getTerminalBackKeyAction();
+        }
+        if ("status_bar_cutout_mode".equals(key)) {
+            return mPreferences.getStatusBarCutoutMode();
+        }
+        return defValue;
+    }
+
+    @Override
+    public void putInt(String key, int value) {
+        if (mPreferences == null || key == null) return;
+        if ("status_bar_cutout_center".equals(key)) {
+            mPreferences.setStatusBarCutoutCenter(value);
+        } else if ("status_bar_cutout_width".equals(key)) {
+            mPreferences.setStatusBarCutoutWidth(value);
+        }
+    }
+
+    @Override
+    public int getInt(String key, int defValue) {
+        if (mPreferences == null || key == null) return defValue;
+        if ("status_bar_cutout_center".equals(key)) {
+            return mPreferences.getStatusBarCutoutCenter();
+        }
+        if ("status_bar_cutout_width".equals(key)) {
+            return mPreferences.getStatusBarCutoutWidth();
         }
         return defValue;
     }

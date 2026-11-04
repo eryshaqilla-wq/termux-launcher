@@ -11,6 +11,7 @@ import androidx.preference.PreferenceManager;
 
 import com.termux.R;
 import com.termux.app.fragments.settings.MaterialPreferenceFragment;
+import com.termux.app.fragments.settings.SegmentedPillPreference;
 import com.termux.app.fragments.settings.SettingsLayoutUtils;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 
@@ -38,6 +39,7 @@ public final class StatusBarPreferencesFragment extends MaterialPreferenceFragme
         StatusWidgetPrivilegedGate.attach(context, findPreference("status_widget_cpu"));
         StatusWidgetPrivilegedGate.attach(context, findPreference("status_widget_ram"));
         bindWeatherPlace(findPreference("status_widget_weather_location"));
+        bindCutoutMode(findPreference("status_bar_cutout_mode"));
 
         Preference editKeys = findPreference("edit_status_bar_extra_keys");
         if (editKeys != null) {
@@ -86,6 +88,25 @@ public final class StatusBarPreferencesFragment extends MaterialPreferenceFragme
      * the picker, which stores the place itself (label and coordinates together), so the row is not
      * persisted through the data store.
      */
+    /** The cutout's two sliders are there only while the gap is the user's own. */
+    private void bindCutoutMode(@Nullable Preference pref) {
+        if (!(pref instanceof SegmentedPillPreference)) return;
+        SegmentedPillPreference mode = (SegmentedPillPreference) pref;
+        applyCutoutSliders(mode.getValue());
+        mode.setOnPreferenceChangeListener((preference, newValue) -> {
+            applyCutoutSliders(newValue == null ? null : newValue.toString());
+            return true;
+        });
+    }
+
+    private void applyCutoutSliders(@Nullable String mode) {
+        boolean custom = "custom".equals(mode);
+        Preference centre = findPreference("status_bar_cutout_center");
+        if (centre != null) centre.setVisible(custom);
+        Preference width = findPreference("status_bar_cutout_width");
+        if (width != null) width.setVisible(custom);
+    }
+
     private void bindWeatherPlace(@Nullable Preference place) {
         if (place == null) return;
         updateWeatherPlaceSummary(place);

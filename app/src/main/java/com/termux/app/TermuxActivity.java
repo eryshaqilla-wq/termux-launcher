@@ -5825,6 +5825,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         return com.termux.app.statusbar.StatusBarEdgeGeometry.isVertical(mStatusBarEdge);
     }
 
+    /** Whether camera cutout padding is disabled (Off / Fullscreen mode). */
+    private boolean isStatusBarCutoutOff() {
+        return mPreferences != null
+            && com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.STATUS_BAR_CUTOUT_OFF
+                .equals(mPreferences.getStatusBarCutoutMode());
+    }
+
     /**
      * The top pane's COMPACT height in the current style. Read by the app drawer's top-band
      * choreography, which fakes the expanded→compact collapse with a clip while the plane grows:
@@ -9069,10 +9076,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the canvas structurally and nobody pads for them. What is left of the horizontal answer
         // is the display cutout, and that the root keeps: the camera hole is the window's, not the
         // place's, so every bar on every edge clears it in one place rather than four.
-        int cutoutLeft = content.left
-            - EdgeStackPolicy.stackThicknessPx(placeLayout, PlaceLayout.Edge.LEFT, metrics);
-        int cutoutRight = content.right
-            - EdgeStackPolicy.stackThicknessPx(placeLayout, PlaceLayout.Edge.RIGHT, metrics);
+        boolean cutoutDisabled = isStatusBarCutoutOff();
+        int cutoutLeft = cutoutDisabled ? 0 : (content.left
+            - EdgeStackPolicy.stackThicknessPx(placeLayout, PlaceLayout.Edge.LEFT, metrics));
+        int cutoutRight = cutoutDisabled ? 0 : (content.right
+            - EdgeStackPolicy.stackThicknessPx(placeLayout, PlaceLayout.Edge.RIGHT, metrics));
         View rootRelativeLayout = findViewById(R.id.activity_termux_root_relative_layout);
         if (rootRelativeLayout != null
             && (rootRelativeLayout.getPaddingLeft() != cutoutLeft
@@ -10267,7 +10275,13 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             getWindow().setNavigationBarContrastEnforced(false);
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ (API 30): Allow window to extend into display cutout on all edges
+            WindowManager.LayoutParams attributes = getWindow().getAttributes();
+            attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS;
+            getWindow().setAttributes(attributes);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             // Let the window extend into the display-cutout ear in landscape; otherwise the system
             // letterboxes the window off that edge and the raw wallpaper shows as an unscrimmed strip.
             WindowManager.LayoutParams attributes = getWindow().getAttributes();
@@ -15796,8 +15810,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             .baseToolbarHeightPx(getDockBaseToolbarHeightPx())
             .additionalAppsBarHeightPx(additionalAppsBarHeightPx)
             .railOnRight(PlaceChromePolicy.appsRailOnRight(layout))
-            .displayCutoutInsetLeftPx(mLastDisplayCutoutInsetLeft)
-            .displayCutoutInsetRightPx(mLastDisplayCutoutInsetRight)
+            .displayCutoutInsetLeftPx(isStatusBarCutoutOff() ? 0 : mLastDisplayCutoutInsetLeft)
+            .displayCutoutInsetRightPx(isStatusBarCutoutOff() ? 0 : mLastDisplayCutoutInsetRight)
             .build();
     }
 
