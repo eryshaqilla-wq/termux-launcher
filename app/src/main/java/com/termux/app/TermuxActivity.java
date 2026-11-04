@@ -24810,7 +24810,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         () -> {
                             if (mWidgetPaneController != null) {
                                 mWidgetPaneController.removeWidgetPublic(appWidgetId);
-                                android.widget.Toast.makeText(TermuxActivity.this, finalEntry.label + " dihapus dari Home", android.widget.Toast.LENGTH_SHORT).show();
                             }
                         },
                         () -> {

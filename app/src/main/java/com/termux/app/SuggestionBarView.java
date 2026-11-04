@@ -5518,15 +5518,11 @@ public final class SuggestionBarView extends GridLayout
         if (homeShortcutHost != null && homeShortcutHost.isHomeGridAvailable()) {
             TextView addToHomeRow = menuRows.addActionRow(shell, "Tambah ke Home", R.drawable.ic_dock_menu_pin, false, tintBase, () -> {
                 dismissAppContextPopup();
-                if (homeShortcutHost.addAppShortcutToHome(context.entry)) {
-                    android.widget.Toast.makeText(getContext(), context.entry.label + " ditambahkan ke Home", android.widget.Toast.LENGTH_SHORT).show();
-                }
+                homeShortcutHost.addAppShortcutToHome(context.entry);
             });
             pendingMenuRows.add(new MenuRow(addToHomeRow, () -> {
                 dismissAppContextPopup();
-                if (homeShortcutHost.addAppShortcutToHome(context.entry)) {
-                    android.widget.Toast.makeText(getContext(), context.entry.label + " ditambahkan ke Home", android.widget.Toast.LENGTH_SHORT).show();
-                }
+                homeShortcutHost.addAppShortcutToHome(context.entry);
             }, false));
         }
 
