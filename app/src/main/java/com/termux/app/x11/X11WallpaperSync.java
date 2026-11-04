@@ -178,9 +178,13 @@ public final class X11WallpaperSync {
         boolean showDock = prefs == null || prefs.isX11ShowExtraKeysEnabled();
 
         PlaceOrientation orientation = PlaceOrientation.of(context.getResources().getConfiguration());
+        PlaceLayoutStore layoutStore = null;
         PlaceLayout layout = null;
         try {
-            layout = prefs != null ? new PlaceLayoutStore(prefs).resolve(orientation) : null;
+            if (prefs != null) {
+                layoutStore = new PlaceLayoutStore(prefs);
+                layout = layoutStore.resolve(orientation);
+            }
         } catch (Exception ignored) {}
 
         Edge statusEdge = Edge.TOP;
@@ -189,7 +193,7 @@ public final class X11WallpaperSync {
         if (layout != null) {
             statusEdge = layout.slot(Element.STATUS).edge;
             statusHidden = !showBar || layout.slot(Element.STATUS).hidden;
-            statusCompact = layout.statusCompact;
+            statusCompact = layoutStore != null && layoutStore.isStatusCompact(orientation);
         }
 
         Edge extraKeysEdge = Edge.BOTTOM;
