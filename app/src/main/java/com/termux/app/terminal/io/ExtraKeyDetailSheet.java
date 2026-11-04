@@ -177,14 +177,41 @@ public final class ExtraKeyDetailSheet {
             context.getString(R.string.settings_extra_keys_sheet_label_hint), key));
 
         body.addView(sectionLabel("Target Eksekusi & Lingkungan OS"));
-        String targetDesc = key.isNewTab() ? "⚡ Tab Baru (IPC + Auto-Detect)" : "🖥️ Tab Aktif (Inline)";
-        body.addView(selectorRow("Target: " + targetDesc, null, () -> {
-            boolean currentNewTab = key.isNewTab();
-            key.target = currentNewTab ? "inline" : "new_tab";
-            changed(true);
+        String targetDesc;
+        if (key.isBackground()) {
+            targetDesc = "⚡ Background (Latar Belakang)";
+        } else if (key.isForeground()) {
+            targetDesc = "🖥️ Foreground (Tab Baru di Kanvas Tengah)";
+        } else {
+            targetDesc = "💻 Tab Aktif (Inline)";
+        }
+        body.addView(selectorRow("Mode: " + targetDesc, null, () -> {
+            final String[] modeNames = new String[]{
+                "⚡ Background (Latar Belakang - Tanpa Terminal)",
+                "🖥️ Foreground (Tab Baru di Kanvas Tengah)",
+                "💻 Tab Aktif (Inline - Kirim ke Sesi Aktif)"
+            };
+            final String[] modeKeys = new String[]{
+                "background",
+                "foreground",
+                "inline"
+            };
+            int curIdx = 0;
+            if (key.isForeground()) curIdx = 1;
+            else if ("inline".equalsIgnoreCase(key.target)) curIdx = 2;
+
+            new com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+                .setTitle("Pilih Mode Eksekusi")
+                .setSingleChoiceItems(modeNames, curIdx, (d, which) -> {
+                    key.target = modeKeys[which];
+                    d.dismiss();
+                    changed(true);
+                })
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
         }));
 
-        if (key.isNewTab()) {
+        if (key.isForeground() || key.isBackground()) {
             String envDesc;
             String curEnv = key.getResolvedEnv();
             if ("chroot".equalsIgnoreCase(curEnv)) envDesc = "🐉 Kali NetHunter Chroot";
@@ -385,8 +412,33 @@ public final class ExtraKeyDetailSheet {
         });
 
         fieldLayout.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         fieldRow.addView(fieldLayout);
+
+        MaterialButton browseBtn = new MaterialButton(context, null,
+            com.google.android.material.R.attr.materialButtonOutlinedStyle);
+        browseBtn.setText("📁");
+        browseBtn.setContentDescription("Pilih Berkas Script");
+        browseBtn.setMinWidth(dp(56));
+        browseBtn.setOnClickListener(v -> {
+            dialog.hide();
+            FusionScriptFilePickerSheet.show(context, pickedKey -> {
+                target.key = pickedKey.key;
+                if (pickedKey.display != null && (target.display == null || target.display.isEmpty())) {
+                    target.display = pickedKey.display;
+                }
+                if (pickedKey.target != null) target.target = pickedKey.target;
+                if (pickedKey.env != null) target.env = pickedKey.env;
+                changed(true);
+                dialog.show();
+            });
+        });
+        LinearLayout.LayoutParams browseParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        browseParams.setMarginStart(dp(8));
+        browseBtn.setLayoutParams(browseParams);
+        fieldRow.addView(browseBtn);
+
         return fieldRow;
     }
 

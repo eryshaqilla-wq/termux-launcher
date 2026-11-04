@@ -22418,8 +22418,14 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             String command = resolveIpcToolCommand(actionKey);
             String title = (key.display != null && !key.display.trim().isEmpty())
                 ? key.display.trim() : extractProgramName(command);
-            launchProgramInNewTabString(command, title, key.getResolvedEnv());
-        } else if (key.isNewTab()) {
+            if (key.isBackground()) {
+                launchScriptInBackground(command, title, key.getResolvedEnv());
+            } else {
+                launchProgramInNewTabString(command, title, key.getResolvedEnv());
+            }
+        } else if (key.isBackground()) {
+            launchScriptInBackground(actionKey, key.display, key.getResolvedEnv());
+        } else if (key.isNewTab() || key.isForeground()) {
             launchProgramInNewTab(key);
         } else if (actionKey != null && actionKey.endsWith("\n")) {
             TerminalSession session = getCurrentSession();
@@ -22641,9 +22647,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             String command = resolveIpcToolCommand(actionKey);
             String title = (key.display != null && !key.display.trim().isEmpty())
                 ? key.display.trim() : extractProgramName(command);
-            launchScriptInBackground(command, title, key.getResolvedEnv());
+            boolean isFg = key.isForeground();
+            if (isFg) {
+                if (mPaneWallController != null) {
+                    mPaneWallController.goTo(com.termux.app.wall.PaneWallPage.TERMINAL, isVisible());
+                }
+                launchProgramInNewTabString(command, title, key.getResolvedEnv());
+            } else {
+                launchScriptInBackground(command, title, key.getResolvedEnv());
+            }
         } else if (actionKey.endsWith("\n") || !actionKey.isEmpty()) {
-            launchScriptInBackground(actionKey, key.display, key.getResolvedEnv());
+            boolean isFg = key.isForeground();
+            if (isFg) {
+                if (mPaneWallController != null) {
+                    mPaneWallController.goTo(com.termux.app.wall.PaneWallPage.TERMINAL, isVisible());
+                }
+                launchProgramInNewTab(key);
+            } else {
+                launchScriptInBackground(actionKey, key.display, key.getResolvedEnv());
+            }
         }
     }
 

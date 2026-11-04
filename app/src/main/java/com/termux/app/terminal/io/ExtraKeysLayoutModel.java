@@ -73,11 +73,25 @@ public final class ExtraKeysLayoutModel {
         }
 
         /**
+         * Whether this key executes in the background.
+         */
+        public boolean isBackground() {
+            return "background".equalsIgnoreCase(target);
+        }
+
+        /**
+         * Whether this key executes in a new tab / foreground.
+         */
+        public boolean isForeground() {
+            return "foreground".equalsIgnoreCase(target) || "new_tab".equalsIgnoreCase(target);
+        }
+
+        /**
          * Whether this key executes in a new tab (IPC) rather than injecting into the active session.
          */
         public boolean isNewTab() {
-            if ("new_tab".equalsIgnoreCase(target)) return true;
-            if ("inline".equalsIgnoreCase(target)) return false;
+            if ("new_tab".equalsIgnoreCase(target) || "foreground".equalsIgnoreCase(target)) return true;
+            if ("inline".equalsIgnoreCase(target) || "background".equalsIgnoreCase(target)) return false;
             // Default heuristic: commands/scripts ending with newline that are not simple screen clears
             if (key != null && key.endsWith("\n")) {
                 String cmd = key.trim().toLowerCase(java.util.Locale.ROOT);

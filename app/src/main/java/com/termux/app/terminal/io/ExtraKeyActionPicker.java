@@ -215,6 +215,16 @@ public final class ExtraKeyActionPicker {
         renderNamedKeys(results, context.getString(R.string.settings_extra_keys_action_row_keys),
             ExtraKeysPresets.ROW_KEYS, needle, pick);
 
+        // Script / Program File Picker
+        if (needle.isEmpty() || matches("script", needle) || matches("file", needle) || matches("program", needle) || matches("berkas", needle)) {
+            results.addView(entry("📁 Pilih Script / Program (File Picker)",
+                "Jelajahi berkas .sh, .py, .cjs, binary di sistem dan buat shortcut",
+                () -> {
+                    dialog.dismiss();
+                    FusionScriptFilePickerSheet.show(context, rawOnPicked::onPicked);
+                }));
+        }
+
         // System Fast Tools
         if (needle.isEmpty() || matches("airplane", needle) || matches("mode pesawat", needle) || matches("pesawat", needle)) {
             results.addView(entry("✈️ Mode Pesawat", "Toggle Mode Pesawat (Auto Root / Shizuku / Non-root)", () -> {
