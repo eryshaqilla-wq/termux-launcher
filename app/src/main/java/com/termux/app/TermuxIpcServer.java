@@ -7,6 +7,7 @@ import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.os.Vibrator;
 import android.widget.Toast;
+import com.termux.R;
 import com.termux.terminal.TerminalSession;
 import com.termux.webview.FusionWebViewDispatcher;
 import java.io.BufferedReader;
@@ -484,8 +485,8 @@ public class TermuxIpcServer {
                                             : "[]";
                                         outputStream.write((json + "\n").getBytes());
                                     } else if (sub.equalsIgnoreCase("reset")) {
-                                        if (act.mPreferences != null) {
-                                            act.mPreferences.setLeftCanvasQuickExtraKeys(
+                                        if (act.getPreferences() != null) {
+                                            act.getPreferences().setLeftCanvasQuickExtraKeys(
                                                 com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants.TERMUX_APP.DEFAULT_LEFT_CANVAS_QUICK_EXTRA_KEYS);
                                         }
                                         act.runOnUiThread(() -> {
@@ -495,8 +496,8 @@ public class TermuxIpcServer {
                                         outputStream.write("{\"status\":\"ok\",\"action\":\"reset\"}\n".getBytes());
                                     } else if (sub.startsWith("set ")) {
                                         String val = sub.substring(4).trim();
-                                        if (act.mPreferences != null) {
-                                            act.mPreferences.setLeftCanvasQuickExtraKeys(val);
+                                        if (act.getPreferences() != null) {
+                                            act.getPreferences().setLeftCanvasQuickExtraKeys(val);
                                         }
                                         act.runOnUiThread(() -> {
                                             android.view.ViewGroup cluster = act.findViewById(R.id.left_canvas_quick_keys_cluster);
