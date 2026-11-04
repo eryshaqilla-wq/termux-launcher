@@ -1605,9 +1605,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         }
 
         @Override public boolean statusBarOnDockPlank() {
-            // Under a joined Docked frame the bar is on the frame's glass, which is as good as
-            // the plank's: it wears no frost of its own.
-            return mStatusBarOnDockPlank || frameStandsDown();
+            // Under a joined Docked frame the top bar is on the frame's glass (wears no frost of its own).
+            // A bar along the bottom is on the plank only when the dock plank actually stands under it.
+            boolean joinsDock = mStatusBarEdge == PlaceLayout.Edge.BOTTOM;
+            return joinsDock ? mStatusBarOnDockPlank : (mStatusBarOnDockPlank || frameStandsDown());
         }
 
         @NonNull @Override public com.termux.app.chrome.ChromeEdgeRule.TopLead topStackLead() {
@@ -15974,19 +15975,23 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             return;
         }
 
-        // One and a half portrait screens wide at the portrait screen's height, whichever way
-        // the phone is held now: the launcher keeps this wide picture as the managed copy and pans
-        // it as the places slide; the system gets its screen-sized centre.
+        // One and a half screens wide at the active screen's height, adapting to orientation:
+        // the launcher keeps this wide picture as the managed copy and pans it as the places slide;
+        // the system gets its screen-sized centre.
         Rect screenRect = getSystemWallpaperFrameRect();
-        int portraitWidth = Math.max(1, Math.min(screenRect.width(), screenRect.height()));
-        int portraitHeight = Math.max(1, Math.max(screenRect.width(), screenRect.height()));
-        int cropWidth = com.termux.app.wall.WallParallax.pickerWidthPx(portraitWidth);
+        boolean isLandscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE
+            || screenRect.width() > screenRect.height();
+        int activeWidth = isLandscape ? Math.max(screenRect.width(), screenRect.height())
+            : Math.min(screenRect.width(), screenRect.height());
+        int activeHeight = isLandscape ? Math.min(screenRect.width(), screenRect.height())
+            : Math.max(screenRect.width(), screenRect.height());
+        int cropWidth = com.termux.app.wall.WallParallax.pickerWidthPx(activeWidth);
         CropImageOptions cropOptions = new CropImageOptions();
         cropOptions.fixAspectRatio = true;
         cropOptions.aspectRatioX = cropWidth;
-        cropOptions.aspectRatioY = portraitHeight;
+        cropOptions.aspectRatioY = activeHeight;
         cropOptions.outputRequestWidth = cropWidth;
-        cropOptions.outputRequestHeight = portraitHeight;
+        cropOptions.outputRequestHeight = activeHeight;
         File tempCropFile = getManagedWallpaperTempFile();
         if (tempCropFile.exists()) {
             tempCropFile.delete();
@@ -25689,9 +25694,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         boolean joinsDock = mStatusBarEdge == PlaceLayout.Edge.BOTTOM;
         // And ordered between the dock's own rows it wears no glass at all: the plank's sheet is
         // already under it, so a sheet here would be a second wash and a second blur over the
-        // first. The bar keeps a sheet only as the band touching the canvas, where the dock's
-        // glass is inset below it (dockGlassTopInsetPx) — which is where it has always stood.
-        boolean onPlank = (joinsDock && mStatusBarOnDockPlank) || frameStandsDown();
+        // first. A bar on the bottom edge keeps its own sheet whenever it stands without a dock plank
+        // under it (mStatusBarOnDockPlank is false when extra keys / apps row are hidden).
+        // frameStandsDown() only applies to top status bar joining the main frame glass.
+        boolean onPlank = joinsDock ? mStatusBarOnDockPlank : frameStandsDown();
         float opacity = mPreferences == null ? 1f
             : (joinsDock ? mPreferences.getAppBarOpacity() : mPreferences.getStatusBarOpacity())
                 / 100f;

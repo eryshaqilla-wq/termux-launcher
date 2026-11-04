@@ -14,6 +14,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 import com.termux.app.TermuxActivity;
+import com.termux.app.place.Element;
+import com.termux.app.place.PlaceLayout;
+import com.termux.app.place.PlaceLayout.Edge;
+import com.termux.app.place.PlaceLayoutStore;
+import com.termux.app.place.PlaceOrientation;
+import com.termux.app.statusbar.StatusBarEdgeGeometry;
 import com.termux.shared.logger.Logger;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.shared.termux.settings.preferences.TermuxPreferenceConstants;
@@ -171,39 +177,113 @@ public final class X11WallpaperSync {
         boolean showBar = prefs == null || prefs.isX11ShowStatusBarEnabled();
         boolean showDock = prefs == null || prefs.isX11ShowExtraKeysEnabled();
 
+        PlaceOrientation orientation = PlaceOrientation.of(context.getResources().getConfiguration());
+        PlaceLayout layout = null;
+        try {
+            layout = prefs != null ? new PlaceLayoutStore(prefs).resolve(orientation) : null;
+        } catch (Exception ignored) {}
+
+        Edge statusEdge = Edge.TOP;
+        boolean statusHidden = !showBar;
+        boolean statusCompact = false;
+        if (layout != null) {
+            statusEdge = layout.slot(Element.STATUS).edge;
+            statusHidden = !showBar || layout.slot(Element.STATUS).hidden;
+            statusCompact = layout.statusCompact;
+        }
+
+        Edge extraKeysEdge = Edge.BOTTOM;
+        boolean extraKeysHidden = !showDock;
+        if (layout != null) {
+            extraKeysEdge = layout.slot(Element.EXTRA_KEYS).edge;
+            extraKeysHidden = !showDock || layout.slot(Element.EXTRA_KEYS).hidden;
+        }
+
+        boolean cutoutOff = prefs != null && TermuxPreferenceConstants.TERMUX_APP.STATUS_BAR_CUTOUT_OFF
+            .equals(prefs.getStatusBarCutoutMode());
+
         float density = context.getResources().getDisplayMetrics().density;
         int topInset = 0;
         int bottomInset = 0;
+        int leftInset = 0;
+        int rightInset = 0;
 
         int systemStatusBarHeight = 0;
-        int resId = context.getResources().getIdentifier("status_bar_height", "dimen", "android");
-        if (resId > 0) {
-            systemStatusBarHeight = context.getResources().getDimensionPixelSize(resId);
-        } else {
-            systemStatusBarHeight = Math.round(24 * density);
+        if (!cutoutOff && !isFullscreen) {
+            int resId = context.getResources().getIdentifier("status_bar_height", "dimen", "android");
+            if (resId > 0) {
+                systemStatusBarHeight = context.getResources().getDimensionPixelSize(resId);
+            } else {
+                systemStatusBarHeight = Math.round(24 * density);
+            }
         }
 
         int navBarHeight = 0;
-        int navResId = context.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
-        if (navResId > 0) {
-            navBarHeight = context.getResources().getDimensionPixelSize(navResId);
-        } else {
-            navBarHeight = Math.round(48 * density);
+        if (!isFullscreen) {
+            int navResId = context.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+            if (navResId > 0) {
+                navBarHeight = context.getResources().getDimensionPixelSize(navResId);
+            } else {
+                navBarHeight = Math.round(48 * density);
+            }
         }
 
-        int appStatusBarHeight = Math.round(91 * density);
-        int dockHeight = Math.round(96 * density);
-
-        if (isFullscreen) {
-            topInset = showBar ? appStatusBarHeight : 0;
-            bottomInset = showDock ? dockHeight : 0;
-        } else {
-            topInset = systemStatusBarHeight + (showBar ? appStatusBarHeight : 0);
-            bottomInset = (showDock ? dockHeight : 0) + navBarHeight;
+        int appStatusBarThickness = 0;
+        if (!statusHidden) {
+            appStatusBarThickness = StatusBarEdgeGeometry.thicknessPx(statusEdge, false, statusCompact, density);
         }
 
+        int dockThickness = 0;
+        if (!extraKeysHidden) {
+            dockThickness = Math.round(96 * density);
+        }
+
+        if (systemStatusBarHeight > 0) {
+            topInset += systemStatusBarHeight;
+        }
+        if (navBarHeight > 0) {
+            bottomInset += navBarHeight;
+        }
+
+        if (appStatusBarThickness > 0) {
+            switch (statusEdge) {
+                case BOTTOM:
+                    bottomInset += appStatusBarThickness;
+                    break;
+                case LEFT:
+                    leftInset += appStatusBarThickness;
+                    break;
+                case RIGHT:
+                    rightInset += appStatusBarThickness;
+                    break;
+                case TOP:
+                default:
+                    topInset += appStatusBarThickness;
+                    break;
+            }
+        }
+
+        if (dockThickness > 0) {
+            switch (extraKeysEdge) {
+                case TOP:
+                    topInset += dockThickness;
+                    break;
+                case LEFT:
+                    leftInset += dockThickness;
+                    break;
+                case RIGHT:
+                    rightInset += dockThickness;
+                    break;
+                case BOTTOM:
+                default:
+                    bottomInset += dockThickness;
+                    break;
+            }
+        }
+
+        int w = Math.max(1, screenWidth - leftInset - rightInset);
         int h = Math.max(1, screenHeight - topInset - bottomInset);
-        return new Rect(0, topInset, screenWidth, topInset + h);
+        return new Rect(leftInset, topInset, leftInset + w, topInset + h);
     }
 
     private static void exportAndroidWallpaper(@NonNull Context context) {
@@ -251,7 +331,12 @@ public final class X11WallpaperSync {
         int drawWidth = Math.max(frameWidth, Math.round(intrinsicWidth * scale));
         int drawHeight = Math.max(frameHeight, Math.round(intrinsicHeight * scale));
 
-        int offsetLeft = Math.round((frameWidth - drawWidth) / 2f);
+        // In Termux-AGY Project Fusion, Display X11 is the Right Canvas (PaneWallPage.DISPLAY).
+        // Under WallParallax, DISPLAY sits at placePosition = 1.0f (the rightmost edge of the parallax span).
+        // To align 1:1 with the Termux wallpaper when standing on the Display page,
+        // offsetLeft is positioned at placePosition = 1.0f:
+        int spareWidth = Math.max(0, drawWidth - frameWidth);
+        int offsetLeft = -spareWidth;
         int offsetTop = Math.round((frameHeight - drawHeight) / 2f);
 
         Bitmap fullBitmap = Bitmap.createBitmap(frameWidth, frameHeight, Bitmap.Config.ARGB_8888);
