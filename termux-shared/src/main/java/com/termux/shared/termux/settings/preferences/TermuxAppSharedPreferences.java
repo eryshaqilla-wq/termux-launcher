@@ -920,10 +920,6 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             TERMUX_APP.KEY_STATUS_WIDGET_WEATHER_FAHRENHEIT, TERMUX_APP.DEFAULT_STATUS_WIDGET_WEATHER_FAHRENHEIT);
     }
 
-    public void setStatusWidgetWeatherFahrenheit(boolean value) {
-        SharedPreferenceUtils.setBoolean(mSharedPreferences, TERMUX_APP.KEY_STATUS_WIDGET_WEATHER_FAHRENHEIT, value, false);
-    }
-
     /** Whose box the status row's camera gap follows: auto, custom or off; unknown reads as auto. */
     @NonNull
     public String getStatusBarCutoutMode() {
