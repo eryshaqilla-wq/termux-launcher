@@ -129,8 +129,18 @@ public final class PlaceChromePolicy {
         return extraKeysShown(layout) && extraKeysEdge(layout) == Edge.RIGHT;
     }
 
+    /** Whether the status bar is on screen at all, wherever it stands. */
+    public static boolean statusBarShown(@NonNull PlaceLayout layout) {
+        return EdgeStackPolicy.isShown(layout, Element.STATUS);
+    }
+
+    /** The status bar as a row standing on the bottom edge (the dock's row stack). */
+    public static boolean statusBarRowShown(@NonNull PlaceLayout layout) {
+        return statusBarShown(layout) && EdgeStackPolicy.edgeOf(layout, Element.STATUS) == Edge.BOTTOM;
+    }
+
     /** Whether anything at all lands on the dock, which is what decides it is drawn. */
     public static boolean dockShown(@NonNull PlaceLayout layout) {
-        return appsRowShown(layout) || azRowOnDock(layout) || extraKeysRowShown(layout);
+        return appsRowShown(layout) || azRowOnDock(layout) || extraKeysRowShown(layout) || statusBarRowShown(layout);
     }
 }

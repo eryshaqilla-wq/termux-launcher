@@ -6000,6 +6000,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // the row goes, and with it the whole stack when it was the only thing on it.
         boolean azRowEnabled = !mIsAccessoryStackCollapsed && PlaceChromePolicy.azRowOnDock(layout);
         boolean extraKeysRowEnabled = PlaceChromePolicy.extraKeysRowShown(layout);
+        boolean statusRowEnabled = PlaceChromePolicy.statusBarRowShown(layout);
 
         boolean isDisplayAtRest = isDisplayPageShowing()
             && (mPaneWallController == null || !mPaneWallController.wall().isMoving());
@@ -6012,7 +6013,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
         }
 
-        boolean dockShown = appsRowEnabled || azRowEnabled || extraKeysRowEnabled;
+        boolean dockShown = appsRowEnabled || azRowEnabled || extraKeysRowEnabled || statusRowEnabled;
         int blurRadiusDp = getEffectiveExtraKeysBlurRadius();
         float barAlpha = mPreferences.getAppBarOpacity() / 100f;
         return new ChromeSpec(
@@ -8590,7 +8591,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Alphabet and extra-key row state is deliberately not part of this cancellation decision.
         if (!state.appsRowEnabled && mSuggestionBarView != null)
             mSuggestionBarView.cancelActiveDockDrag();
-        if (!state.toolbarShown) {
+        boolean hasBottomStatus = bottomStatusBandPx() > 0;
+        if (!state.toolbarShown && !hasBottomStatus) {
             View appsBarRowHost = findViewById(R.id.apps_bar_row_host);
             View appsBarAzHost = findViewById(R.id.apps_bar_az_host);
             if (appsBarRowHost != null) {
@@ -8610,7 +8612,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (accessoryContainer != null) {
                 accessoryContainer.setVisibility(
                     !mIsAccessoryStackCollapsed && shouldShowAccessoryStack(false, state.keyboardShown,
-                        bottomStatusBandPx() > 0) ? View.VISIBLE : View.GONE);
+                        false) ? View.VISIBLE : View.GONE);
             }
             if (extraKeysBackground != null) {
                 extraKeysBackground.setVisibility(View.GONE);
@@ -8659,8 +8661,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         if (accessoryContainer != null)
             accessoryContainer.setVisibility(
-                shouldShowAccessoryStack(true, state.keyboardShown,
-                    bottomStatusBandPx() > 0) ? View.VISIBLE : View.GONE);
+                shouldShowAccessoryStack(state.toolbarShown, state.keyboardShown,
+                    hasBottomStatus) ? View.VISIBLE : View.GONE);
         if (accessorySurfaceHost != null) {
             accessorySurfaceHost.setVisibility(View.VISIBLE);
         }
@@ -15131,7 +15133,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             }
             return;
         }
-        if (host.getVisibility() != View.VISIBLE && isSplitPanesEnabled()) {
+        if (host.getVisibility() != View.VISIBLE) {
+            cancelTopStatusBarAnimator();
             host.setVisibility(View.VISIBLE);
             applyTerminalWindowBarBackdropInsets();
             setTopStatusBarCollapsed(isStatusBarCompact(), false);
@@ -21385,7 +21388,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         View leftScroll = findViewById(R.id.left_canvas_quick_keys_scroll);
         ViewGroup leftCluster = findViewById(R.id.left_canvas_quick_keys_cluster);
         if (leftScroll != null) {
-            leftScroll.setVisibility(isWidgetsPage && !isStatusBarVertical() ? View.VISIBLE : View.GONE);
+            leftScroll.setVisibility(isWidgetsPage ? View.VISIBLE : View.GONE);
             if (isWidgetsPage && leftCluster != null) {
                 populateLeftCanvasQuickKeys(leftCluster);
             }
@@ -22072,14 +22075,15 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         int primary = mDisplayQuickKeysPrimaryInk != 0 ? mDisplayQuickKeysPrimaryInk : accent;
         int muted = mDisplayQuickKeysMutedInk != 0 ? mDisplayQuickKeysMutedInk : 0xFF6C7086;
 
+        boolean vertical = isStatusBarVertical();
         int defaultStroke;
         int defaultBg;
         int defaultInk;
         if (isRunning) {
-            defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+            defaultStroke = (windowBar != null && !vertical && windowBar.getSelectedStrokeColor() != 0)
                 ? windowBar.getSelectedStrokeColor()
                 : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 112);
-            defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+            defaultBg = (windowBar != null && !vertical && windowBar.getSelectedFillColor() != 0)
                 ? windowBar.getSelectedFillColor()
                 : androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 58);
             defaultInk = 0xFFFFFFFF;
@@ -22091,13 +22095,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         int btnHeight = Math.round(dpToPx(20));
         int btnSquareW = Math.round(dpToPx(20));
-        float cornerRadius = (windowBar != null && windowBar.getStatusBarRadiusPx() >= 0)
+        float cornerRadius = (windowBar != null && !vertical && windowBar.getStatusBarRadiusPx() >= 0)
             ? windowBar.getStatusBarRadiusPx()
             : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
         int strokeWidth = Math.round(dpToPx(1));
         int marginE = Math.round(dpToPx(3));
 
         quickCluster.removeAllViews();
+        if (quickCluster instanceof LinearLayout) {
+            LinearLayout lCluster = (LinearLayout) quickCluster;
+            lCluster.setOrientation(vertical ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+            lCluster.setGravity(vertical ? Gravity.CENTER_HORIZONTAL : Gravity.CENTER_VERTICAL);
+            ViewGroup.LayoutParams clp = quickCluster.getLayoutParams();
+            if (clp != null) {
+                clp.width = vertical ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
+                clp.height = vertical ? ViewGroup.LayoutParams.WRAP_CONTENT : ViewGroup.LayoutParams.MATCH_PARENT;
+                quickCluster.setLayoutParams(clp);
+            }
+        }
         android.graphics.Typeface terminalFont = com.termux.app.terminal.TerminalLabelFaces.current().regular;
 
         for (int i = 0; i < keys.size(); i++) {
@@ -22147,10 +22162,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int padH = Math.round(dpToPx(3.5f));
             btn.setPadding(padH, 0, padH, 0);
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
-            lp.setMarginEnd(marginE);
-            lp.gravity = android.view.Gravity.CENTER_VERTICAL;
+            LinearLayout.LayoutParams lp = vertical
+                ? new LinearLayout.LayoutParams(btnSquareW, btnHeight)
+                : new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
+            if (vertical) {
+                lp.bottomMargin = marginE;
+                lp.gravity = Gravity.CENTER_HORIZONTAL;
+            } else {
+                lp.setMarginEnd(marginE);
+                lp.gravity = Gravity.CENTER_VERTICAL;
+            }
             quickCluster.addView(btn, lp);
         }
     }
@@ -22256,24 +22277,36 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getTerminalQuickKeysList();
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
 
+        boolean vertical = isStatusBarVertical();
         int accent = com.termux.app.statusbar.StatusBarLensView.accentFor(this, com.termux.app.wall.PaneWallPage.TERMINAL);
-        int defaultStroke = (windowBar != null && windowBar.getSelectedStrokeColor() != 0)
+        int defaultStroke = (windowBar != null && !vertical && windowBar.getSelectedStrokeColor() != 0)
             ? windowBar.getSelectedStrokeColor()
             : androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 112);
-        int defaultBg = (windowBar != null && windowBar.getSelectedFillColor() != 0)
+        int defaultBg = (windowBar != null && !vertical && windowBar.getSelectedFillColor() != 0)
             ? windowBar.getSelectedFillColor()
             : androidx.core.graphics.ColorUtils.setAlphaComponent(accent, 58);
         int defaultInk = 0xFFFFFFFF;
 
         int btnHeight = Math.round(dpToPx(20));
         int btnSquareW = Math.round(dpToPx(20));
-        float cornerRadius = (windowBar != null && windowBar.getStatusBarRadiusPx() >= 0)
+        float cornerRadius = (windowBar != null && !vertical && windowBar.getStatusBarRadiusPx() >= 0)
             ? windowBar.getStatusBarRadiusPx()
             : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
         int strokeWidth = Math.round(dpToPx(1));
         int marginE = Math.round(dpToPx(3));
 
         cluster.removeAllViews();
+        if (cluster instanceof LinearLayout) {
+            LinearLayout lCluster = (LinearLayout) cluster;
+            lCluster.setOrientation(vertical ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+            lCluster.setGravity(vertical ? Gravity.CENTER_HORIZONTAL : Gravity.CENTER_VERTICAL);
+            ViewGroup.LayoutParams clp = cluster.getLayoutParams();
+            if (clp != null) {
+                clp.width = vertical ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
+                clp.height = vertical ? ViewGroup.LayoutParams.WRAP_CONTENT : ViewGroup.LayoutParams.MATCH_PARENT;
+                cluster.setLayoutParams(clp);
+            }
+        }
         android.graphics.Typeface terminalFont = com.termux.app.terminal.TerminalLabelFaces.current().regular;
 
         for (int i = 0; i < keys.size(); i++) {
@@ -22344,10 +22377,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int padH = Math.round(dpToPx(3.5f));
             btn.setPadding(padH, 0, padH, 0);
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
-            lp.setMarginEnd(marginE);
-            lp.gravity = android.view.Gravity.CENTER_VERTICAL;
+            LinearLayout.LayoutParams lp = vertical
+                ? new LinearLayout.LayoutParams(btnSquareW, btnHeight)
+                : new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
+            if (vertical) {
+                lp.bottomMargin = marginE;
+                lp.gravity = Gravity.CENTER_HORIZONTAL;
+            } else {
+                lp.setMarginEnd(marginE);
+                lp.gravity = Gravity.CENTER_VERTICAL;
+            }
             cluster.addView(btn, lp);
         }
     }
@@ -22784,6 +22823,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     public void populateLeftCanvasQuickKeys(@NonNull ViewGroup cluster) {
+        boolean vertical = isStatusBarVertical();
         List<com.termux.app.terminal.io.ExtraKeysLayoutModel.Key> keys = getLeftCanvasQuickKeysList();
         com.termux.app.terminal.TerminalWindowBar windowBar = findViewById(R.id.terminal_window_bar);
 
@@ -22794,13 +22834,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         int btnHeight = Math.round(dpToPx(20));
         int btnSquareW = Math.round(dpToPx(20));
-        float cornerRadius = (windowBar != null && windowBar.getStatusBarRadiusPx() >= 0)
+        float cornerRadius = (windowBar != null && !vertical && windowBar.getStatusBarRadiusPx() >= 0)
             ? windowBar.getStatusBarRadiusPx()
             : resolveStatusIndicatorCornerRadiusPx(btnHeight, false);
         int strokeWidth = Math.round(dpToPx(1));
         int marginE = Math.round(dpToPx(3));
 
         cluster.removeAllViews();
+        if (cluster instanceof LinearLayout) {
+            LinearLayout lCluster = (LinearLayout) cluster;
+            lCluster.setOrientation(vertical ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+            lCluster.setGravity(vertical ? Gravity.CENTER_HORIZONTAL : Gravity.CENTER_VERTICAL);
+            ViewGroup.LayoutParams clp = cluster.getLayoutParams();
+            if (clp != null) {
+                clp.width = vertical ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
+                clp.height = vertical ? ViewGroup.LayoutParams.WRAP_CONTENT : ViewGroup.LayoutParams.MATCH_PARENT;
+                cluster.setLayoutParams(clp);
+            }
+        }
         android.graphics.Typeface terminalFont = com.termux.app.terminal.TerminalLabelFaces.current().regular;
 
         for (int i = 0; i < keys.size(); i++) {
@@ -22873,10 +22924,16 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             int padH = Math.round(dpToPx(3.5f));
             btn.setPadding(padH, 0, padH, 0);
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
-            lp.setMarginEnd(marginE);
-            lp.gravity = android.view.Gravity.CENTER_VERTICAL;
+            LinearLayout.LayoutParams lp = vertical
+                ? new LinearLayout.LayoutParams(btnSquareW, btnHeight)
+                : new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, btnHeight);
+            if (vertical) {
+                lp.bottomMargin = marginE;
+                lp.gravity = Gravity.CENTER_HORIZONTAL;
+            } else {
+                lp.setMarginEnd(marginE);
+                lp.gravity = Gravity.CENTER_VERTICAL;
+            }
             cluster.addView(btn, lp);
         }
 

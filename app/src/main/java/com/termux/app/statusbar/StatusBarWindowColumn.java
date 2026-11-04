@@ -205,14 +205,13 @@ public final class StatusBarWindowColumn extends ScrollView {
         WindowChipInk.Palette glass = mGlassPalette;
         if (glass == null) {
             chip.setTextColor(selected
-                ? MaterialColors.getColor(this, com.termux.shared.R.attr.termuxColorOnAccentContainer,
-                    ContextCompat.getColor(getContext(), R.color.termux_on_surface))
+                ? 0xFFFFFFFF
                 : ColorUtils.setAlphaComponent(markColor(item), 210));
         } else {
             // The chip's one glyph is 11sp text, so it is held to body text — on the surface the
             // chip's own wash leaves, not on the bare band.
             chip.setTextColor(selected
-                ? glass.selectedLabel
+                ? 0xFFFFFFFF
                 : WindowChipInk.towardPolarity(glass.restingSurface, markColor(item), pale(),
                     OnGlass.TARGET_BODY_TEXT));
         }
@@ -321,18 +320,16 @@ public final class StatusBarWindowColumn extends ScrollView {
         WindowChipInk.Palette glass = mGlassPalette;
         if (glass == null) {
             if (selected) {
-                // The pair: the container role under its own on-colour label (see dress()).
-                shape.setColor(ColorStateList.valueOf(MaterialColors.getColor(this,
-                    com.termux.shared.R.attr.termuxColorAccentContainer,
-                    ContextCompat.getColor(getContext(), R.color.termux_surface_panel_high))));
-                shape.setStroke(Math.round(density()), ColorUtils.setAlphaComponent(mAccent, 190));
+                // Paritas 100% dengan mode portrait: background fill transparan kaca (alpha 58) dan outline halus (alpha 112)
+                shape.setColor(ColorStateList.valueOf(ColorUtils.setAlphaComponent(mAccent, 58)));
+                shape.setStroke(Math.round(density()), ColorUtils.setAlphaComponent(mAccent, 112));
             } else {
                 shape.setColor(ColorStateList.valueOf(Color.TRANSPARENT));
                 shape.setStroke(Math.round(density()),
                     ColorUtils.setAlphaComponent(mark, item.busy || item.attention
                         || item.agentState == com.termux.app.terminal.AgentStatus.State.BLOCKED
                         || item.agentState == com.termux.app.terminal.AgentStatus.State.WORKING
-                        ? 170 : 70));
+                        ? 112 : 70));
             }
             return shape;
         }

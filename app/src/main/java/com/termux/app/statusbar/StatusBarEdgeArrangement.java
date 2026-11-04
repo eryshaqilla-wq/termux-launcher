@@ -122,6 +122,12 @@ public final class StatusBarEdgeArrangement {
             strip.setVertical(vertical);
             strip.setGravity(vertical ? Gravity.CENTER_HORIZONTAL : Gravity.CENTER_VERTICAL);
             stretch(strip, vertical);
+            if (vertical) {
+                strip.setPaddingRelative(0, 0, 0, 0);
+            } else {
+                int lead = Math.round(14f * host.getContext().getResources().getDisplayMetrics().density);
+                strip.setPaddingRelative(lead, 0, 0, 0);
+            }
         }
 
         View sessions = host.findViewById(R.id.terminal_sessions_indicator);
@@ -130,14 +136,58 @@ public final class StatusBarEdgeArrangement {
         TerminalWindowBar windows = host.findViewById(R.id.terminal_window_bar);
         StatusBarWindowColumn windowColumn =
             host.findViewById(R.id.terminal_status_window_column);
+        View leftScroll = host.findViewById(R.id.left_canvas_quick_keys_scroll);
         if (windowColumn != null) stretch(windowColumn, vertical);
+        if (leftScroll != null) stretch(leftScroll, vertical);
         if (windows != null && vertical) windows.setVisibility(View.GONE);
         if (windowColumn != null && !vertical) windowColumn.setVisibility(View.GONE);
 
         stack(host.findViewById(R.id.terminal_status_stats_cluster), vertical);
         stack(host.findViewById(R.id.terminal_status_widgets), vertical);
+        stackQuickKeys(host.findViewById(R.id.terminal_quick_keys_cluster), vertical);
+        stackQuickKeys(host.findViewById(R.id.display_quick_keys_cluster), vertical);
+        stackQuickKeys(host.findViewById(R.id.left_canvas_quick_keys_cluster), vertical);
         View spacer = host.findViewById(R.id.terminal_status_stats_center_spacer);
         if (spacer != null) stretch(spacer, vertical);
+    }
+
+    /** A container of quick key shortcuts, stacked cleanly along or across the bar. */
+    private static void stackQuickKeys(@Nullable View container, boolean vertical) {
+        if (!(container instanceof LinearLayout)) return;
+        LinearLayout group = (LinearLayout) container;
+        group.setOrientation(vertical ? LinearLayout.VERTICAL : LinearLayout.HORIZONTAL);
+        group.setGravity(vertical ? Gravity.CENTER_HORIZONTAL : Gravity.CENTER_VERTICAL);
+        ViewGroup.LayoutParams params = group.getLayoutParams();
+        if (params != null) {
+            params.width = vertical ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
+            params.height = vertical ? ViewGroup.LayoutParams.WRAP_CONTENT : ViewGroup.LayoutParams.MATCH_PARENT;
+            group.setLayoutParams(params);
+        }
+        float density = group.getResources().getDisplayMetrics().density;
+        int btnSquareW = Math.round(20f * density);
+        int btnHeight = Math.round(20f * density);
+        int marginE = Math.round(3f * density);
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            ViewGroup.LayoutParams childLp = child.getLayoutParams();
+            if (childLp instanceof LinearLayout.LayoutParams) {
+                LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) childLp;
+                if (vertical) {
+                    lp.width = btnSquareW;
+                    lp.height = btnHeight;
+                    lp.setMarginEnd(0);
+                    lp.bottomMargin = marginE;
+                    lp.gravity = Gravity.CENTER_HORIZONTAL;
+                } else {
+                    lp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    lp.height = btnHeight;
+                    lp.setMarginEnd(marginE);
+                    lp.bottomMargin = 0;
+                    lp.gravity = Gravity.CENTER_VERTICAL;
+                }
+                child.setLayoutParams(lp);
+            }
+        }
     }
 
     /** A container of stat widgets, turned to run down the bar rather than along it. */
