@@ -42,13 +42,24 @@ public final class M3 {
     /** A colour role from the theme; {@code fallbackRes} is the M3 baseline token used if absent. */
     @ColorInt
     public static int color(@NonNull Context context, @AttrRes int attr, @ColorRes int fallbackRes) {
-        return MaterialColors.getColor(context, attr, ContextCompat.getColor(context, fallbackRes));
+        int fallback;
+        try {
+            fallback = ContextCompat.getColor(context, fallbackRes);
+        } catch (Throwable t) {
+            fallback = fallbackRes; // Gracefully handle raw @ColorInt or missing resource IDs
+        }
+        return MaterialColors.getColor(context, attr, fallback);
     }
 
     @ColorInt
     public static int color(@NonNull View view, @AttrRes int attr, @ColorRes int fallbackRes) {
-        return MaterialColors.getColor(view, attr,
-            ContextCompat.getColor(view.getContext(), fallbackRes));
+        int fallback;
+        try {
+            fallback = ContextCompat.getColor(view.getContext(), fallbackRes);
+        } catch (Throwable t) {
+            fallback = fallbackRes; // Gracefully handle raw @ColorInt or missing resource IDs
+        }
+        return MaterialColors.getColor(view, attr, fallback);
     }
 
     @ColorInt public static int surfaceContainer(@NonNull Context c) {

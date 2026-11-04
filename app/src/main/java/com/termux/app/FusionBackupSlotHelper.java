@@ -588,7 +588,7 @@ public final class FusionBackupSlotHelper {
         dialog.setContentView(root);
 
         int primaryColor = MaterialColors.getColor(context, com.termux.shared.R.attr.termuxColorPrimary, 0xFFCDD6F4);
-        int surfaceVariant = M3.color(context, com.google.android.material.R.attr.colorSurfaceVariant, 0x1FFFFFFF);
+        int surfaceVariant = MaterialColors.getColor(context, com.google.android.material.R.attr.colorSurfaceVariant, 0x1FFFFFFF);
         int onSurface = M3.onSurface(context);
         int chipMargin = Math.round(4 * density);
         int chipHeight = Math.round(44 * density);
