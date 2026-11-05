@@ -20,6 +20,8 @@ public class FusionTab {
     public boolean mIsRecording = false;
     public FusionProxyHelper.ProxyItem mProxyItem = null;
     public boolean mIsProxyEnabled = false;
+    public int mAutoRotateIntervalSec = 0;
+    public long mLastProxyRotatedTime = 0;
 
     public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3) {
         this.mId = i;

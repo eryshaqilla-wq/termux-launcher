@@ -37,6 +37,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 🌐 FUSION PROXY HELPER (Sticky Proxy per-Tab & Multi-Tab Concurrency Manager)
@@ -394,6 +397,7 @@ public class FusionProxyHelper {
 
             tab.mProxyItem = newProxy;
             tab.mIsProxyEnabled = true;
+            tab.mLastProxyRotatedTime = System.currentTimeMillis();
             saveStickyProxy(key, newProxy);
 
             sMainHandler.post(() -> {
@@ -414,6 +418,106 @@ public class FusionProxyHelper {
                 if (cb != null) cb.onResult(success, message, ip, country, latencyMs);
             });
         }).start();
+    }
+
+    private static ScheduledExecutorService sRotateScheduler = null;
+    private static final Object sSchedulerLock = new Object();
+
+    public static synchronized void startAutoRotateScheduler(final FusionWebViewManager manager) {
+        synchronized (sSchedulerLock) {
+            if (sRotateScheduler != null && !sRotateScheduler.isShutdown()) {
+                return;
+            }
+            sRotateScheduler = Executors.newSingleThreadScheduledExecutor();
+            sRotateScheduler.scheduleWithFixedDelay(() -> {
+                try {
+                    checkAndRotateTabs(manager);
+                } catch (Throwable t) {
+                    Log.e(TAG, "Error in auto-rotate scheduler: " + t.getMessage());
+                }
+            }, 10, 10, TimeUnit.SECONDS);
+        }
+    }
+
+    private static void checkAndRotateTabs(final FusionWebViewManager manager) {
+        if (manager == null || manager.mTabList == null) return;
+        List<?> tabs = new ArrayList<>(manager.mTabList);
+        if (tabs.isEmpty()) return;
+
+        long now = System.currentTimeMillis();
+        for (Object obj : tabs) {
+            if (!(obj instanceof FusionTab)) continue;
+            final FusionTab tab = (FusionTab) obj;
+            if (tab.mIsProxyEnabled && tab.mAutoRotateIntervalSec > 0) {
+                long elapsedSec = (now - tab.mLastProxyRotatedTime) / 1000L;
+                if (elapsedSec >= tab.mAutoRotateIntervalSec) {
+                    tab.mLastProxyRotatedTime = now;
+                    Log.i(TAG, "Auto-rotating proxy for tab " + tab.mId + " (interval: " + tab.mAutoRotateIntervalSec + "s)");
+                    rotateProxyForTab(tab, manager, (success, message, ip, country, latencyMs) -> {
+                        sMainHandler.post(() -> {
+                            TermuxActivity act = manager.mActivity;
+                            if (act != null && success) {
+                                String cStr = (country != null && !country.isEmpty()) ? country.toUpperCase() : "OK";
+                                FusionToast.makeText(act, "🔄 Tab " + (tab.mId + 1) + " auto-rotate: " + cStr + " (" + ip + ")", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Konfigurasi proxy untuk tab secara spesifik atau auto-pool
+     */
+    public static void configureTabProxy(FusionTab tab, String proxyStr, int intervalSec, FusionWebViewManager manager) {
+        if (tab == null) return;
+        if (proxyStr == null || proxyStr.trim().isEmpty() || "direct".equalsIgnoreCase(proxyStr) || "off".equalsIgnoreCase(proxyStr)) {
+            tab.mIsProxyEnabled = false;
+            tab.mAutoRotateIntervalSec = 0;
+            return;
+        }
+
+        String key = (tab.mProfile != null && !tab.mProfile.isEmpty() && !"default".equals(tab.mProfile))
+                ? tab.mProfile
+                : "tab_" + tab.mId;
+
+        ProxyItem item = null;
+        if ("auto".equalsIgnoreCase(proxyStr) || "pool".equalsIgnoreCase(proxyStr) || "1".equals(proxyStr) || "true".equalsIgnoreCase(proxyStr)) {
+            ProxyItem sticky = loadStickyProxy(key);
+            if (sticky != null && sticky.isValid()) {
+                item = sticky;
+            } else {
+                File poolFile = getPrimaryProxyFile();
+                if (poolFile != null) {
+                    item = popNextProxyFromFile(poolFile);
+                }
+            }
+        } else {
+            item = parse(proxyStr);
+        }
+
+        if (item != null && item.isValid()) {
+            tab.mProxyItem = item;
+            tab.mIsProxyEnabled = true;
+            tab.mLastProxyRotatedTime = System.currentTimeMillis();
+            if (intervalSec > 0) {
+                tab.mAutoRotateIntervalSec = intervalSec;
+                startAutoRotateScheduler(manager);
+            }
+            saveStickyProxy(key, item);
+            applyProxyToEngine(tab);
+            updateProxyIndicator(manager, tab);
+
+            testProxyAsync(item, (success, message, ip, country, latencyMs) -> {
+                if (success) {
+                    saveStickyProxy(key, item);
+                    sMainHandler.post(() -> {
+                        if (manager != null) updateProxyIndicator(manager, tab);
+                    });
+                }
+            });
+        }
     }
 
     /**
@@ -576,12 +680,12 @@ public class FusionProxyHelper {
 
         if (tab != null && tab.mIsProxyEnabled && tab.mProxyItem != null && tab.mProxyItem.isValid()) {
             String country = tab.mProxyItem.country;
-            String label = (country != null && !country.isEmpty()) ? " 🌐 " + country.toUpperCase() + " " : " 🌐 ON ";
-            manager.mProxyBtn.setText(label);
+            String cCode = (country != null && !country.trim().isEmpty()) ? country.trim().toUpperCase() : "ON";
+            manager.mProxyBtn.setText(" PROXY : " + cCode + " ");
             manager.mProxyBtn.setTextColor(0xFF89DCEB); // Cyan
             manager.mProxyBtn.setBackground(FusionUiHelper.createRounded(0x3389DCEB, 0xFF89DCEB, 4.0f));
         } else {
-            manager.mProxyBtn.setText(" 🌐 OFF ");
+            manager.mProxyBtn.setText(" PROXY : OFF ");
             manager.mProxyBtn.setTextColor(0xFF6C7086); // Muted gray
             manager.mProxyBtn.setBackground(FusionUiHelper.createRounded(0x1A6C7086, 0x336C7086, 4.0f));
         }
@@ -601,7 +705,7 @@ public class FusionProxyHelper {
 
         AlertDialog.Builder builder = new AlertDialog.Builder(act);
         String profLabel = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty()) ? " (" + currentTab.mProfile + ")" : "";
-        builder.setTitle("🌐 Proxy · Tab " + (manager.mActiveTab + 1) + profLabel);
+        builder.setTitle("Proxy · Tab " + (manager.mActiveTab + 1) + profLabel);
 
         ScrollView scrollView = new ScrollView(act);
         LinearLayout root = new LinearLayout(act);
@@ -611,10 +715,10 @@ public class FusionProxyHelper {
         // Status proxy saat ini
         TextView statusText = new TextView(act);
         if (currentTab.mIsProxyEnabled && currentTab.mProxyItem != null && currentTab.mProxyItem.isValid()) {
-            statusText.setText("Status: 🟢 Aktif (" + currentTab.mProxyItem.getDisplayName() + ")");
+            statusText.setText("Status: Aktif (" + currentTab.mProxyItem.getDisplayName() + ")");
             statusText.setTextColor(0xFFA6E3A1); // Green
         } else {
-            statusText.setText("Status: ⚪ Direct (Tanpa Proxy)");
+            statusText.setText("Status: Nonaktif (Direct Network)");
             statusText.setTextColor(0xFFBAC2DE);
         }
         statusText.setTextSize(2, 13.0f);
@@ -640,6 +744,30 @@ public class FusionProxyHelper {
         }
         root.addView(inputProxy);
 
+        // Baris Interval Rotasi Otomatis
+        LinearLayout intervalRow = new LinearLayout(act);
+        intervalRow.setOrientation(0);
+        intervalRow.setPadding(0, 10, 0, 4);
+        intervalRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        TextView labelInterval = new TextView(act);
+        labelInterval.setText("Interval Rotasi (Menit, 0 = Nonaktif):");
+        labelInterval.setTextColor(0xFFCDD6F4);
+        labelInterval.setTextSize(2, 12.0f);
+        intervalRow.addView(labelInterval, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+        final EditText inputInterval = new EditText(act);
+        int currentMins = (currentTab.mAutoRotateIntervalSec > 0) ? (currentTab.mAutoRotateIntervalSec / 60) : 0;
+        inputInterval.setText(String.valueOf(currentMins));
+        inputInterval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        inputInterval.setTextSize(2, 12.5f);
+        inputInterval.setTextColor(0xFFCDD6F4);
+        inputInterval.setGravity(android.view.Gravity.CENTER);
+        inputInterval.setBackground(FusionUiHelper.createRounded(0xFF181825, 0xFF313244, 4.0f));
+        inputInterval.setPadding(14, 8, 14, 8);
+        intervalRow.addView(inputInterval, new LinearLayout.LayoutParams(120, -2));
+        root.addView(intervalRow);
+
         // Hasil Pengujian
         final TextView testResultText = new TextView(act);
         testResultText.setTextSize(2, 11.5f);
@@ -653,7 +781,7 @@ public class FusionProxyHelper {
         actionRow.setPadding(0, 10, 0, 6);
 
         Button testBtn = new Button(act);
-        testBtn.setText("🔍 Tes Proxy");
+        testBtn.setText("Tes Proxy");
         testBtn.setTextSize(2, 11.5f);
         testBtn.setOnClickListener(v -> {
             String pStr = inputProxy.getText().toString().trim();
@@ -661,12 +789,12 @@ public class FusionProxyHelper {
             if (item == null || !item.isValid()) {
                 testResultText.setVisibility(View.VISIBLE);
                 testResultText.setTextColor(0xFFF38BA8);
-                testResultText.setText("❌ Format proxy tidak valid. Contoh: gw.dataimpulse.com:823:user:pass");
+                testResultText.setText("Format proxy tidak valid. Contoh: gw.dataimpulse.com:823:user:pass");
                 return;
             }
             testResultText.setVisibility(View.VISIBLE);
             testResultText.setTextColor(0xFFF9E2AF);
-            testResultText.setText("⏳ Sedang menguji koneksi proxy ke server...");
+            testResultText.setText("Sedang menguji koneksi proxy ke server...");
 
             testProxyAsync(item, (success, message, ip, country, latencyMs) -> {
                 testResultText.setText(message);
@@ -676,7 +804,7 @@ public class FusionProxyHelper {
         actionRow.addView(testBtn, new LinearLayout.LayoutParams(0, -2, 1.0f));
 
         Button fileBtn = new Button(act);
-        fileBtn.setText("📂 File .txt");
+        fileBtn.setText("Pilih File .txt");
         fileBtn.setTextSize(2, 11.5f);
         fileBtn.setOnClickListener(v -> {
             showSelectProxyFileDialog(act, manager, inputProxy, testResultText);
@@ -691,12 +819,12 @@ public class FusionProxyHelper {
         rotateRow.setPadding(0, 0, 0, 10);
 
         Button rotateBtn = new Button(act);
-        rotateBtn.setText("🔄 Rotasi Proxy (Tarik Baru dari proxy.txt)");
+        rotateBtn.setText("Rotasi Proxy (Tarik Baru dari proxy.txt)");
         rotateBtn.setTextSize(2, 11.5f);
         rotateBtn.setOnClickListener(v -> {
             testResultText.setVisibility(View.VISIBLE);
             testResultText.setTextColor(0xFFF9E2AF);
-            testResultText.setText("⏳ Mengambil proxy baru & menguji on-chain...");
+            testResultText.setText("Mengambil proxy baru & menguji on-chain...");
 
             rotateProxyForTab(currentTab, manager, (success, message, ip, country, latencyMs) -> {
                 testResultText.setText(message);
@@ -725,19 +853,33 @@ public class FusionProxyHelper {
             String pStr = inputProxy.getText().toString().trim();
             ProxyItem item = parse(pStr);
             if (item == null || !item.isValid()) {
-                FusionToast.makeText(act, "❌ Format proxy tidak valid.", Toast.LENGTH_SHORT).show();
+                FusionToast.makeText(act, "Format proxy tidak valid.", Toast.LENGTH_SHORT).show();
                 return;
             }
+
+            int mins = 0;
+            try {
+                mins = Integer.parseInt(inputInterval.getText().toString().trim());
+            } catch (Exception ignored) {}
+            if (mins < 0) mins = 0;
+
             String key = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty() && !"default".equals(currentTab.mProfile))
                     ? currentTab.mProfile
                     : "tab_" + currentTab.mId;
 
             currentTab.mProxyItem = item;
             currentTab.mIsProxyEnabled = true;
+            currentTab.mAutoRotateIntervalSec = mins * 60;
+            currentTab.mLastProxyRotatedTime = System.currentTimeMillis();
+            if (mins > 0) {
+                startAutoRotateScheduler(manager);
+            }
             saveStickyProxy(key, item);
             applyProxyToEngine(currentTab);
             updateProxyIndicator(manager, currentTab);
-            FusionToast.makeText(act, "✅ Proxy Aktif untuk Tab " + (manager.mActiveTab + 1) + " (" + item.toProxyRule() + ")", Toast.LENGTH_SHORT).show();
+
+            String intMsg = mins > 0 ? " (Auto-rotate tiap " + mins + "m)" : "";
+            FusionToast.makeText(act, "Proxy Aktif untuk Tab " + (manager.mActiveTab + 1) + intMsg, Toast.LENGTH_SHORT).show();
         });
 
         builder.setNeutralButton("Matikan Proxy Tab", (dialog, which) -> {
@@ -746,10 +888,11 @@ public class FusionProxyHelper {
                     : "tab_" + currentTab.mId;
 
             currentTab.mIsProxyEnabled = false;
+            currentTab.mAutoRotateIntervalSec = 0;
             saveStickyProxy(key, null);
             applyProxyToEngine(currentTab);
             updateProxyIndicator(manager, currentTab);
-            FusionToast.makeText(act, "⚪ Tab " + (manager.mActiveTab + 1) + " kembali ke Direct Network", Toast.LENGTH_SHORT).show();
+            FusionToast.makeText(act, "Tab " + (manager.mActiveTab + 1) + " kembali ke Direct Network (Proxy OFF)", Toast.LENGTH_SHORT).show();
         });
 
         builder.setNegativeButton("Tutup", null);

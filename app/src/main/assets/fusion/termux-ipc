@@ -51,20 +51,16 @@ handle_left_canvas() {
     shift 2>/dev/null || true
     case "$SUB" in
         ""|help|--help|-h)
-            echo "Usage: termux-ipc left-canvas <open|stop|profile|eval|tab|keys> [args...]"
+            echo "Usage: termux-ipc left-canvas <open|stop|profile|eval|tab> [args...]"
             echo ""
-            echo "Kontrol Kanvas Kiri (Eso Browser - 0 MB RAM Standby & Shortcut Statbar):"
+            echo "Kontrol Kanvas Kiri (Eso Browser - 0 MB RAM Standby):"
             echo "  open <url> [--json]       Buka URL di Kanvas Kiri on-demand"
             echo "  stop [--json]             Hentikan mesin WebView & kembali ke Standby 0 MB"
             echo "  profile <nama> [--json]   Ganti profil aktif Kanvas Kiri"
             echo "  eval \"<js>\" [--json]      Jalankan kode JavaScript di tab aktif"
             echo "  tab new [--json]          Buka tab baru (diarahkan ke beranda standby)"
             echo "  tab close [--json]        Tutup tab aktif"
-            echo "  keys [list|add|set|reset] Kelola tombol shortcut statbar kanvas kiri"
             return 0
-            ;;
-        keys)
-            send_cmd "LEFT_CANVAS_KEYS $*"
             ;;
         open)
             send_cmd "LEFT_CANVAS open $*"
@@ -327,6 +323,45 @@ handle_webview() {
             send_cmd "WEBVIEW_SHOW_TABS"
             return 0
             ;;
+        proxy|--proxy)
+            shift
+            local SUB="$1"
+            if [ "$SUB" = "set" ]; then
+                shift
+                local PSTR="$*"
+                if [ -z "$PSTR" ]; then
+                    echo "Usage: termux-ipc webview proxy set <proxy_string>"
+                    return 1
+                fi
+                send_cmd "WEBVIEW_PROXY_SET $PSTR"
+                echo "[termux-ipc] Proxy tab aktif diset: $PSTR"
+            elif [ "$SUB" = "clear" ] || [ "$SUB" = "off" ] || [ "$SUB" = "reset" ] || [ "$SUB" = "direct" ]; then
+                send_cmd "WEBVIEW_PROXY_CLEAR"
+                echo "[termux-ipc] Proxy tab aktif dimatikan (Direct)"
+            elif [ "$SUB" = "rotate" ] || [ "$SUB" = "rotasi" ] || [ "$SUB" = "next" ]; then
+                shift
+                local INT_ARG="$1"
+                if [ -n "$INT_ARG" ] && [[ "$INT_ARG" =~ ^[0-9]+$ ]]; then
+                    send_cmd "WEBVIEW_PROXY_ROTATE $INT_ARG"
+                    echo "[termux-ipc] Proxy tab aktif dirotasi (auto-rotate tiap $INT_ARG menit)"
+                else
+                    send_cmd "WEBVIEW_PROXY_ROTATE"
+                    echo "[termux-ipc] Memutar proxy tab aktif (tarik baru dari proxy.txt)..."
+                fi
+            elif [ "$SUB" = "interval" ] || [ "$SUB" = "auto" ]; then
+                shift
+                local INT_VAL="$1"
+                if [ -z "$INT_VAL" ]; then
+                    echo "Usage: termux-ipc webview proxy interval <menit (0=nonaktif)>"
+                    return 1
+                fi
+                send_cmd "WEBVIEW_PROXY_INTERVAL $INT_VAL"
+                echo "[termux-ipc] Interval rotasi otomatis diset: $INT_VAL menit"
+            else
+                send_cmd "WEBVIEW_PROXY_DIALOG"
+            fi
+            return 0
+            ;;
         save-session|save|--save-session|--save)
             shift
             local PROF="$1"
@@ -545,11 +580,30 @@ handle_webview() {
     local BLOCK_FONTS=0
     local BLOCK_TRACKERS=0
     local BLOCK_CSS=0
+    local PROXY=""
+    local INTERVAL=0
     local WC=""
     local URL=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --proxy)
+                if [ $# -ge 2 ] && [[ "$2" != --* ]] && [[ "$2" != http://* ]] && [[ "$2" != https://* ]]; then
+                    PROXY="$2"
+                    shift 2
+                else
+                    PROXY="auto"
+                    shift 1
+                fi
+                ;;
+            --interval|--rotate)
+                if [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]]; then
+                    INTERVAL="$2"
+                    shift 2
+                else
+                    shift 1
+                fi
+                ;;
             --profile)
                 if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
                     PROFILE="$2"
@@ -671,10 +725,12 @@ data = {
     'block_media': sys.argv[9] == '1',
     'block_fonts': sys.argv[10] == '1',
     'block_trackers': sys.argv[11] == '1',
-    'block_css': sys.argv[12] == '1'
+    'block_css': sys.argv[12] == '1',
+    'proxy': sys.argv[13],
+    'interval': int(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14].isdigit() else 0
 }
 print(json.dumps(data))
-" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS")
+" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL")
 
     local RESP
     RESP=$(send_cmd "WEBVIEW_CONFIG $CFG_PAYLOAD")
@@ -918,57 +974,6 @@ sys.exit(res.returncode)
     tab-rename)
         handle_tab "rename" "$@"
         ;;
-    airplane-mode|airplane|pesawat|mode-pesawat)
-        SUB="${1:-toggle}"
-        shift 2>/dev/null || true
-        case "$SUB" in
-            ""|toggle)
-                send_cmd "AIRPLANE_MODE toggle"
-                ;;
-            on|enable|1)
-                send_cmd "AIRPLANE_MODE on"
-                ;;
-            off|disable|0)
-                send_cmd "AIRPLANE_MODE off"
-                ;;
-            status|check|get)
-                send_cmd "AIRPLANE_MODE status"
-                ;;
-            *)
-                echo "Penggunaan: termux-ipc airplane-mode [on|off|toggle|status]"
-                ;;
-        esac
-        ;;
-    slot|backup-slot)
-        SUB="${1:-status}"
-        shift 2>/dev/null || true
-        case "$SUB" in
-            get|status|current|"")
-                send_cmd "BACKUP_SLOT get"
-                ;;
-            list|all)
-                send_cmd "BACKUP_SLOT list"
-                ;;
-            next)
-                send_cmd "BACKUP_SLOT next"
-                ;;
-            prev|previous)
-                send_cmd "BACKUP_SLOT prev"
-                ;;
-            pick|picker)
-                send_cmd "BACKUP_SLOT pick"
-                ;;
-            app|backup-app)
-                send_cmd "BACKUP_SLOT app"
-                ;;
-            set|switch)
-                send_cmd "BACKUP_SLOT set $1"
-                ;;
-            *)
-                send_cmd "BACKUP_SLOT set $SUB"
-                ;;
-        esac
-        ;;
     launcherctl)
         SUB="${1:-status}"
         case "$SUB" in
@@ -991,7 +996,7 @@ sys.exit(res.returncode)
         ;;
     *)
         echo "Aksi tidak dikenal: $ACTION"
-        echo "Pilihan yang tersedia: toast, vibrate, clip-get, clip-set, run, input, slot, airplane-mode, mouse-on, mouse-off, keyboard-disable (disable), keyboard-enable (enable), keyboard-hide (hide), keyboard-show (show), webview, api, x11-start, x11-stop, x11-launch, x11-audio, ping"
+        echo "Pilihan yang tersedia: toast, vibrate, clip-get, clip-set, run, input, mouse-on, mouse-off, keyboard-disable (disable), keyboard-enable (enable), keyboard-hide (hide), keyboard-show (show), webview, api, x11-start, x11-stop, x11-launch, x11-audio, ping"
         echo "Untuk kontrol WebView: termux-ipc webview --help"
         exit 1
         ;;

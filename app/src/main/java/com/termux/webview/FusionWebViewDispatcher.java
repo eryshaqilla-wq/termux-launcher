@@ -15,7 +15,18 @@ public class FusionWebViewDispatcher {
         if (str.startsWith("WEBVIEW_CONFIG ")) {
             try {
                 JSONObject jSONObject = new JSONObject(str.substring(15));
-                fusionWebViewManager.openConfig(jSONObject.getString("url"), jSONObject.optString("profile", "default"), jSONObject.optString("wallet", ""), jSONObject.optString("chain", "base"), jSONObject.optBoolean("isGhost", true), jSONObject.optBoolean("isDesktop", false), jSONObject.optBoolean("isAuto", false), jSONObject.optString("wc", ""));
+                fusionWebViewManager.openConfig(
+                    jSONObject.getString("url"),
+                    jSONObject.optString("profile", "default"),
+                    jSONObject.optString("wallet", ""),
+                    jSONObject.optString("chain", "base"),
+                    jSONObject.optBoolean("isGhost", true),
+                    jSONObject.optBoolean("isDesktop", false),
+                    jSONObject.optBoolean("isAuto", false),
+                    jSONObject.optString("wc", ""),
+                    jSONObject.optString("proxy", ""),
+                    jSONObject.optInt("interval", 0)
+                );
                 return;
             } catch (Exception unused) {
                 return;
@@ -146,6 +157,7 @@ public class FusionWebViewDispatcher {
             if (activeTab != null) {
                 activeTab.mIsProxyEnabled = false;
                 activeTab.mProxyItem = null;
+                activeTab.mAutoRotateIntervalSec = 0;
                 FusionProxyHelper.applyProxyToEngine(activeTab);
                 FusionProxyHelper.updateProxyIndicator(fusionWebViewManager, activeTab);
             }
@@ -155,10 +167,36 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.showProxyDialog();
             return;
         }
-        if (str.equals("WEBVIEW_PROXY_ROTATE")) {
+        if (str.startsWith("WEBVIEW_PROXY_ROTATE")) {
             FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
             if (activeTab != null) {
+                String sub = str.length() > 20 ? str.substring(20).trim() : "";
+                if (!sub.isEmpty()) {
+                    try {
+                        int mins = Integer.parseInt(sub);
+                        activeTab.mAutoRotateIntervalSec = mins * 60;
+                        activeTab.mLastProxyRotatedTime = System.currentTimeMillis();
+                        if (mins > 0) {
+                            FusionProxyHelper.startAutoRotateScheduler(fusionWebViewManager);
+                        }
+                    } catch (Exception ignored) {}
+                }
                 FusionProxyHelper.rotateProxyForTab(activeTab, fusionWebViewManager, null);
+            }
+            return;
+        }
+        if (str.startsWith("WEBVIEW_PROXY_INTERVAL ") || str.startsWith("WEBVIEW_PROXY_AUTO ")) {
+            String valStr = str.substring(str.indexOf(" ") + 1).trim();
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+            if (activeTab != null) {
+                try {
+                    int mins = Integer.parseInt(valStr);
+                    activeTab.mAutoRotateIntervalSec = mins * 60;
+                    activeTab.mLastProxyRotatedTime = System.currentTimeMillis();
+                    if (mins > 0) {
+                        FusionProxyHelper.startAutoRotateScheduler(fusionWebViewManager);
+                    }
+                } catch (Exception ignored) {}
             }
             return;
         }

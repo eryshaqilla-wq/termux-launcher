@@ -313,8 +313,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         public final String mUrl;
         public final String mWalletName;
         public final String mWcUri;
+        public final String mProxy;
+        public final int mIntervalMins;
 
-        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
             this.mManager = fusionWebViewManager;
             this.mUrl = str;
             this.mProfile = str2;
@@ -324,6 +326,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mIsDesktop = z2;
             this.mIsAuto = z3;
             this.mWcUri = str5;
+            this.mProxy = str6;
+            this.mIntervalMins = i;
+        }
+
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, "", 0);
         }
 
         @Override // java.lang.Runnable
@@ -332,7 +340,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (fusionWebViewManager == null) {
                 return;
             }
-            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri);
+            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri, this.mProxy, this.mIntervalMins);
         }
     }
 
@@ -763,7 +771,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (termuxActivity != null) {
             fusionTab.mBoundSession = termuxActivity.getCurrentSession();
         }
-        FusionProxyHelper.initTabStickyProxy(fusionTab);
+        fusionTab.mIsProxyEnabled = false;
+        fusionTab.mProxyItem = null;
+        fusionTab.mAutoRotateIntervalSec = 0;
         this.mTabList.add(fusionTab);
         return fusionTab;
     }
@@ -952,7 +962,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mControlPill.addView(textView2, layoutParams3);
             TextView proxyBtn = new TextView(this.mActivity);
             this.mProxyBtn = proxyBtn;
-            proxyBtn.setText(" 🌐 OFF ");
+            proxyBtn.setText(" PROXY : OFF ");
             FusionUiHelper.setSolidBtn(proxyBtn);
             proxyBtn.setTextSize(2, 11.0f);
             proxyBtn.setPadding(8, 4, 8, 4);
@@ -2116,12 +2126,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity == null) {
             return;
         }
-        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5));
+        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5, str6, i));
+    }
+
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+        openConfig(str, str2, str3, str4, z, z2, z3, str5, "", 0);
+    }
+
+    public java.util.List<FusionTab> getTabList() {
+        return this.mTabList;
     }
 
     public void openUrl(String str, String str2, boolean z, boolean z2) {
@@ -2133,6 +2151,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, "", 0);
+    }
+
+    public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins) {
         TerminalSession currentSession = null;
         initViews();
         if (str == null || str.isEmpty() || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
@@ -2186,10 +2208,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             }
         }
+        FusionTab targetTab = null;
         if (i >= 0) {
             FusionTab fusionTab2 = (FusionTab) this.mTabList.get(i);
             fusionTab2.mUrl = str;
             fusionTab2.mIsMinimized = false;
+            targetTab = fusionTab2;
             switchTab(i);
             FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
             if (fusionTab2.mWebView != null) {
@@ -2197,9 +2221,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
         } else {
             FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5);
+            targetTab = fusionTabCreateTabInternal;
             switchTab(this.mTabList.size() - 1);
             if (fusionTabCreateTabInternal != null && fusionTabCreateTabInternal.mWebView != null) {
                 fusionTabCreateTabInternal.mWebView.loadUrl(str);
+            }
+        }
+        if (targetTab != null) {
+            if (proxyStr != null && !proxyStr.trim().isEmpty()) {
+                FusionProxyHelper.configureTabProxy(targetTab, proxyStr, intervalMins * 60, this);
+            } else {
+                targetTab.mIsProxyEnabled = false;
+                targetTab.mAutoRotateIntervalSec = 0;
+                FusionProxyHelper.applyProxyToEngine(targetTab);
+                FusionProxyHelper.updateProxyIndicator(this, targetTab);
             }
         }
         syncVisibility();
