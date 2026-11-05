@@ -27,6 +27,7 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
@@ -37,10 +38,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+/**
+ * 🌐 FUSION PROXY HELPER (Sticky Proxy per-Tab & Multi-Tab Concurrency Manager)
+ * Mengadopsi arsitektur dari agenthansa.py & fluxa.py (Tuan Eso Edition):
+ * 1. Sticky Proxy: Setiap Profil & Tab memiliki proxy lengket unik di ~/.fusion/proxy_sticky.json.
+ * 2. Auto-Pool Assignment: Tab baru otomatis menyedot 1 proxy unik dari proxy.txt / dataimpulse.txt.
+ * 3. Rotasi Sekali Klik: Tombol [🔄 Rotasi Proxy] untuk membuang proxy ampas dan menarik proxy baru dari antrean.
+ * 4. Multi-Format: Mendukung penuh host:port:user:pass DataImpulse, user:pass@host:port, SOCKS5, & HTTP.
+ * 5. Multi-Tab Isolation: Sinkronisasi instan saat berpindah tab & auto HTTP Auth tanpa popup.
+ */
 public class FusionProxyHelper {
     private static final String TAG = "FusionProxyHelper";
     private static final Handler sMainHandler = new Handler(Looper.getMainLooper());
     private static final Executor sDirectExecutor = Runnable::run;
+
+    private static final String STICKY_FILE_PATH = "/root/.fusion/proxy_sticky.json";
+    private static final String FALLBACK_STICKY_FILE_PATH = "/data/data/com.termux/files/home/.fusion/proxy_sticky.json";
 
     public static class ProxyItem {
         public String raw = "";
@@ -119,29 +132,24 @@ public class FusionProxyHelper {
             String first = parts[0];
             String second = parts[1];
 
-            // Cek apakah host di depan (host:port@user:pass) atau di belakang (user:pass@host:port)
             if (first.contains(":") && second.contains(":")) {
-                // Tentukan mana yang host berdasarkan port angka
                 String[] p1 = first.split(":", 2);
                 String[] p2 = second.split(":", 2);
                 boolean p1IsPort = isNumeric(p1[1]);
                 boolean p2IsPort = isNumeric(p2[1]);
 
                 if (p1IsPort && !p2IsPort) {
-                    // host:port@user:pass
                     item.host = p1[0].trim();
                     try { item.port = Integer.parseInt(p1[1].trim()); } catch (Exception ignored) {}
                     item.user = p2[0].trim();
                     item.pass = p2[1].trim();
                 } else {
-                    // user:pass@host:port
                     item.user = p1[0].trim();
                     item.pass = p1[1].trim();
                     item.host = p2[0].trim();
                     try { item.port = Integer.parseInt(p2[1].trim()); } catch (Exception ignored) {}
                 }
             } else if (second.contains(":")) {
-                // user:pass@host:port atau user@host:port
                 if (first.contains(":")) {
                     String[] auth = first.split(":", 2);
                     item.user = auth[0].trim();
@@ -165,7 +173,6 @@ public class FusionProxyHelper {
             item.pass = colons[3].trim();
             return item.isValid() ? item : null;
         } else if (colons.length == 2) {
-            // host:port
             item.host = colons[0].trim();
             try { item.port = Integer.parseInt(colons[1].trim()); } catch (Exception ignored) {}
             return item.isValid() ? item : null;
@@ -180,6 +187,233 @@ public class FusionProxyHelper {
             if (!Character.isDigit(c)) return false;
         }
         return true;
+    }
+
+    /* =========================================================================
+     * STICKY PROXY & AUTO-ROTATION STORAGE (SEPERTI FLUXA.PY & AGENTHANSA.PY)
+     * ========================================================================= */
+
+    private static File getStickyFile() {
+        File f1 = new File(STICKY_FILE_PATH);
+        if (f1.getParentFile() != null && !f1.getParentFile().exists()) {
+            try { f1.getParentFile().mkdirs(); } catch (Exception ignored) {}
+        }
+        if (f1.getParentFile() != null && f1.getParentFile().canWrite()) {
+            return f1;
+        }
+        File f2 = new File(FALLBACK_STICKY_FILE_PATH);
+        if (f2.getParentFile() != null && !f2.getParentFile().exists()) {
+            try { f2.getParentFile().mkdirs(); } catch (Exception ignored) {}
+        }
+        return f2;
+    }
+
+    public static synchronized void saveStickyProxy(String profileOrTab, ProxyItem item) {
+        if (profileOrTab == null || profileOrTab.isEmpty()) return;
+        try {
+            File f = getStickyFile();
+            JSONObject root = new JSONObject();
+            if (f.exists()) {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) sb.append(line);
+                    if (sb.length() > 0) root = new JSONObject(sb.toString());
+                }
+            }
+            if (item != null && item.isValid()) {
+                JSONObject pObj = new JSONObject();
+                pObj.put("raw", item.raw);
+                pObj.put("host", item.host);
+                pObj.put("port", item.port);
+                pObj.put("user", item.user);
+                pObj.put("pass", item.pass);
+                pObj.put("scheme", item.scheme);
+                pObj.put("country", item.country);
+                pObj.put("ip", item.ip);
+                root.put(profileOrTab, pObj);
+            } else {
+                root.remove(profileOrTab);
+            }
+            try (FileOutputStream fos = new FileOutputStream(f, false)) {
+                fos.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Gagal saveStickyProxy: " + e.getMessage());
+        }
+    }
+
+    public static synchronized ProxyItem loadStickyProxy(String profileOrTab) {
+        if (profileOrTab == null || profileOrTab.isEmpty()) return null;
+        try {
+            File f = getStickyFile();
+            if (!f.exists()) return null;
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line);
+                if (sb.length() == 0) return null;
+                JSONObject root = new JSONObject(sb.toString());
+                if (root.has(profileOrTab)) {
+                    JSONObject pObj = root.getJSONObject(profileOrTab);
+                    String raw = pObj.optString("raw", "");
+                    ProxyItem item = parse(raw);
+                    if (item != null) {
+                        item.country = pObj.optString("country", "");
+                        item.ip = pObj.optString("ip", "");
+                        return item;
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Gagal loadStickyProxy: " + e.getMessage());
+        }
+        return null;
+    }
+
+    public static File getPrimaryProxyFile() {
+        String[] candidates = new String[] {
+            "/sdcard/Download/proxy.txt",
+            "/sdcard/Download/dataimpulse.txt",
+            "/root/proxy.txt",
+            "/project/proxy.txt",
+            "/data/data/com.termux/files/home/proxy.txt",
+            "/sdcard/proxy.txt"
+        };
+        for (String p : candidates) {
+            File f = new File(p);
+            if (f.exists() && f.isFile() && f.length() > 0) return f;
+        }
+        return null;
+    }
+
+    /**
+     * Mengambil 1 proxy berikutnya dari file antrean (Multi-process safe locking persis fluxa.py)
+     */
+    public static synchronized ProxyItem popNextProxyFromFile(File file) {
+        if (file == null || !file.exists() || !file.isFile()) return null;
+
+        File lockFile = new File(file.getAbsolutePath() + ".lock");
+        int waitCount = 0;
+        while (lockFile.exists() && waitCount++ < 15) {
+            try { Thread.sleep(100); } catch (Exception ignored) {}
+        }
+        try { lockFile.createNewFile(); } catch (Exception ignored) {}
+
+        ProxyItem popped = null;
+        try {
+            List<String> remainingLines = new ArrayList<>();
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWith("#") || line.startsWith("//")) continue;
+                    if (popped == null) {
+                        ProxyItem parsed = parse(line);
+                        if (parsed != null && parsed.isValid()) {
+                            popped = parsed;
+                            continue; // Ambil yang pertama (pop)
+                        }
+                    }
+                    remainingLines.add(line);
+                }
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(file, false)) {
+                for (String rem : remainingLines) {
+                    fos.write((rem + "\n").getBytes(StandardCharsets.UTF_8));
+                }
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Gagal popNextProxyFromFile: " + e.getMessage());
+        } finally {
+            try { lockFile.delete(); } catch (Exception ignored) {}
+        }
+
+        return popped;
+    }
+
+    /**
+     * Menginisialisasi sticky proxy saat tab baru dibuat
+     */
+    public static void initTabStickyProxy(FusionTab tab) {
+        if (tab == null) return;
+        String key = (tab.mProfile != null && !tab.mProfile.isEmpty() && !"default".equals(tab.mProfile))
+                ? tab.mProfile
+                : "tab_" + tab.mId;
+
+        ProxyItem sticky = loadStickyProxy(key);
+        if (sticky != null && sticky.isValid()) {
+            tab.mProxyItem = sticky;
+            tab.mIsProxyEnabled = true;
+            return;
+        }
+
+        // Sedot otomatis 1 proxy dari pool proxy.txt (persis assign_proxy di fluxa.py)
+        File poolFile = getPrimaryProxyFile();
+        if (poolFile != null) {
+            ProxyItem next = popNextProxyFromFile(poolFile);
+            if (next != null && next.isValid()) {
+                tab.mProxyItem = next;
+                tab.mIsProxyEnabled = true;
+                saveStickyProxy(key, next);
+                Log.i(TAG, "Auto-assigned sticky proxy untuk [" + key + "] dari " + poolFile.getName() + ": " + next.toProxyRule());
+            }
+        }
+    }
+
+    /**
+     * Rotasi proxy untuk tab: buang proxy ampas, ambil yang baru dari proxy.txt, tes, dan pasang langsung
+     */
+    public static void rotateProxyForTab(final FusionTab tab, final FusionWebViewManager manager, final TestCallback cb) {
+        if (tab == null) {
+            if (cb != null) cb.onResult(false, "Tab tidak valid", "", "", -1);
+            return;
+        }
+
+        new Thread(() -> {
+            File poolFile = getPrimaryProxyFile();
+            if (poolFile == null) {
+                sMainHandler.post(() -> {
+                    if (cb != null) cb.onResult(false, "File proxy.txt tidak ditemukan", "", "", -1);
+                });
+                return;
+            }
+
+            ProxyItem newProxy = popNextProxyFromFile(poolFile);
+            if (newProxy == null || !newProxy.isValid()) {
+                sMainHandler.post(() -> {
+                    if (cb != null) cb.onResult(false, "Antrean proxy di " + poolFile.getName() + " sudah habis!", "", "", -1);
+                });
+                return;
+            }
+
+            String key = (tab.mProfile != null && !tab.mProfile.isEmpty() && !"default".equals(tab.mProfile))
+                    ? tab.mProfile
+                    : "tab_" + tab.mId;
+
+            tab.mProxyItem = newProxy;
+            tab.mIsProxyEnabled = true;
+            saveStickyProxy(key, newProxy);
+
+            sMainHandler.post(() -> {
+                if (manager != null && manager.getActiveFusionTab() == tab) {
+                    applyProxyToEngine(tab);
+                    updateProxyIndicator(manager, tab);
+                }
+            });
+
+            // Uji proxy baru
+            testProxyAsync(newProxy, (success, message, ip, country, latencyMs) -> {
+                if (success) {
+                    saveStickyProxy(key, newProxy);
+                    sMainHandler.post(() -> {
+                        if (manager != null) updateProxyIndicator(manager, tab);
+                    });
+                }
+                if (cb != null) cb.onResult(success, message, ip, country, latencyMs);
+            });
+        }).start();
     }
 
     /**
@@ -251,7 +485,6 @@ public class FusionProxyHelper {
                 Proxy.Type pType = "socks5".equalsIgnoreCase(item.scheme) ? Proxy.Type.SOCKS : Proxy.Type.HTTP;
                 Proxy proxy = new Proxy(pType, new InetSocketAddress(item.host, item.port));
 
-                // Endpoint cepat tanpa HTTPS overhead untuk tes awal yang akurat
                 URL testUrl = new URL("http://ip-api.com/json/?fields=status,country,countryCode,city,query,org");
                 HttpURLConnection conn = (HttpURLConnection) testUrl.openConnection(proxy);
                 conn.setConnectTimeout(8000);
@@ -355,7 +588,7 @@ public class FusionProxyHelper {
     }
 
     /**
-     * Dialog UI Utama Pengaturan Proxy Per-Tab
+     * Dialog UI Utama Pengaturan Proxy Per-Tab & Rotasi Otomatis
      */
     public static void showProxyDialog(final TermuxActivity act, final FusionWebViewManager manager) {
         if (act == null || manager == null) return;
@@ -367,7 +600,8 @@ public class FusionProxyHelper {
         }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(act);
-        builder.setTitle("🌐 Pengaturan Proxy · Tab " + (manager.mActiveTab + 1));
+        String profLabel = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty()) ? " (" + currentTab.mProfile + ")" : "";
+        builder.setTitle("🌐 Proxy · Tab " + (manager.mActiveTab + 1) + profLabel);
 
         ScrollView scrollView = new ScrollView(act);
         LinearLayout root = new LinearLayout(act);
@@ -413,10 +647,10 @@ public class FusionProxyHelper {
         testResultText.setVisibility(View.GONE);
         root.addView(testResultText);
 
-        // Baris Tombol Aksi: Tes Proxy & Pilih File
+        // Baris Tombol Aksi 1: Tes Proxy & Pilih File
         LinearLayout actionRow = new LinearLayout(act);
         actionRow.setOrientation(0);
-        actionRow.setPadding(0, 10, 0, 10);
+        actionRow.setPadding(0, 10, 0, 6);
 
         Button testBtn = new Button(act);
         testBtn.setText("🔍 Tes Proxy");
@@ -451,12 +685,36 @@ public class FusionProxyHelper {
 
         root.addView(actionRow);
 
+        // Baris Tombol Aksi 2: Rotasi Otomatis (seperti fluxa.py)
+        LinearLayout rotateRow = new LinearLayout(act);
+        rotateRow.setOrientation(0);
+        rotateRow.setPadding(0, 0, 0, 10);
+
+        Button rotateBtn = new Button(act);
+        rotateBtn.setText("🔄 Rotasi Proxy (Tarik Baru dari proxy.txt)");
+        rotateBtn.setTextSize(2, 11.5f);
+        rotateBtn.setOnClickListener(v -> {
+            testResultText.setVisibility(View.VISIBLE);
+            testResultText.setTextColor(0xFFF9E2AF);
+            testResultText.setText("⏳ Mengambil proxy baru & menguji on-chain...");
+
+            rotateProxyForTab(currentTab, manager, (success, message, ip, country, latencyMs) -> {
+                testResultText.setText(message);
+                testResultText.setTextColor(success ? 0xFFA6E3A1 : 0xFFF38BA8);
+                if (currentTab.mProxyItem != null) {
+                    inputProxy.setText(currentTab.mProxyItem.raw);
+                }
+            });
+        });
+        rotateRow.addView(rotateBtn, new LinearLayout.LayoutParams(-1, -2));
+        root.addView(rotateRow);
+
         // Panduan Format
         TextView formatGuide = new TextView(act);
-        formatGuide.setText("Format didukung:\n• DataImpulse: host:port:user:pass\n• URL: http://user:pass@host:port\n• SOCKS: socks5://user:pass@host:port\n• Direct: host:port");
+        formatGuide.setText("Format didukung:\n• DataImpulse: host:port:user:pass\n• URL: http://user:pass@host:port\n• SOCKS: socks5://user:pass@host:port\n• Sticky & Rotasi: Otomatis membaca antrean proxy.txt");
         formatGuide.setTextColor(0xFF6C7086);
         formatGuide.setTextSize(2, 11.0f);
-        formatGuide.setPadding(0, 6, 0, 12);
+        formatGuide.setPadding(0, 4, 0, 12);
         root.addView(formatGuide);
 
         scrollView.addView(root);
@@ -470,15 +728,25 @@ public class FusionProxyHelper {
                 FusionToast.makeText(act, "❌ Format proxy tidak valid.", Toast.LENGTH_SHORT).show();
                 return;
             }
+            String key = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty() && !"default".equals(currentTab.mProfile))
+                    ? currentTab.mProfile
+                    : "tab_" + currentTab.mId;
+
             currentTab.mProxyItem = item;
             currentTab.mIsProxyEnabled = true;
+            saveStickyProxy(key, item);
             applyProxyToEngine(currentTab);
             updateProxyIndicator(manager, currentTab);
             FusionToast.makeText(act, "✅ Proxy Aktif untuk Tab " + (manager.mActiveTab + 1) + " (" + item.toProxyRule() + ")", Toast.LENGTH_SHORT).show();
         });
 
         builder.setNeutralButton("Matikan Proxy Tab", (dialog, which) -> {
+            String key = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty() && !"default".equals(currentTab.mProfile))
+                    ? currentTab.mProfile
+                    : "tab_" + currentTab.mId;
+
             currentTab.mIsProxyEnabled = false;
+            saveStickyProxy(key, null);
             applyProxyToEngine(currentTab);
             updateProxyIndicator(manager, currentTab);
             FusionToast.makeText(act, "⚪ Tab " + (manager.mActiveTab + 1) + " kembali ke Direct Network", Toast.LENGTH_SHORT).show();
@@ -489,13 +757,9 @@ public class FusionProxyHelper {
         builder.show();
     }
 
-    /**
-     * Dialog untuk memilih file .txt berisi proxy dari storage
-     */
     private static void showSelectProxyFileDialog(final TermuxActivity act, final FusionWebViewManager manager, final EditText inputProxy, final TextView testResultText) {
         List<File> files = scanProxyFiles(act);
         if (files.isEmpty()) {
-            // Jika tidak ada yang otomatis ketemu, cari semua .txt di /sdcard/Download
             File dl = new File("/sdcard/Download");
             if (dl.exists() && dl.isDirectory()) {
                 File[] list = dl.listFiles();
@@ -536,9 +800,6 @@ public class FusionProxyHelper {
         b.show();
     }
 
-    /**
-     * Dialog untuk memilih salah satu proxy dari baris-baris file .txt
-     */
     private static void showProxyListSelectorDialog(final TermuxActivity act, final FusionWebViewManager manager, final List<ProxyItem> list, final EditText inputProxy, final TextView testResultText) {
         String[] items = new String[list.size()];
         for (int i = 0; i < list.size(); i++) {

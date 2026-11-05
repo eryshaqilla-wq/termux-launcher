@@ -155,6 +155,13 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.showProxyDialog();
             return;
         }
+        if (str.equals("WEBVIEW_PROXY_ROTATE")) {
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+            if (activeTab != null) {
+                FusionProxyHelper.rotateProxyForTab(activeTab, fusionWebViewManager, null);
+            }
+            return;
+        }
         if (str.startsWith("WEBVIEW_WORKER")) {
             fusionWebViewManager.openWorkerTab(str.length() > 15 ? str.substring(15) : "https://x.com");
             return;

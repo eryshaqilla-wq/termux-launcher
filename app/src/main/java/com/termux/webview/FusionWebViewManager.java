@@ -763,6 +763,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (termuxActivity != null) {
             fusionTab.mBoundSession = termuxActivity.getCurrentSession();
         }
+        FusionProxyHelper.initTabStickyProxy(fusionTab);
         this.mTabList.add(fusionTab);
         return fusionTab;
     }
