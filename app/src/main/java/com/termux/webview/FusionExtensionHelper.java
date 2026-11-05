@@ -22,9 +22,11 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -42,7 +44,8 @@ import java.util.zip.ZipInputStream;
  * Kiwi-Style Chrome Extension Engine untuk Fusion WebView.
  * Mendukung instalasi paket ekstensi .zip & .crx (Manifest V2 & V3),
  * injeksi level document_start via WebViewCompat, polyfill API chrome.* (storage, runtime, tabs),
- * iframe multi-frame routing, serta setelan layer konfigurasi interaktif.
+ * iframe multi-frame routing, setelan layer konfigurasi interaktif, serta penghapusan & pembacaan
+ * berkas failsafe yang tahan terhadap pembatasan permission Android Scoped Storage / root chroot.
  */
 public class FusionExtensionHelper {
     private static final String TAG = "FusionExtension";
@@ -113,23 +116,28 @@ public class FusionExtensionHelper {
         };
         for (String p : candidatePaths) {
             File d = new File(p);
-            if (d.exists() && d.isDirectory()) {
-                return d;
+            if (!d.exists()) {
+                try { d.mkdirs(); } catch (Throwable ignored) {}
             }
-        }
-        for (String p : candidatePaths) {
-            File d = new File(p);
-            try {
-                if (d.mkdirs()) {
-                    try { d.setReadable(true, false); } catch (Throwable ignored) {}
-                    try { d.setWritable(true, false); } catch (Throwable ignored) {}
+            if (d.exists() && d.isDirectory()) {
+                try {
+                    d.setReadable(true, false);
+                    d.setWritable(true, false);
+                    d.setExecutable(true, false);
+                } catch (Throwable ignored) {}
+                if (d.canWrite()) {
                     return d;
                 }
-            } catch (Throwable ignored) {}
+            }
         }
         if (context != null) {
             File fallback = new File(context.getFilesDir(), "fusion_extensions");
             if (!fallback.exists()) fallback.mkdirs();
+            try {
+                fallback.setReadable(true, false);
+                fallback.setWritable(true, false);
+                fallback.setExecutable(true, false);
+            } catch (Throwable ignored) {}
             return fallback;
         }
         return new File("/data/data/com.termux/files/home/.fusion/extensions");
@@ -147,12 +155,11 @@ public class FusionExtensionHelper {
         File f = getStorageFile(context);
         if (f.exists() && f.isFile()) {
             try {
-                byte[] bytes = new byte[(int) f.length()];
-                try (FileInputStream fis = new FileInputStream(f)) {
-                    fis.read(bytes);
+                byte[] bytes = readFileBytesSafe(f);
+                if (bytes != null && bytes.length > 0) {
+                    sStorageCache = new String(bytes, StandardCharsets.UTF_8).trim();
+                    if (!sStorageCache.isEmpty()) return sStorageCache;
                 }
-                sStorageCache = new String(bytes, StandardCharsets.UTF_8).trim();
-                if (!sStorageCache.isEmpty()) return sStorageCache;
             } catch (Throwable ignored) {}
         }
         if (context != null) {
@@ -184,7 +191,11 @@ public class FusionExtensionHelper {
             try { f.setReadable(true, false); } catch (Throwable ignored) {}
             try { f.setWritable(true, false); } catch (Throwable ignored) {}
         } catch (Throwable e) {
-            Log.e(TAG, "Gagal menyimpan storage.json: " + e.getMessage());
+            Log.w(TAG, "Standard save storage.json failed: " + e.getMessage() + ", trying shell write...");
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "echo '" + jsonStr.replace("'", "'\\''") + "' > '" + f.getAbsolutePath() + "' && chmod 777 '" + f.getAbsolutePath() + "'"});
+                p.waitFor();
+            } catch (Throwable ignored) {}
         }
         if (context != null) {
             try {
@@ -225,15 +236,14 @@ public class FusionExtensionHelper {
         File f = getStateFile(context);
         if (f.exists() && f.isFile()) {
             try {
-                byte[] bytes = new byte[(int) f.length()];
-                try (FileInputStream fis = new FileInputStream(f)) {
-                    fis.read(bytes);
-                }
-                JSONObject obj = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
-                java.util.Iterator<String> keys = obj.keys();
-                while (keys.hasNext()) {
-                    String k = keys.next();
-                    stateMap.put(k, obj.optBoolean(k, true));
+                byte[] bytes = readFileBytesSafe(f);
+                if (bytes != null && bytes.length > 0) {
+                    JSONObject obj = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
+                    java.util.Iterator<String> keys = obj.keys();
+                    while (keys.hasNext()) {
+                        String k = keys.next();
+                        stateMap.put(k, obj.optBoolean(k, true));
+                    }
                 }
             } catch (Throwable ignored) {}
         }
@@ -247,38 +257,72 @@ public class FusionExtensionHelper {
             for (Map.Entry<String, Boolean> entry : stateMap.entrySet()) {
                 obj.put(entry.getKey(), entry.getValue());
             }
+            String content = obj.toString(2);
             try (FileOutputStream fos = new FileOutputStream(f)) {
-                fos.write(obj.toString(2).getBytes(StandardCharsets.UTF_8));
+                fos.write(content.getBytes(StandardCharsets.UTF_8));
             }
             try { f.setReadable(true, false); } catch (Throwable ignored) {}
             try { f.setWritable(true, false); } catch (Throwable ignored) {}
         } catch (Throwable e) {
-            Log.e(TAG, "Gagal menyimpan extensions_state.json: " + e.getMessage());
+            Log.w(TAG, "Standard save extensions_state.json failed: " + e.getMessage());
+            try {
+                JSONObject obj = new JSONObject();
+                for (Map.Entry<String, Boolean> entry : stateMap.entrySet()) {
+                    obj.put(entry.getKey(), entry.getValue());
+                }
+                String content = obj.toString(2);
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "echo '" + content.replace("'", "'\\''") + "' > '" + f.getAbsolutePath() + "' && chmod 777 '" + f.getAbsolutePath() + "'"});
+                p.waitFor();
+            } catch (Throwable ignored) {}
         }
     }
 
     public static List<ExtensionInfo> getInstalledExtensions(Context context) {
         List<ExtensionInfo> list = new ArrayList<>();
-        File extDir = getPrimaryExtensionsDir(context);
-        if (!extDir.exists() || !extDir.isDirectory()) return list;
+        Set<String> seenIds = new HashSet<>();
 
+        String[] scanPaths = new String[] {
+            "/data/data/com.termux/files/home/.fusion/extensions",
+            "/data/local/nhsystem/kali-arm64/root/.fusion/extensions",
+            "/root/.fusion/extensions"
+        };
+        if (context != null) {
+            File localDir = new File(context.getFilesDir(), "fusion_extensions");
+            if (localDir.exists()) {
+                scanCandidateExtensionsInDir(context, localDir, list, seenIds);
+            }
+        }
+
+        for (String p : scanPaths) {
+            File d = new File(p);
+            if (d.exists() && d.isDirectory()) {
+                scanCandidateExtensionsInDir(context, d, list, seenIds);
+            }
+        }
+
+        return list;
+    }
+
+    private static void scanCandidateExtensionsInDir(Context context, File extDir, List<ExtensionInfo> list, Set<String> seenIds) {
         Map<String, Boolean> stateMap = loadExtensionsState(context);
         File[] subdirs = extDir.listFiles();
-        if (subdirs == null) return list;
+        if (subdirs == null) return;
 
         for (File d : subdirs) {
-            if (d.isDirectory()) {
+            if (d.isDirectory() && !d.getName().startsWith(".")) {
                 File manifest = new File(d, "manifest.json");
                 if (manifest.exists() && manifest.isFile()) {
-                    ExtensionInfo info = parseExtensionDir(d);
-                    if (info != null) {
-                        info.enabled = stateMap.containsKey(info.id) ? Boolean.TRUE.equals(stateMap.get(info.id)) : true;
-                        list.add(info);
+                    if (!seenIds.contains(d.getName())) {
+                        ExtensionInfo info = parseExtensionDir(d);
+                        if (info != null) {
+                            info.enabled = stateMap.containsKey(info.id) ? Boolean.TRUE.equals(stateMap.get(info.id)) : true;
+                            list.add(info);
+                            seenIds.add(info.id);
+                        }
                     }
                 }
             }
         }
-        return list;
     }
 
     public static ExtensionInfo parseExtensionDir(File dir) {
@@ -287,10 +331,9 @@ public class FusionExtensionHelper {
         if (!manifestFile.exists() || !manifestFile.isFile()) return null;
 
         try {
-            byte[] bytes = new byte[(int) manifestFile.length()];
-            try (FileInputStream fis = new FileInputStream(manifestFile)) {
-                fis.read(bytes);
-            }
+            byte[] bytes = readFileBytesSafe(manifestFile);
+            if (bytes == null || bytes.length == 0) return null;
+
             String jsonStr = new String(bytes, StandardCharsets.UTF_8);
             JSONObject root = new JSONObject(jsonStr);
 
@@ -347,10 +390,90 @@ public class FusionExtensionHelper {
         }
     }
 
-    public static boolean installPackage(Context context, File packageFile) {
-        if (packageFile == null || !packageFile.exists() || !packageFile.isFile()) {
-            return false;
+    public static byte[] readFileBytesSafe(File file) {
+        if (file == null) return null;
+
+        // 1. Baca standar via Java
+        try {
+            if (file.exists() && file.isFile()) {
+                byte[] b = new byte[(int) file.length()];
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    int total = 0;
+                    while (total < b.length) {
+                        int r = fis.read(b, total, b.length - total);
+                        if (r == -1) break;
+                        total += r;
+                    }
+                    if (total > 0) return b;
+                }
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "Standard Java read failed for " + file.getAbsolutePath() + ": " + e.getMessage());
         }
+
+        // 2. Baca via su cat untuk bypass Android Scoped Storage / FUSE permission
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "cat '" + file.getAbsolutePath() + "'"});
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            InputStream is = p.getInputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) > 0) {
+                baos.write(buf, 0, n);
+            }
+            p.waitFor();
+            byte[] res = baos.toByteArray();
+            if (res.length > 0) {
+                Log.i(TAG, "Berhasil membaca " + res.length + " bytes via su cat fallback.");
+                return res;
+            }
+        } catch (Throwable ignored) {}
+
+        // 3. Baca via cat biasa
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"cat", file.getAbsolutePath()});
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            InputStream is = p.getInputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) > 0) {
+                baos.write(buf, 0, n);
+            }
+            p.waitFor();
+            byte[] res = baos.toByteArray();
+            if (res.length > 0) return res;
+        } catch (Throwable ignored) {}
+
+        // 4. Fallback jika nama file pro.zip, cari di lokasi alternatif yang bisa dibaca
+        if (file.getName().toLowerCase().contains("pro.zip")) {
+            String[] altPaths = new String[]{
+                "/data/data/com.termux/files/home/pro.zip",
+                "/data/data/com.termux/files/home/.fusion/pro.zip",
+                "/root/pro.zip",
+                "/project/pro.zip"
+            };
+            for (String alt : altPaths) {
+                File altFile = new File(alt);
+                if (altFile.exists() && altFile.isFile()) {
+                    try (FileInputStream fis = new FileInputStream(altFile)) {
+                        byte[] b = new byte[(int) altFile.length()];
+                        int total = 0;
+                        while (total < b.length) {
+                            int r = fis.read(b, total, b.length - total);
+                            if (r == -1) break;
+                            total += r;
+                        }
+                        if (total > 0) return b;
+                    } catch (Throwable ignored) {}
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static boolean installPackage(Context context, File packageFile) {
+        if (packageFile == null) return false;
         File baseDir = getPrimaryExtensionsDir(context);
         String baseName = packageFile.getName().toLowerCase().replace(".crx", "").replace(".zip", "");
         String safeName = baseName.replaceAll("[^a-zA-Z0-9._-]", "_");
@@ -381,11 +504,17 @@ public class FusionExtensionHelper {
             }
 
             boolean renamed = tempExtractDir.renameTo(finalDir);
-            if (!renamed) {
+            if (!renamed || !finalDir.exists()) {
                 // Salin manual jika rename lintas filesystem
                 copyDirectory(tempExtractDir, finalDir);
                 deleteRecursive(tempExtractDir);
             }
+
+            // Setel izin full 777 agar bisa dikelola/dihapus kapan saja
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod -R 777 '" + finalDir.getAbsolutePath() + "'"});
+                p.waitFor();
+            } catch (Throwable ignored) {}
 
             // Aktifkan ekstensi di extensions_state.json
             Map<String, Boolean> stateMap = loadExtensionsState(context);
@@ -402,19 +531,28 @@ public class FusionExtensionHelper {
     }
 
     public static boolean extractArchive(File archiveFile, File targetDir) {
-        if (archiveFile == null || !archiveFile.exists() || !archiveFile.isFile()) return false;
+        if (archiveFile == null) return false;
         if (targetDir == null) return false;
-        if (!targetDir.exists()) targetDir.mkdirs();
+        if (!targetDir.exists()) {
+            targetDir.mkdirs();
+            try {
+                targetDir.setReadable(true, false);
+                targetDir.setWritable(true, false);
+                targetDir.setExecutable(true, false);
+            } catch (Throwable ignored) {}
+        }
+        if (!targetDir.exists() || !targetDir.canWrite()) {
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "mkdir -p '" + targetDir.getAbsolutePath() + "' && chmod 777 '" + targetDir.getAbsolutePath() + "'"});
+                p.waitFor();
+            } catch (Throwable ignored) {}
+        }
 
         try {
-            byte[] allBytes = new byte[(int) archiveFile.length()];
-            try (FileInputStream fis = new FileInputStream(archiveFile)) {
-                int totalRead = 0;
-                while (totalRead < allBytes.length) {
-                    int r = fis.read(allBytes, totalRead, allBytes.length - totalRead);
-                    if (r == -1) break;
-                    totalRead += r;
-                }
+            byte[] allBytes = readFileBytesSafe(archiveFile);
+            if (allBytes == null || allBytes.length == 0) {
+                Log.e(TAG, "Gagal membaca bytes dari file arsip: " + archiveFile.getAbsolutePath());
+                return false;
             }
 
             int zipOffset = 0;
@@ -444,7 +582,7 @@ public class FusionExtensionHelper {
             try (ZipInputStream zisDetect = new ZipInputStream(new ByteArrayInputStream(allBytes, zipOffset, allBytes.length - zipOffset))) {
                 ZipEntry ze;
                 while ((ze = zisDetect.getNextEntry()) != null) {
-                    String name = ze.getName();
+                    String name = ze.getName().replace('\\', '/');
                     if (name.equals("manifest.json")) {
                         rootPrefix = "";
                         break;
@@ -460,7 +598,7 @@ public class FusionExtensionHelper {
                 ZipEntry entry;
                 byte[] buffer = new byte[8192];
                 while ((entry = zis.getNextEntry()) != null) {
-                    String entryName = entry.getName();
+                    String entryName = entry.getName().replace('\\', '/');
                     if (entryName.contains("..")) continue;
                     if (!rootPrefix.isEmpty() && entryName.startsWith(rootPrefix)) {
                         entryName = entryName.substring(rootPrefix.length());
@@ -470,10 +608,20 @@ public class FusionExtensionHelper {
                     File outFile = new File(targetDir, entryName);
                     if (entry.isDirectory()) {
                         outFile.mkdirs();
+                        try {
+                            outFile.setReadable(true, false);
+                            outFile.setWritable(true, false);
+                            outFile.setExecutable(true, false);
+                        } catch (Throwable ignored) {}
                     } else {
                         File parent = outFile.getParentFile();
                         if (parent != null && !parent.exists()) {
                             parent.mkdirs();
+                            try {
+                                parent.setReadable(true, false);
+                                parent.setWritable(true, false);
+                                parent.setExecutable(true, false);
+                            } catch (Throwable ignored) {}
                         }
                         try (FileOutputStream fos = new FileOutputStream(outFile)) {
                             int len;
@@ -481,13 +629,31 @@ public class FusionExtensionHelper {
                                 fos.write(buffer, 0, len);
                             }
                         }
-                        try { outFile.setReadable(true, false); } catch (Throwable ignored) {}
+                        try {
+                            outFile.setReadable(true, false);
+                            outFile.setWritable(true, false);
+                        } catch (Throwable ignored) {}
                     }
                 }
             }
 
             File manifestCheck = new File(targetDir, "manifest.json");
-            return manifestCheck.exists() && manifestCheck.isFile();
+            if (manifestCheck.exists() && manifestCheck.isFile()) {
+                try {
+                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod -R 777 '" + targetDir.getAbsolutePath() + "'"});
+                    p.waitFor();
+                } catch (Throwable ignored) {}
+                return true;
+            }
+
+            // Fallback unzipping via su unzip jika penulisan Java terhalang izin
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "unzip -o '" + archiveFile.getAbsolutePath() + "' -d '" + targetDir.getAbsolutePath() + "' && chmod -R 777 '" + targetDir.getAbsolutePath() + "'"});
+                p.waitFor();
+                if (manifestCheck.exists() && manifestCheck.isFile()) return true;
+            } catch (Throwable ignored) {}
+
+            return false;
         } catch (Throwable e) {
             Log.e(TAG, "Gagal mengekstrak archive " + archiveFile.getName() + ": " + e.getMessage(), e);
             return false;
@@ -504,7 +670,26 @@ public class FusionExtensionHelper {
                 }
             }
         }
-        return f.delete();
+        boolean ok = f.delete();
+        if (!ok && f.exists()) {
+            try {
+                f.setWritable(true, false);
+                ok = f.delete();
+            } catch (Throwable ignored) {}
+        }
+        if (f.exists()) {
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"rm", "-rf", f.getAbsolutePath()});
+                p.waitFor();
+            } catch (Throwable ignored) {}
+        }
+        if (f.exists()) {
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "rm -rf '" + f.getAbsolutePath() + "'"});
+                p.waitFor();
+            } catch (Throwable ignored) {}
+        }
+        return !f.exists();
     }
 
     public static void copyDirectory(File source, File target) {
@@ -657,12 +842,11 @@ public class FusionExtensionHelper {
             File f = new File(ext.dir, jsFileRel);
             if (f.exists() && f.isFile()) {
                 try {
-                    byte[] bytes = new byte[(int) f.length()];
-                    try (FileInputStream fis = new FileInputStream(f)) {
-                        fis.read(bytes);
+                    byte[] bytes = readFileBytesSafe(f);
+                    if (bytes != null && bytes.length > 0) {
+                        jsCodeBuilder.append("/* --- ").append(jsFileRel).append(" --- */\n");
+                        jsCodeBuilder.append(new String(bytes, StandardCharsets.UTF_8)).append("\n;\n");
                     }
-                    jsCodeBuilder.append("/* --- ").append(jsFileRel).append(" --- */\n");
-                    jsCodeBuilder.append(new String(bytes, StandardCharsets.UTF_8)).append("\n;\n");
                 } catch (Throwable ignored) {}
             }
         }
@@ -800,7 +984,6 @@ public class FusionExtensionHelper {
             for (int i = 0; i < ext.contentScripts.size(); i++) {
                 ExtensionInfo.ContentScript cs = ext.contentScripts.get(i);
                 if (isUrlMatched(currentUrl, cs.matches)) {
-                    // Jika trigger timing sesuai atau document_idle
                     String wrapped = buildContentScriptWrapper(ext, cs, i);
                     if (wrapped != null) {
                         webView.evaluateJavascript(wrapped, null);
@@ -813,19 +996,29 @@ public class FusionExtensionHelper {
     public static List<File> scanCandidateArchives() {
         List<File> archives = new ArrayList<>();
         String[] candidateDirs = new String[] {
+            "/data/data/com.termux/files/home",
+            "/data/data/com.termux/files/home/.fusion",
             "/sdcard/Download",
             "/sdcard",
             "/root",
-            "/project",
-            "/data/data/com.termux/files/home"
+            "/project"
         };
         Set<String> seen = new HashSet<>();
 
-        // Prioritaskan pro.zip jika ada
-        File proZip = new File("/sdcard/Download/pro.zip");
-        if (proZip.exists() && proZip.isFile()) {
-            archives.add(proZip);
-            seen.add(proZip.getAbsolutePath());
+        String[] priorityFiles = new String[] {
+            "/data/data/com.termux/files/home/pro.zip",
+            "/data/data/com.termux/files/home/.fusion/pro.zip",
+            "/sdcard/Download/pro.zip",
+            "/root/pro.zip",
+            "/project/pro.zip"
+        };
+        for (String pf : priorityFiles) {
+            File f = new File(pf);
+            if (f.exists() && f.isFile()) {
+                archives.add(f);
+                seen.add(f.getAbsolutePath());
+                break;
+            }
         }
 
         for (String dirPath : candidateDirs) {
@@ -866,13 +1059,14 @@ public class FusionExtensionHelper {
         if (extensions.isEmpty()) {
             sb.append("• Belum ada ekstensi .zip / .crx yang terpasang.\n");
             File proZip = new File("/sdcard/Download/pro.zip");
-            if (proZip.exists()) {
-                sb.append("💡 Ditemukan file pro.zip di /sdcard/Download! Klik '➕ Pasang .zip / .crx' untuk menginstal langsung.\n");
+            File homeProZip = new File("/data/data/com.termux/files/home/pro.zip");
+            if (proZip.exists() || homeProZip.exists()) {
+                sb.append("💡 Ditemukan paket pro.zip! Klik '➕ Pasang .zip / .crx' untuk menginstal langsung.\n");
             } else {
                 sb.append("• Tuan bisa memasang file .zip atau .crx ekstensi Chrome desktop langsung ke dalam WebView.\n");
             }
         } else {
-            sb.append("Daftar Ekstensi Terpasang (Klik nomor untuk atur):\n");
+            sb.append("Daftar Ekstensi Terpasang (Klik '⚙️ Kelola' untuk opsi/hapus):\n");
             for (int i = 0; i < extensions.size(); i++) {
                 ExtensionInfo ext = extensions.get(i);
                 sb.append(" [").append(i + 1).append("] ").append(ext.name)
@@ -961,8 +1155,16 @@ public class FusionExtensionHelper {
                 delConfirm.setTitle("Hapus Ekstensi?");
                 delConfirm.setMessage("Yakin ingin menghapus ekstensi \"" + ext.name + "\"?");
                 delConfirm.setPositiveButton("Hapus", (d, w) -> {
-                    deleteRecursive(ext.dir);
-                    FusionToast.makeText(act, "Ekstensi \"" + ext.name + "\" dihapus.", Toast.LENGTH_SHORT).show();
+                    boolean deleted = deleteRecursive(ext.dir);
+                    Map<String, Boolean> stateMap = loadExtensionsState(act);
+                    stateMap.remove(ext.id);
+                    saveExtensionsState(act, stateMap);
+
+                    if (deleted) {
+                        FusionToast.makeText(act, "Ekstensi \"" + ext.name + "\" berhasil dihapus.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        FusionToast.makeText(act, "Gagal menghapus berkas ekstensi.", Toast.LENGTH_SHORT).show();
+                    }
                     showExtensionsDialog(act, manager);
                 });
                 delConfirm.setNegativeButton("Batal", null);
@@ -1032,8 +1234,8 @@ public class FusionExtensionHelper {
         List<String> displayNames = new ArrayList<>();
         for (File f : archives) {
             String sizeKb = (f.length() / 1024) + " KB";
-            if (f.getAbsolutePath().equals("/sdcard/Download/pro.zip")) {
-                displayNames.add("⭐ pro.zip (/sdcard/Download) [" + sizeKb + "]");
+            if (f.getName().equalsIgnoreCase("pro.zip")) {
+                displayNames.add("⭐ pro.zip (" + f.getParent() + ") [" + sizeKb + "]");
             } else {
                 displayNames.add("📦 " + f.getName() + " (" + f.getParent() + ") [" + sizeKb + "]");
             }
@@ -1054,32 +1256,28 @@ public class FusionExtensionHelper {
                     }
                     showExtensionsDialog(act, manager);
                 } else {
-                    FusionToast.makeText(act, "❌ Gagal memasang ekstensi: manifest.json tidak valid.", Toast.LENGTH_LONG).show();
+                    FusionToast.makeText(act, "❌ Gagal memasang ekstensi: berkas arsip tidak dapat diekstrak.", Toast.LENGTH_LONG).show();
                 }
             } else {
                 // Input path manual
                 AlertDialog.Builder inputDialog = new AlertDialog.Builder(act);
                 inputDialog.setTitle("Ketik Path Paket Ekstensi");
                 final EditText input = new EditText(act);
-                input.setHint("/sdcard/Download/pro.zip");
-                input.setText("/sdcard/Download/pro.zip");
+                input.setHint("/data/data/com.termux/files/home/pro.zip");
+                input.setText("/data/data/com.termux/files/home/pro.zip");
                 inputDialog.setView(input);
                 inputDialog.setPositiveButton("Pasang", (d, w) -> {
                     String p = input.getText().toString().trim();
                     File customFile = new File(p);
-                    if (customFile.exists() && customFile.isFile()) {
-                        boolean ok = installPackage(act, customFile);
-                        if (ok) {
-                            FusionToast.makeText(act, "✅ Ekstensi berhasil dipasang!", Toast.LENGTH_LONG).show();
-                            if (manager != null && manager.mActiveWebView != null) {
-                                setupWebView(manager.mActiveWebView);
-                            }
-                            showExtensionsDialog(act, manager);
-                        } else {
-                            FusionToast.makeText(act, "❌ Gagal pasang: file bukan zip/crx ekstensi valid.", Toast.LENGTH_LONG).show();
+                    boolean ok = installPackage(act, customFile);
+                    if (ok) {
+                        FusionToast.makeText(act, "✅ Ekstensi berhasil dipasang!", Toast.LENGTH_LONG).show();
+                        if (manager != null && manager.mActiveWebView != null) {
+                            setupWebView(manager.mActiveWebView);
                         }
+                        showExtensionsDialog(act, manager);
                     } else {
-                        FusionToast.makeText(act, "❌ Berkas tidak ditemukan: " + p, Toast.LENGTH_LONG).show();
+                        FusionToast.makeText(act, "❌ Gagal pasang: file bukan zip/crx ekstensi valid atau tidak dapat diakses.", Toast.LENGTH_LONG).show();
                     }
                 });
                 inputDialog.setNegativeButton("Batal", null);
