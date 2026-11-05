@@ -2361,6 +2361,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionProxyHelper.showProxyDialog(this.mActivity, this);
     }
 
+    public FusionTab getActiveFusionTab() {
+        return FusionTabStateHelper.getActiveTab(this);
+    }
+
     public void showExtensionsDialog() {
         showUserscriptsDialog();
     }

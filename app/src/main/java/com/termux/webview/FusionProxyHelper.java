@@ -397,7 +397,7 @@ public class FusionProxyHelper {
             saveStickyProxy(key, newProxy);
 
             sMainHandler.post(() -> {
-                if (manager != null && manager.getActiveFusionTab() == tab) {
+                if (manager != null && FusionTabStateHelper.getActiveTab(manager) == tab) {
                     applyProxyToEngine(tab);
                     updateProxyIndicator(manager, tab);
                 }
