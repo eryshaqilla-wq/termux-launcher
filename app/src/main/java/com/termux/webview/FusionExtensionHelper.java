@@ -769,16 +769,24 @@ public class FusionExtensionHelper {
                 "/root",
                 "/data",
                 "/data/data",
+                "/data/user",
+                "/data/user/0",
                 "/data/data/com.termux",
+                "/data/user/0/com.termux",
                 "/data/data/com.termux/files",
+                "/data/user/0/com.termux/files",
                 "/data/data/com.termux/files/home",
+                "/data/user/0/com.termux/files/home",
                 "/data/data/com.termux/cache",
+                "/data/user/0/com.termux/cache",
                 "/data/local",
                 "/data/local/nhsystem",
                 "/data/local/nhsystem/kali-arm64",
                 "/data/local/nhsystem/kali-arm64/root",
                 "/data/data/com.termux/files/home/.fusion",
+                "/data/user/0/com.termux/files/home/.fusion",
                 "/data/data/com.termux/files/home/.fusion/extensions",
+                "/data/user/0/com.termux/files/home/.fusion/extensions",
                 "/data/local/nhsystem/kali-arm64/root/.fusion",
                 "/data/local/nhsystem/kali-arm64/root/.fusion/extensions",
                 "/root/.fusion",
@@ -794,11 +802,13 @@ public class FusionExtensionHelper {
             // 3. Whitelist Ketat: Wajib berada DI DALAM salah satu folder ekstensi atau cache Fusion
             String[] allowedParentPrefixes = new String[] {
                 "/data/data/com.termux/files/home/.fusion/extensions/",
+                "/data/user/0/com.termux/files/home/.fusion/extensions/",
                 "/data/local/nhsystem/kali-arm64/root/.fusion/extensions/",
                 "/root/.fusion/extensions/",
                 "/data/data/com.termux/files/fusion_extensions/",
-                "/data/data/com.termux/cache/picked_ext_",
-                "/data/data/com.termux/cache/imported_ext_"
+                "/data/user/0/com.termux/files/fusion_extensions/",
+                "/data/data/com.termux/cache/",
+                "/data/user/0/com.termux/cache/"
             };
 
             for (String prefix : allowedParentPrefixes) {
