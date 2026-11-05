@@ -271,6 +271,24 @@ public class FusionWebViewDispatcher {
             FusionProfileManager.exportProfileSessionToJson(fusionWebViewManager.mActivity, prof);
         } else if (str.startsWith("WEBVIEW_COLLAPSE_PILL")) {
             fusionWebViewManager.toggleCollapsePill();
+        } else if (str.equals("WEBVIEW_EXTENSIONS") || str.equals("WEBVIEW_EXTENSION_DIALOG")) {
+            fusionWebViewManager.showExtensionsDialog();
+        } else if (str.startsWith("WEBVIEW_EXTENSION_INSTALL ")) {
+            String path = str.substring(26).trim();
+            java.io.File f = new java.io.File(path);
+            if (f.exists()) {
+                boolean ok = FusionExtensionHelper.installPackage(fusionWebViewManager.mActivity, f);
+                if (ok && fusionWebViewManager.mActiveWebView != null) {
+                    FusionExtensionHelper.setupWebView(fusionWebViewManager.mActiveWebView);
+                }
+            }
+        } else if (str.startsWith("WEBVIEW_EXTENSION_LAYER ") || str.startsWith("WEBVIEW_EXT_LAYER ")) {
+            String layer = str.substring(str.indexOf(" ") + 1).trim();
+            FusionExtensionHelper.setLayerConfig(fusionWebViewManager.mActivity, layer);
+            if (fusionWebViewManager.mActiveWebView != null) {
+                fusionWebViewManager.mActiveWebView.evaluateJavascript(
+                    "(function(){ if(window.chrome&&window.chrome.storage&&window.chrome.storage.local) { window.chrome.storage.local.set({gapt_layer:'" + layer + "'}); } window.postMessage({__gapt:1,type:'cfg',layer:'" + layer + "'},'*'); })();", null);
+            }
         }
     }
 }

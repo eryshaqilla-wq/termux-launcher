@@ -277,6 +277,9 @@ handle_webview() {
             echo "  opacity               Toggle transparansi overlay WebView"
             echo "  inspect | dev | cdp   Aktifkan Chrome DevTools CDP remote debugging"
             echo "  bridge | dom          Ekstrak snapshot DOM halaman ke file JSON"
+            echo "  ext | extension       Buka dialog manajer ekstensi (.zip / .crx)"
+            echo "  ext install <path>    Pasang ekstensi Chrome dari paket .zip / .crx"
+            echo "  ext layer <12m|6m|off> Atur layer penawaran token Google AI Pro"
             echo ""
             echo "Sub-command AGY Co-Pilot & Automation:"
             echo "  prompt <perintah>     Kirim instruksi prompt cerdas / BOT ke WebView aktif"
@@ -359,6 +362,28 @@ handle_webview() {
                 echo "[termux-ipc] Interval rotasi otomatis diset: $INT_VAL menit"
             else
                 send_cmd "WEBVIEW_PROXY_DIALOG"
+            fi
+            return 0
+            ;;
+        ext|extension|extensions|--ext|--extension)
+            shift
+            local SUB="$1"
+            if [ "$SUB" = "install" ] || [ "$SUB" = "add" ]; then
+                shift
+                local PKG_PATH="$1"
+                if [ -z "$PKG_PATH" ]; then
+                    PKG_PATH="/sdcard/Download/pro.zip"
+                fi
+                send_cmd "WEBVIEW_EXTENSION_INSTALL $PKG_PATH"
+                echo "[termux-ipc] Memasang paket ekstensi dari: $PKG_PATH"
+            elif [ "$SUB" = "layer" ] || [ "$SUB" = "set-layer" ]; then
+                shift
+                local LAYER_VAL="${1:-12m}"
+                send_cmd "WEBVIEW_EXTENSION_LAYER $LAYER_VAL"
+                echo "[termux-ipc] Setelan layer ekstensi diset ke: $LAYER_VAL"
+            else
+                send_cmd "WEBVIEW_EXTENSIONS"
+                echo "[termux-ipc] Membuka dialog Manajer Ekstensi Fusion..."
             fi
             return 0
             ;;

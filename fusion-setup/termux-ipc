@@ -277,6 +277,9 @@ handle_webview() {
             echo "  opacity               Toggle transparansi overlay WebView"
             echo "  inspect | dev | cdp   Aktifkan Chrome DevTools CDP remote debugging"
             echo "  bridge | dom          Ekstrak snapshot DOM halaman ke file JSON"
+            echo "  ext | extension       Buka dialog manajer ekstensi (.zip / .crx)"
+            echo "  ext install <path>    Pasang ekstensi Chrome dari paket .zip / .crx"
+            echo "  ext layer <12m|6m|off> Atur layer penawaran token Google AI Pro"
             echo ""
             echo "Sub-command AGY Co-Pilot & Automation:"
             echo "  prompt <perintah>     Kirim instruksi prompt cerdas / BOT ke WebView aktif"
@@ -321,6 +324,67 @@ handle_webview() {
             ;;
         tabs|show-tabs|--tabs|--show-tabs)
             send_cmd "WEBVIEW_SHOW_TABS"
+            return 0
+            ;;
+        proxy|--proxy)
+            shift
+            local SUB="$1"
+            if [ "$SUB" = "set" ]; then
+                shift
+                local PSTR="$*"
+                if [ -z "$PSTR" ]; then
+                    echo "Usage: termux-ipc webview proxy set <proxy_string>"
+                    return 1
+                fi
+                send_cmd "WEBVIEW_PROXY_SET $PSTR"
+                echo "[termux-ipc] Proxy tab aktif diset: $PSTR"
+            elif [ "$SUB" = "clear" ] || [ "$SUB" = "off" ] || [ "$SUB" = "reset" ] || [ "$SUB" = "direct" ]; then
+                send_cmd "WEBVIEW_PROXY_CLEAR"
+                echo "[termux-ipc] Proxy tab aktif dimatikan (Direct)"
+            elif [ "$SUB" = "rotate" ] || [ "$SUB" = "rotasi" ] || [ "$SUB" = "next" ]; then
+                shift
+                local INT_ARG="$1"
+                if [ -n "$INT_ARG" ] && [[ "$INT_ARG" =~ ^[0-9]+$ ]]; then
+                    send_cmd "WEBVIEW_PROXY_ROTATE $INT_ARG"
+                    echo "[termux-ipc] Proxy tab aktif dirotasi (auto-rotate tiap $INT_ARG menit)"
+                else
+                    send_cmd "WEBVIEW_PROXY_ROTATE"
+                    echo "[termux-ipc] Memutar proxy tab aktif (tarik baru dari proxy.txt)..."
+                fi
+            elif [ "$SUB" = "interval" ] || [ "$SUB" = "auto" ]; then
+                shift
+                local INT_VAL="$1"
+                if [ -z "$INT_VAL" ]; then
+                    echo "Usage: termux-ipc webview proxy interval <menit (0=nonaktif)>"
+                    return 1
+                fi
+                send_cmd "WEBVIEW_PROXY_INTERVAL $INT_VAL"
+                echo "[termux-ipc] Interval rotasi otomatis diset: $INT_VAL menit"
+            else
+                send_cmd "WEBVIEW_PROXY_DIALOG"
+            fi
+            return 0
+            ;;
+        ext|extension|extensions|--ext|--extension)
+            shift
+            local SUB="$1"
+            if [ "$SUB" = "install" ] || [ "$SUB" = "add" ]; then
+                shift
+                local PKG_PATH="$1"
+                if [ -z "$PKG_PATH" ]; then
+                    PKG_PATH="/sdcard/Download/pro.zip"
+                fi
+                send_cmd "WEBVIEW_EXTENSION_INSTALL $PKG_PATH"
+                echo "[termux-ipc] Memasang paket ekstensi dari: $PKG_PATH"
+            elif [ "$SUB" = "layer" ] || [ "$SUB" = "set-layer" ]; then
+                shift
+                local LAYER_VAL="${1:-12m}"
+                send_cmd "WEBVIEW_EXTENSION_LAYER $LAYER_VAL"
+                echo "[termux-ipc] Setelan layer ekstensi diset ke: $LAYER_VAL"
+            else
+                send_cmd "WEBVIEW_EXTENSIONS"
+                echo "[termux-ipc] Membuka dialog Manajer Ekstensi Fusion..."
+            fi
             return 0
             ;;
         save-session|save|--save-session|--save)
@@ -541,11 +605,30 @@ handle_webview() {
     local BLOCK_FONTS=0
     local BLOCK_TRACKERS=0
     local BLOCK_CSS=0
+    local PROXY=""
+    local INTERVAL=0
     local WC=""
     local URL=""
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --proxy)
+                if [ $# -ge 2 ] && [[ "$2" != --* ]] && [[ "$2" != http://* ]] && [[ "$2" != https://* ]]; then
+                    PROXY="$2"
+                    shift 2
+                else
+                    PROXY="auto"
+                    shift 1
+                fi
+                ;;
+            --interval|--rotate)
+                if [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]]; then
+                    INTERVAL="$2"
+                    shift 2
+                else
+                    shift 1
+                fi
+                ;;
             --profile)
                 if [ $# -ge 2 ] && [[ "$2" != --* ]]; then
                     PROFILE="$2"
@@ -667,10 +750,12 @@ data = {
     'block_media': sys.argv[9] == '1',
     'block_fonts': sys.argv[10] == '1',
     'block_trackers': sys.argv[11] == '1',
-    'block_css': sys.argv[12] == '1'
+    'block_css': sys.argv[12] == '1',
+    'proxy': sys.argv[13],
+    'interval': int(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14].isdigit() else 0
 }
 print(json.dumps(data))
-" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS")
+" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL")
 
     local RESP
     RESP=$(send_cmd "WEBVIEW_CONFIG $CFG_PAYLOAD")

@@ -747,6 +747,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.setWebChromeClient(new FusionWebChromeClient());
         webView.setWebViewClient(new FusionWebViewClient(this));
         webView.addJavascriptInterface(new GhostBridgeInterface(), "GhostBridge");
+        webView.addJavascriptInterface(new FusionExtensionHelper.FusionExtensionBridge((this.mActivity != null) ? this.mActivity : webView.getContext()), "__FusionExtensionBridge__");
+        FusionExtensionHelper.setupWebView(webView);
         return webView;
     }
 
@@ -1191,10 +1193,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             }));
 
-            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🧩", "Userscript Ekstensi", new View.OnClickListener() {
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🧩", "Ekstensi (.zip/.crx & Script)", new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    showUserscriptsDialog();
+                    closeAllDrawers();
+                    showExtensionsDialog();
                 }
             }));
 
@@ -1524,6 +1527,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "ghost_injected.js");
         FusionUserscriptHelper.injectMatchingScripts(webView, webView.getUrl());
+        FusionExtensionHelper.injectMatchingScripts(webView, webView.getUrl(), "document_idle");
     }
 
     public void killActiveTab() {
@@ -2443,7 +2447,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void showExtensionsDialog() {
-        showUserscriptsDialog();
+        FusionExtensionHelper.showExtensionsDialog(this.mActivity, this);
     }
 
     public boolean onBackPressed() {

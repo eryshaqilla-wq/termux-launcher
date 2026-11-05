@@ -21,6 +21,15 @@ public class FusionWebViewClient extends WebViewClient {
     }
 
     @Override // android.webkit.WebViewClient
+    public void onPageStarted(WebView webView, String url, android.graphics.Bitmap favicon) {
+        super.onPageStarted(webView, url, favicon);
+        FusionWebViewManager fusionWebViewManager = this.mManager;
+        if (fusionWebViewManager != null) {
+            FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
+        }
+    }
+
+    @Override // android.webkit.WebViewClient
     public void onPageFinished(WebView webView, String str) {
         super.onPageFinished(webView, str);
         FusionWebViewManager fusionWebViewManager = this.mManager;
