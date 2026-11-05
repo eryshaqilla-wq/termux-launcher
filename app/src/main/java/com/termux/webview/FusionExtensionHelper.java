@@ -737,8 +737,95 @@ public class FusionExtensionHelper {
         }
     }
 
+    /**
+     * Pelindung Keamanan Mutlak (Ironclad Whitelist Guard)
+     * Memastikan tidak ada perintah penghapusan (terutama su rm -rf) yang menyentuh direktori
+     * sistem atau direktori di luar sandbox ekstensi Fusion. Mencegah brick / mati total.
+     */
+    public static boolean isSafeExtensionPath(File f) {
+        if (f == null) return false;
+        try {
+            String canonical = f.getCanonicalPath();
+            if (canonical == null || canonical.trim().isEmpty() || canonical.length() < 20) {
+                return false;
+            }
+
+            // 1. Blacklist Mutlak: Direktori root & partisi sistem vital Android/Linux
+            String[] forbiddenPrefixes = new String[] {
+                "/system", "/vendor", "/product", "/odm", "/apex", "/bin", "/sbin", "/etc",
+                "/boot", "/recovery", "/persist", "/metadata", "/dev", "/proc", "/sys",
+                "/storage", "/sdcard"
+            };
+            for (String fp : forbiddenPrefixes) {
+                if (canonical.equals(fp) || canonical.startsWith(fp + "/")) {
+                    Log.e(TAG, "⛔ BLOCKED DANGEROUS DELETE: Path berada di partisi sistem -> " + canonical);
+                    return false;
+                }
+            }
+
+            // 2. Blacklist Direktori Induk Kritis (Jangan pernah izinkan penghapusan folder induk ini)
+            String[] forbiddenExact = new String[] {
+                "/",
+                "/root",
+                "/data",
+                "/data/data",
+                "/data/data/com.termux",
+                "/data/data/com.termux/files",
+                "/data/data/com.termux/files/home",
+                "/data/data/com.termux/cache",
+                "/data/local",
+                "/data/local/nhsystem",
+                "/data/local/nhsystem/kali-arm64",
+                "/data/local/nhsystem/kali-arm64/root",
+                "/data/data/com.termux/files/home/.fusion",
+                "/data/data/com.termux/files/home/.fusion/extensions",
+                "/data/local/nhsystem/kali-arm64/root/.fusion",
+                "/data/local/nhsystem/kali-arm64/root/.fusion/extensions",
+                "/root/.fusion",
+                "/root/.fusion/extensions"
+            };
+            for (String fe : forbiddenExact) {
+                if (canonical.equals(fe) || canonical.equals(fe + "/")) {
+                    Log.e(TAG, "⛔ BLOCKED DANGEROUS DELETE: Folder induk kritis tidak boleh dihapus -> " + canonical);
+                    return false;
+                }
+            }
+
+            // 3. Whitelist Ketat: Wajib berada DI DALAM salah satu folder ekstensi atau cache Fusion
+            String[] allowedParentPrefixes = new String[] {
+                "/data/data/com.termux/files/home/.fusion/extensions/",
+                "/data/local/nhsystem/kali-arm64/root/.fusion/extensions/",
+                "/root/.fusion/extensions/",
+                "/data/data/com.termux/files/fusion_extensions/",
+                "/data/data/com.termux/cache/picked_ext_",
+                "/data/data/com.termux/cache/imported_ext_"
+            };
+
+            for (String prefix : allowedParentPrefixes) {
+                if (canonical.startsWith(prefix) && canonical.length() > prefix.length()) {
+                    String sub = canonical.substring(prefix.length());
+                    if (!sub.isEmpty() && !sub.equals(".") && !sub.equals("..") && !sub.contains("../")) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Gagal memverifikasi keamanan path: " + e.getMessage());
+            return false;
+        }
+        return false;
+    }
+
     public static boolean deleteRecursive(File f) {
         if (f == null || !f.exists()) return true;
+
+        // VERIFIKASI KEAMANAN MUTLAK: Tolak jika tidak berada di whitelist sandbox ekstensi
+        if (!isSafeExtensionPath(f)) {
+            Log.e(TAG, "⛔ deleteRecursive DIBATALKAN: Path tidak lolos audit keamanan -> " + f.getAbsolutePath());
+            return false;
+        }
+
+        // 1. Coba hapus rekursif menggunakan Java murni terlebih dahulu
         if (f.isDirectory()) {
             File[] files = f.listFiles();
             if (files != null) {
@@ -748,24 +835,24 @@ public class FusionExtensionHelper {
             }
         }
         boolean ok = f.delete();
-        if (!ok && f.exists()) {
-            try {
-                f.setWritable(true, false);
-                ok = f.delete();
-            } catch (Throwable ignored) {}
-        }
-        if (f.exists()) {
-            try {
-                Process p = Runtime.getRuntime().exec(new String[]{"rm", "-rf", f.getAbsolutePath()});
+        if (ok || !f.exists()) return true;
+
+        // 2. Beri izin write lalu coba delete Java lagi
+        try {
+            f.setWritable(true, false);
+            if (f.delete() || !f.exists()) return true;
+        } catch (Throwable ignored) {}
+
+        // 3. Fallback su rm -rf HANYA jika lolos validasi whitelist dan path canonical dijamin aman
+        try {
+            String safePath = f.getCanonicalPath();
+            if (isSafeExtensionPath(f) && safePath != null && safePath.length() >= 25) {
+                String escapedPath = safePath.replace("'", "'\\''");
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "rm -rf '" + escapedPath + "'"});
                 p.waitFor();
-            } catch (Throwable ignored) {}
-        }
-        if (f.exists()) {
-            try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "rm -rf '" + f.getAbsolutePath() + "'"});
-                p.waitFor();
-            } catch (Throwable ignored) {}
-        }
+            }
+        } catch (Throwable ignored) {}
+
         return !f.exists();
     }
 
