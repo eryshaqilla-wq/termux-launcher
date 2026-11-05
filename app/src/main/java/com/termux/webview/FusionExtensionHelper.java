@@ -3,7 +3,9 @@ package com.termux.webview;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.util.Log;
 import android.view.View;
 import android.webkit.JavascriptInterface;
@@ -49,6 +51,7 @@ import java.util.zip.ZipInputStream;
  */
 public class FusionExtensionHelper {
     private static final String TAG = "FusionExtension";
+    public static final int REQUEST_CODE_PICK_EXTENSION = 4725;
     private static final String PREF_NAME = "fusion_extension_prefs";
     private static final String KEY_STORAGE_CACHE = "ext_storage_json";
     private static String sStorageCache = null;
@@ -472,6 +475,79 @@ public class FusionExtensionHelper {
         return null;
     }
 
+    public static boolean installPackageFromUri(Context context, Uri uri) {
+        if (context == null || uri == null) return false;
+        File cacheDir = context.getCacheDir();
+        if (cacheDir != null && !cacheDir.exists()) cacheDir.mkdirs();
+        File tempFile = new File(cacheDir, "picked_ext_" + System.currentTimeMillis() + ".zip");
+        try (InputStream is = context.getContentResolver().openInputStream(uri);
+             FileOutputStream fos = new FileOutputStream(tempFile)) {
+            if (is == null) {
+                Log.e(TAG, "Gagal membuka InputStream dari URI: " + uri);
+                return false;
+            }
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = is.read(buf)) > 0) {
+                fos.write(buf, 0, n);
+            }
+            fos.flush();
+        } catch (Throwable e) {
+            Log.e(TAG, "Gagal menyalin paket ekstensi dari URI: " + e.getMessage(), e);
+            if (tempFile.exists()) tempFile.delete();
+            return false;
+        }
+
+        try {
+            boolean ok = installPackage(context, tempFile);
+            tempFile.delete();
+            return ok;
+        } catch (Throwable e) {
+            if (tempFile.exists()) tempFile.delete();
+            return false;
+        }
+    }
+
+    public static void launchExtensionPicker(TermuxActivity act) {
+        if (act == null) return;
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("*/*");
+            String[] mimeTypes = new String[]{
+                "application/zip",
+                "application/x-zip-compressed",
+                "application/octet-stream",
+                "application/x-chrome-extension",
+                "*/*"
+            };
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+            act.startActivityForResult(intent, REQUEST_CODE_PICK_EXTENSION);
+        } catch (Throwable e) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.setType("*/*");
+                act.startActivityForResult(intent, REQUEST_CODE_PICK_EXTENSION);
+            } catch (Throwable err) {
+                FusionToast.makeText(act, "Gagal membuka File Manager: " + err.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    public static void handlePickedExtensionUri(final TermuxActivity act, final FusionWebViewManager manager, Uri uri) {
+        if (act == null || uri == null) return;
+        boolean ok = installPackageFromUri(act, uri);
+        if (ok) {
+            FusionToast.makeText(act, "✅ Ekstensi berhasil dipasang dari File Manager!", Toast.LENGTH_LONG).show();
+            if (manager != null && manager.mActiveWebView != null) {
+                setupWebView(manager.mActiveWebView);
+            }
+            showExtensionsDialog(act, manager);
+        } else {
+            FusionToast.makeText(act, "❌ Gagal memasang: berkas zip/crx tidak valid atau manifest.json tidak ditemukan.", Toast.LENGTH_LONG).show();
+        }
+    }
+
     public static boolean installPackage(Context context, File packageFile) {
         if (packageFile == null) return false;
         File baseDir = getPrimaryExtensionsDir(context);
@@ -600,6 +676,7 @@ public class FusionExtensionHelper {
                 while ((entry = zis.getNextEntry()) != null) {
                     String entryName = entry.getName().replace('\\', '/');
                     if (entryName.contains("..")) continue;
+                    if (entryName.startsWith("__MACOSX/") || entryName.endsWith(".DS_Store")) continue;
                     if (!rootPrefix.isEmpty() && entryName.startsWith(rootPrefix)) {
                         entryName = entryName.substring(rootPrefix.length());
                     }
@@ -1232,6 +1309,9 @@ public class FusionExtensionHelper {
         final List<File> archives = scanCandidateArchives();
 
         List<String> displayNames = new ArrayList<>();
+        // Opsi 1: Pemilih Berkas Resmi Android (SAF) - 100% Dukungan Non-Root & Akses SDCard Tanpa Batasan Scoped Storage
+        displayNames.add("📁 Buka File Manager Android (SAF - Non-Root / SDCard)");
+
         for (File f : archives) {
             String sizeKb = (f.length() / 1024) + " KB";
             if (f.getName().equalsIgnoreCase("pro.zip")) {
@@ -1246,8 +1326,11 @@ public class FusionExtensionHelper {
         AlertDialog.Builder b = new AlertDialog.Builder(act);
         b.setTitle("📦 Pilih Paket Ekstensi (.zip / .crx)");
         b.setItems(items, (dialog, which) -> {
-            if (which >= 0 && which < archives.size()) {
-                File selected = archives.get(which);
+            if (which == 0) {
+                // Buka File Picker Bawaan Android via SAF
+                launchExtensionPicker(act);
+            } else if (which > 0 && which <= archives.size()) {
+                File selected = archives.get(which - 1);
                 boolean ok = installPackage(act, selected);
                 if (ok) {
                     FusionToast.makeText(act, "✅ Ekstensi berhasil dipasang dari " + selected.getName(), Toast.LENGTH_LONG).show();

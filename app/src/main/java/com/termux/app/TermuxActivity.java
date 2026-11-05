@@ -17766,6 +17766,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == PermissionUtils.REQUEST_GRANT_STORAGE_PERMISSION) {
             requestStoragePermission(true);
+        } else if (requestCode == com.termux.webview.FusionExtensionHelper.REQUEST_CODE_PICK_EXTENSION) {
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) {
+                com.termux.webview.FusionExtensionHelper.handlePickedExtensionUri(
+                    this, com.termux.webview.FusionWebViewManager.getInstance(), data.getData());
+            }
         } else if (requestCode == REQUEST_CODE_VOICE_TYPING) {
             TerminalSession target = mVoiceTypingTargetSession;
             mVoiceTypingTargetSession = null;
