@@ -146,18 +146,28 @@ public class FusionWebViewDispatcher {
                 if (item != null && item.isValid()) {
                     activeTab.mProxyItem = item;
                     activeTab.mIsProxyEnabled = true;
+                    String profKey = (activeTab.mProfile != null && !activeTab.mProfile.isEmpty()) ? activeTab.mProfile : "default";
+                    FusionProxyHelper.savePersistentState(fusionWebViewManager.mActivity, profKey, true, item, activeTab.mAutoRotateIntervalSec, "custom", null);
+                    if (!"default".equals(profKey)) {
+                        FusionProxyHelper.savePersistentState(fusionWebViewManager.mActivity, "default", true, item, activeTab.mAutoRotateIntervalSec, "custom", null);
+                    }
                     FusionProxyHelper.applyProxyToEngine(activeTab);
                     FusionProxyHelper.updateProxyIndicator(fusionWebViewManager, activeTab);
                 }
             }
             return;
         }
-        if (str.equals("WEBVIEW_PROXY_CLEAR")) {
+        if (str.equals("WEBVIEW_PROXY_CLEAR") || str.equals("WEBVIEW_PROXY_OFF")) {
             FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
             if (activeTab != null) {
                 activeTab.mIsProxyEnabled = false;
                 activeTab.mProxyItem = null;
                 activeTab.mAutoRotateIntervalSec = 0;
+                String profKey = (activeTab.mProfile != null && !activeTab.mProfile.isEmpty()) ? activeTab.mProfile : "default";
+                FusionProxyHelper.savePersistentState(fusionWebViewManager.mActivity, profKey, false, null, 0, "direct", null);
+                if (!"default".equals(profKey)) {
+                    FusionProxyHelper.savePersistentState(fusionWebViewManager.mActivity, "default", false, null, 0, "direct", null);
+                }
                 FusionProxyHelper.applyProxyToEngine(activeTab);
                 FusionProxyHelper.updateProxyIndicator(fusionWebViewManager, activeTab);
             }

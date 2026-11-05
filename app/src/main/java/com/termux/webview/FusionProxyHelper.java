@@ -196,7 +196,21 @@ public class FusionProxyHelper {
      * STICKY PROXY & AUTO-ROTATION STORAGE (SEPERTI FLUXA.PY & AGENTHANSA.PY)
      * ========================================================================= */
 
+    private static final String PREF_NAME = "fusion_proxy_prefs";
+
+    public static class PersistentProxyState {
+        public boolean enabled = false;
+        public ProxyItem item = null;
+        public int intervalSec = 0;
+        public String mode = "custom"; // "custom" or "file_pool"
+        public String activeFile = "";
+    }
+
     private static File getStickyFile() {
+        File f0 = new File("/data/data/com.termux/files/proxy_sticky.json");
+        if (f0.getParentFile() != null && f0.getParentFile().canWrite()) {
+            return f0;
+        }
         File f1 = new File(STICKY_FILE_PATH);
         if (f1.getParentFile() != null && !f1.getParentFile().exists()) {
             try { f1.getParentFile().mkdirs(); } catch (Exception ignored) {}
@@ -211,8 +225,14 @@ public class FusionProxyHelper {
         return f2;
     }
 
-    public static synchronized void saveStickyProxy(String profileOrTab, ProxyItem item) {
-        if (profileOrTab == null || profileOrTab.isEmpty()) return;
+    public static synchronized void saveActiveProxyFile(Context ctx, String filePath) {
+        if (filePath == null || filePath.isEmpty()) return;
+        if (ctx != null) {
+            try {
+                android.content.SharedPreferences sp = ctx.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+                sp.edit().putString("active_file", filePath).apply();
+            } catch (Throwable ignored) {}
+        }
         try {
             File f = getStickyFile();
             JSONObject root = new JSONObject();
@@ -224,38 +244,138 @@ public class FusionProxyHelper {
                     if (sb.length() > 0) root = new JSONObject(sb.toString());
                 }
             }
-            if (item != null && item.isValid()) {
-                JSONObject pObj = new JSONObject();
-                pObj.put("raw", item.raw);
-                pObj.put("host", item.host);
-                pObj.put("port", item.port);
-                pObj.put("user", item.user);
-                pObj.put("pass", item.pass);
-                pObj.put("scheme", item.scheme);
-                pObj.put("country", item.country);
-                pObj.put("ip", item.ip);
-                root.put(profileOrTab, pObj);
-            } else {
-                root.remove(profileOrTab);
-            }
+            root.put("active_file", filePath);
             try (FileOutputStream fos = new FileOutputStream(f, false)) {
                 fos.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
             }
-        } catch (Throwable e) {
-            Log.e(TAG, "Gagal saveStickyProxy: " + e.getMessage());
+        } catch (Throwable ignored) {}
+    }
+
+    public static synchronized void savePersistentState(Context ctx, String profKey, boolean enabled, ProxyItem item, int intervalSec, String mode, String activeFile) {
+        if (profKey == null || profKey.isEmpty()) profKey = "default";
+
+        if (ctx != null) {
+            try {
+                android.content.SharedPreferences sp = ctx.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+                android.content.SharedPreferences.Editor ed = sp.edit();
+                ed.putBoolean("enabled_" + profKey, enabled);
+                ed.putString("raw_" + profKey, (item != null && item.raw != null) ? item.raw : "");
+                ed.putString("country_" + profKey, (item != null && item.country != null) ? item.country : "");
+                ed.putString("ip_" + profKey, (item != null && item.ip != null) ? item.ip : "");
+                ed.putInt("interval_" + profKey, intervalSec);
+                ed.putString("mode_" + profKey, mode != null ? mode : "custom");
+                if (activeFile != null && !activeFile.isEmpty()) {
+                    ed.putString("active_file", activeFile);
+                }
+                ed.apply();
+            } catch (Throwable t) {
+                Log.e(TAG, "Gagal savePersistentState to SharedPreferences: " + t.getMessage());
+            }
+        }
+
+        saveStickyProxy(profKey, item);
+    }
+
+    public static synchronized PersistentProxyState loadPersistentState(Context ctx, String profKey) {
+        if (profKey == null || profKey.isEmpty()) profKey = "default";
+        PersistentProxyState state = new PersistentProxyState();
+
+        if (ctx != null) {
+            try {
+                android.content.SharedPreferences sp = ctx.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+                if (sp.contains("enabled_" + profKey) || sp.contains("raw_" + profKey)) {
+                    state.enabled = sp.getBoolean("enabled_" + profKey, false);
+                    String raw = sp.getString("raw_" + profKey, "");
+                    state.intervalSec = sp.getInt("interval_" + profKey, 0);
+                    state.mode = sp.getString("mode_" + profKey, "custom");
+                    state.activeFile = sp.getString("active_file", "");
+                    if (raw != null && !raw.isEmpty()) {
+                        ProxyItem it = parse(raw);
+                        if (it != null) {
+                            it.country = sp.getString("country_" + profKey, "");
+                            it.ip = sp.getString("ip_" + profKey, "");
+                            state.item = it;
+                        }
+                    }
+                    if (state.item != null && state.item.isValid()) {
+                        return state;
+                    }
+                }
+            } catch (Throwable t) {
+                Log.e(TAG, "Gagal loadPersistentState from SharedPreferences: " + t.getMessage());
+            }
+        }
+
+        ProxyItem sticky = loadStickyProxy(profKey);
+        if (sticky != null && sticky.isValid()) {
+            state.enabled = true;
+            state.item = sticky;
+            return state;
+        }
+
+        if (!"default".equals(profKey)) {
+            return loadPersistentState(ctx, "default");
+        }
+
+        return state;
+    }
+
+    public static synchronized void saveStickyProxy(String profileOrTab, ProxyItem item) {
+        if (profileOrTab == null || profileOrTab.isEmpty()) profileOrTab = "default";
+        File[] targets = new File[] {
+            new File("/data/data/com.termux/files/proxy_sticky.json"),
+            new File(STICKY_FILE_PATH),
+            new File(FALLBACK_STICKY_FILE_PATH)
+        };
+        for (File f : targets) {
+            try {
+                if (f.getParentFile() != null && !f.getParentFile().exists()) {
+                    f.getParentFile().mkdirs();
+                }
+                JSONObject root = new JSONObject();
+                if (f.exists()) {
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
+                        StringBuilder sb = new StringBuilder();
+                        String line;
+                        while ((line = br.readLine()) != null) sb.append(line);
+                        if (sb.length() > 0) root = new JSONObject(sb.toString());
+                    }
+                }
+                if (item != null && item.isValid()) {
+                    JSONObject pObj = new JSONObject();
+                    pObj.put("raw", item.raw);
+                    pObj.put("host", item.host);
+                    pObj.put("port", item.port);
+                    pObj.put("user", item.user);
+                    pObj.put("pass", item.pass);
+                    pObj.put("scheme", item.scheme);
+                    pObj.put("country", item.country);
+                    pObj.put("ip", item.ip);
+                    root.put(profileOrTab, pObj);
+                } else {
+                    root.remove(profileOrTab);
+                }
+                try (FileOutputStream fos = new FileOutputStream(f, false)) {
+                    fos.write(root.toString(2).getBytes(StandardCharsets.UTF_8));
+                }
+            } catch (Throwable ignored) {}
         }
     }
 
     public static synchronized ProxyItem loadStickyProxy(String profileOrTab) {
-        if (profileOrTab == null || profileOrTab.isEmpty()) return null;
-        try {
-            File f = getStickyFile();
-            if (!f.exists()) return null;
+        if (profileOrTab == null || profileOrTab.isEmpty()) profileOrTab = "default";
+        File[] candidates = new File[] {
+            new File("/data/data/com.termux/files/proxy_sticky.json"),
+            new File(STICKY_FILE_PATH),
+            new File(FALLBACK_STICKY_FILE_PATH)
+        };
+        for (File f : candidates) {
+            if (!f.exists()) continue;
             try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
                 StringBuilder sb = new StringBuilder();
                 String line;
                 while ((line = br.readLine()) != null) sb.append(line);
-                if (sb.length() == 0) return null;
+                if (sb.length() == 0) continue;
                 JSONObject root = new JSONObject(sb.toString());
                 if (root.has(profileOrTab)) {
                     JSONObject pObj = root.getJSONObject(profileOrTab);
@@ -267,17 +387,61 @@ public class FusionProxyHelper {
                         return item;
                     }
                 }
-            }
-        } catch (Throwable e) {
-            Log.e(TAG, "Gagal loadStickyProxy: " + e.getMessage());
+                if (!"default".equals(profileOrTab) && root.has("default")) {
+                    JSONObject pObj = root.getJSONObject("default");
+                    String raw = pObj.optString("raw", "");
+                    ProxyItem item = parse(raw);
+                    if (item != null) {
+                        item.country = pObj.optString("country", "");
+                        item.ip = pObj.optString("ip", "");
+                        return item;
+                    }
+                }
+            } catch (Throwable ignored) {}
         }
         return null;
     }
 
-    public static File getPrimaryProxyFile() {
+    public static File getPrimaryProxyFile(Context ctx) {
+        if (ctx != null) {
+            try {
+                android.content.SharedPreferences sp = ctx.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+                String savedPath = sp.getString("active_file", "");
+                if (savedPath != null && !savedPath.isEmpty()) {
+                    File sf = new File(savedPath);
+                    if (sf.exists() && sf.isFile() && sf.length() > 0) {
+                        return sf;
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        File[] candidatesSticky = new File[] {
+            new File("/data/data/com.termux/files/proxy_sticky.json"),
+            new File(STICKY_FILE_PATH),
+            new File(FALLBACK_STICKY_FILE_PATH)
+        };
+        for (File f : candidatesSticky) {
+            if (f.exists()) {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(f), StandardCharsets.UTF_8))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = br.readLine()) != null) sb.append(line);
+                    if (sb.length() > 0) {
+                        JSONObject root = new JSONObject(sb.toString());
+                        String savedPath = root.optString("active_file", "");
+                        if (savedPath != null && !savedPath.isEmpty()) {
+                            File sf = new File(savedPath);
+                            if (sf.exists() && sf.isFile() && sf.length() > 0) {
+                                return sf;
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
         String[] candidates = new String[] {
-            "/sdcard/Download/proxy.txt",
             "/sdcard/Download/dataimpulse.txt",
+            "/sdcard/Download/proxy.txt",
             "/root/proxy.txt",
             "/project/proxy.txt",
             "/data/data/com.termux/files/home/proxy.txt",
@@ -288,6 +452,10 @@ public class FusionProxyHelper {
             if (f.exists() && f.isFile() && f.length() > 0) return f;
         }
         return null;
+    }
+
+    public static File getPrimaryProxyFile() {
+        return getPrimaryProxyFile(null);
     }
 
     /**
@@ -375,7 +543,7 @@ public class FusionProxyHelper {
         }
 
         new Thread(() -> {
-            File poolFile = getPrimaryProxyFile();
+            File poolFile = getPrimaryProxyFile(manager != null ? manager.mActivity : null);
             if (poolFile == null) {
                 sMainHandler.post(() -> {
                     if (cb != null) cb.onResult(false, "File proxy.txt tidak ditemukan", "", "", -1);
@@ -391,14 +559,19 @@ public class FusionProxyHelper {
                 return;
             }
 
-            String key = (tab.mProfile != null && !tab.mProfile.isEmpty() && !"default".equals(tab.mProfile))
+            String key = (tab.mProfile != null && !tab.mProfile.isEmpty())
                     ? tab.mProfile
-                    : "tab_" + tab.mId;
+                    : "default";
 
             tab.mProxyItem = newProxy;
             tab.mIsProxyEnabled = true;
             tab.mLastProxyRotatedTime = System.currentTimeMillis();
-            saveStickyProxy(key, newProxy);
+
+            Context ctx = manager != null ? manager.mActivity : null;
+            savePersistentState(ctx, key, true, newProxy, tab.mAutoRotateIntervalSec, "file_pool", poolFile.getAbsolutePath());
+            if (!"default".equals(key)) {
+                savePersistentState(ctx, "default", true, newProxy, tab.mAutoRotateIntervalSec, "file_pool", poolFile.getAbsolutePath());
+            }
 
             sMainHandler.post(() -> {
                 if (manager != null && FusionTabStateHelper.getActiveTab(manager) == tab) {
@@ -410,7 +583,10 @@ public class FusionProxyHelper {
             // Uji proxy baru
             testProxyAsync(newProxy, (success, message, ip, country, latencyMs) -> {
                 if (success) {
-                    saveStickyProxy(key, newProxy);
+                    savePersistentState(ctx, key, true, newProxy, tab.mAutoRotateIntervalSec, "file_pool", poolFile.getAbsolutePath());
+                    if (!"default".equals(key)) {
+                        savePersistentState(ctx, "default", true, newProxy, tab.mAutoRotateIntervalSec, "file_pool", poolFile.getAbsolutePath());
+                    }
                     sMainHandler.post(() -> {
                         if (manager != null) updateProxyIndicator(manager, tab);
                     });
@@ -458,7 +634,7 @@ public class FusionProxyHelper {
                             TermuxActivity act = manager.mActivity;
                             if (act != null && success) {
                                 String cStr = (country != null && !country.isEmpty()) ? country.toUpperCase() : "OK";
-                                FusionToast.makeText(act, "🔄 Tab " + (tab.mId + 1) + " auto-rotate: " + cStr + " (" + ip + ")", Toast.LENGTH_SHORT).show();
+                                FusionToast.makeText(act, "Tab " + (tab.mId + 1) + " auto-rotate: " + cStr + " (" + ip + ")", Toast.LENGTH_SHORT).show();
                             }
                         });
                     });
@@ -472,23 +648,27 @@ public class FusionProxyHelper {
      */
     public static void configureTabProxy(FusionTab tab, String proxyStr, int intervalSec, FusionWebViewManager manager) {
         if (tab == null) return;
-        if (proxyStr == null || proxyStr.trim().isEmpty() || "direct".equalsIgnoreCase(proxyStr) || "off".equalsIgnoreCase(proxyStr)) {
+        Context ctx = manager != null ? manager.mActivity : null;
+        if (proxyStr == null || proxyStr.trim().isEmpty() || "direct".equalsIgnoreCase(proxyStr) || "off".equalsIgnoreCase(proxyStr) || "none".equalsIgnoreCase(proxyStr)) {
             tab.mIsProxyEnabled = false;
             tab.mAutoRotateIntervalSec = 0;
+            savePersistentState(ctx, tab.mProfile, false, null, 0, "direct", null);
             return;
         }
 
-        String key = (tab.mProfile != null && !tab.mProfile.isEmpty() && !"default".equals(tab.mProfile))
+        String key = (tab.mProfile != null && !tab.mProfile.isEmpty())
                 ? tab.mProfile
-                : "tab_" + tab.mId;
+                : "default";
 
         ProxyItem item = null;
+        String mode = "custom";
         if ("auto".equalsIgnoreCase(proxyStr) || "pool".equalsIgnoreCase(proxyStr) || "1".equals(proxyStr) || "true".equalsIgnoreCase(proxyStr)) {
-            ProxyItem sticky = loadStickyProxy(key);
-            if (sticky != null && sticky.isValid()) {
-                item = sticky;
+            mode = "file_pool";
+            PersistentProxyState saved = loadPersistentState(ctx, key);
+            if (saved != null && saved.enabled && saved.item != null && saved.item.isValid()) {
+                item = saved.item;
             } else {
-                File poolFile = getPrimaryProxyFile();
+                File poolFile = getPrimaryProxyFile(ctx);
                 if (poolFile != null) {
                     item = popNextProxyFromFile(poolFile);
                 }
@@ -505,13 +685,23 @@ public class FusionProxyHelper {
                 tab.mAutoRotateIntervalSec = intervalSec;
                 startAutoRotateScheduler(manager);
             }
-            saveStickyProxy(key, item);
+            savePersistentState(ctx, key, true, item, intervalSec, mode, null);
+            if (!"default".equals(key)) {
+                savePersistentState(ctx, "default", true, item, intervalSec, mode, null);
+            }
             applyProxyToEngine(tab);
             updateProxyIndicator(manager, tab);
 
+            final String fKey = key;
+            final String fMode = mode;
+            final int fInt = intervalSec;
+            final ProxyItem fItem = item;
             testProxyAsync(item, (success, message, ip, country, latencyMs) -> {
                 if (success) {
-                    saveStickyProxy(key, item);
+                    savePersistentState(ctx, fKey, true, fItem, fInt, fMode, null);
+                    if (!"default".equals(fKey)) {
+                        savePersistentState(ctx, "default", true, fItem, fInt, fMode, null);
+                    }
                     sMainHandler.post(() -> {
                         if (manager != null) updateProxyIndicator(manager, tab);
                     });
@@ -732,6 +922,9 @@ public class FusionProxyHelper {
         labelInput.setTextSize(2, 12.0f);
         root.addView(labelInput);
 
+        String profKey = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty()) ? currentTab.mProfile : "default";
+        PersistentProxyState savedState = loadPersistentState(act, profKey);
+
         final EditText inputProxy = new EditText(act);
         inputProxy.setHint("host:port:user:pass atau user:pass@host:port");
         inputProxy.setTextSize(2, 12.5f);
@@ -739,8 +932,10 @@ public class FusionProxyHelper {
         inputProxy.setHintTextColor(0xFF6C7086);
         inputProxy.setBackground(FusionUiHelper.createRounded(0xFF181825, 0xFF313244, 4.0f));
         inputProxy.setPadding(14, 12, 14, 12);
-        if (currentTab.mProxyItem != null && currentTab.mProxyItem.raw != null) {
+        if (currentTab.mProxyItem != null && currentTab.mProxyItem.raw != null && !currentTab.mProxyItem.raw.isEmpty()) {
             inputProxy.setText(currentTab.mProxyItem.raw);
+        } else if (savedState != null && savedState.item != null && savedState.item.raw != null && !savedState.item.raw.isEmpty()) {
+            inputProxy.setText(savedState.item.raw);
         }
         root.addView(inputProxy);
 
@@ -757,7 +952,8 @@ public class FusionProxyHelper {
         intervalRow.addView(labelInterval, new LinearLayout.LayoutParams(0, -2, 1.0f));
 
         final EditText inputInterval = new EditText(act);
-        int currentMins = (currentTab.mAutoRotateIntervalSec > 0) ? (currentTab.mAutoRotateIntervalSec / 60) : 0;
+        int currentMins = (currentTab.mAutoRotateIntervalSec > 0) ? (currentTab.mAutoRotateIntervalSec / 60)
+                : ((savedState != null && savedState.intervalSec > 0) ? (savedState.intervalSec / 60) : 0);
         inputInterval.setText(String.valueOf(currentMins));
         inputInterval.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         inputInterval.setTextSize(2, 12.5f);
@@ -863,9 +1059,9 @@ public class FusionProxyHelper {
             } catch (Exception ignored) {}
             if (mins < 0) mins = 0;
 
-            String key = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty() && !"default".equals(currentTab.mProfile))
+            String key = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty())
                     ? currentTab.mProfile
-                    : "tab_" + currentTab.mId;
+                    : "default";
 
             currentTab.mProxyItem = item;
             currentTab.mIsProxyEnabled = true;
@@ -874,7 +1070,10 @@ public class FusionProxyHelper {
             if (mins > 0) {
                 startAutoRotateScheduler(manager);
             }
-            saveStickyProxy(key, item);
+            savePersistentState(act, key, true, item, mins * 60, "custom", null);
+            if (!"default".equals(key)) {
+                savePersistentState(act, "default", true, item, mins * 60, "custom", null);
+            }
             applyProxyToEngine(currentTab);
             updateProxyIndicator(manager, currentTab);
 
@@ -883,13 +1082,16 @@ public class FusionProxyHelper {
         });
 
         builder.setNeutralButton("Matikan Proxy Tab", (dialog, which) -> {
-            String key = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty() && !"default".equals(currentTab.mProfile))
+            String key = (currentTab.mProfile != null && !currentTab.mProfile.isEmpty())
                     ? currentTab.mProfile
-                    : "tab_" + currentTab.mId;
+                    : "default";
 
             currentTab.mIsProxyEnabled = false;
             currentTab.mAutoRotateIntervalSec = 0;
-            saveStickyProxy(key, null);
+            savePersistentState(act, key, false, null, 0, "direct", null);
+            if (!"default".equals(key)) {
+                savePersistentState(act, "default", false, null, 0, "direct", null);
+            }
             applyProxyToEngine(currentTab);
             updateProxyIndicator(manager, currentTab);
             FusionToast.makeText(act, "Tab " + (manager.mActiveTab + 1) + " kembali ke Direct Network (Proxy OFF)", Toast.LENGTH_SHORT).show();
@@ -931,12 +1133,50 @@ public class FusionProxyHelper {
         b.setItems(names, (dialog, which) -> {
             if (which >= 0 && which < files.size()) {
                 File selected = files.get(which);
+                saveActiveProxyFile(act, selected.getAbsolutePath());
                 List<ProxyItem> proxies = loadProxiesFromFile(selected);
                 if (proxies.isEmpty()) {
                     FusionToast.makeText(act, "File tidak berisi format proxy yang valid.", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                showProxyListSelectorDialog(act, manager, proxies, inputProxy, testResultText);
+
+                String[] options = new String[] {
+                    "⚡ Muat Proxy Pertama dari " + selected.getName(),
+                    "📋 Telusuri Seluruh Proxy (" + proxies.size() + " Baris)",
+                    "🔄 Jadikan Antrean Rotasi Otomatis & Ambil Proxy Baru"
+                };
+
+                AlertDialog.Builder optDialog = new AlertDialog.Builder(act);
+                optDialog.setTitle("File: " + selected.getName());
+                optDialog.setItems(options, (d2, optIdx) -> {
+                    if (optIdx == 0) {
+                        ProxyItem first = proxies.get(0);
+                        inputProxy.setText(first.raw);
+                        testResultText.setVisibility(View.VISIBLE);
+                        testResultText.setTextColor(0xFFF9E2AF);
+                        testResultText.setText("Menguji proxy dari " + selected.getName() + "...");
+                        testProxyAsync(first, (success, message, ip, country, latencyMs) -> {
+                            testResultText.setText(message);
+                            testResultText.setTextColor(success ? 0xFFA6E3A1 : 0xFFF38BA8);
+                        });
+                    } else if (optIdx == 1) {
+                        showProxyListSelectorDialog(act, manager, proxies, inputProxy, testResultText);
+                    } else if (optIdx == 2) {
+                        FusionTab currentTab = FusionTabStateHelper.getActiveTab(manager);
+                        if (currentTab != null) {
+                            rotateProxyForTab(currentTab, manager, (success, message, ip, country, latencyMs) -> {
+                                if (currentTab.mProxyItem != null) {
+                                    inputProxy.setText(currentTab.mProxyItem.raw);
+                                }
+                                testResultText.setVisibility(View.VISIBLE);
+                                testResultText.setText(message);
+                                testResultText.setTextColor(success ? 0xFFA6E3A1 : 0xFFF38BA8);
+                            });
+                        }
+                    }
+                });
+                optDialog.setNegativeButton("Batal", null);
+                optDialog.show();
             }
         });
         b.setNegativeButton("Batal", null);
