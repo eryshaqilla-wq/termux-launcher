@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.net.http.SslError;
+import android.webkit.HttpAuthHandler;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.SslErrorHandler;
 import android.webkit.WebResourceRequest;
@@ -46,6 +47,18 @@ public class FusionWebViewClient extends WebViewClient {
                 webView.evaluateJavascript(desktopViewportJs, null);
             }
         }
+    }
+
+    @Override // android.webkit.WebViewClient
+    public void onReceivedHttpAuthRequest(WebView webView, HttpAuthHandler handler, String host, String realm) {
+        if (this.mManager != null) {
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(this.mManager);
+            if (activeTab != null && activeTab.mIsProxyEnabled && activeTab.mProxyItem != null && activeTab.mProxyItem.hasAuth()) {
+                handler.proceed(activeTab.mProxyItem.user, activeTab.mProxyItem.pass);
+                return;
+            }
+        }
+        super.onReceivedHttpAuthRequest(webView, handler, host, realm);
     }
 
     @Override // android.webkit.WebViewClient

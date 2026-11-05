@@ -77,6 +77,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public TextView mOpacityBtn;
     public FrameLayout mPaneHost;
     public TextView mQuickBackBtn;
+    public TextView mProxyBtn;
     public TextView mRandomFpBtn;
     public TextView mRecBtn;
     public TextView mRunMacroBtn;
@@ -948,6 +949,22 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             LinearLayout.LayoutParams layoutParams3 = new LinearLayout.LayoutParams(-2, -2);
             layoutParams3.setMargins(2, 0, 2, 0);
             this.mControlPill.addView(textView2, layoutParams3);
+            TextView proxyBtn = new TextView(this.mActivity);
+            this.mProxyBtn = proxyBtn;
+            proxyBtn.setText(" 🌐 OFF ");
+            FusionUiHelper.setSolidBtn(proxyBtn);
+            proxyBtn.setTextSize(2, 11.0f);
+            proxyBtn.setPadding(8, 4, 8, 4);
+            proxyBtn.setClickable(true);
+            proxyBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    FusionProxyHelper.showProxyDialog(FusionWebViewManager.this.mActivity, FusionWebViewManager.this);
+                }
+            });
+            LinearLayout.LayoutParams layoutParamsProxy = new LinearLayout.LayoutParams(-2, -2);
+            layoutParamsProxy.setMargins(2, 0, 2, 0);
+            this.mControlPill.addView(proxyBtn, layoutParamsProxy);
             TextView textView3 = new TextView(this.mActivity);
             this.mAgyBtn = textView3;
             textView3.setText(" BOT ");
@@ -1156,6 +1173,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 @Override
                 public void onClick(View v) {
                     showUserscriptsDialog();
+                }
+            }));
+
+            menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🌐", "Pengaturan Proxy (Per-Tab)", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    closeAllDrawers();
+                    showProxyDialog();
                 }
             }));
 
@@ -2331,6 +2356,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionUserscriptHelper.showUserscriptsDialog(this.mActivity, this);
     }
 
+    public void showProxyDialog() {
+        FusionProxyHelper.showProxyDialog(this.mActivity, this);
+    }
+
     public void showExtensionsDialog() {
         showUserscriptsDialog();
     }
@@ -2587,6 +2616,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
                 this.mActiveWebView = webView;
                 this.mCurrentProfile = fusionTab.mProfile;
+                FusionProxyHelper.applyProxyToEngine(fusionTab);
+                FusionProxyHelper.updateProxyIndicator(this, fusionTab);
             } else {
                 if (fusionTab != null && fusionTab.mWebView != null) {
                     fusionTab.mWebView.setVisibility(8);

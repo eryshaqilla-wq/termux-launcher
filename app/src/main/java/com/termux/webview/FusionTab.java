@@ -18,6 +18,8 @@ public class FusionTab {
     public boolean mIsPillCollapsed = false;
     public int mOpacityLevel = 0;
     public boolean mIsRecording = false;
+    public FusionProxyHelper.ProxyItem mProxyItem = null;
+    public boolean mIsProxyEnabled = false;
 
     public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3) {
         this.mId = i;

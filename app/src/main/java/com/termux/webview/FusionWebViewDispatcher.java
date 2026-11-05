@@ -127,6 +127,34 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.triggerAiDevBridge();
             return;
         }
+        if (str.startsWith("WEBVIEW_PROXY_SET ")) {
+            String proxyStr = str.substring(18).trim();
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+            if (activeTab != null) {
+                FusionProxyHelper.ProxyItem item = FusionProxyHelper.parse(proxyStr);
+                if (item != null && item.isValid()) {
+                    activeTab.mProxyItem = item;
+                    activeTab.mIsProxyEnabled = true;
+                    FusionProxyHelper.applyProxyToEngine(activeTab);
+                    FusionProxyHelper.updateProxyIndicator(fusionWebViewManager, activeTab);
+                }
+            }
+            return;
+        }
+        if (str.equals("WEBVIEW_PROXY_CLEAR")) {
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+            if (activeTab != null) {
+                activeTab.mIsProxyEnabled = false;
+                activeTab.mProxyItem = null;
+                FusionProxyHelper.applyProxyToEngine(activeTab);
+                FusionProxyHelper.updateProxyIndicator(fusionWebViewManager, activeTab);
+            }
+            return;
+        }
+        if (str.equals("WEBVIEW_PROXY_DIALOG") || str.equals("WEBVIEW_PROXY")) {
+            fusionWebViewManager.showProxyDialog();
+            return;
+        }
         if (str.startsWith("WEBVIEW_WORKER")) {
             fusionWebViewManager.openWorkerTab(str.length() > 15 ? str.substring(15) : "https://x.com");
             return;
