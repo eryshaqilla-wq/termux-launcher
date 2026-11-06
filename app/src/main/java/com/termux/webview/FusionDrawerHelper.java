@@ -949,6 +949,77 @@ public class FusionDrawerHelper {
         builder.show();
     }
 
+    public static void refreshExtensionDrawerIfVisible(final FusionWebViewManager manager) {
+        if (manager == null || manager.mActivity == null) return;
+        manager.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (sExtensionDrawer != null && sExtensionDrawer.getVisibility() == View.VISIBLE) {
+                    showExtensionDrawer(manager);
+                }
+            }
+        });
+    }
+
+    public static void showScriptDetailsDialog(final TermuxActivity act, final FusionWebViewManager manager, final File scriptFile, final String scriptName) {
+        if (act == null || scriptFile == null) return;
+
+        List<String> matches = FusionUserscriptHelper.parseScriptMatches(scriptFile);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Nama: ").append(scriptName).append("\n");
+        sb.append("Berkas: ").append(scriptFile.getName()).append(" (").append(Math.max(1, scriptFile.length() / 1024)).append(" KB)\n\n");
+        if (matches != null && !matches.isEmpty()) {
+            sb.append("Target Domain (@match):\n");
+            for (int i = 0; i < Math.min(5, matches.size()); i++) {
+                sb.append(" • ").append(matches.get(i)).append("\n");
+            }
+            if (matches.size() > 5) {
+                sb.append(" • ... (+").append(matches.size() - 5).append(" lainnya)\n");
+            }
+        } else {
+            sb.append("Target: Seluruh URL / Website (*)\n");
+        }
+
+        AlertDialog.Builder b = new AlertDialog.Builder(act);
+        b.setTitle("📜 " + scriptName);
+        b.setMessage(sb.toString());
+
+        b.setPositiveButton("👁️ Buka Kode", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                if (manager != null) {
+                    manager.addNewTab("file://" + scriptFile.getAbsolutePath());
+                    manager.closeAllDrawers();
+                }
+            }
+        });
+
+        b.setNeutralButton("🗑️ Hapus Skrip", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                AlertDialog.Builder confirm = new AlertDialog.Builder(act);
+                confirm.setTitle("Hapus Userscript?");
+                confirm.setMessage("Yakin ingin menghapus skrip \"" + scriptName + "\"?");
+                confirm.setPositiveButton("Hapus", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        if (scriptFile.delete()) {
+                            FusionToast.makeText(act, "Skrip \"" + scriptName + "\" berhasil dihapus.", Toast.LENGTH_SHORT).show();
+                            showExtensionDrawer(manager);
+                        } else {
+                            FusionToast.makeText(act, "Gagal menghapus berkas skrip.", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                });
+                confirm.setNegativeButton("Batal", null);
+                confirm.show();
+            }
+        });
+
+        b.setNegativeButton("Tutup", null);
+        b.show();
+    }
+
     public static void showExtensionDrawer(final FusionWebViewManager fusionWebViewManager) {
         final TermuxActivity appCompatActivity;
         ViewParent parent;
@@ -994,7 +1065,7 @@ public class FusionDrawerHelper {
 
         // Judul Drawer
         TextView titleText = new TextView(appCompatActivity);
-        titleText.setText("  🧩 Ekstensi");
+        titleText.setText("  🧩 Ekstensi & Skrip");
         titleText.setTextColor(0xFFCDD6F4);
         titleText.setTextSize(2, 16.0f);
         titleText.setTypeface(null, 1);
@@ -1016,7 +1087,7 @@ public class FusionDrawerHelper {
 
         // Subtitle
         TextView subtitle = new TextView(appCompatActivity);
-        subtitle.setText("Klik modul untuk langsung buka halaman popup");
+        subtitle.setText("Ekstensi Chrome & userscript Tampermonkey terpasang");
         subtitle.setTextColor(0xFFA6ADC8);
         subtitle.setTextSize(2, 11.0f);
         subtitle.setPadding(2, 6, 2, 8);
@@ -1031,8 +1102,8 @@ public class FusionDrawerHelper {
         TextView installBtn = new TextView(appCompatActivity);
         installBtn.setText("➕ Pasang .zip/.crx");
         installBtn.setTextColor(0xFFCDD6F4);
-        installBtn.setTextSize(2, 11.5f);
-        installBtn.setPadding(12, 8, 12, 8);
+        installBtn.setTextSize(2, 11.0f);
+        installBtn.setPadding(10, 7, 10, 7);
         installBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
         installBtn.setClickable(true);
         installBtn.setOnClickListener(new View.OnClickListener() {
@@ -1042,15 +1113,15 @@ public class FusionDrawerHelper {
             }
         });
         LinearLayout.LayoutParams installLp = new LinearLayout.LayoutParams(-2, -2);
-        installLp.setMargins(0, 0, 8, 0);
+        installLp.setMargins(0, 0, 6, 0);
         chipRow.addView(installBtn, installLp);
 
         // 🌐 Buka GreasyFork
         TextView gfBtn = new TextView(appCompatActivity);
-        gfBtn.setText("🌐 Buka GreasyFork");
+        gfBtn.setText("🌐 GreasyFork");
         gfBtn.setTextColor(0xFFA6E3A1);
-        gfBtn.setTextSize(2, 11.5f);
-        gfBtn.setPadding(12, 8, 12, 8);
+        gfBtn.setTextSize(2, 11.0f);
+        gfBtn.setPadding(10, 7, 10, 7);
         gfBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
         gfBtn.setClickable(true);
         gfBtn.setOnClickListener(new View.OnClickListener() {
@@ -1064,11 +1135,29 @@ public class FusionDrawerHelper {
                 FusionToast.makeText(appCompatActivity, "🌐 Membuka GreasyFork... Klik 'Pasang' pada skrip yang diinginkan!", Toast.LENGTH_SHORT).show();
             }
         });
-        chipRow.addView(gfBtn);
+        LinearLayout.LayoutParams gfLp = new LinearLayout.LayoutParams(-2, -2);
+        gfLp.setMargins(0, 0, 6, 0);
+        chipRow.addView(gfBtn, gfLp);
+
+        // 🔄 Segarkan
+        TextView refreshBtn = new TextView(appCompatActivity);
+        refreshBtn.setText("🔄 Segarkan");
+        refreshBtn.setTextColor(0xFF89B4FA);
+        refreshBtn.setTextSize(2, 11.0f);
+        refreshBtn.setPadding(10, 7, 10, 7);
+        refreshBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+        refreshBtn.setClickable(true);
+        refreshBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showExtensionDrawer(fusionWebViewManager);
+            }
+        });
+        chipRow.addView(refreshBtn);
 
         rootDrawer.addView(chipRow);
 
-        // ================= SCROLLABLE EXTENSION LIST =================
+        // ================= SCROLLABLE EXTENSION & USERSCRIPT LIST =================
         ScrollView scrollView = new ScrollView(appCompatActivity);
         scrollView.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1.0f));
         scrollView.setVerticalScrollBarEnabled(false);
@@ -1077,22 +1166,26 @@ public class FusionDrawerHelper {
         listContainer.setOrientation(1);
 
         final List<FusionExtensionHelper.ExtensionInfo> extensions = FusionExtensionHelper.getInstalledExtensions(appCompatActivity);
+        final List<File> scripts = FusionUserscriptHelper.getInstalledScripts(appCompatActivity);
 
-        if (extensions.isEmpty()) {
+        boolean hasExtensions = !extensions.isEmpty();
+        boolean hasScripts = !scripts.isEmpty();
+
+        if (!hasExtensions && !hasScripts) {
             LinearLayout emptyCard = new LinearLayout(appCompatActivity);
             emptyCard.setOrientation(1);
             emptyCard.setPadding(16, 20, 16, 20);
             emptyCard.setBackground(FusionUiHelper.createRounded(0xFF1E1E2E, 0xFF313244, 8.0f));
 
             TextView emptyTitle = new TextView(appCompatActivity);
-            emptyTitle.setText("Belum ada ekstensi terpasang");
+            emptyTitle.setText("Belum ada ekstensi atau userscript");
             emptyTitle.setTextColor(0xFFCDD6F4);
             emptyTitle.setTextSize(2, 13.0f);
             emptyTitle.setTypeface(null, 1);
             emptyCard.addView(emptyTitle);
 
             TextView emptyDesc = new TextView(appCompatActivity);
-            emptyDesc.setText("Pasang file .zip / .crx ekstensi Chrome desktop, atau klik 'Buka GreasyFork' di atas untuk memasang skrip otomasi secara instan.");
+            emptyDesc.setText("• Pasang file .zip / .crx ekstensi Chrome desktop via tombol '➕ Pasang'.\n• Pasang userscript Tampermonkey (.user.js) secara instan via tombol '🌐 GreasyFork'.");
             emptyDesc.setTextColor(0xFFA6ADC8);
             emptyDesc.setTextSize(2, 11.5f);
             emptyDesc.setPadding(0, 6, 0, 0);
@@ -1103,112 +1196,226 @@ public class FusionDrawerHelper {
             float density = appCompatActivity.getResources().getDisplayMetrics().density;
             int iconPx = (int) (38 * density);
 
-            for (int i = 0; i < extensions.size(); i++) {
-                final FusionExtensionHelper.ExtensionInfo ext = extensions.get(i);
+            // 1. BAGIAN EKSTENSI CHROME
+            if (hasExtensions) {
+                TextView extHeader = new TextView(appCompatActivity);
+                extHeader.setText("🧩 EKSTENSI CHROME (" + extensions.size() + ")");
+                extHeader.setTextColor(0xFF89B4FA);
+                extHeader.setTextSize(2, 11.0f);
+                extHeader.setTypeface(null, 1);
+                extHeader.setPadding(4, 2, 4, 6);
+                listContainer.addView(extHeader);
 
-                LinearLayout itemCard = new LinearLayout(appCompatActivity);
-                itemCard.setOrientation(0);
-                itemCard.setGravity(16);
-                itemCard.setPadding(12, 12, 12, 12);
-                itemCard.setBackground(FusionUiHelper.createRounded(0xFF1E1E2E, 0xFF313244, 8.0f));
-                itemCard.setClickable(true);
-                itemCard.setFocusable(true);
+                for (int i = 0; i < extensions.size(); i++) {
+                    final FusionExtensionHelper.ExtensionInfo ext = extensions.get(i);
 
-                // Ikon Logo Asli Ekstensi
-                Bitmap iconBmp = FusionExtensionHelper.getExtensionIcon(ext, 120);
-                if (iconBmp != null) {
-                    ImageView iconView = new ImageView(appCompatActivity);
-                    iconView.setImageBitmap(iconBmp);
-                    iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    LinearLayout itemCard = new LinearLayout(appCompatActivity);
+                    itemCard.setOrientation(0);
+                    itemCard.setGravity(16);
+                    itemCard.setPadding(12, 12, 12, 12);
+                    itemCard.setBackground(FusionUiHelper.createRounded(0xFF1E1E2E, 0xFF313244, 8.0f));
+                    itemCard.setClickable(true);
+                    itemCard.setFocusable(true);
+
+                    // Ikon Logo Asli Ekstensi
+                    Bitmap iconBmp = FusionExtensionHelper.getExtensionIcon(ext, 120);
+                    if (iconBmp != null) {
+                        ImageView iconView = new ImageView(appCompatActivity);
+                        iconView.setImageBitmap(iconBmp);
+                        iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(iconPx, iconPx);
+                        iconLp.setMargins(0, 0, 12, 0);
+                        itemCard.addView(iconView, iconLp);
+                    } else {
+                        TextView iconFallback = new TextView(appCompatActivity);
+                        iconFallback.setText("🧩");
+                        iconFallback.setTextSize(2, 22.0f);
+                        iconFallback.setGravity(17);
+                        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(iconPx, iconPx);
+                        iconLp.setMargins(0, 0, 12, 0);
+                        itemCard.addView(iconFallback, iconLp);
+                    }
+
+                    // Info Ekstensi (Tengah)
+                    LinearLayout infoCol = new LinearLayout(appCompatActivity);
+                    infoCol.setOrientation(1);
+
+                    TextView nameText = new TextView(appCompatActivity);
+                    nameText.setText(ext.name);
+                    nameText.setTextColor(0xFFCDD6F4);
+                    nameText.setTextSize(2, 13.5f);
+                    nameText.setTypeface(null, 1);
+                    nameText.setSingleLine(true);
+                    nameText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    infoCol.addView(nameText);
+
+                    TextView verText = new TextView(appCompatActivity);
+                    String statusStr = ext.enabled ? " • Aktif" : " • Nonaktif";
+                    verText.setText("v" + ext.version + statusStr);
+                    verText.setTextColor(ext.enabled ? 0xFFA6E3A1 : 0xFF6C7086);
+                    verText.setTextSize(2, 11.0f);
+                    infoCol.addView(verText);
+
+                    itemCard.addView(infoCol, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+                    // Tombol aksi kanan
+                    if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
+                        TextView popupBadge = new TextView(appCompatActivity);
+                        popupBadge.setText("Popup");
+                        popupBadge.setTextColor(0xFF11111B);
+                        popupBadge.setTextSize(2, 10.5f);
+                        popupBadge.setTypeface(null, 1);
+                        popupBadge.setPadding(10, 4, 10, 4);
+                        popupBadge.setBackground(FusionUiHelper.createRounded(0xFF89B4FA, 0xFF89B4FA, 6.0f));
+                        LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(-2, -2);
+                        badgeLp.setMargins(6, 0, 6, 0);
+                        itemCard.addView(popupBadge, badgeLp);
+                    }
+
+                    TextView optBtn = new TextView(appCompatActivity);
+                    optBtn.setText("⚙️");
+                    optBtn.setTextSize(2, 14.0f);
+                    optBtn.setPadding(8, 6, 8, 6);
+                    optBtn.setClickable(true);
+                    optBtn.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
+                        }
+                    });
+                    itemCard.addView(optBtn);
+
+                    // 1-KLIK LANGSUNG BUKA POPUP HTML
+                    itemCard.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
+                                File popupFile = new File(ext.dir, ext.popupHtml);
+                                if (popupFile.exists()) {
+                                    fusionWebViewManager.addNewTab("file://" + popupFile.getAbsolutePath());
+                                    fusionWebViewManager.closeAllDrawers();
+                                    return;
+                                }
+                            }
+                            FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
+                        }
+                    });
+
+                    itemCard.setOnLongClickListener(new View.OnLongClickListener() {
+                        @Override
+                        public boolean onLongClick(View v) {
+                            FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
+                            return true;
+                        }
+                    });
+
+                    LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+                    cardLp.setMargins(0, 0, 0, 8);
+                    listContainer.addView(itemCard, cardLp);
+                }
+            }
+
+            // 2. BAGIAN USERSCRIPT TAMPERMONKEY
+            if (hasScripts) {
+                TextView scriptHeader = new TextView(appCompatActivity);
+                scriptHeader.setText("📜 USERSCRIPT TAMPERMONKEY (" + scripts.size() + ")");
+                scriptHeader.setTextColor(0xFFA6E3A1);
+                scriptHeader.setTextSize(2, 11.0f);
+                scriptHeader.setTypeface(null, 1);
+                scriptHeader.setPadding(4, hasExtensions ? 14 : 2, 4, 6);
+                listContainer.addView(scriptHeader);
+
+                for (int i = 0; i < scripts.size(); i++) {
+                    final File scriptFile = scripts.get(i);
+                    final String scriptName = FusionUserscriptHelper.parseScriptName(scriptFile);
+                    final long scriptKb = Math.max(1, scriptFile.length() / 1024);
+
+                    LinearLayout itemCard = new LinearLayout(appCompatActivity);
+                    itemCard.setOrientation(0);
+                    itemCard.setGravity(16);
+                    itemCard.setPadding(12, 12, 12, 12);
+                    itemCard.setBackground(FusionUiHelper.createRounded(0xFF1E1E2E, 0xFF313244, 8.0f));
+                    itemCard.setClickable(true);
+                    itemCard.setFocusable(true);
+
+                    // Ikon Userscript
+                    TextView iconView = new TextView(appCompatActivity);
+                    iconView.setText("📜");
+                    iconView.setTextSize(2, 22.0f);
+                    iconView.setGravity(17);
                     LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(iconPx, iconPx);
                     iconLp.setMargins(0, 0, 12, 0);
                     itemCard.addView(iconView, iconLp);
-                } else {
-                    TextView iconFallback = new TextView(appCompatActivity);
-                    iconFallback.setText("🧩");
-                    iconFallback.setTextSize(2, 22.0f);
-                    iconFallback.setGravity(17);
-                    LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(iconPx, iconPx);
-                    iconLp.setMargins(0, 0, 12, 0);
-                    itemCard.addView(iconFallback, iconLp);
-                }
 
-                // Info Ekstensi (Tengah)
-                LinearLayout infoCol = new LinearLayout(appCompatActivity);
-                infoCol.setOrientation(1);
+                    // Info Userscript (Tengah)
+                    LinearLayout infoCol = new LinearLayout(appCompatActivity);
+                    infoCol.setOrientation(1);
 
-                TextView nameText = new TextView(appCompatActivity);
-                nameText.setText(ext.name);
-                nameText.setTextColor(0xFFCDD6F4);
-                nameText.setTextSize(2, 13.5f);
-                nameText.setTypeface(null, 1);
-                nameText.setSingleLine(true);
-                nameText.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                infoCol.addView(nameText);
+                    TextView nameText = new TextView(appCompatActivity);
+                    nameText.setText(scriptName);
+                    nameText.setTextColor(0xFFCDD6F4);
+                    nameText.setTextSize(2, 13.5f);
+                    nameText.setTypeface(null, 1);
+                    nameText.setSingleLine(true);
+                    nameText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                    infoCol.addView(nameText);
 
-                TextView verText = new TextView(appCompatActivity);
-                String statusStr = ext.enabled ? " • Aktif" : " • Nonaktif";
-                verText.setText("v" + ext.version + statusStr);
-                verText.setTextColor(ext.enabled ? 0xFFA6E3A1 : 0xFF6C7086);
-                verText.setTextSize(2, 11.0f);
-                infoCol.addView(verText);
+                    TextView subText = new TextView(appCompatActivity);
+                    subText.setText("Userscript • " + scriptKb + " KB • Aktif");
+                    subText.setTextColor(0xFFA6E3A1);
+                    subText.setTextSize(2, 11.0f);
+                    infoCol.addView(subText);
 
-                itemCard.addView(infoCol, new LinearLayout.LayoutParams(0, -2, 1.0f));
+                    itemCard.addView(infoCol, new LinearLayout.LayoutParams(0, -2, 1.0f));
 
-                // Tombol aksi kanan
-                if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
-                    TextView popupBadge = new TextView(appCompatActivity);
-                    popupBadge.setText("Popup");
-                    popupBadge.setTextColor(0xFF11111B);
-                    popupBadge.setTextSize(2, 10.5f);
-                    popupBadge.setTypeface(null, 1);
-                    popupBadge.setPadding(10, 4, 10, 4);
-                    popupBadge.setBackground(FusionUiHelper.createRounded(0xFF89B4FA, 0xFF89B4FA, 6.0f));
-                    LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(-2, -2);
-                    badgeLp.setMargins(6, 0, 6, 0);
-                    itemCard.addView(popupBadge, badgeLp);
-                }
-
-                TextView optBtn = new TextView(appCompatActivity);
-                optBtn.setText("⚙️");
-                optBtn.setTextSize(2, 14.0f);
-                optBtn.setPadding(8, 6, 8, 6);
-                optBtn.setClickable(true);
-                optBtn.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
-                    }
-                });
-                itemCard.addView(optBtn);
-
-                // 1-KLIK LANGSUNG BUKA POPUP HTML
-                itemCard.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
-                            File popupFile = new File(ext.dir, ext.popupHtml);
-                            if (popupFile.exists()) {
-                                fusionWebViewManager.addNewTab("file://" + popupFile.getAbsolutePath());
-                                fusionWebViewManager.closeAllDrawers();
-                                return;
-                            }
+                    // Tombol Hapus [ 🗑️ ] Langsung di Kartu
+                    TextView delBtn = new TextView(appCompatActivity);
+                    delBtn.setText("🗑️");
+                    delBtn.setTextSize(2, 14.0f);
+                    delBtn.setPadding(8, 6, 8, 6);
+                    delBtn.setClickable(true);
+                    delBtn.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            AlertDialog.Builder confirm = new AlertDialog.Builder(appCompatActivity);
+                            confirm.setTitle("Hapus Userscript?");
+                            confirm.setMessage("Yakin ingin menghapus skrip \"" + scriptName + "\"?");
+                            confirm.setPositiveButton("Hapus", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface d, int w) {
+                                    if (scriptFile.delete()) {
+                                        FusionToast.makeText(appCompatActivity, "Skrip \"" + scriptName + "\" berhasil dihapus.", Toast.LENGTH_SHORT).show();
+                                        showExtensionDrawer(fusionWebViewManager);
+                                    } else {
+                                        FusionToast.makeText(appCompatActivity, "Gagal menghapus berkas skrip.", Toast.LENGTH_SHORT).show();
+                                    }
+                                }
+                            });
+                            confirm.setNegativeButton("Batal", null);
+                            confirm.show();
                         }
-                        FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
-                    }
-                });
+                    });
+                    itemCard.addView(delBtn);
 
-                itemCard.setOnLongClickListener(new View.OnLongClickListener() {
-                    @Override
-                    public boolean onLongClick(View v) {
-                        FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
-                        return true;
-                    }
-                });
+                    // Klik kartu -> Tampilkan info & aksi skrip
+                    itemCard.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            showScriptDetailsDialog(appCompatActivity, fusionWebViewManager, scriptFile, scriptName);
+                        }
+                    });
+                    itemCard.setOnLongClickListener(new View.OnLongClickListener() {
+                        @Override
+                        public boolean onLongClick(View v) {
+                            showScriptDetailsDialog(appCompatActivity, fusionWebViewManager, scriptFile, scriptName);
+                            return true;
+                        }
+                    });
 
-                LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
-                cardLp.setMargins(0, 0, 0, 8);
-                listContainer.addView(itemCard, cardLp);
+                    LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+                    cardLp.setMargins(0, 0, 0, 8);
+                    listContainer.addView(itemCard, cardLp);
+                }
             }
         }
 
@@ -1218,31 +1425,22 @@ public class FusionDrawerHelper {
         // ================= BOTTOM ACTIONS =================
         LinearLayout bottomRow = new LinearLayout(appCompatActivity);
         bottomRow.setOrientation(0);
+        bottomRow.setGravity(16);
         bottomRow.setPadding(0, 10, 0, 0);
 
-        TextView userscriptBtn = new TextView(appCompatActivity);
-        userscriptBtn.setText("📜 Userscript");
-        userscriptBtn.setTextColor(0xFFCDD6F4);
-        userscriptBtn.setTextSize(2, 11.5f);
-        userscriptBtn.setGravity(17);
-        userscriptBtn.setPadding(10, 10, 10, 10);
-        userscriptBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
-        userscriptBtn.setClickable(true);
-        userscriptBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                FusionUserscriptHelper.showUserscriptsDialog(appCompatActivity, fusionWebViewManager);
-            }
-        });
-        bottomRow.addView(userscriptBtn, new LinearLayout.LayoutParams(0, -2, 1.0f));
+        TextView summaryText = new TextView(appCompatActivity);
+        summaryText.setText("📊 " + extensions.size() + " Ekstensi • " + scripts.size() + " Skrip");
+        summaryText.setTextColor(0xFFA6ADC8);
+        summaryText.setTextSize(2, 11.5f);
+        bottomRow.addView(summaryText, new LinearLayout.LayoutParams(0, -2, 1.0f));
 
         if (!extensions.isEmpty()) {
             TextView manageBtn = new TextView(appCompatActivity);
-            manageBtn.setText("🗑️ Kelola / Hapus");
+            manageBtn.setText("🗑️ Kelola Ekstensi");
             manageBtn.setTextColor(0xFFF38BA8);
             manageBtn.setTextSize(2, 11.5f);
             manageBtn.setGravity(17);
-            manageBtn.setPadding(10, 10, 10, 10);
+            manageBtn.setPadding(10, 8, 10, 8);
             manageBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
             manageBtn.setClickable(true);
             manageBtn.setOnClickListener(new View.OnClickListener() {
@@ -1251,9 +1449,7 @@ public class FusionDrawerHelper {
                     FusionExtensionHelper.showManageExtensionsDialog(appCompatActivity, fusionWebViewManager, extensions);
                 }
             });
-            LinearLayout.LayoutParams manageLp = new LinearLayout.LayoutParams(0, -2, 1.0f);
-            manageLp.setMargins(8, 0, 0, 0);
-            bottomRow.addView(manageBtn, manageLp);
+            bottomRow.addView(manageBtn);
         }
 
         rootDrawer.addView(bottomRow);

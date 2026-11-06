@@ -356,6 +356,10 @@ public class FusionUserscriptHelper {
 
                             FusionToast.makeText(dialogCtx, "✅ Userscript Terpasang: " + finalName, Toast.LENGTH_SHORT).show();
                             Log.i(TAG, "Userscript berhasil disimpan ke " + targetFile.getAbsolutePath());
+                            FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                            if (mgr != null) {
+                                FusionDrawerHelper.refreshExtensionDrawerIfVisible(mgr);
+                            }
                         } catch (Throwable err) {
                             FusionToast.makeText(dialogCtx, "❌ Gagal pasang script: " + err.getMessage(), Toast.LENGTH_SHORT).show();
                         }
@@ -379,6 +383,10 @@ public class FusionUserscriptHelper {
     }
 
     public static void showUserscriptsDialog(final TermuxActivity act, final FusionWebViewManager manager) {
+        if (manager != null) {
+            FusionDrawerHelper.showExtensionDrawer(manager);
+            return;
+        }
         if (act == null) return;
         List<File> scripts = getInstalledScripts(act);
         AlertDialog.Builder b = new AlertDialog.Builder(act);

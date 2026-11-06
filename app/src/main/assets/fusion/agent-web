@@ -1590,8 +1590,8 @@ async function executeSingleProfile(url, extraFlags = []) {
         } catch (_) {}
     }
 
-    // Cleanup: Jika sesi berjalan di dalam tab worker terisolasi, tutup webview & tab worker
-    if (isWorkerTab) {
+    // Cleanup: Hanya tutup tab worker & webview jika ini adalah sesi makro/automasi (--modul / recipe)
+    if (isWorkerTab && recipe) {
         if (targetProfile && targetProfile !== 'default' && targetProfile !== 'list') {
             try {
                 runIpc(`save-session ${targetProfile}`);
@@ -2007,14 +2007,18 @@ async function main() {
         process.exit(0);
     }
 
-    // Jika dipanggil oleh Telegram / skrip background dan belum di dalam worker tab: delegasikan ke tab baru via IPC!
+    // Jika dipanggil oleh Telegram / skrip background dan membawa MAKRO: delegasikan ke tab baru via IPC!
     if (isTelegramCaller && !inWorkerTab && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close'].includes(cmd)) {
-        const workerTab = ('w_' + Date.now().toString().slice(-8)).slice(0, 14);
-        const cleanArgs = args.filter(a => a !== '--telegram' && a !== '--new-tab');
-        const delegatedCmd = `web --in-worker-tab --tab-name ${workerTab} ${cleanArgs.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}; sleep 1; termux-ipc tab close "${workerTab}" 2>/dev/null || true`;
-        console.log(`[Agent-Web] Panggilan background/Telegram terdeteksi. Membuka tab baru "${workerTab}" via IPC...`);
-        runIpcTab('new', [workerTab, delegatedCmd]);
-        process.exit(0);
+        const hasMacro = args.some(a => a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') || a.startsWith('--loop') || a.startsWith('-l'));
+        if (hasMacro) {
+            const workerTab = ('w_' + Date.now().toString().slice(-8)).slice(0, 14);
+            const cleanArgs = args.filter(a => a !== '--telegram' && a !== '--new-tab');
+            const delegatedCmd = `web --in-worker-tab --tab-name ${workerTab} ${cleanArgs.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}; sleep 1; termux-ipc tab close "${workerTab}" 2>/dev/null || true`;
+            console.log(`[Agent-Web] Panggilan background/Telegram dengan makro terdeteksi. Membuka tab baru "${workerTab}" via IPC...`);
+            runIpcTab('new', [workerTab, delegatedCmd]);
+            process.exit(0);
+        }
+        // Jika bukan makro (hanya buka URL biasa / TMA), lanjutkan ke handleOpenUrl tanpa buka tab terminal!
     }
 
     // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost / --ai / --engine)

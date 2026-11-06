@@ -1147,16 +1147,20 @@ EOF_PALSA
     else
         # Root Mode: Siapkan bspwm, virgl, audio, shims & tema langsung di rootfs container jika path diketahui
         if [ -n "$CONTAINER_ROOTFS" ] && su -c "[ -d '$CONTAINER_ROOTFS' ]" 2>/dev/null; then
-            spin "Memasang bspwm, audio & virgl driver di $CUSTOM_LINUX_NAME..." su -c "
+            CONTAINER_SHELL_PKG=""
+            if [ $USE_ZSH -eq 1 ]; then
+                CONTAINER_SHELL_PKG="zsh"
+            fi
+            spin "Memasang bspwm, audio, zsh & virgl driver di $CUSTOM_LINUX_NAME..." su -c "
                 if [ -x '/data/local/Droidspaces/bin/droidspaces' ] && [ -n '$CUSTOM_LINUX_NAME' ] && [ '$CUSTOM_LINUX_NAME' != 'NetHunter' ]; then
                     /data/local/Droidspaces/bin/droidspaces --name='$CUSTOM_LINUX_NAME' run /bin/sh -c '
                         export DEBIAN_FRONTEND=noninteractive
-                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 $CONTAINER_SHELL_PKG 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 $CONTAINER_SHELL_PKG 2>/dev/null || true
                     ' >/dev/null 2>&1 || true
                 else
                     chroot '$CONTAINER_ROOTFS' /bin/sh -c '
                         export DEBIAN_FRONTEND=noninteractive
-                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 2>/dev/null || true
+                        apt-get update -qq && apt-get install -y --no-install-recommends bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils libgl1-mesa-dri mesa-va-drivers mesa-vulkan-drivers fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 $CONTAINER_SHELL_PKG 2>/dev/null || apt-get install -y bspwm sxhkd rofi polybar picom feh x11-utils pulseaudio pulseaudio-utils fcitx5 fcitx5-modules fcitx5-frontend-gtk3 fcitx5-frontend-qt5 $CONTAINER_SHELL_PKG 2>/dev/null || true
                     ' >/dev/null 2>&1 || true
                 fi
             "
@@ -1164,7 +1168,7 @@ EOF_PALSA
             spin "Menginjeksi shims langsung ke rootfs $CUSTOM_LINUX_NAME..." su -c "
                 mkdir -p '$CONTAINER_ROOTFS/usr/local/bin'
                 mkdir -p '$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin'
-                for b_sym in bash sh env node python3; do
+                for b_sym in bash sh env node python3 zsh; do
                     if [ -e '$CONTAINER_ROOTFS/usr/bin/'\$b_sym ] || [ -e '$CONTAINER_ROOTFS/bin/'\$b_sym ]; then
                         ln -sf '/usr/bin/'\$b_sym '$CONTAINER_ROOTFS/data/data/com.termux/files/usr/bin/'\$b_sym 2>/dev/null || true
                     fi
@@ -1335,6 +1339,64 @@ EOF_FCITX
                 "
                 echo -e "  ${GREEN}✔ Tema Eso (bspwm, polybar, rofi, picom & wallpapers) disinkronkan ke $CUSTOM_LINUX_NAME (/root/.config/)${RESET}"
             fi
+
+            # Sinkronisasi Zsh Engine & Powerlevel10k ke Container Linux jika Zsh aktif
+            if [ $USE_ZSH -eq 1 ]; then
+                spin "Mengonfigurasi Zsh Modern Engine di $CUSTOM_LINUX_NAME..." su -c "
+                    mkdir -p '$CONTAINER_ROOTFS/root/.zsh/plugins' '$CONTAINER_ROOTFS/root/.zsh/themes' '$CONTAINER_ROOTFS/root/.oh-my-zsh/custom/plugins' '$CONTAINER_ROOTFS/root/.oh-my-zsh/custom/themes'
+                    if [ -d '$FUSION_HOME/zsh_plugins' ]; then
+                        cp -rf '$FUSION_HOME/zsh_plugins/'* '$CONTAINER_ROOTFS/root/.zsh/plugins/' 2>/dev/null || true
+                        cp -rf '$FUSION_HOME/zsh_plugins/'* '$CONTAINER_ROOTFS/root/.oh-my-zsh/custom/plugins/' 2>/dev/null || true
+                    fi
+                    if [ -d '$FUSION_HOME/zsh_themes/powerlevel10k' ]; then
+                        cp -rf '$FUSION_HOME/zsh_themes/powerlevel10k' '$CONTAINER_ROOTFS/root/.zsh/themes/' 2>/dev/null || true
+                        cp -rf '$FUSION_HOME/zsh_themes/powerlevel10k' '$CONTAINER_ROOTFS/root/.oh-my-zsh/custom/themes/' 2>/dev/null || true
+                    elif [ -d '$SCRIPT_DIR/zsh_themes/powerlevel10k' ]; then
+                        cp -rf '$SCRIPT_DIR/zsh_themes/powerlevel10k' '$CONTAINER_ROOTFS/root/.zsh/themes/' 2>/dev/null || true
+                        cp -rf '$SCRIPT_DIR/zsh_themes/powerlevel10k' '$CONTAINER_ROOTFS/root/.oh-my-zsh/custom/themes/' 2>/dev/null || true
+                    fi
+                    [ -f '$FUSION_HOME/configs/.p10k.zsh' ] && cp -f '$FUSION_HOME/configs/.p10k.zsh' '$CONTAINER_ROOTFS/root/.p10k.zsh' 2>/dev/null || true
+                    [ -f '$SCRIPT_DIR/p10k.zsh' ] && cp -f '$SCRIPT_DIR/p10k.zsh' '$CONTAINER_ROOTFS/root/.p10k.zsh' 2>/dev/null || true
+                    [ -f '$HOME/.p10k.zsh' ] && cp -f '$HOME/.p10k.zsh' '$CONTAINER_ROOTFS/root/.p10k.zsh' 2>/dev/null || true
+
+                    # Salin basis .zshrc
+                    if [ -f '$FUSION_HOME/configs/.zshrc' ]; then
+                        cp -f '$FUSION_HOME/configs/.zshrc' '$CONTAINER_ROOTFS/root/.zshrc' 2>/dev/null || true
+                    elif [ -f '$SCRIPT_DIR/zshrc.template' ]; then
+                        cp -f '$SCRIPT_DIR/zshrc.template' '$CONTAINER_ROOTFS/root/.zshrc' 2>/dev/null || true
+                    elif [ -f '$HOME/.zshrc' ]; then
+                        cp -f '$HOME/.zshrc' '$CONTAINER_ROOTFS/root/.zshrc' 2>/dev/null || true
+                    fi
+
+                    # Set default shell root di /etc/passwd ke zsh
+                    TARGET_ZSH_BIN=\"/bin/zsh\"
+                    [ -x \"$CONTAINER_ROOTFS/usr/bin/zsh\" ] && TARGET_ZSH_BIN=\"/usr/bin/zsh\"
+                    if [ -f '$CONTAINER_ROOTFS/etc/passwd' ]; then
+                        sed -i \"s|root:x:0:0:root:/root:/bin/bash|root:x:0:0:root:/root:\$TARGET_ZSH_BIN|\" '$CONTAINER_ROOTFS/etc/passwd' 2>/dev/null || true
+                        sed -i \"s|root:x:0:0:root:/root:/bin/sh|root:x:0:0:root:/root:\$TARGET_ZSH_BIN|\" '$CONTAINER_ROOTFS/etc/passwd' 2>/dev/null || true
+                    fi
+
+                    # Pasang auto-launch zsh di .bashrc sebagai safeguard interaktif
+                    if [ -f '$CONTAINER_ROOTFS/root/.bashrc' ]; then
+                        if ! grep -q 'AUTO LAUNCH ZSH' '$CONTAINER_ROOTFS/root/.bashrc' 2>/dev/null; then
+                            cat << 'EOF_BRC_ZSH' >> '$CONTAINER_ROOTFS/root/.bashrc'
+
+# --- AUTO LAUNCH ZSH FOR INTERACTIVE SHELL ---
+if [ -t 1 ] && [ -n \"\$PS1\" ] && [ \"\$SHELL\" != \"/bin/zsh\" ] && [ \"\$SHELL\" != \"/usr/bin/zsh\" ]; then
+    if [ -x /usr/bin/zsh ]; then
+        export SHELL=/usr/bin/zsh
+        exec /usr/bin/zsh -l
+    elif [ -x /bin/zsh ]; then
+        export SHELL=/bin/zsh
+        exec /bin/zsh -l
+    fi
+fi
+EOF_BRC_ZSH
+                        fi
+                    fi
+                "
+                echo -e "  ${GREEN}✔ Shell Zsh Modern + Powerlevel10k aktif di $CUSTOM_LINUX_NAME (/root/.zshrc)${RESET}"
+            fi
             echo -e "  ${GREEN}✔ Shims & Audio Bridge terinjeksi langsung ke $CUSTOM_LINUX_NAME (/usr/local/bin/)${RESET}"
 
             # Instalasi Antigravity CLI Resmi di Container Linux jika disetujui user
@@ -1436,20 +1498,11 @@ else
 fi
 
 PREF_FILE="/data/data/com.termux/shared_prefs/com.termux_preferences.xml"
-if [ -f "$PREF_FILE" ]; then
-    if grep -q "status_widget_battery" "$PREF_FILE"; then
-        sed -i 's/name="status_widget_battery" value="false"/name="status_widget_battery" value="true"/' "$PREF_FILE" 2>/dev/null || true
-    else
-        sed -i 's|</map>|    <boolean name="status_widget_battery" value="true" />\n</map>|' "$PREF_FILE" 2>/dev/null || true
-    fi
-fi
-
 am broadcast -a com.termux.app.reload_style >/dev/null 2>&1 || true
 if command -v termux-ipc >/dev/null 2>&1; then
     termux-ipc toast "Pengaturan tampilan berhasil dimuat!" >/dev/null 2>&1 || true
 fi
 echo -e "  ${GREEN}✔ Properti & styling terminal aktif${RESET}"
-echo -e "  ${GREEN}✔ Sensor suhu baterai aktif di Status Bar${RESET}"
 
 # ==============================================================================
 # TAHAP 7: MODUL NODE, WEB3 WALLET & X RADAR
