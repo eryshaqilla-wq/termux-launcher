@@ -1,9 +1,13 @@
 package com.termux.app;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
@@ -15,6 +19,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.GridLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -107,6 +112,29 @@ public final class FusionBackupSlotHelper {
                       @NonNull List<String> createdNames, @Nullable String errorMsg);
     }
 
+    /**
+     * Model representing an application participating in multi-profile slots (.data_profiles).
+     */
+    public static final class ProfileAppInfo {
+        @NonNull public final String packageName;
+        @NonNull public final String appLabel;
+        @NonNull public final String currentSlot;
+        public final int profileCount;
+        @Nullable public final Drawable icon;
+        public final boolean isInstalled;
+
+        public ProfileAppInfo(@NonNull String packageName, @NonNull String appLabel,
+                              @NonNull String currentSlot, int profileCount,
+                              @Nullable Drawable icon, boolean isInstalled) {
+            this.packageName = packageName;
+            this.appLabel = appLabel;
+            this.currentSlot = currentSlot;
+            this.profileCount = profileCount;
+            this.icon = icon;
+            this.isInstalled = isInstalled;
+        }
+    }
+
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
@@ -114,6 +142,9 @@ public final class FusionBackupSlotHelper {
     private static List<String> sCachedAllSlots = null;
     private static long sLastCacheUpdate = 0;
     private static final long CACHE_TTL_MS = 3000;
+
+    private static List<ProfileAppInfo> sCachedProfileApps = null;
+    private static long sLastProfileAppsUpdate = 0;
 
     private static Boolean sCachedRootAvailable = null;
     private static long sLastRootCheckTime = 0;
@@ -256,6 +287,87 @@ public final class FusionBackupSlotHelper {
         }
         sCachedAllSlots = all;
         sLastCacheUpdate = System.currentTimeMillis();
+    }
+
+    /**
+     * Scans all installed packages that have .data_profiles directory.
+     * Returns a list of ProfileAppInfo containing app label, package, current active slot,
+     * total profile directories, and app icon.
+     */
+    @NonNull
+    public static List<ProfileAppInfo> scanProfileApps(@NonNull Context context) {
+        long now = System.currentTimeMillis();
+        synchronized (FusionBackupSlotHelper.class) {
+            if (sCachedProfileApps != null && (now - sLastProfileAppsUpdate < 4000L)) {
+                return new ArrayList<>(sCachedProfileApps);
+            }
+        }
+
+        List<ProfileAppInfo> result = new ArrayList<>();
+        if (!isRootAvailable()) {
+            return result;
+        }
+
+        PackageManager pm = context.getPackageManager();
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "/system/bin/sh"});
+            String script = "for pdir in $(find /data/data -maxdepth 2 -name .data_profiles 2>/dev/null); do\n" +
+                "  [ -d \"$pdir\" ] || continue\n" +
+                "  pkg=$(basename \"$(dirname \"$pdir\")\")\n" +
+                "  curr=$(readlink \"$pdir/.current\" 2>/dev/null)\n" +
+                "  [ -z \"$curr\" ] && [ -f \"$pdir/.current\" ] && curr=$(cat \"$pdir/.current\" 2>/dev/null)\n" +
+                "  [ -z \"$curr\" ] && curr=\"?\"\n" +
+                "  cnt=$(ls -1 \"$pdir\" 2>/dev/null | grep -v '^\\.' | wc -l)\n" +
+                "  echo \"$pkg|$curr|$cnt\"\n" +
+                "done\n";
+            java.io.OutputStream os = p.getOutputStream();
+            os.write(script.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            os.flush();
+            os.close();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                String[] parts = line.split("\\|");
+                if (parts.length >= 1) {
+                    String pkg = parts[0].trim();
+                    String curr = parts.length > 1 ? parts[1].trim() : "?";
+                    int count = 0;
+                    if (parts.length > 2) {
+                        try {
+                            count = Integer.parseInt(parts[2].trim());
+                        } catch (Exception ignored) {}
+                    }
+
+                    String label = pkg;
+                    Drawable icon = null;
+                    boolean installed = false;
+                    try {
+                        ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
+                        CharSequence l = pm.getApplicationLabel(ai);
+                        if (l != null) label = l.toString();
+                        icon = pm.getApplicationIcon(ai);
+                        installed = true;
+                    } catch (PackageManager.NameNotFoundException ignored) {}
+
+                    result.add(new ProfileAppInfo(pkg, label, curr, count, icon, installed));
+                }
+            }
+            reader.close();
+            p.waitFor();
+        } catch (Throwable t) {
+            Log.e(TAG, "Error scanning profile apps", t);
+        }
+
+        Collections.sort(result, (a, b) -> a.appLabel.compareToIgnoreCase(b.appLabel));
+
+        synchronized (FusionBackupSlotHelper.class) {
+            sCachedProfileApps = result;
+            sLastProfileAppsUpdate = System.currentTimeMillis();
+        }
+        return result;
     }
 
     /**
@@ -788,6 +900,87 @@ public final class FusionBackupSlotHelper {
             root.addView(warnCard);
         }
 
+        // Expandable Dropdown: List App yang masuk Profile Slot (.data_profiles)
+        MaterialCardView appsDropdownCard = M3.clickableCard(context, false);
+        LinearLayout.LayoutParams appsCardLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        appsCardLp.setMargins(0, 0, 0, Math.round(8 * density));
+        appsDropdownCard.setLayoutParams(appsCardLp);
+
+        LinearLayout appsCardCol = new LinearLayout(context);
+        appsCardCol.setOrientation(LinearLayout.VERTICAL);
+
+        // Header Row (Clickable to toggle dropdown)
+        LinearLayout appsHeaderRow = new LinearLayout(context);
+        appsHeaderRow.setOrientation(LinearLayout.HORIZONTAL);
+        appsHeaderRow.setGravity(Gravity.CENTER_VERTICAL);
+        appsHeaderRow.setPadding(Math.round(14 * density), Math.round(10 * density), Math.round(14 * density), Math.round(10 * density));
+
+        TextView appsIcon = new TextView(context);
+        appsIcon.setText("📦");
+        appsIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f);
+        appsHeaderRow.addView(appsIcon);
+
+        LinearLayout appsTitleCol = new LinearLayout(context);
+        appsTitleCol.setOrientation(LinearLayout.VERTICAL);
+        appsTitleCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        appsTitleCol.setPadding(Math.round(12 * density), 0, Math.round(8 * density), 0);
+
+        TextView appsTitle = new TextView(context);
+        appsTitle.setText("Aplikasi Terdaftar Profile");
+        M3.textAppearance(appsTitle, com.google.android.material.R.attr.textAppearanceTitleSmall);
+        appsTitle.setTextColor(M3.onSurface(context));
+        appsTitleCol.addView(appsTitle);
+
+        TextView appsSubtitle = new TextView(context);
+        appsSubtitle.setText(rootOk ? "Memuat aplikasi terisolasi slot..." : "Akses root diperlukan");
+        M3.textAppearance(appsSubtitle, com.google.android.material.R.attr.textAppearanceBodySmall);
+        appsSubtitle.setTextColor(M3.onSurfaceVariant(context));
+        appsTitleCol.addView(appsSubtitle);
+
+        appsHeaderRow.addView(appsTitleCol);
+
+        TextView appsChevron = new TextView(context);
+        appsChevron.setText("▼");
+        appsChevron.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        appsChevron.setTextColor(M3.onSurfaceVariant(context));
+        appsChevron.setPadding(Math.round(8 * density), 0, Math.round(4 * density), 0);
+        appsHeaderRow.addView(appsChevron);
+
+        appsCardCol.addView(appsHeaderRow);
+
+        // Dropdown expandable content container (initially GONE)
+        LinearLayout appsDropdownContent = new LinearLayout(context);
+        appsDropdownContent.setOrientation(LinearLayout.VERTICAL);
+        appsDropdownContent.setPadding(Math.round(14 * density), 0, Math.round(14 * density), Math.round(10 * density));
+        appsDropdownContent.setVisibility(View.GONE);
+
+        View divApp = new View(context);
+        divApp.setBackgroundColor(ColorUtils.setAlphaComponent(M3.onSurface(context), 25));
+        LinearLayout.LayoutParams divAppLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.round(1 * density));
+        divAppLp.setMargins(0, 0, 0, Math.round(8 * density));
+        appsDropdownContent.addView(divApp, divAppLp);
+
+        LinearLayout appsItemsList = new LinearLayout(context);
+        appsItemsList.setOrientation(LinearLayout.VERTICAL);
+        appsDropdownContent.addView(appsItemsList);
+
+        appsCardCol.addView(appsDropdownContent);
+        appsDropdownCard.addView(appsCardCol);
+
+        if (!rootOk) {
+            appsDropdownCard.setAlpha(0.38f);
+        } else {
+            appsHeaderRow.setClickable(true);
+            appsHeaderRow.setOnClickListener(v -> {
+                boolean isExpanded = (appsDropdownContent.getVisibility() == View.VISIBLE);
+                appsDropdownContent.setVisibility(isExpanded ? View.GONE : View.VISIBLE);
+                appsChevron.setText(isExpanded ? "▼" : "▲");
+            });
+        }
+        root.addView(appsDropdownCard);
+
         // Quick Creation Card: +1, +10, +20, Kustom
         MaterialCardView addCard = M3.clickableCard(context, false);
         LinearLayout.LayoutParams addCardLp = new LinearLayout.LayoutParams(
@@ -884,12 +1077,29 @@ public final class FusionBackupSlotHelper {
         int chipHeight = Math.round(44 * density);
         Typeface nerdFont = NerdFontSpans.typeface(context);
 
+        final Runnable refreshAppsList = () -> {
+            if (rootOk) {
+                EXECUTOR.execute(() -> {
+                    List<ProfileAppInfo> apps = scanProfileApps(context);
+                    MAIN_HANDLER.post(() -> {
+                        if (apps.isEmpty()) {
+                            appsSubtitle.setText("0 aplikasi (.data_profiles belum dibuat)");
+                        } else {
+                            appsSubtitle.setText(apps.size() + " aplikasi terisolasi multi-slot");
+                        }
+                        renderProfileAppsList(context, appsItemsList, apps, dialog, density);
+                    });
+                });
+            }
+        };
+
         final Runnable refreshGrid = () -> {
             String currentFilter = searchInput.getText() != null ? searchInput.getText().toString().trim() : "";
             List<String> all = (sCachedAllSlots != null) ? sCachedAllSlots : Collections.singletonList(activeSlot);
             renderGridChips(context, grid, all, currentFilter, activeSlot, primaryColor, surfaceVariant,
                 onSurface, chipMargin, chipHeight, nerdFont, dialog, onPicked, rootOk);
             subtitle.setText("Slot aktif: " + activeSlot + " (" + all.size() + " slot terdaftar)");
+            refreshAppsList.run();
         };
 
         if (rootOk) {
@@ -1065,6 +1275,134 @@ public final class FusionBackupSlotHelper {
             }
 
             grid.addView(chip, params);
+        }
+    }
+
+    private static void renderProfileAppsList(@NonNull Context context,
+                                              @NonNull LinearLayout container,
+                                              @NonNull List<ProfileAppInfo> apps,
+                                              @NonNull BottomSheetDialog dialog,
+                                              float density) {
+        container.removeAllViews();
+        if (apps.isEmpty()) {
+            TextView empty = new TextView(context);
+            empty.setText("Belum ada aplikasi yang memiliki .data_profiles");
+            empty.setTextColor(M3.onSurfaceVariant(context));
+            empty.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+            empty.setPadding(0, Math.round(4 * density), 0, Math.round(4 * density));
+            container.addView(empty);
+            return;
+        }
+
+        int onSurface = M3.onSurface(context);
+        int onSurfaceVar = M3.onSurfaceVariant(context);
+        int primary = MaterialColors.getColor(context, com.termux.shared.R.attr.termuxColorPrimary, 0xFFCDD6F4);
+
+        for (int i = 0; i < apps.size(); i++) {
+            ProfileAppInfo app = apps.get(i);
+
+            LinearLayout row = new LinearLayout(context);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, Math.round(6 * density), 0, Math.round(6 * density));
+
+            // App Icon
+            ImageView iconView = new ImageView(context);
+            if (app.icon != null) {
+                iconView.setImageDrawable(app.icon);
+            } else {
+                iconView.setImageResource(android.R.drawable.sym_def_app_icon);
+            }
+            LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(
+                Math.round(36 * density), Math.round(36 * density));
+            iconLp.setMargins(0, 0, Math.round(10 * density), 0);
+            row.addView(iconView, iconLp);
+
+            // App Name & Package Info Col
+            LinearLayout infoCol = new LinearLayout(context);
+            infoCol.setOrientation(LinearLayout.VERTICAL);
+            infoCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView nameView = new TextView(context);
+            nameView.setText(app.appLabel);
+            nameView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            nameView.setTypeface(Typeface.DEFAULT_BOLD);
+            nameView.setTextColor(onSurface);
+            nameView.setSingleLine(true);
+            infoCol.addView(nameView);
+
+            // Sub row: Package name + slot badge
+            LinearLayout badgeRow = new LinearLayout(context);
+            badgeRow.setOrientation(LinearLayout.HORIZONTAL);
+            badgeRow.setGravity(Gravity.CENTER_VERTICAL);
+            badgeRow.setPadding(0, Math.round(2 * density), 0, 0);
+
+            TextView slotBadge = new TextView(context);
+            slotBadge.setText("Slot: " + app.currentSlot);
+            slotBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f);
+            slotBadge.setTextColor(Color.BLACK);
+            slotBadge.setTypeface(Typeface.DEFAULT_BOLD);
+            slotBadge.setPadding(Math.round(6 * density), Math.round(1 * density), Math.round(6 * density), Math.round(1 * density));
+
+            GradientDrawable slotBg = new GradientDrawable();
+            slotBg.setShape(GradientDrawable.RECTANGLE);
+            slotBg.setCornerRadius(Math.round(4 * density));
+            slotBg.setColor(ColorUtils.setAlphaComponent(primary, 220));
+            slotBadge.setBackground(slotBg);
+            badgeRow.addView(slotBadge);
+
+            TextView countBadge = new TextView(context);
+            countBadge.setText(app.profileCount + " profil");
+            countBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f);
+            countBadge.setTextColor(onSurfaceVar);
+            countBadge.setPadding(Math.round(6 * density), 0, 0, 0);
+            badgeRow.addView(countBadge);
+
+            infoCol.addView(badgeRow);
+            row.addView(infoCol);
+
+            // Action Button: Buka App
+            if (app.isInstalled) {
+                MaterialButton openBtn = new MaterialButton(context, null,
+                    androidx.appcompat.R.attr.borderlessButtonStyle);
+                openBtn.setText("🚀 Buka");
+                openBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+                openBtn.setPadding(Math.round(8 * density), 0, Math.round(8 * density), 0);
+                openBtn.setOnClickListener(v -> {
+                    Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(app.packageName);
+                    if (launchIntent != null) {
+                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        dialog.dismiss();
+                        context.startActivity(launchIntent);
+                    } else {
+                        FusionToast.show(context, "Tidak dapat membuka " + app.appLabel);
+                    }
+                });
+                row.addView(openBtn);
+
+                row.setClickable(true);
+                row.setOnClickListener(v -> {
+                    Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(app.packageName);
+                    if (launchIntent != null) {
+                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        dialog.dismiss();
+                        context.startActivity(launchIntent);
+                    } else {
+                        FusionToast.show(context, "Tidak dapat membuka " + app.appLabel);
+                    }
+                });
+            }
+
+            container.addView(row);
+
+            if (i < apps.size() - 1) {
+                View sep = new View(context);
+                sep.setBackgroundColor(ColorUtils.setAlphaComponent(onSurface, 15));
+                LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, Math.round(0.75f * density));
+                sepLp.setMargins(Math.round(46 * density), 0, 0, 0);
+                container.addView(sep, sepLp);
+            }
         }
     }
 }

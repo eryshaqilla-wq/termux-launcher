@@ -288,6 +288,29 @@ create_auto_next() {
     echo "✔ Berhasil membuat $created slot baru: $created_list"
 }
 
+list_apps() {
+    if ! check_root; then
+        echo "Error: Akses root (su) diperlukan untuk fitur slot .backup" >&2
+        return 1
+    fi
+    local SCRIPT="
+echo 'Daftar Aplikasi Profile Slot (.data_profiles):'
+count=0
+for pdir in \$(find /data/data -maxdepth 2 -name .data_profiles 2>/dev/null); do
+    [ -d \"\$pdir\" ] || continue
+    pkg=\$(basename \"\$(dirname \"\$pdir\")\")
+    curr=\$(readlink \"\$pdir/.current\" 2>/dev/null)
+    [ -z \"\$curr\" ] && [ -f \"\$pdir/.current\" ] && curr=\$(cat \"\$pdir/.current\" 2>/dev/null)
+    [ -z \"\$curr\" ] && curr='?'
+    cnt=\$(ls -1 \"\$pdir\" 2>/dev/null | grep -v '^\.' | wc -l)
+    echo \"  • \$pkg [Slot: \$curr | \$cnt profil]\"
+    count=\$((count + 1))
+done
+echo \"Total: \$count aplikasi terdaftar\"
+"
+    run_sh "$SCRIPT"
+}
+
 CLEAR_CACHE_OPT=0
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -338,11 +361,14 @@ case "$CMD" in
         fi
         run_sh "/system/bin/am start -a ACTION_SELECT_DATA_PROFILE -n com.ery.ziggy/o.ḟ >/dev/null 2>&1"
         ;;
+    apps|app-list|packages)
+        list_apps
+        ;;
     *)
         if [ -n "$CMD" ]; then
             switch_to "$CMD"
         else
-            echo "Usage: termux-backup-slot [--clear-cache] [get|list|set <slot>|prev|next|add [1|10|20]|batch [10|20]|create <slot>|picker]"
+            echo "Usage: termux-backup-slot [--clear-cache] [get|list|set <slot>|prev|next|add [1|10|20]|batch [10|20]|create <slot>|picker|apps]"
         fi
         ;;
 esac
