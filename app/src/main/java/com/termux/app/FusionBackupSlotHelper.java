@@ -7,6 +7,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
@@ -18,6 +19,7 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -41,6 +43,7 @@ import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
 import com.termux.app.material.M3;
 import com.termux.shared.termux.font.NerdFontSpans;
+import com.termux.webview.FusionUiHelper;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -769,6 +772,22 @@ public final class FusionBackupSlotHelper {
         return executeRootScript(sb.toString());
     }
 
+    private static MaterialButton createQuickAddButton(@NonNull Context context, @NonNull String text, float density, boolean enabled) {
+        MaterialButton btn = new MaterialButton(context, null, androidx.appcompat.R.attr.borderlessButtonStyle);
+        btn.setText(text);
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+        btn.setTypeface(Typeface.DEFAULT_BOLD);
+        btn.setPadding(0, 0, 0, 0);
+        btn.setTextColor(0xFFCDD6F4);
+        btn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+        btn.setCornerRadius(Math.round(6 * density));
+        btn.setInsetTop(0);
+        btn.setInsetBottom(0);
+        btn.setEnabled(enabled);
+        if (!enabled) btn.setAlpha(0.38f);
+        return btn;
+    }
+
     /**
      * Material 3 Bottom Sheet Dialog to pick from all available slots.
      */
@@ -777,42 +796,55 @@ public final class FusionBackupSlotHelper {
 
         BottomSheetDialog dialog = new BottomSheetDialog(context);
         float density = context.getResources().getDisplayMetrics().density;
-        int padH = Math.round(20 * density);
+        int padH = Math.round(16 * density);
 
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(padH, 0, padH, Math.round(16 * density));
+        root.setBackground(FusionUiHelper.createRounded(0xFF1E1E2E, 0xFF313244, 16.0f));
 
         root.addView(new BottomSheetDragHandleView(context), new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Header: Title + Open in .backup button
+        // Header: Title + Active Slot Badge + Open in .backup button
         LinearLayout headerRow = new LinearLayout(context);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
         headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        headerRow.setPadding(0, 0, 0, Math.round(8 * density));
 
         LinearLayout titleCol = new LinearLayout(context);
-        titleCol.setOrientation(LinearLayout.VERTICAL);
+        titleCol.setOrientation(LinearLayout.HORIZONTAL);
+        titleCol.setGravity(Gravity.CENTER_VERTICAL);
         titleCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView title = new TextView(context);
-        title.setText("Pilih Slot Profile");
-        M3.textAppearance(title, com.google.android.material.R.attr.textAppearanceTitleLarge);
+        title.setText("Pilih Slot");
+        M3.textAppearance(title, com.google.android.material.R.attr.textAppearanceTitleMedium);
         title.setTextColor(M3.onSurface(context));
         titleCol.addView(title);
 
         final String activeSlot = getCurrentSlotCached();
-        TextView subtitle = new TextView(context);
-        subtitle.setText("Slot aktif: " + activeSlot + " (.backup)");
-        M3.textAppearance(subtitle, com.google.android.material.R.attr.textAppearanceBodyMedium);
-        subtitle.setTextColor(M3.onSurfaceVariant(context));
-        titleCol.addView(subtitle);
+        final TextView activeBadge = new TextView(context);
+        activeBadge.setText("Slot: " + activeSlot);
+        activeBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+        activeBadge.setTypeface(Typeface.DEFAULT_BOLD);
+        activeBadge.setTextColor(0xFF11111B);
+        activeBadge.setPadding(Math.round(6 * density), Math.round(2 * density), Math.round(6 * density), Math.round(2 * density));
+        activeBadge.setBackground(FusionUiHelper.createRounded(0xFF89B4FA, 0xFF89B4FA, 4.0f));
+        LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        badgeLp.setMargins(Math.round(8 * density), 0, 0, 0);
+        titleCol.addView(activeBadge, badgeLp);
 
         headerRow.addView(titleCol);
 
         MaterialButton backupAppBtn = new MaterialButton(context, null,
             androidx.appcompat.R.attr.borderlessButtonStyle);
         backupAppBtn.setText("📱 .backup");
+        backupAppBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
+        backupAppBtn.setPadding(Math.round(8 * density), 0, Math.round(8 * density), 0);
+        backupAppBtn.setInsetTop(0);
+        backupAppBtn.setInsetBottom(0);
         backupAppBtn.setEnabled(rootOk);
         if (!rootOk) {
             backupAppBtn.setAlpha(0.38f);
@@ -822,60 +854,123 @@ public final class FusionBackupSlotHelper {
             openBackupAppPicker(context);
         });
         headerRow.addView(backupAppBtn);
-
         root.addView(headerRow);
 
-        // Auto Clear RAM & Cache (ESC Parity) Menu Card
-        MaterialCardView clearCard = M3.clickableCard(context, false);
-        LinearLayout.LayoutParams clearCardLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        clearCardLp.setMargins(0, Math.round(8 * density), 0, Math.round(8 * density));
-        clearCard.setLayoutParams(clearCardLp);
+        // Baris Kontrol Ringkas 1: [ Clear Cache: ON/OFF ] + [ Aplikasi (X) ▼ ]
+        LinearLayout toolbarRow1 = new LinearLayout(context);
+        toolbarRow1.setOrientation(LinearLayout.HORIZONTAL);
+        toolbarRow1.setGravity(Gravity.CENTER_VERTICAL);
+        toolbarRow1.setPadding(0, 0, 0, Math.round(6 * density));
 
-        LinearLayout clearRow = new LinearLayout(context);
-        clearRow.setOrientation(LinearLayout.HORIZONTAL);
-        clearRow.setGravity(Gravity.CENTER_VERTICAL);
-        clearRow.setPadding(Math.round(14 * density), Math.round(10 * density), Math.round(14 * density), Math.round(10 * density));
+        final boolean[] clearCacheEnabled = { isAutoClearCacheEnabled(context) };
+        final MaterialButton btnClearCache = new MaterialButton(context, null, androidx.appcompat.R.attr.borderlessButtonStyle);
+        btnClearCache.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+        btnClearCache.setTypeface(Typeface.DEFAULT_BOLD);
+        btnClearCache.setPadding(Math.round(8 * density), 0, Math.round(8 * density), 0);
+        btnClearCache.setCornerRadius(Math.round(6 * density));
+        btnClearCache.setInsetTop(0);
+        btnClearCache.setInsetBottom(0);
 
-        TextView clearIcon = new TextView(context);
-        clearIcon.setText("🧹");
-        clearIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f);
-        clearRow.addView(clearIcon);
-
-        LinearLayout clearCol = new LinearLayout(context);
-        clearCol.setOrientation(LinearLayout.VERTICAL);
-        clearCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        clearCol.setPadding(Math.round(12 * density), 0, Math.round(8 * density), 0);
-
-        TextView clearTitle = new TextView(context);
-        clearTitle.setText("Clear RAM & Cache (ESC)");
-        M3.textAppearance(clearTitle, com.google.android.material.R.attr.textAppearanceTitleSmall);
-        clearTitle.setTextColor(M3.onSurface(context));
-        clearCol.addView(clearTitle);
-
-        TextView clearDesc = new TextView(context);
-        clearDesc.setText("Auto drop_caches & optimasi RAM saat berganti slot");
-        M3.textAppearance(clearDesc, com.google.android.material.R.attr.textAppearanceBodySmall);
-        clearDesc.setTextColor(M3.onSurfaceVariant(context));
-        clearCol.addView(clearDesc);
-
-        clearRow.addView(clearCol);
-
-        MaterialSwitch clearSwitch = new MaterialSwitch(context);
-        clearSwitch.setChecked(isAutoClearCacheEnabled(context));
-        clearSwitch.setEnabled(rootOk);
-        clearSwitch.setOnCheckedChangeListener((v, isChecked) -> {
-            setAutoClearCacheEnabled(context, isChecked);
-            FusionToast.show(context, isChecked ? "🧹 Auto Clear Cache: AKTIF" : "Auto Clear Cache: NONAKTIF");
-        });
-        clearRow.addView(clearSwitch);
-        clearCard.addView(clearRow);
-
+        final Runnable updateClearCacheStyle = () -> {
+            if (clearCacheEnabled[0]) {
+                btnClearCache.setText("Clear Cache: ON");
+                btnClearCache.setTextColor(0xFFA6E3A1);
+                btnClearCache.setBackground(FusionUiHelper.createRounded(0x26A6E3A1, 0xFFA6E3A1, 6.0f));
+            } else {
+                btnClearCache.setText("Clear Cache: OFF");
+                btnClearCache.setTextColor(0xFFA6ADC8);
+                btnClearCache.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+            }
+        };
+        updateClearCacheStyle.run();
+        btnClearCache.setEnabled(rootOk);
         if (!rootOk) {
-            clearCard.setAlpha(0.38f);
-            clearCard.setEnabled(false);
+            btnClearCache.setAlpha(0.38f);
+        } else {
+            btnClearCache.setOnClickListener(v -> {
+                clearCacheEnabled[0] = !clearCacheEnabled[0];
+                setAutoClearCacheEnabled(context, clearCacheEnabled[0]);
+                updateClearCacheStyle.run();
+                FusionToast.show(context, clearCacheEnabled[0] ? "Clear Cache: AKTIF" : "Clear Cache: NONAKTIF");
+            });
         }
-        root.addView(clearCard);
+        LinearLayout.LayoutParams btnClearLp = new LinearLayout.LayoutParams(0, Math.round(34 * density), 1f);
+        btnClearLp.setMargins(0, 0, Math.round(4 * density), 0);
+        toolbarRow1.addView(btnClearCache, btnClearLp);
+
+        final MaterialButton btnAppsDropdown = new MaterialButton(context, null, androidx.appcompat.R.attr.borderlessButtonStyle);
+        btnAppsDropdown.setText("Aplikasi ▼");
+        btnAppsDropdown.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+        btnAppsDropdown.setTypeface(Typeface.DEFAULT_BOLD);
+        btnAppsDropdown.setPadding(Math.round(8 * density), 0, Math.round(8 * density), 0);
+        btnAppsDropdown.setTextColor(0xFF89B4FA);
+        btnAppsDropdown.setBackground(FusionUiHelper.createRounded(0x2689B4FA, 0xFF89B4FA, 6.0f));
+        btnAppsDropdown.setCornerRadius(Math.round(6 * density));
+        btnAppsDropdown.setInsetTop(0);
+        btnAppsDropdown.setInsetBottom(0);
+        btnAppsDropdown.setEnabled(rootOk);
+        if (!rootOk) btnAppsDropdown.setAlpha(0.38f);
+
+        LinearLayout.LayoutParams btnAppsLp = new LinearLayout.LayoutParams(0, Math.round(34 * density), 1f);
+        btnAppsLp.setMargins(Math.round(4 * density), 0, 0, 0);
+        toolbarRow1.addView(btnAppsDropdown, btnAppsLp);
+        root.addView(toolbarRow1);
+
+        // Expandable Container untuk Daftar Aplikasi (muncul jika tombol Aplikasi ditekan)
+        LinearLayout appsDropdownContent = new LinearLayout(context);
+        appsDropdownContent.setOrientation(LinearLayout.VERTICAL);
+        appsDropdownContent.setPadding(Math.round(10 * density), Math.round(6 * density), Math.round(10 * density), Math.round(6 * density));
+        appsDropdownContent.setBackground(FusionUiHelper.createRounded(0xFF181825, 0xFF313244, 8.0f));
+        appsDropdownContent.setVisibility(View.GONE);
+        LinearLayout.LayoutParams dropLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        dropLp.setMargins(0, 0, 0, Math.round(6 * density));
+        appsDropdownContent.setLayoutParams(dropLp);
+
+        LinearLayout appsItemsList = new LinearLayout(context);
+        appsItemsList.setOrientation(LinearLayout.VERTICAL);
+        appsDropdownContent.addView(appsItemsList);
+        root.addView(appsDropdownContent);
+
+        if (rootOk) {
+            btnAppsDropdown.setOnClickListener(v -> {
+                boolean isExpanded = (appsDropdownContent.getVisibility() == View.VISIBLE);
+                appsDropdownContent.setVisibility(isExpanded ? View.GONE : View.VISIBLE);
+                String currentLabel = btnAppsDropdown.getText().toString();
+                if (currentLabel.contains("▼")) {
+                    btnAppsDropdown.setText(currentLabel.replace("▼", "▲"));
+                } else if (currentLabel.contains("▲")) {
+                    btnAppsDropdown.setText(currentLabel.replace("▲", "▼"));
+                }
+            });
+        }
+
+        // Baris Kontrol Ringkas 2: Buat Slot Cepat (+1, +10, +20, +Kustom)
+        LinearLayout createRow = new LinearLayout(context);
+        createRow.setOrientation(LinearLayout.HORIZONTAL);
+        createRow.setGravity(Gravity.CENTER_VERTICAL);
+        createRow.setPadding(0, 0, 0, Math.round(8 * density));
+
+        TextView createLabel = new TextView(context);
+        createLabel.setText("Buat Slot:");
+        createLabel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+        createLabel.setTextColor(0xFFA6ADC8);
+        createLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        createLabel.setPadding(0, 0, Math.round(6 * density), 0);
+        createRow.addView(createLabel);
+
+        MaterialButton btnAdd1 = createQuickAddButton(context, "+1", density, rootOk);
+        MaterialButton btnAdd10 = createQuickAddButton(context, "+10", density, rootOk);
+        MaterialButton btnAdd20 = createQuickAddButton(context, "+20", density, rootOk);
+        MaterialButton btnAddCustom = createQuickAddButton(context, "+Kustom", density, rootOk);
+
+        LinearLayout.LayoutParams qBtnLp = new LinearLayout.LayoutParams(0, Math.round(32 * density), 1f);
+        qBtnLp.setMargins(Math.round(2 * density), 0, Math.round(2 * density), 0);
+
+        createRow.addView(btnAdd1, qBtnLp);
+        createRow.addView(btnAdd10, qBtnLp);
+        createRow.addView(btnAdd20, qBtnLp);
+        createRow.addView(btnAddCustom, qBtnLp);
+        root.addView(createRow);
 
         // Non-root Warning Banner
         if (!rootOk) {
@@ -900,154 +995,11 @@ public final class FusionBackupSlotHelper {
             root.addView(warnCard);
         }
 
-        // Expandable Dropdown: List App yang masuk Profile Slot (.data_profiles)
-        MaterialCardView appsDropdownCard = M3.clickableCard(context, false);
-        LinearLayout.LayoutParams appsCardLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        appsCardLp.setMargins(0, 0, 0, Math.round(8 * density));
-        appsDropdownCard.setLayoutParams(appsCardLp);
-
-        LinearLayout appsCardCol = new LinearLayout(context);
-        appsCardCol.setOrientation(LinearLayout.VERTICAL);
-
-        // Header Row (Clickable to toggle dropdown)
-        LinearLayout appsHeaderRow = new LinearLayout(context);
-        appsHeaderRow.setOrientation(LinearLayout.HORIZONTAL);
-        appsHeaderRow.setGravity(Gravity.CENTER_VERTICAL);
-        appsHeaderRow.setPadding(Math.round(14 * density), Math.round(10 * density), Math.round(14 * density), Math.round(10 * density));
-
-        TextView appsIcon = new TextView(context);
-        appsIcon.setText("📦");
-        appsIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f);
-        appsHeaderRow.addView(appsIcon);
-
-        LinearLayout appsTitleCol = new LinearLayout(context);
-        appsTitleCol.setOrientation(LinearLayout.VERTICAL);
-        appsTitleCol.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        appsTitleCol.setPadding(Math.round(12 * density), 0, Math.round(8 * density), 0);
-
-        TextView appsTitle = new TextView(context);
-        appsTitle.setText("Aplikasi Terdaftar Profile");
-        M3.textAppearance(appsTitle, com.google.android.material.R.attr.textAppearanceTitleSmall);
-        appsTitle.setTextColor(M3.onSurface(context));
-        appsTitleCol.addView(appsTitle);
-
-        TextView appsSubtitle = new TextView(context);
-        appsSubtitle.setText(rootOk ? "Memuat aplikasi terisolasi slot..." : "Akses root diperlukan");
-        M3.textAppearance(appsSubtitle, com.google.android.material.R.attr.textAppearanceBodySmall);
-        appsSubtitle.setTextColor(M3.onSurfaceVariant(context));
-        appsTitleCol.addView(appsSubtitle);
-
-        appsHeaderRow.addView(appsTitleCol);
-
-        TextView appsChevron = new TextView(context);
-        appsChevron.setText("▼");
-        appsChevron.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
-        appsChevron.setTextColor(M3.onSurfaceVariant(context));
-        appsChevron.setPadding(Math.round(8 * density), 0, Math.round(4 * density), 0);
-        appsHeaderRow.addView(appsChevron);
-
-        appsCardCol.addView(appsHeaderRow);
-
-        // Dropdown expandable content container (initially GONE)
-        LinearLayout appsDropdownContent = new LinearLayout(context);
-        appsDropdownContent.setOrientation(LinearLayout.VERTICAL);
-        appsDropdownContent.setPadding(Math.round(14 * density), 0, Math.round(14 * density), Math.round(10 * density));
-        appsDropdownContent.setVisibility(View.GONE);
-
-        View divApp = new View(context);
-        divApp.setBackgroundColor(ColorUtils.setAlphaComponent(M3.onSurface(context), 25));
-        LinearLayout.LayoutParams divAppLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, Math.round(1 * density));
-        divAppLp.setMargins(0, 0, 0, Math.round(8 * density));
-        appsDropdownContent.addView(divApp, divAppLp);
-
-        LinearLayout appsItemsList = new LinearLayout(context);
-        appsItemsList.setOrientation(LinearLayout.VERTICAL);
-        appsDropdownContent.addView(appsItemsList);
-
-        appsCardCol.addView(appsDropdownContent);
-        appsDropdownCard.addView(appsCardCol);
-
-        if (!rootOk) {
-            appsDropdownCard.setAlpha(0.38f);
-        } else {
-            appsHeaderRow.setClickable(true);
-            appsHeaderRow.setOnClickListener(v -> {
-                boolean isExpanded = (appsDropdownContent.getVisibility() == View.VISIBLE);
-                appsDropdownContent.setVisibility(isExpanded ? View.GONE : View.VISIBLE);
-                appsChevron.setText(isExpanded ? "▼" : "▲");
-            });
-        }
-        root.addView(appsDropdownCard);
-
-        // Quick Creation Card: +1, +10, +20, Kustom
-        MaterialCardView addCard = M3.clickableCard(context, false);
-        LinearLayout.LayoutParams addCardLp = new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        addCardLp.setMargins(0, 0, 0, Math.round(10 * density));
-        addCard.setLayoutParams(addCardLp);
-
-        LinearLayout addCol = new LinearLayout(context);
-        addCol.setOrientation(LinearLayout.VERTICAL);
-        addCol.setPadding(Math.round(14 * density), Math.round(10 * density), Math.round(14 * density), Math.round(10 * density));
-
-        TextView addTitle = new TextView(context);
-        addTitle.setText("BUAT SLOT BARU (AUTO NEXT):");
-        M3.textAppearance(addTitle, com.google.android.material.R.attr.textAppearanceLabelMedium);
-        addTitle.setTextColor(M3.onSurfaceVariant(context));
-        addTitle.setPadding(0, 0, 0, Math.round(8 * density));
-        addCol.addView(addTitle);
-
-        LinearLayout btnRow = new LinearLayout(context);
-        btnRow.setOrientation(LinearLayout.HORIZONTAL);
-        btnRow.setGravity(Gravity.CENTER_VERTICAL);
-
-        MaterialButton btnAdd1 = new MaterialButton(context);
-        btnAdd1.setText("+1");
-        btnAdd1.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-        btnAdd1.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
-        btnAdd1.setEnabled(rootOk);
-
-        MaterialButton btnAdd10 = new MaterialButton(context);
-        btnAdd10.setText("+10");
-        btnAdd10.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-        btnAdd10.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
-        btnAdd10.setEnabled(rootOk);
-
-        MaterialButton btnAdd20 = new MaterialButton(context);
-        btnAdd20.setText("+20");
-        btnAdd20.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
-        btnAdd20.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
-        btnAdd20.setEnabled(rootOk);
-
-        MaterialButton btnAddCustom = new MaterialButton(context, null, androidx.appcompat.R.attr.borderlessButtonStyle);
-        btnAddCustom.setText("✏️ Kustom");
-        btnAddCustom.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
-        btnAddCustom.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
-        btnAddCustom.setEnabled(rootOk);
-
-        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(0, Math.round(38 * density), 1f);
-        btnLp.setMargins(Math.round(2 * density), 0, Math.round(2 * density), 0);
-
-        btnRow.addView(btnAdd1, btnLp);
-        btnRow.addView(btnAdd10, btnLp);
-        btnRow.addView(btnAdd20, btnLp);
-        btnRow.addView(btnAddCustom, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Math.round(38 * density)));
-
-        addCol.addView(btnRow);
-        addCard.addView(addCol);
-        if (!rootOk) {
-            addCard.setAlpha(0.38f);
-            addCard.setEnabled(false);
-        }
-        root.addView(addCard);
-
         // Search / Filter Input
         TextInputLayout searchLayout = new TextInputLayout(context);
         searchLayout.setEndIconMode(TextInputLayout.END_ICON_CLEAR_TEXT);
         searchLayout.setHint("Cari slot (misal: 01, 15, 99)...");
-        searchLayout.setPadding(0, 0, 0, Math.round(10 * density));
+        searchLayout.setPadding(0, 0, 0, Math.round(8 * density));
         TextInputEditText searchInput = new TextInputEditText(searchLayout.getContext());
         searchInput.setSingleLine(true);
         searchLayout.addView(searchInput, new LinearLayout.LayoutParams(
@@ -1057,7 +1009,7 @@ public final class FusionBackupSlotHelper {
         // Grid Scroller
         ScrollView scroller = new ScrollView(context);
         scroller.setLayoutParams(new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, Math.round(320 * density)));
+            ViewGroup.LayoutParams.MATCH_PARENT, Math.round(340 * density)));
         scroller.setOverScrollMode(View.OVER_SCROLL_NEVER);
 
         final GridLayout grid = new GridLayout(context);
@@ -1069,6 +1021,23 @@ public final class FusionBackupSlotHelper {
         root.addView(scroller);
 
         dialog.setContentView(root);
+
+        // Langsung beri background solid Catppuccin dan expand segera setelah view hierarchy inflated
+        FrameLayout bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        if (bottomSheet != null) {
+            GradientDrawable sheetBg = new GradientDrawable();
+            sheetBg.setColor(0xFF1E1E2E);
+            sheetBg.setCornerRadii(new float[]{
+                16 * density, 16 * density, // top-left
+                16 * density, 16 * density, // top-right
+                0, 0,                       // bottom-right
+                0, 0                        // bottom-left
+            });
+            bottomSheet.setBackground(sheetBg);
+            BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(bottomSheet);
+            behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+            behavior.setSkipCollapsed(true);
+        }
 
         int primaryColor = MaterialColors.getColor(context, com.termux.shared.R.attr.termuxColorPrimary, 0xFFCDD6F4);
         int surfaceVariant = MaterialColors.getColor(context, com.google.android.material.R.attr.colorSurfaceVariant, 0x1FFFFFFF);
@@ -1082,11 +1051,9 @@ public final class FusionBackupSlotHelper {
                 EXECUTOR.execute(() -> {
                     List<ProfileAppInfo> apps = scanProfileApps(context);
                     MAIN_HANDLER.post(() -> {
-                        if (apps.isEmpty()) {
-                            appsSubtitle.setText("0 aplikasi (.data_profiles belum dibuat)");
-                        } else {
-                            appsSubtitle.setText(apps.size() + " aplikasi terisolasi multi-slot");
-                        }
+                        int count = apps.size();
+                        boolean isExp = (appsDropdownContent.getVisibility() == View.VISIBLE);
+                        btnAppsDropdown.setText("Aplikasi (" + count + ") " + (isExp ? "▲" : "▼"));
                         renderProfileAppsList(context, appsItemsList, apps, dialog, density);
                     });
                 });
@@ -1098,7 +1065,7 @@ public final class FusionBackupSlotHelper {
             List<String> all = (sCachedAllSlots != null) ? sCachedAllSlots : Collections.singletonList(activeSlot);
             renderGridChips(context, grid, all, currentFilter, activeSlot, primaryColor, surfaceVariant,
                 onSurface, chipMargin, chipHeight, nerdFont, dialog, onPicked, rootOk);
-            subtitle.setText("Slot aktif: " + activeSlot + " (" + all.size() + " slot terdaftar)");
+            activeBadge.setText("Slot: " + activeSlot + " (" + all.size() + ")");
             refreshAppsList.run();
         };
 
@@ -1201,11 +1168,27 @@ public final class FusionBackupSlotHelper {
             });
         });
 
-        View sheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
-        if (sheet != null) {
-            BottomSheetBehavior<?> behavior = dialog.getBehavior();
-            behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
-            behavior.setSkipCollapsed(true);
+        dialog.setOnShowListener(d -> {
+            FrameLayout bs = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+            if (bs != null) {
+                GradientDrawable sheetBg = new GradientDrawable();
+                sheetBg.setColor(0xFF1E1E2E);
+                sheetBg.setCornerRadii(new float[]{
+                    16 * density, 16 * density,
+                    16 * density, 16 * density,
+                    0, 0,
+                    0, 0
+                });
+                bs.setBackground(sheetBg);
+                BottomSheetBehavior<FrameLayout> behavior = BottomSheetBehavior.from(bs);
+                behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
+                behavior.setSkipCollapsed(true);
+            }
+        });
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            dialog.getWindow().setDimAmount(0.55f);
         }
 
         dialog.show();

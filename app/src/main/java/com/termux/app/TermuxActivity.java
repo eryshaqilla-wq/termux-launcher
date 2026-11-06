@@ -2505,6 +2505,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         if (contentView != null)
             androidx.core.view.ViewCompat.requestApplyInsets(contentView);
         FusionBackupSlotHelper.refreshCache(this, this::refreshAllQuickKeysClusters);
+        if (com.termux.webview.FusionWebViewManager.sInstance != null) {
+            com.termux.webview.FusionWebViewManager.sInstance.applyThemeToAllTabs();
+        }
         // Preferences may have changed while the settings activity covered this one.
         if (!transientPause) initializeInAppKeyboard(null);
         syncDisplayKeyboardRoute();
@@ -9993,6 +9996,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // Layout mode's canvas defaults to the orientation the phone is in, so it turns with it.
         mSurfaceEditor.onPlaceOrientationChanged();
         scheduleOrientationGeometryPass();
+        if (com.termux.webview.FusionWebViewManager.sInstance != null) {
+            com.termux.webview.FusionWebViewManager.sInstance.applyThemeToAllTabs();
+        }
     }
 
     /**

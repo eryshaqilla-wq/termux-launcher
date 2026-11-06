@@ -31,6 +31,10 @@ import android.webkit.WebBackForwardList;
 import android.webkit.WebHistoryItem;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import androidx.webkit.WebSettingsCompat;
+import androidx.webkit.WebViewFeature;
+import android.content.res.Configuration;
+import android.util.Log;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -741,6 +745,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             globalCm.setAcceptThirdPartyCookies(webView, true);
         } catch (Exception ignored) {}
         FusionProfileManager.setupProfileForWebView(webView, profileName, isDesktop);
+        applyThemeToWebView(webView, appCompatActivity);
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
         webView.setClickable(true);
@@ -752,6 +757,59 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.addJavascriptInterface(new FusionExtensionHelper.FusionExtensionBridge((this.mActivity != null) ? this.mActivity : webView.getContext()), "__FusionExtensionBridge__");
         FusionExtensionHelper.setupWebView(webView);
         return webView;
+    }
+
+    /**
+     * Menerapkan tema gelap / terang sistem Android secara dinamis ke WebView.
+     * Mengatur background solid Catppuccin, FORCE_DARK, FORCE_DARK_STRATEGY, dan Algorithmic Darkening.
+     */
+    public static void applyThemeToWebView(WebView webView, Context context) {
+        if (webView == null || context == null) return;
+        try {
+            boolean isNight = false;
+            if (context.getResources() != null && context.getResources().getConfiguration() != null) {
+                int nightMask = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+                isNight = (nightMask == Configuration.UI_MODE_NIGHT_YES);
+            }
+
+            webView.setBackgroundColor(isNight ? 0xFF1E1E2E : 0xFFFFFFFF);
+
+            WebSettings settings = webView.getSettings();
+            if (settings != null) {
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                    WebSettingsCompat.setForceDark(settings, isNight ? WebSettingsCompat.FORCE_DARK_ON : WebSettingsCompat.FORCE_DARK_OFF);
+                }
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+                    WebSettingsCompat.setForceDarkStrategy(settings, WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING);
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    settings.setAlgorithmicDarkeningAllowed(isNight);
+                } else if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                    WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, isNight);
+                }
+            }
+        } catch (Throwable t) {
+            Log.w("FusionWebViewManager", "Gagal menerapkan tema pada WebView: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Sinkronisasi tema seluruh tab dan WebView yang sedang aktif.
+     */
+    public void applyThemeToAllTabs() {
+        if (this.mActivity == null) return;
+        this.mActivity.runOnUiThread(() -> {
+            if (this.mTabList != null) {
+                for (FusionTab tab : this.mTabList) {
+                    if (tab != null && tab.mWebView != null) {
+                        applyThemeToWebView(tab.mWebView, this.mActivity);
+                    }
+                }
+            }
+            if (this.mActiveWebView != null) {
+                applyThemeToWebView(this.mActiveWebView, this.mActivity);
+            }
+        });
     }
 
     public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {

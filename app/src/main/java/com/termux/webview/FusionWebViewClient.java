@@ -15,18 +15,34 @@ import android.webkit.WebViewClient;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.util.Map;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionWebViewClient extends WebViewClient {
     public FusionWebViewManager mManager;
+    private volatile String mCurrentUrl = null;
 
     public FusionWebViewClient(FusionWebViewManager fusionWebViewManager) {
         this.mManager = fusionWebViewManager;
     }
 
+    public FusionWebViewClient(FusionWebViewManager fusionWebViewManager, String initialUrl) {
+        this.mManager = fusionWebViewManager;
+        this.mCurrentUrl = initialUrl;
+    }
+
+    public void setCurrentUrl(String url) {
+        this.mCurrentUrl = url;
+    }
+
+    public String getCurrentUrl() {
+        return this.mCurrentUrl;
+    }
+
     @Override // android.webkit.WebViewClient
     public void onPageStarted(WebView webView, String url, android.graphics.Bitmap favicon) {
         super.onPageStarted(webView, url, favicon);
+        this.mCurrentUrl = url;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
@@ -36,6 +52,7 @@ public class FusionWebViewClient extends WebViewClient {
     @Override // android.webkit.WebViewClient
     public void onPageFinished(WebView webView, String str) {
         super.onPageFinished(webView, str);
+        this.mCurrentUrl = str;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
             fusionWebViewManager.injectScripts(webView);
@@ -110,40 +127,81 @@ public class FusionWebViewClient extends WebViewClient {
         if (webResourceRequest == null || webResourceRequest.getUrl() == null) {
             return super.shouldInterceptRequest(webView, webResourceRequest);
         }
-        Uri uri = webResourceRequest.getUrl();
-        String scheme = uri.getScheme();
-        if ("file".equalsIgnoreCase(scheme) || "chrome-extension".equalsIgnoreCase(scheme)) {
-            String path = uri.getPath();
-            if (path != null) {
-                File directFile = new File(path);
-                if ("file".equalsIgnoreCase(scheme) && directFile.exists() && directFile.isFile()) {
-                    return super.shouldInterceptRequest(webView, webResourceRequest);
-                }
+        try {
+            Uri uri = webResourceRequest.getUrl();
+            String scheme = uri.getScheme();
+            if ("file".equalsIgnoreCase(scheme) || "chrome-extension".equalsIgnoreCase(scheme)) {
+                String path = uri.getPath();
+                if (path != null) {
+                    File directFile = new File(path);
+                    if ("file".equalsIgnoreCase(scheme) && directFile.exists() && directFile.isFile()) {
+                        return super.shouldInterceptRequest(webView, webResourceRequest);
+                    }
 
-                String currentUrl = (webView != null) ? webView.getUrl() : null;
-                if (currentUrl != null && currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/")) {
-                    try {
-                        String currentPath = Uri.parse(currentUrl).getPath();
-                        if (currentPath != null) {
-                            File currentFile = new File(currentPath);
-                            File extDir = currentFile.isDirectory() ? currentFile : currentFile.getParentFile();
-                            while (extDir != null && extDir.exists() && !new File(extDir, "manifest.json").exists()) {
-                                if (!extDir.getAbsolutePath().contains(".fusion/extensions")) break;
-                                extDir = extDir.getParentFile();
+                    // Ambil context URL tanpa memanggil method WebView di ThreadPoolForeg
+                    String currentUrl = this.mCurrentUrl;
+                    if (currentUrl == null || currentUrl.isEmpty()) {
+                        Map<String, String> headers = webResourceRequest.getRequestHeaders();
+                        if (headers != null) {
+                            currentUrl = headers.get("Referer");
+                            if (currentUrl == null) currentUrl = headers.get("referer");
+                        }
+                    }
+
+                    File extDir = null;
+
+                    // 1. Coba deteksi folder ekstensi dari currentUrl / referer
+                    if (currentUrl != null && currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/")) {
+                        try {
+                            String currentPath = Uri.parse(currentUrl).getPath();
+                            if (currentPath != null) {
+                                File currentFile = new File(currentPath);
+                                extDir = currentFile.isDirectory() ? currentFile : currentFile.getParentFile();
+                                while (extDir != null && extDir.exists() && !new File(extDir, "manifest.json").exists()) {
+                                    if (!extDir.getAbsolutePath().contains(".fusion/extensions")) break;
+                                    extDir = extDir.getParentFile();
+                                }
                             }
-                            if (extDir != null && new File(extDir, "manifest.json").exists()) {
-                                String relName = path.startsWith("/") ? path.substring(1) : path;
-                                File candidate = new File(extDir, relName);
-                                if (candidate.exists() && candidate.isFile()) {
-                                    String mimeType = getFileMimeType(candidate.getName());
-                                    String encoding = (mimeType.startsWith("text/") || mimeType.contains("json") || mimeType.contains("javascript")) ? "utf-8" : null;
-                                    return new WebResourceResponse(mimeType, encoding, new FileInputStream(candidate));
+                        } catch (Throwable ignored) {}
+                    }
+
+                    // 2. Coba deteksi jika uri adalah chrome-extension://<id>/...
+                    if (extDir == null || !extDir.exists() || !new File(extDir, "manifest.json").exists()) {
+                        String host = uri.getHost();
+                        if (host != null && !host.isEmpty()) {
+                            File candidateDir = new File("/data/data/com.termux/files/home/.fusion/extensions", host);
+                            if (candidateDir.exists() && new File(candidateDir, "manifest.json").exists()) {
+                                extDir = candidateDir;
+                            } else {
+                                File baseExtDir = new File("/data/data/com.termux/files/home/.fusion/extensions");
+                                File[] list = baseExtDir.listFiles();
+                                if (list != null) {
+                                    for (File d : list) {
+                                        if (d.isDirectory() && new File(d, "manifest.json").exists()) {
+                                            if (d.getName().equalsIgnoreCase(host)) {
+                                                extDir = d;
+                                                break;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
-                    } catch (Throwable ignored) {}
+                    }
+
+                    if (extDir != null && extDir.exists() && new File(extDir, "manifest.json").exists()) {
+                        String relName = path.startsWith("/") ? path.substring(1) : path;
+                        File candidate = new File(extDir, relName);
+                        if (candidate.exists() && candidate.isFile()) {
+                            String mimeType = getFileMimeType(candidate.getName());
+                            String encoding = (mimeType.startsWith("text/") || mimeType.contains("json") || mimeType.contains("javascript")) ? "utf-8" : null;
+                            return new WebResourceResponse(mimeType, encoding, new FileInputStream(candidate));
+                        }
+                    }
                 }
             }
+        } catch (Throwable t) {
+            android.util.Log.e("FusionWebViewClient", "Error in shouldInterceptRequest", t);
         }
         return super.shouldInterceptRequest(webView, webResourceRequest);
     }
@@ -166,6 +224,8 @@ public class FusionWebViewClient extends WebViewClient {
             return false;
         }
 
+        this.mCurrentUrl = url;
+
         // Intercept link pemasangan Userscript (.user.js) misal dari GreasyFork atau GitHub
         if (url.endsWith(".user.js") || url.contains(".user.js?")) {
             com.termux.app.TermuxActivity act = (this.mManager != null) ? this.mManager.mActivity : null;
@@ -180,7 +240,7 @@ public class FusionWebViewClient extends WebViewClient {
             String path = parsedUri.getPath();
             File targetFile = (path != null) ? new File(path) : null;
             if (targetFile != null && !targetFile.exists()) {
-                String currentUrl = (webView != null) ? webView.getUrl() : null;
+                String currentUrl = this.mCurrentUrl;
                 if (currentUrl != null && currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/")) {
                     try {
                         String currentPath = Uri.parse(currentUrl).getPath();
@@ -195,7 +255,8 @@ public class FusionWebViewClient extends WebViewClient {
                                 String relName = path.startsWith("/") ? path.substring(1) : path;
                                 File resolvedFile = new File(extDir, relName);
                                 if (resolvedFile.exists()) {
-                                    webView.loadUrl("file://" + resolvedFile.getAbsolutePath());
+                                    this.mCurrentUrl = "file://" + resolvedFile.getAbsolutePath();
+                                    webView.loadUrl(this.mCurrentUrl);
                                     return true;
                                 }
                             }

@@ -1042,9 +1042,9 @@ public class FusionDrawerHelper {
         headerRow.setOrientation(0);
         headerRow.setGravity(16);
 
-        // Tombol Back ke Menu Utama [ ← Menu ]
+        // Tombol Back ke Menu Utama [ Menu ]
         TextView backBtn = new TextView(appCompatActivity);
-        backBtn.setText("← Menu");
+        backBtn.setText("Menu");
         backBtn.setTextColor(0xFF89B4FA);
         backBtn.setTextSize(2, 13.0f);
         backBtn.setTypeface(null, 1);
