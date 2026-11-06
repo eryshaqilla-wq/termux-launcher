@@ -800,9 +800,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (this.mActivity == null) return;
         this.mActivity.runOnUiThread(() -> {
             if (this.mTabList != null) {
-                for (FusionTab tab : this.mTabList) {
-                    if (tab != null && tab.mWebView != null) {
-                        applyThemeToWebView(tab.mWebView, this.mActivity);
+                for (int i = 0; i < this.mTabList.size(); i++) {
+                    Object item = this.mTabList.get(i);
+                    if (item instanceof FusionTab) {
+                        FusionTab tab = (FusionTab) item;
+                        if (tab.mWebView != null) {
+                            applyThemeToWebView(tab.mWebView, this.mActivity);
+                        }
                     }
                 }
             }
