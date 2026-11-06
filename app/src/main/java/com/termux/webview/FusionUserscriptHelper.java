@@ -165,6 +165,98 @@ public class FusionUserscriptHelper {
         return false;
     }
 
+    public static String getUserscriptPolyfill(String scriptName, String scriptVer) {
+        String safeName = (scriptName != null) ? scriptName.replace("'", "\\'") : "FusionUserscript";
+        String safeVer = (scriptVer != null) ? scriptVer.replace("'", "\\'") : "1.0";
+        return "(function() {\n" +
+                "  if (window.__FUSION_GM_READY__) return;\n" +
+                "  window.__FUSION_GM_READY__ = true;\n" +
+                "  window.unsafeWindow = window;\n" +
+                "  window.GM_info = {\n" +
+                "    script: { name: '" + safeName + "', version: '" + safeVer + "' },\n" +
+                "    scriptHandler: 'FusionTampermonkey',\n" +
+                "    version: '1.0'\n" +
+                "  };\n" +
+                "  window.GM_addStyle = function(css) {\n" +
+                "    try {\n" +
+                "      var head = document.head || document.getElementsByTagName('head')[0] || document.documentElement;\n" +
+                "      var s = document.createElement('style');\n" +
+                "      s.type = 'text/css';\n" +
+                "      s.appendChild(document.createTextNode(css));\n" +
+                "      head.appendChild(s);\n" +
+                "      return s;\n" +
+                "    } catch(e) { return null; }\n" +
+                "  };\n" +
+                "  window.GM_setValue = function(key, val) {\n" +
+                "    try { localStorage.setItem('GM_' + key, JSON.stringify(val)); } catch(e) { try { localStorage.setItem('GM_' + key, val); } catch(err){} }\n" +
+                "  };\n" +
+                "  window.GM_getValue = function(key, def) {\n" +
+                "    try {\n" +
+                "      var raw = localStorage.getItem('GM_' + key);\n" +
+                "      if (raw === null) return def;\n" +
+                "      try { return JSON.parse(raw); } catch(e) { return raw; }\n" +
+                "    } catch(e) { return def; }\n" +
+                "  };\n" +
+                "  window.GM_deleteValue = function(key) { try { localStorage.removeItem('GM_' + key); } catch(e) {} };\n" +
+                "  window.GM_listValues = function() {\n" +
+                "    var list = [];\n" +
+                "    try {\n" +
+                "      for (var i = 0; i < localStorage.length; i++) {\n" +
+                "        var k = localStorage.key(i);\n" +
+                "        if (k && k.indexOf('GM_') === 0) list.push(k.substring(3));\n" +
+                "      }\n" +
+                "    } catch(e) {}\n" +
+                "    return list;\n" +
+                "  };\n" +
+                "  window.GM_setClipboard = function(text) {\n" +
+                "    try {\n" +
+                "      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text);\n" +
+                "      else {\n" +
+                "        var ta = document.createElement('textarea');\n" +
+                "        ta.value = text; document.body.appendChild(ta); ta.select();\n" +
+                "        document.execCommand('copy'); document.body.removeChild(ta);\n" +
+                "      }\n" +
+                "    } catch(e) {}\n" +
+                "  };\n" +
+                "  window.GM_xmlhttpRequest = function(details) {\n" +
+                "    var url = details.url;\n" +
+                "    var method = details.method || 'GET';\n" +
+                "    var headers = details.headers || {};\n" +
+                "    var data = details.data || null;\n" +
+                "    try {\n" +
+                "      fetch(url, {\n" +
+                "        method: method,\n" +
+                "        headers: headers,\n" +
+                "        body: (method === 'GET' || method === 'HEAD') ? null : data\n" +
+                "      }).then(function(res) {\n" +
+                "        return res.text().then(function(text) {\n" +
+                "          if (details.onload) {\n" +
+                "            details.onload({\n" +
+                "              status: res.status,\n" +
+                "              statusText: res.statusText,\n" +
+                "              responseText: text,\n" +
+                "              responseHeaders: ''\n" +
+                "            });\n" +
+                "          }\n" +
+                "        });\n" +
+                "      }).catch(function(err) {\n" +
+                "        if (details.onerror) details.onerror(err);\n" +
+                "      });\n" +
+                "    } catch(e) { if (details.onerror) details.onerror(e); }\n" +
+                "  };\n" +
+                "  window.GM = {\n" +
+                "    setValue: function(k, v) { return Promise.resolve(window.GM_setValue(k, v)); },\n" +
+                "    getValue: function(k, d) { return Promise.resolve(window.GM_getValue(k, d)); },\n" +
+                "    deleteValue: function(k) { return Promise.resolve(window.GM_deleteValue(k)); },\n" +
+                "    listValues: function() { return Promise.resolve(window.GM_listValues()); },\n" +
+                "    addStyle: window.GM_addStyle,\n" +
+                "    setClipboard: window.GM_setClipboard,\n" +
+                "    xmlHttpRequest: window.GM_xmlhttpRequest,\n" +
+                "    info: window.GM_info\n" +
+                "  };\n" +
+                "})();\n";
+    }
+
     public static void injectMatchingScripts(WebView webView, String currentUrl) {
         if (webView == null || currentUrl == null || currentUrl.isEmpty()) return;
         if (currentUrl.startsWith("file:///android_asset/") || currentUrl.startsWith("about:") || currentUrl.startsWith("javascript:")) {
@@ -184,7 +276,9 @@ public class FusionUserscriptHelper {
                         fis.read(bytes);
                     }
                     String scriptCode = new String(bytes, StandardCharsets.UTF_8);
-                    String wrapped = "(function() { try {\n" + scriptCode + "\n} catch(err) { console.error('[Userscript Error " + f.getName() + "]:', err); } })();";
+                    String sName = parseScriptName(f);
+                    String polyfill = getUserscriptPolyfill(sName, "1.0");
+                    String wrapped = "(function() { try {\n" + polyfill + "\n" + scriptCode + "\n} catch(err) { console.error('[Userscript Error " + f.getName() + "]:', err); } })();";
                     webView.evaluateJavascript(wrapped, null);
                     Log.i(TAG, "Injected userscript [" + f.getName() + "] into " + currentUrl);
                 }

@@ -13,7 +13,12 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.termux.app.FusionToast;
+import com.termux.app.TermuxActivity;
 import androidx.appcompat.app.AppCompatActivity;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
+import java.io.File;
+import java.util.List;
 import java.util.ArrayList;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
@@ -21,6 +26,7 @@ public class FusionDrawerHelper {
     public static LinearLayout sAgyDrawer;
     public static LinearLayout sChainDrawer;
     public static View sDrawerBackdrop;
+    public static LinearLayout sExtensionDrawer;
     public static LinearLayout sRecModeDrawer;
     public static LinearLayout sRecipeDrawer;
     public static LinearLayout sTabDrawer;
@@ -58,6 +64,10 @@ public class FusionDrawerHelper {
         LinearLayout linearLayout7 = sRecModeDrawer;
         if (linearLayout7 != null) {
             linearLayout7.setVisibility(8);
+        }
+        LinearLayout linearLayoutExt = sExtensionDrawer;
+        if (linearLayoutExt != null) {
+            linearLayoutExt.setVisibility(8);
         }
         View view = fusionWebViewManager.mMenuBackdrop;
         if (view != null) {
@@ -118,6 +128,10 @@ public class FusionDrawerHelper {
         LinearLayout linearLayout7 = sRecModeDrawer;
         if (linearLayout7 != null) {
             linearLayout7.setVisibility(8);
+        }
+        LinearLayout linearLayoutExt = sExtensionDrawer;
+        if (linearLayoutExt != null) {
+            linearLayoutExt.setVisibility(8);
         }
         View view = fusionWebViewManager.mMenuBackdrop;
         if (view != null) {
@@ -198,6 +212,10 @@ public class FusionDrawerHelper {
         LinearLayout linearLayout8 = sRecModeDrawer;
         if (linearLayout8 != null && linearLayout8 != linearLayout) {
             linearLayout8.setVisibility(8);
+        }
+        LinearLayout linearLayoutExt = sExtensionDrawer;
+        if (linearLayoutExt != null && linearLayoutExt != linearLayout) {
+            linearLayoutExt.setVisibility(8);
         }
         linearLayout.setVisibility(0);
         linearLayout.bringToFront();
@@ -929,6 +947,318 @@ public class FusionDrawerHelper {
         builder.setItems(new String[]{"1. /root/wallet/wallets_db.json (Chroot Default)", "2. /data/data/com.termux/files/home/wallet/wallets_db.json", "3. /sdcard/Download/wallets_db.json"}, new FusionWalletPathSelectClick(fusionWebViewManager));
         builder.setNegativeButton("Batal", (DialogInterface.OnClickListener) null);
         builder.show();
+    }
+
+    public static void showExtensionDrawer(final FusionWebViewManager fusionWebViewManager) {
+        final TermuxActivity appCompatActivity;
+        ViewParent parent;
+        if (fusionWebViewManager == null || (appCompatActivity = fusionWebViewManager.mActivity) == null) {
+            return;
+        }
+
+        LinearLayout linearLayout = sExtensionDrawer;
+        if (linearLayout != null && (parent = linearLayout.getParent()) != null) {
+            ((ViewGroup) parent).removeView(linearLayout);
+        }
+
+        final LinearLayout rootDrawer = new LinearLayout(appCompatActivity);
+        sExtensionDrawer = rootDrawer;
+        rootDrawer.setOrientation(1);
+        rootDrawer.setPadding(16, 16, 16, 16);
+
+        // ================= HEADER ROW =================
+        LinearLayout headerRow = new LinearLayout(appCompatActivity);
+        headerRow.setOrientation(0);
+        headerRow.setGravity(16);
+
+        // Tombol Back ke Menu Utama [ ← Menu ]
+        TextView backBtn = new TextView(appCompatActivity);
+        backBtn.setText("← Menu");
+        backBtn.setTextColor(0xFF89B4FA);
+        backBtn.setTextSize(2, 13.0f);
+        backBtn.setTypeface(null, 1);
+        backBtn.setPadding(10, 8, 12, 8);
+        backBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+        backBtn.setClickable(true);
+        backBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                rootDrawer.setVisibility(8);
+                if (fusionWebViewManager.mMenuCard != null) {
+                    fusionWebViewManager.mMenuCard.setVisibility(0);
+                    fusionWebViewManager.mMenuCard.bringToFront();
+                }
+            }
+        });
+        headerRow.addView(backBtn);
+
+        // Judul Drawer
+        TextView titleText = new TextView(appCompatActivity);
+        titleText.setText("  🧩 Ekstensi");
+        titleText.setTextColor(0xFFCDD6F4);
+        titleText.setTextSize(2, 16.0f);
+        titleText.setTypeface(null, 1);
+        titleText.setGravity(19);
+        headerRow.addView(titleText, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+        // Tombol Close [ ✕ ]
+        TextView closeBtn = new TextView(appCompatActivity);
+        closeBtn.setText("  ✕  ");
+        closeBtn.setTextColor(0xFFF38BA8);
+        closeBtn.setTextSize(2, 14.0f);
+        closeBtn.setTypeface(null, 1);
+        closeBtn.setPadding(8, 6, 8, 6);
+        closeBtn.setClickable(true);
+        closeBtn.setOnClickListener(new FusionDrawerCloseClick(fusionWebViewManager));
+        headerRow.addView(closeBtn);
+
+        rootDrawer.addView(headerRow);
+
+        // Subtitle
+        TextView subtitle = new TextView(appCompatActivity);
+        subtitle.setText("Klik modul untuk langsung buka halaman popup");
+        subtitle.setTextColor(0xFFA6ADC8);
+        subtitle.setTextSize(2, 11.0f);
+        subtitle.setPadding(2, 6, 2, 8);
+        rootDrawer.addView(subtitle);
+
+        // ================= ACTION CHIPS ROW =================
+        LinearLayout chipRow = new LinearLayout(appCompatActivity);
+        chipRow.setOrientation(0);
+        chipRow.setPadding(0, 0, 0, 10);
+
+        // ➕ Pasang Zip/Crx
+        TextView installBtn = new TextView(appCompatActivity);
+        installBtn.setText("➕ Pasang .zip/.crx");
+        installBtn.setTextColor(0xFFCDD6F4);
+        installBtn.setTextSize(2, 11.5f);
+        installBtn.setPadding(12, 8, 12, 8);
+        installBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+        installBtn.setClickable(true);
+        installBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FusionExtensionHelper.showImportPackageDialog(appCompatActivity, fusionWebViewManager);
+            }
+        });
+        LinearLayout.LayoutParams installLp = new LinearLayout.LayoutParams(-2, -2);
+        installLp.setMargins(0, 0, 8, 0);
+        chipRow.addView(installBtn, installLp);
+
+        // 🌐 Buka GreasyFork
+        TextView gfBtn = new TextView(appCompatActivity);
+        gfBtn.setText("🌐 Buka GreasyFork");
+        gfBtn.setTextColor(0xFFA6E3A1);
+        gfBtn.setTextSize(2, 11.5f);
+        gfBtn.setPadding(12, 8, 12, 8);
+        gfBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+        gfBtn.setClickable(true);
+        gfBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                fusionWebViewManager.closeAllDrawers();
+                WebView wv = fusionWebViewManager.mActiveWebView;
+                if (wv != null) {
+                    wv.loadUrl("https://greasyfork.org/id/scripts");
+                }
+                FusionToast.makeText(appCompatActivity, "🌐 Membuka GreasyFork... Klik 'Pasang' pada skrip yang diinginkan!", Toast.LENGTH_SHORT).show();
+            }
+        });
+        chipRow.addView(gfBtn);
+
+        rootDrawer.addView(chipRow);
+
+        // ================= SCROLLABLE EXTENSION LIST =================
+        ScrollView scrollView = new ScrollView(appCompatActivity);
+        scrollView.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1.0f));
+        scrollView.setVerticalScrollBarEnabled(false);
+
+        LinearLayout listContainer = new LinearLayout(appCompatActivity);
+        listContainer.setOrientation(1);
+
+        final List<FusionExtensionHelper.ExtensionInfo> extensions = FusionExtensionHelper.getInstalledExtensions(appCompatActivity);
+
+        if (extensions.isEmpty()) {
+            LinearLayout emptyCard = new LinearLayout(appCompatActivity);
+            emptyCard.setOrientation(1);
+            emptyCard.setPadding(16, 20, 16, 20);
+            emptyCard.setBackground(FusionUiHelper.createRounded(0xFF1E1E2E, 0xFF313244, 8.0f));
+
+            TextView emptyTitle = new TextView(appCompatActivity);
+            emptyTitle.setText("Belum ada ekstensi terpasang");
+            emptyTitle.setTextColor(0xFFCDD6F4);
+            emptyTitle.setTextSize(2, 13.0f);
+            emptyTitle.setTypeface(null, 1);
+            emptyCard.addView(emptyTitle);
+
+            TextView emptyDesc = new TextView(appCompatActivity);
+            emptyDesc.setText("Pasang file .zip / .crx ekstensi Chrome desktop, atau klik 'Buka GreasyFork' di atas untuk memasang skrip otomasi secara instan.");
+            emptyDesc.setTextColor(0xFFA6ADC8);
+            emptyDesc.setTextSize(2, 11.5f);
+            emptyDesc.setPadding(0, 6, 0, 0);
+            emptyCard.addView(emptyDesc);
+
+            listContainer.addView(emptyCard);
+        } else {
+            float density = appCompatActivity.getResources().getDisplayMetrics().density;
+            int iconPx = (int) (38 * density);
+
+            for (int i = 0; i < extensions.size(); i++) {
+                final FusionExtensionHelper.ExtensionInfo ext = extensions.get(i);
+
+                LinearLayout itemCard = new LinearLayout(appCompatActivity);
+                itemCard.setOrientation(0);
+                itemCard.setGravity(16);
+                itemCard.setPadding(12, 12, 12, 12);
+                itemCard.setBackground(FusionUiHelper.createRounded(0xFF1E1E2E, 0xFF313244, 8.0f));
+                itemCard.setClickable(true);
+                itemCard.setFocusable(true);
+
+                // Ikon Logo Asli Ekstensi
+                Bitmap iconBmp = FusionExtensionHelper.getExtensionIcon(ext, 120);
+                if (iconBmp != null) {
+                    ImageView iconView = new ImageView(appCompatActivity);
+                    iconView.setImageBitmap(iconBmp);
+                    iconView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(iconPx, iconPx);
+                    iconLp.setMargins(0, 0, 12, 0);
+                    itemCard.addView(iconView, iconLp);
+                } else {
+                    TextView iconFallback = new TextView(appCompatActivity);
+                    iconFallback.setText("🧩");
+                    iconFallback.setTextSize(2, 22.0f);
+                    iconFallback.setGravity(17);
+                    LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(iconPx, iconPx);
+                    iconLp.setMargins(0, 0, 12, 0);
+                    itemCard.addView(iconFallback, iconLp);
+                }
+
+                // Info Ekstensi (Tengah)
+                LinearLayout infoCol = new LinearLayout(appCompatActivity);
+                infoCol.setOrientation(1);
+
+                TextView nameText = new TextView(appCompatActivity);
+                nameText.setText(ext.name);
+                nameText.setTextColor(0xFFCDD6F4);
+                nameText.setTextSize(2, 13.5f);
+                nameText.setTypeface(null, 1);
+                nameText.setSingleLine(true);
+                nameText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                infoCol.addView(nameText);
+
+                TextView verText = new TextView(appCompatActivity);
+                String statusStr = ext.enabled ? " • Aktif" : " • Nonaktif";
+                verText.setText("v" + ext.version + statusStr);
+                verText.setTextColor(ext.enabled ? 0xFFA6E3A1 : 0xFF6C7086);
+                verText.setTextSize(2, 11.0f);
+                infoCol.addView(verText);
+
+                itemCard.addView(infoCol, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+                // Tombol aksi kanan
+                if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
+                    TextView popupBadge = new TextView(appCompatActivity);
+                    popupBadge.setText("Popup");
+                    popupBadge.setTextColor(0xFF11111B);
+                    popupBadge.setTextSize(2, 10.5f);
+                    popupBadge.setTypeface(null, 1);
+                    popupBadge.setPadding(10, 4, 10, 4);
+                    popupBadge.setBackground(FusionUiHelper.createRounded(0xFF89B4FA, 0xFF89B4FA, 6.0f));
+                    LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(-2, -2);
+                    badgeLp.setMargins(6, 0, 6, 0);
+                    itemCard.addView(popupBadge, badgeLp);
+                }
+
+                TextView optBtn = new TextView(appCompatActivity);
+                optBtn.setText("⚙️");
+                optBtn.setTextSize(2, 14.0f);
+                optBtn.setPadding(8, 6, 8, 6);
+                optBtn.setClickable(true);
+                optBtn.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
+                    }
+                });
+                itemCard.addView(optBtn);
+
+                // 1-KLIK LANGSUNG BUKA POPUP HTML
+                itemCard.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
+                            File popupFile = new File(ext.dir, ext.popupHtml);
+                            if (popupFile.exists()) {
+                                fusionWebViewManager.addNewTab("file://" + popupFile.getAbsolutePath());
+                                fusionWebViewManager.closeAllDrawers();
+                                return;
+                            }
+                        }
+                        FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
+                    }
+                });
+
+                itemCard.setOnLongClickListener(new View.OnLongClickListener() {
+                    @Override
+                    public boolean onLongClick(View v) {
+                        FusionExtensionHelper.showExtensionActionsDialog(appCompatActivity, fusionWebViewManager, ext);
+                        return true;
+                    }
+                });
+
+                LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(-1, -2);
+                cardLp.setMargins(0, 0, 0, 8);
+                listContainer.addView(itemCard, cardLp);
+            }
+        }
+
+        scrollView.addView(listContainer);
+        rootDrawer.addView(scrollView);
+
+        // ================= BOTTOM ACTIONS =================
+        LinearLayout bottomRow = new LinearLayout(appCompatActivity);
+        bottomRow.setOrientation(0);
+        bottomRow.setPadding(0, 10, 0, 0);
+
+        TextView userscriptBtn = new TextView(appCompatActivity);
+        userscriptBtn.setText("📜 Userscript");
+        userscriptBtn.setTextColor(0xFFCDD6F4);
+        userscriptBtn.setTextSize(2, 11.5f);
+        userscriptBtn.setGravity(17);
+        userscriptBtn.setPadding(10, 10, 10, 10);
+        userscriptBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+        userscriptBtn.setClickable(true);
+        userscriptBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FusionUserscriptHelper.showUserscriptsDialog(appCompatActivity, fusionWebViewManager);
+            }
+        });
+        bottomRow.addView(userscriptBtn, new LinearLayout.LayoutParams(0, -2, 1.0f));
+
+        if (!extensions.isEmpty()) {
+            TextView manageBtn = new TextView(appCompatActivity);
+            manageBtn.setText("🗑️ Kelola / Hapus");
+            manageBtn.setTextColor(0xFFF38BA8);
+            manageBtn.setTextSize(2, 11.5f);
+            manageBtn.setGravity(17);
+            manageBtn.setPadding(10, 10, 10, 10);
+            manageBtn.setBackground(FusionUiHelper.createRounded(0xFF313244, 0xFF45475A, 6.0f));
+            manageBtn.setClickable(true);
+            manageBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    FusionExtensionHelper.showManageExtensionsDialog(appCompatActivity, fusionWebViewManager, extensions);
+                }
+            });
+            LinearLayout.LayoutParams manageLp = new LinearLayout.LayoutParams(0, -2, 1.0f);
+            manageLp.setMargins(8, 0, 0, 0);
+            bottomRow.addView(manageBtn, manageLp);
+        }
+
+        rootDrawer.addView(bottomRow);
+
+        prepareDrawer(fusionWebViewManager, rootDrawer);
     }
 
     public static void toggleMenuDrawer(FusionWebViewManager fusionWebViewManager) {

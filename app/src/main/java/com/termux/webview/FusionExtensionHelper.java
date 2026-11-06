@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.util.Log;
 import android.view.View;
@@ -65,6 +67,7 @@ public class FusionExtensionHelper {
         public boolean enabled = true;
         public int manifestVersion = 3;
         public String popupHtml;
+        public String iconPath;
         public List<ContentScript> contentScripts = new ArrayList<>();
 
         public static class ContentScript {
@@ -352,11 +355,32 @@ public class FusionExtensionHelper {
                 JSONObject action = root.optJSONObject("action");
                 if (action != null) {
                     info.popupHtml = action.optString("default_popup", null);
+                    Object defIcon = action.opt("default_icon");
+                    if (defIcon instanceof String) {
+                        info.iconPath = (String) defIcon;
+                    } else if (defIcon instanceof JSONObject) {
+                        JSONObject iconObj = (JSONObject) defIcon;
+                        info.iconPath = iconObj.optString("128", iconObj.optString("48", iconObj.optString("32", iconObj.optString("16", null))));
+                    }
                 }
             } else if (root.has("browser_action")) {
                 JSONObject ba = root.optJSONObject("browser_action");
                 if (ba != null) {
                     info.popupHtml = ba.optString("default_popup", null);
+                    Object defIcon = ba.opt("default_icon");
+                    if (defIcon instanceof String) {
+                        info.iconPath = (String) defIcon;
+                    } else if (defIcon instanceof JSONObject) {
+                        JSONObject iconObj = (JSONObject) defIcon;
+                        info.iconPath = iconObj.optString("128", iconObj.optString("48", iconObj.optString("32", iconObj.optString("16", null))));
+                    }
+                }
+            }
+
+            if (info.iconPath == null && root.has("icons")) {
+                JSONObject icons = root.optJSONObject("icons");
+                if (icons != null) {
+                    info.iconPath = icons.optString("128", icons.optString("48", icons.optString("32", icons.optString("16", null))));
                 }
             }
 
@@ -391,6 +415,55 @@ public class FusionExtensionHelper {
             Log.e(TAG, "Gagal mem-parsing manifest di " + dir.getAbsolutePath() + ": " + e.getMessage());
             return null;
         }
+    }
+
+    public static Bitmap getExtensionIcon(ExtensionInfo ext, int targetSizePx) {
+        if (ext == null || ext.dir == null) return null;
+        File iconFile = null;
+        if (ext.iconPath != null && !ext.iconPath.isEmpty()) {
+            File f = new File(ext.dir, ext.iconPath);
+            if (f.exists() && f.isFile()) {
+                iconFile = f;
+            }
+        }
+        if (iconFile == null) {
+            String[] commonNames = new String[]{"icon.png", "icon128.png", "icon48.png", "icon-128.png", "icon-48.png", "logo.png", "icon.webp"};
+            for (String cn : commonNames) {
+                File f = new File(ext.dir, cn);
+                if (f.exists() && f.isFile()) {
+                    iconFile = f;
+                    break;
+                }
+                File sub = new File(new File(ext.dir, "images"), cn);
+                if (sub.exists() && sub.isFile()) {
+                    iconFile = sub;
+                    break;
+                }
+                File sub2 = new File(new File(ext.dir, "icons"), cn);
+                if (sub2.exists() && sub2.isFile()) {
+                    iconFile = sub2;
+                    break;
+                }
+            }
+        }
+        if (iconFile != null) {
+            try {
+                byte[] bytes = readFileBytesSafe(iconFile);
+                if (bytes != null && bytes.length > 0) {
+                    BitmapFactory.Options opts = new BitmapFactory.Options();
+                    opts.inJustDecodeBounds = true;
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.length, opts);
+                    opts.inSampleSize = 1;
+                    if (targetSizePx > 0 && opts.outWidth > targetSizePx) {
+                        opts.inSampleSize = Math.max(1, opts.outWidth / targetSizePx);
+                    }
+                    opts.inJustDecodeBounds = false;
+                    Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, opts);
+                    if (bmp != null) return bmp;
+                }
+            } catch (Throwable ignored) {}
+        }
+        return null;
     }
 
     public static byte[] readFileBytesSafe(File file) {
@@ -1218,6 +1291,10 @@ public class FusionExtensionHelper {
     }
 
     public static void showExtensionsDialog(final TermuxActivity act, final FusionWebViewManager manager) {
+        if (manager != null) {
+            FusionDrawerHelper.showExtensionDrawer(manager);
+            return;
+        }
         if (act == null) return;
         final Context context = act;
         final List<ExtensionInfo> extensions = getInstalledExtensions(context);

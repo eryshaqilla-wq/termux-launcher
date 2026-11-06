@@ -2532,7 +2532,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public boolean onBackPressed() {
-        if (this.mMenuCard != null && this.mMenuCard.getVisibility() == View.VISIBLE) {
+        if ((this.mMenuCard != null && this.mMenuCard.getVisibility() == View.VISIBLE) ||
+            (FusionDrawerHelper.sExtensionDrawer != null && FusionDrawerHelper.sExtensionDrawer.getVisibility() == View.VISIBLE)) {
             closeAllDrawers();
             return true;
         }
