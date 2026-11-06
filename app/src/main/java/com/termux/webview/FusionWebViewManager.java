@@ -970,7 +970,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         TerminalSession session = this.mActivity.getCurrentSession();
         if (session == null || this.mTabList == null) return false;
         for (int i = 0; i < this.mTabList.size(); i++) {
-            FusionTab tab = this.mTabList.get(i);
+            FusionTab tab = (FusionTab) this.mTabList.get(i);
             if (tab != null && tab.mBoundSession == session && !tab.mIsMinimized && tab.mWebView != null) {
                 return true;
             }
