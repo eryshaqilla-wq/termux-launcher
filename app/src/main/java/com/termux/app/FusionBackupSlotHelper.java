@@ -42,6 +42,7 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -69,6 +70,33 @@ public final class FusionBackupSlotHelper {
 
     public static final String PREFS_NAME = "fusion_slot_preferences";
     public static final String KEY_AUTO_CLEAR_CACHE = "slot_auto_clear_cache";
+
+    /**
+     * Natural numeric comparator for backup slots.
+     * Sorts numeric strings by numeric value (e.g. "00", "01", ... "99", "100", "101"),
+     * preserving ascending numerical order rather than lexicographical order ("100" after "99", not after "10").
+     */
+    public static final Comparator<String> SLOT_COMPARATOR = (a, b) -> {
+        if (a == null && b == null) return 0;
+        if (a == null) return -1;
+        if (b == null) return 1;
+        String s1 = a.trim();
+        String s2 = b.trim();
+        boolean aIsNum = s1.matches("^[0-9]+$");
+        boolean bIsNum = s2.matches("^[0-9]+$");
+        if (aIsNum && bIsNum) {
+            try {
+                long n1 = Long.parseLong(s1);
+                long n2 = Long.parseLong(s2);
+                int cmp = Long.compare(n1, n2);
+                if (cmp != 0) return cmp;
+                return Integer.compare(s1.length(), s2.length());
+            } catch (NumberFormatException ignored) {}
+        }
+        if (aIsNum && !bIsNum) return -1;
+        if (!aIsNum && bIsNum) return 1;
+        return s1.compareToIgnoreCase(s2);
+    };
 
     public interface OnSlotPicked {
         void onPicked(@NonNull String slot);
@@ -224,7 +252,7 @@ public final class FusionBackupSlotHelper {
                 all.add(String.format(Locale.ROOT, "%02d", i));
             }
         } else {
-            Collections.sort(all);
+            Collections.sort(all, SLOT_COMPARATOR);
         }
         sCachedAllSlots = all;
         sLastCacheUpdate = System.currentTimeMillis();
@@ -512,7 +540,7 @@ public final class FusionBackupSlotHelper {
             if (ok) {
                 synchronized (FusionBackupSlotHelper.class) {
                     existing.addAll(toCreate);
-                    Collections.sort(existing);
+                    Collections.sort(existing, SLOT_COMPARATOR);
                     sCachedAllSlots = existing;
                     sLastCacheUpdate = System.currentTimeMillis();
                 }
@@ -577,7 +605,7 @@ public final class FusionBackupSlotHelper {
             if (ok) {
                 synchronized (FusionBackupSlotHelper.class) {
                     existing.add(cleanName);
-                    Collections.sort(existing);
+                    Collections.sort(existing, SLOT_COMPARATOR);
                     sCachedAllSlots = existing;
                     sLastCacheUpdate = System.currentTimeMillis();
                 }
@@ -624,6 +652,7 @@ public final class FusionBackupSlotHelper {
         }
         sb.append("done\n");
         sb.append("/system/bin/am broadcast -a android.appwidget.action.APPWIDGET_UPDATE -n com.ery.ziggy/com.myrefucek.FufuFu.MyDataProfileWidget >/dev/null 2>&1 || true\n");
+        sb.append("/system/bin/am force-stop com.ery.ziggy >/dev/null 2>&1 || am force-stop com.ery.ziggy >/dev/null 2>&1 || true\n");
 
         return executeRootScript(sb.toString());
     }
@@ -949,21 +978,14 @@ public final class FusionBackupSlotHelper {
         // Populate slots in background if cache empty
         EXECUTOR.execute(() -> {
             ensureCacheLoaded();
-            final List<String> slots = (sCachedAllSlots != null && !sCachedAllSlots.isEmpty())
-                ? sCachedAllSlots
-                : Collections.singletonList(activeSlot);
-
             MAIN_HANDLER.post(() -> {
-                renderGridChips(context, grid, slots, "", activeSlot, primaryColor, surfaceVariant, onSurface,
-                    chipMargin, chipHeight, nerdFont, dialog, onPicked, rootOk);
+                refreshGrid.run();
 
                 searchInput.addTextChangedListener(new TextWatcher() {
                     @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                     @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
                     @Override public void afterTextChanged(Editable s) {
-                        String filter = s != null ? s.toString().trim() : "";
-                        renderGridChips(context, grid, slots, filter, activeSlot, primaryColor, surfaceVariant,
-                            onSurface, chipMargin, chipHeight, nerdFont, dialog, onPicked, rootOk);
+                        refreshGrid.run();
                     }
                 });
             });

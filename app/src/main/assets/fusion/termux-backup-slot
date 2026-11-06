@@ -51,9 +51,9 @@ get_all() {
         echo "Error: Akses root (su) diperlukan untuk fitur slot .backup" >&2
         return 1
     fi
-    all=$(run_sh "grep 'name=\"profile\.' /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null | sed -e 's/.*name=\"profile\.//' -e 's/\".*//' | sort")
+    all=$(run_sh "grep 'name=\"profile\.' /data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml 2>/dev/null | sed -e 's/.*name=\"profile\.//' -e 's/\".*//' | (sort -V 2>/dev/null || sort)")
     if [ -z "$all" ]; then
-        all=$(run_sh "ls -1 /data/data/com.kiwibrowser.browser/.data_profiles 2>/dev/null | grep -v '^\.' | sort")
+        all=$(run_sh "ls -1 /data/data/com.kiwibrowser.browser/.data_profiles 2>/dev/null | grep -v '^\.' | (sort -V 2>/dev/null || sort)")
     fi
     echo "$all"
 }
@@ -234,6 +234,7 @@ for pdir in \$(find /data/data -maxdepth 2 -name .data_profiles 2>/dev/null); do
   fi
 done
 /system/bin/am broadcast -a android.appwidget.action.APPWIDGET_UPDATE -n com.ery.ziggy/com.myrefucek.FufuFu.MyDataProfileWidget >/dev/null 2>&1 || true
+/system/bin/am force-stop com.ery.ziggy >/dev/null 2>&1 || am force-stop com.ery.ziggy >/dev/null 2>&1 || true
 "
     run_sh "$SCRIPT"
     echo "✔ Slot berhasil dibuat: $target"
