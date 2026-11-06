@@ -679,6 +679,15 @@
                         android:clipToPadding="false" />
                 </com.termux.app.wall.PaneWallLayout>
 
+                <!-- Dedicated overlay host for Middle Canvas (Terminal) WebView & its floating controls.
+                     Follows the Terminal page's translation and is hidden when leaving the middle canvas! -->
+                <FrameLayout
+                    android:id="@+id/terminal_webview_overlay_host"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipChildren="false"
+                    android:clipToPadding="false" />
+
                 <!-- Optional thin outline framing the terminal area; background/shape/margins
                      are set programmatically in applyTerminalBorderAppearance(). Draws the
                      shared glass rim instead of the plain stroke while the glass pane is on. -->

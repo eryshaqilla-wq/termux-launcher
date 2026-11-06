@@ -17,6 +17,8 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -903,6 +905,79 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
+    public void onTerminalWallOffsetChanged(float translationX, float alpha) {
+        if (this.mPaneHost != null) {
+            this.mPaneHost.setTranslationX(translationX);
+            this.mPaneHost.setAlpha(alpha);
+            boolean onScreen = alpha > 0.05f;
+            if (!onScreen) {
+                if (this.mPaneHost.getVisibility() == View.VISIBLE) {
+                    this.mPaneHost.setVisibility(View.GONE);
+                }
+            } else if (isMiddleCanvasWebViewActive() && this.mPaneHost.getVisibility() != View.VISIBLE) {
+                this.mPaneHost.setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
+    public void onTerminalOffScreenChanged(boolean offScreen) {
+        if (this.mPaneHost != null) {
+            if (offScreen) {
+                this.mPaneHost.setVisibility(View.GONE);
+                if (this.mActivity != null) {
+                    this.mActivity.endWebViewExternalTextInput();
+                }
+            } else if (isMiddleCanvasWebViewActive()) {
+                this.mPaneHost.setVisibility(View.VISIBLE);
+                if (this.mActivity != null) {
+                    this.mActivity.beginWebViewExternalTextInput();
+                }
+            }
+        }
+    }
+
+    public void onWallPageChanged(@NonNull com.termux.app.wall.PaneWallPage page) {
+        if (page != com.termux.app.wall.PaneWallPage.TERMINAL) {
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setVisibility(View.GONE);
+            }
+            if (this.mActivity != null) {
+                this.mActivity.endWebViewExternalTextInput();
+            }
+        }
+    }
+
+    public void onWallPageSettled(@NonNull com.termux.app.wall.PaneWallPage page) {
+        if (page != com.termux.app.wall.PaneWallPage.TERMINAL) {
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setVisibility(View.GONE);
+                this.mPaneHost.setTranslationX(0f);
+            }
+            if (this.mActivity != null) {
+                this.mActivity.endWebViewExternalTextInput();
+            }
+        } else {
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setTranslationX(0f);
+                this.mPaneHost.setAlpha(1f);
+            }
+            syncVisibility();
+        }
+    }
+
+    public boolean isMiddleCanvasWebViewActive() {
+        if (this.mActivity == null) return false;
+        TerminalSession session = this.mActivity.getCurrentSession();
+        if (session == null || this.mTabList == null) return false;
+        for (int i = 0; i < this.mTabList.size(); i++) {
+            FusionTab tab = this.mTabList.get(i);
+            if (tab != null && tab.mBoundSession == session && !tab.mIsMinimized && tab.mWebView != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /* JADX WARN: Multi-variable type inference failed */
     /* JADX WARN: Type inference failed for: r0v0, types: [android.content.Context, com.termux.app.TermuxActivity] */
     /* JADX WARN: Type inference failed for: r7v1 */
@@ -919,7 +994,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             WebView.setWebContentsDebuggingEnabled(true);
         } catch (Exception unused) {
         }
-        this.mPaneHost = (FrameLayout) r0.findViewById(com.termux.R.id.terminal_surface_host);
+        this.mPaneHost = (FrameLayout) r0.findViewById(com.termux.R.id.terminal_webview_overlay_host);
+        if (this.mPaneHost == null) {
+            this.mPaneHost = (FrameLayout) r0.findViewById(com.termux.R.id.terminal_surface_host);
+        }
         if (this.mPaneHost == null) {
             this.mPaneHost = (FrameLayout) this.mActivity.findViewById(android.R.id.content);
         }
@@ -1817,6 +1895,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         act.runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (act.currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
+                    act.goToTerminalCanvas(true);
+                }
                 FusionTab activeTab = FusionTabStateHelper.getActiveTab(FusionWebViewManager.this);
                 if (activeTab != null && activeTab.mIsMinimized) {
                     FusionTabStateHelper.toggleMinimize(FusionWebViewManager.this);
@@ -2472,6 +2553,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public boolean isWebViewVisible() {
+        if (this.mActivity != null && this.mActivity.currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
+            return false;
+        }
         WebView webView;
         if (this.mActiveTab != 1 || (webView = this.mWorkerWebView) == null) {
             webView = this.mActiveWebView;
@@ -2747,6 +2831,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         TerminalSession terminalSession;
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity == null) {
+            return;
+        }
+        if (termuxActivity.currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setVisibility(View.GONE);
+            }
             return;
         }
         ArrayList arrayList = null;

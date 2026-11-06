@@ -30,6 +30,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.card.MaterialCardView;
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
@@ -71,6 +72,11 @@ public final class FusionBackupSlotHelper {
 
     public interface OnSlotPicked {
         void onPicked(@NonNull String slot);
+    }
+
+    public interface OnSlotCreatedCallback {
+        void onResult(boolean success, int createdCount, int skippedCount,
+                      @NonNull List<String> createdNames, @Nullable String errorMsg);
     }
 
     private static final ExecutorService EXECUTOR = Executors.newSingleThreadExecutor();
@@ -243,7 +249,7 @@ public final class FusionBackupSlotHelper {
             }
             MAIN_HANDLER.post(() -> {
                 if (success) {
-                    String msg = "🔄 Slot Aktif: " + targetSlot + (clearCache ? " ⚡ (RAM Bersih)" : "");
+                    String msg = "Slot Aktif: " + targetSlot + (clearCache ? ", Dan Cache Dibersihkan!" : "");
                     FusionToast.show(appCtx, msg);
                 } else {
                     FusionToast.show(appCtx, "⚠️ Gagal mengganti slot: " + targetSlot);
@@ -285,7 +291,7 @@ public final class FusionBackupSlotHelper {
             }
             MAIN_HANDLER.post(() -> {
                 if (success) {
-                    String msg = "◀ Slot Sebelumnya: " + target + (clearCache ? " ⚡ (RAM Bersih)" : "");
+                    String msg = "Slot Sebelumnya: " + target + (clearCache ? ", Dan Cache Dibersihkan!" : "");
                     FusionToast.show(appCtx, msg);
                 } else {
                     FusionToast.show(appCtx, "⚠️ Gagal pindah ke slot sebelumnya: " + target);
@@ -327,7 +333,7 @@ public final class FusionBackupSlotHelper {
             }
             MAIN_HANDLER.post(() -> {
                 if (success) {
-                    String msg = "Slot Berikutnya ▶: " + target + (clearCache ? " ⚡ (RAM Bersih)" : "");
+                    String msg = "Slot Berikutnya: " + target + (clearCache ? ", Dan Cache Dibersihkan!" : "");
                     FusionToast.show(appCtx, msg);
                 } else {
                     FusionToast.show(appCtx, "⚠️ Gagal pindah ke slot berikutnya: " + target);
@@ -400,13 +406,26 @@ public final class FusionBackupSlotHelper {
             script.append("sysctl -w vm.shrink_memory=1 >/dev/null 2>&1 || true\n");
         }
 
+        return executeRootScript(script.toString());
+    }
+
+    private static boolean executeRootScript(@NonNull String script) {
         try {
-            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", script.toString()});
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "/system/bin/sh"});
+            java.io.OutputStream os = p.getOutputStream();
+            os.write(script.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            os.flush();
+            os.close();
             int code = p.waitFor();
             return code == 0;
         } catch (Throwable t) {
-            Log.e(TAG, "Root execution failed for slot switch", t);
-            return false;
+            try {
+                Process p2 = Runtime.getRuntime().exec(new String[]{"su", "-c", script});
+                return p2.waitFor() == 0;
+            } catch (Throwable t2) {
+                Log.e(TAG, "Root execution failed", t2);
+                return false;
+            }
         }
     }
 
@@ -427,6 +446,186 @@ public final class FusionBackupSlotHelper {
                 Log.e(TAG, "Failed launching .backup picker activity", t);
             }
         });
+    }
+
+    /**
+     * Finds highest numeric slot index and returns next integer (e.g., if max is 99 -> returns 100).
+     */
+    public static int getNextNumericSlotIndex(@NonNull List<String> allSlots) {
+        int max = -1;
+        for (String s : allSlots) {
+            if (s == null) continue;
+            try {
+                int val = Integer.parseInt(s.trim());
+                if (val > max) {
+                    max = val;
+                }
+            } catch (NumberFormatException ignored) {}
+        }
+        return max + 1;
+    }
+
+    /**
+     * Formats integer to standard slot naming: 2-digit zero-padded for < 100 ("00", "01", ... "99"),
+     * natural string for >= 100 ("100", "101", ...).
+     */
+    @NonNull
+    public static String formatSlotName(int num) {
+        if (num < 100) {
+            return String.format(Locale.ROOT, "%02d", num);
+        } else {
+            return String.valueOf(num);
+        }
+    }
+
+    /**
+     * Automatically creates N next slots in sequence (e.g. 1, 10, or 20 slots).
+     * Automatically skips any slot that already exists to prevent overwriting existing data.
+     */
+    public static void createSlotsAutoNext(@NonNull Context context, int count,
+                                           @Nullable OnSlotCreatedCallback callback) {
+        final Context appCtx = context.getApplicationContext();
+        if (!isRootAvailable()) {
+            if (callback != null) {
+                callback.onResult(false, 0, 0, Collections.emptyList(),
+                    "Akses root (su) diperlukan untuk membuat slot .backup!");
+            }
+            return;
+        }
+
+        EXECUTOR.execute(() -> {
+            ensureCacheLoaded();
+            List<String> existing = (sCachedAllSlots != null) ? new ArrayList<>(sCachedAllSlots) : new ArrayList<>();
+            int nextIdx = getNextNumericSlotIndex(existing);
+
+            List<String> toCreate = new ArrayList<>();
+            int curr = nextIdx;
+            while (toCreate.size() < count) {
+                String candidate = formatSlotName(curr);
+                if (!existing.contains(candidate)) {
+                    toCreate.add(candidate);
+                }
+                curr++;
+            }
+
+            boolean ok = executeCreateSlots(toCreate);
+            if (ok) {
+                synchronized (FusionBackupSlotHelper.class) {
+                    existing.addAll(toCreate);
+                    Collections.sort(existing);
+                    sCachedAllSlots = existing;
+                    sLastCacheUpdate = System.currentTimeMillis();
+                }
+            }
+
+            final boolean success = ok;
+            final List<String> createdList = toCreate;
+            MAIN_HANDLER.post(() -> {
+                if (callback != null) {
+                    callback.onResult(success, success ? createdList.size() : 0, 0, createdList,
+                        success ? null : "Gagal mengeksekusi shell pembuatan slot");
+                }
+            });
+        });
+    }
+
+    /**
+     * Creates a single custom named slot with duplicate protection.
+     */
+    public static void createCustomSlot(@NonNull Context context, @NonNull String slotName,
+                                        @Nullable OnSlotCreatedCallback callback) {
+        final Context appCtx = context.getApplicationContext();
+        final String cleanName = slotName.trim();
+        if (cleanName.isEmpty()) {
+            if (callback != null) {
+                callback.onResult(false, 0, 0, Collections.emptyList(), "Nama slot tidak boleh kosong!");
+            }
+            return;
+        }
+
+        if (!cleanName.matches("^[a-zA-Z0-9_\\-]+$")) {
+            if (callback != null) {
+                callback.onResult(false, 0, 0, Collections.emptyList(),
+                    "Format karakter tidak valid! Hanya diperbolehkan huruf, angka, tanda hubung (-), dan garis bawah (_).");
+            }
+            return;
+        }
+
+        if (!isRootAvailable()) {
+            if (callback != null) {
+                callback.onResult(false, 0, 0, Collections.emptyList(),
+                    "Akses root (su) diperlukan untuk membuat slot .backup!");
+            }
+            return;
+        }
+
+        EXECUTOR.execute(() -> {
+            ensureCacheLoaded();
+            List<String> existing = (sCachedAllSlots != null) ? new ArrayList<>(sCachedAllSlots) : new ArrayList<>();
+            if (existing.contains(cleanName)) {
+                MAIN_HANDLER.post(() -> {
+                    if (callback != null) {
+                        callback.onResult(false, 0, 1, Collections.emptyList(),
+                            "Slot '" + cleanName + "' sudah terdaftar! Proteksi aktif.");
+                    }
+                });
+                return;
+            }
+
+            List<String> toCreate = Collections.singletonList(cleanName);
+            boolean ok = executeCreateSlots(toCreate);
+            if (ok) {
+                synchronized (FusionBackupSlotHelper.class) {
+                    existing.add(cleanName);
+                    Collections.sort(existing);
+                    sCachedAllSlots = existing;
+                    sLastCacheUpdate = System.currentTimeMillis();
+                }
+            }
+
+            final boolean success = ok;
+            MAIN_HANDLER.post(() -> {
+                if (callback != null) {
+                    callback.onResult(success, success ? 1 : 0, 0, toCreate,
+                        success ? null : "Gagal mengeksekusi pembuatan slot");
+                }
+            });
+        });
+    }
+
+    /**
+     * Executes root shell sequence to register slots into DataProfilesCache.xml and create
+     * corresponding directories in all installed packages with .data_profiles.
+     */
+    private static boolean executeCreateSlots(@NonNull List<String> slotNames) {
+        if (slotNames.isEmpty()) return true;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("PREF='/data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml'\n");
+        sb.append("if [ -f \"$PREF\" ]; then\n");
+        sb.append("  P_OWNER=$(stat -c \"%u:%g\" \"$PREF\" 2>/dev/null || stat -c \"%u:%g\" \"$(dirname \"$PREF\")\")\n");
+        for (String slot : slotNames) {
+            sb.append("  grep -q 'name=\"profile.").append(slot).append("\"' \"$PREF\" 2>/dev/null || sed -i 's/<\\/map>/    <string name=\"profile.").append(slot).append("\"><\\/string>\\n<\\/map>/' \"$PREF\"\n");
+        }
+        sb.append("  chown \"$P_OWNER\" \"$PREF\" 2>/dev/null || true\n");
+        sb.append("  chmod 660 \"$PREF\" 2>/dev/null || true\n");
+        sb.append("fi\n");
+
+        sb.append("for pdir in $(find /data/data -maxdepth 2 -name .data_profiles 2>/dev/null); do\n");
+        sb.append("  [ -d \"$pdir\" ] || continue\n");
+        sb.append("  dir_owner=$(stat -c \"%u:%g\" \"$pdir\" 2>/dev/null || stat -c \"%u:%g\" \"$(dirname \"$pdir\")\")\n");
+        for (String slot : slotNames) {
+            sb.append("  sdir=\"$pdir/").append(slot).append("\"\n");
+            sb.append("  if [ ! -d \"$sdir\" ]; then\n");
+            sb.append("    mkdir -p \"$sdir\" 2>/dev/null\n");
+            sb.append("    chown \"$dir_owner\" \"$sdir\" 2>/dev/null || true\n");
+            sb.append("    chmod 755 \"$sdir\" 2>/dev/null || true\n");
+            sb.append("  fi\n");
+        }
+        sb.append("done\n");
+        sb.append("/system/bin/am broadcast -a android.appwidget.action.APPWIDGET_UPDATE -n com.ery.ziggy/com.myrefucek.FufuFu.MyDataProfileWidget >/dev/null 2>&1 || true\n");
+
+        return executeRootScript(sb.toString());
     }
 
     /**
@@ -498,7 +697,7 @@ public final class FusionBackupSlotHelper {
         clearRow.setPadding(Math.round(14 * density), Math.round(10 * density), Math.round(14 * density), Math.round(10 * density));
 
         TextView clearIcon = new TextView(context);
-        clearIcon.setText("⚡");
+        clearIcon.setText("🧹");
         clearIcon.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f);
         clearRow.addView(clearIcon);
 
@@ -526,7 +725,7 @@ public final class FusionBackupSlotHelper {
         clearSwitch.setEnabled(rootOk);
         clearSwitch.setOnCheckedChangeListener((v, isChecked) -> {
             setAutoClearCacheEnabled(context, isChecked);
-            FusionToast.show(context, isChecked ? "⚡ Auto Clear Cache: AKTIF" : "Auto Clear Cache: NONAKTIF");
+            FusionToast.show(context, isChecked ? "🧹 Auto Clear Cache: AKTIF" : "Auto Clear Cache: NONAKTIF");
         });
         clearRow.addView(clearSwitch);
         clearCard.addView(clearRow);
@@ -559,6 +758,68 @@ public final class FusionBackupSlotHelper {
             warnCard.addView(warnRow);
             root.addView(warnCard);
         }
+
+        // Quick Creation Card: +1, +10, +20, Kustom
+        MaterialCardView addCard = M3.clickableCard(context, false);
+        LinearLayout.LayoutParams addCardLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        addCardLp.setMargins(0, 0, 0, Math.round(10 * density));
+        addCard.setLayoutParams(addCardLp);
+
+        LinearLayout addCol = new LinearLayout(context);
+        addCol.setOrientation(LinearLayout.VERTICAL);
+        addCol.setPadding(Math.round(14 * density), Math.round(10 * density), Math.round(14 * density), Math.round(10 * density));
+
+        TextView addTitle = new TextView(context);
+        addTitle.setText("BUAT SLOT BARU (AUTO NEXT):");
+        M3.textAppearance(addTitle, com.google.android.material.R.attr.textAppearanceLabelMedium);
+        addTitle.setTextColor(M3.onSurfaceVariant(context));
+        addTitle.setPadding(0, 0, 0, Math.round(8 * density));
+        addCol.addView(addTitle);
+
+        LinearLayout btnRow = new LinearLayout(context);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        MaterialButton btnAdd1 = new MaterialButton(context);
+        btnAdd1.setText("+1");
+        btnAdd1.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        btnAdd1.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
+        btnAdd1.setEnabled(rootOk);
+
+        MaterialButton btnAdd10 = new MaterialButton(context);
+        btnAdd10.setText("+10");
+        btnAdd10.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        btnAdd10.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
+        btnAdd10.setEnabled(rootOk);
+
+        MaterialButton btnAdd20 = new MaterialButton(context);
+        btnAdd20.setText("+20");
+        btnAdd20.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
+        btnAdd20.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
+        btnAdd20.setEnabled(rootOk);
+
+        MaterialButton btnAddCustom = new MaterialButton(context, null, androidx.appcompat.R.attr.borderlessButtonStyle);
+        btnAddCustom.setText("✏️ Kustom");
+        btnAddCustom.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f);
+        btnAddCustom.setPadding(Math.round(4 * density), 0, Math.round(4 * density), 0);
+        btnAddCustom.setEnabled(rootOk);
+
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(0, Math.round(38 * density), 1f);
+        btnLp.setMargins(Math.round(2 * density), 0, Math.round(2 * density), 0);
+
+        btnRow.addView(btnAdd1, btnLp);
+        btnRow.addView(btnAdd10, btnLp);
+        btnRow.addView(btnAdd20, btnLp);
+        btnRow.addView(btnAddCustom, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, Math.round(38 * density)));
+
+        addCol.addView(btnRow);
+        addCard.addView(addCol);
+        if (!rootOk) {
+            addCard.setAlpha(0.38f);
+            addCard.setEnabled(false);
+        }
+        root.addView(addCard);
 
         // Search / Filter Input
         TextInputLayout searchLayout = new TextInputLayout(context);
@@ -593,6 +854,97 @@ public final class FusionBackupSlotHelper {
         int chipMargin = Math.round(4 * density);
         int chipHeight = Math.round(44 * density);
         Typeface nerdFont = NerdFontSpans.typeface(context);
+
+        final Runnable refreshGrid = () -> {
+            String currentFilter = searchInput.getText() != null ? searchInput.getText().toString().trim() : "";
+            List<String> all = (sCachedAllSlots != null) ? sCachedAllSlots : Collections.singletonList(activeSlot);
+            renderGridChips(context, grid, all, currentFilter, activeSlot, primaryColor, surfaceVariant,
+                onSurface, chipMargin, chipHeight, nerdFont, dialog, onPicked, rootOk);
+            subtitle.setText("Slot aktif: " + activeSlot + " (" + all.size() + " slot terdaftar)");
+        };
+
+        if (rootOk) {
+            btnAdd1.setOnClickListener(v -> {
+                createSlotsAutoNext(context, 1, (success, createdCount, skippedCount, createdNames, errorMsg) -> {
+                    if (success && !createdNames.isEmpty()) {
+                        FusionToast.show(context, "✔ Slot " + createdNames.get(0) + " berhasil dibuat!");
+                        refreshGrid.run();
+                    } else {
+                        FusionToast.show(context, "⚠️ " + (errorMsg != null ? errorMsg : "Gagal membuat slot"));
+                    }
+                });
+            });
+
+            btnAdd10.setOnClickListener(v -> {
+                List<String> current = (sCachedAllSlots != null) ? sCachedAllSlots : Collections.emptyList();
+                int startIdx = getNextNumericSlotIndex(current);
+                String startName = formatSlotName(startIdx);
+                String endName = formatSlotName(startIdx + 9);
+                new MaterialAlertDialogBuilder(context)
+                    .setTitle("Buat 10 Slot Baru?")
+                    .setMessage("Sistem akan otomatis membuat 10 slot berurutan:\n[" + startName + "] s/d [" + endName + "]\n\nProteksi aktif: slot lama 100% aman dan tidak akan tertimpa.")
+                    .setPositiveButton("Buat", (d, which) -> {
+                        createSlotsAutoNext(context, 10, (success, createdCount, skippedCount, createdNames, errorMsg) -> {
+                            if (success && !createdNames.isEmpty()) {
+                                FusionToast.show(context, "✔ Berhasil membuat 10 slot baru (" + createdNames.get(0) + " - " + createdNames.get(createdNames.size() - 1) + ")!");
+                                refreshGrid.run();
+                            } else {
+                                FusionToast.show(context, "⚠️ " + (errorMsg != null ? errorMsg : "Gagal membuat slot"));
+                            }
+                        });
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+
+            btnAdd20.setOnClickListener(v -> {
+                List<String> current = (sCachedAllSlots != null) ? sCachedAllSlots : Collections.emptyList();
+                int startIdx = getNextNumericSlotIndex(current);
+                String startName = formatSlotName(startIdx);
+                String endName = formatSlotName(startIdx + 19);
+                new MaterialAlertDialogBuilder(context)
+                    .setTitle("Buat 20 Slot Baru?")
+                    .setMessage("Sistem akan otomatis membuat 20 slot berurutan:\n[" + startName + "] s/d [" + endName + "]\n\nProteksi aktif: slot lama 100% aman dan tidak akan tertimpa.")
+                    .setPositiveButton("Buat", (d, which) -> {
+                        createSlotsAutoNext(context, 20, (success, createdCount, skippedCount, createdNames, errorMsg) -> {
+                            if (success && !createdNames.isEmpty()) {
+                                FusionToast.show(context, "✔ Berhasil membuat 20 slot baru (" + createdNames.get(0) + " - " + createdNames.get(createdNames.size() - 1) + ")!");
+                                refreshGrid.run();
+                            } else {
+                                FusionToast.show(context, "⚠️ " + (errorMsg != null ? errorMsg : "Gagal membuat slot"));
+                            }
+                        });
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+
+            btnAddCustom.setOnClickListener(v -> {
+                TextInputLayout customLayout = new TextInputLayout(context);
+                customLayout.setHint("Nama / Nomor Slot (misal: 100, tuyul_01)");
+                TextInputEditText customInput = new TextInputEditText(customLayout.getContext());
+                customInput.setSingleLine(true);
+                customLayout.addView(customInput);
+                customLayout.setPadding(Math.round(20 * density), Math.round(12 * density), Math.round(20 * density), 0);
+
+                new MaterialAlertDialogBuilder(context)
+                    .setTitle("Buat Slot Kustom")
+                    .setView(customLayout)
+                    .setPositiveButton("Buat", (d, which) -> {
+                        String name = (customInput.getText() != null) ? customInput.getText().toString().trim() : "";
+                        createCustomSlot(context, name, (success, createdCount, skippedCount, createdNames, errorMsg) -> {
+                            if (success) {
+                                FusionToast.show(context, "✔ Slot '" + name + "' berhasil dibuat!");
+                                refreshGrid.run();
+                            } else {
+                                FusionToast.show(context, "⚠️ " + (errorMsg != null ? errorMsg : "Gagal membuat slot"));
+                            }
+                        });
+                    })
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show();
+            });
+        }
 
         // Populate slots in background if cache empty
         EXECUTOR.execute(() -> {

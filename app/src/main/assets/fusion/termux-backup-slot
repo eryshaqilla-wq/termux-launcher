@@ -19,7 +19,7 @@ run_sh() {
     if [ -f "$PREF_FILE" ]; then
         sh -c "$*"
     else
-        su -c "$*"
+        echo "$*" | su -mm -c "/system/bin/sh" 2>/dev/null || echo "$*" | su -c "/system/bin/sh"
     fi
 }
 
@@ -132,9 +132,9 @@ $CLEAR_CMD
 
     # Notify Termux IPC if available
     if command -v termux-ipc >/dev/null 2>&1; then
-        local TOAST="🔄 Slot Aktif: $target"
+        local TOAST="Slot Aktif: $target"
         if is_auto_clear_cache; then
-            TOAST="🔄 Slot Aktif: $target ⚡ (RAM Bersih)"
+            TOAST="Slot Aktif: $target, Dan Cache Dibersihkan!"
         fi
         termux-ipc toast "$TOAST" >/dev/null 2>&1 || true
     fi
@@ -199,6 +199,94 @@ next_slot() {
     fi
 }
 
+create_single_slot() {
+    target="$1"
+    if [ -z "$target" ]; then
+        echo "Error: target slot required" >&2
+        return 1
+    fi
+
+    # Proteksi nama sama
+    all=$(get_all)
+    for s in $all; do
+        if [ "$s" = "$target" ]; then
+            echo "Error: Slot '$target' sudah terdaftar! Proteksi aktif." >&2
+            return 1
+        fi
+    done
+
+    local SCRIPT="
+PREF='/data/data/com.ery.ziggy/shared_prefs/DataProfilesCache.xml'
+if [ -f \"\$PREF\" ]; then
+  P_OWNER=\$(stat -c \"%u:%g\" \"\$PREF\" 2>/dev/null || stat -c \"%u:%g\" \"\$(dirname \"\$PREF\")\")
+  grep -q 'name=\"profile.$target\"' \"\$PREF\" 2>/dev/null || sed -i 's/<\\/map>/    <string name=\"profile.$target\"><\\/string>\\n<\\/map>/' \"\$PREF\"
+  chown \"\$P_OWNER\" \"\$PREF\" 2>/dev/null || true
+  chmod 660 \"\$PREF\" 2>/dev/null || true
+fi
+for pdir in \$(find /data/data -maxdepth 2 -name .data_profiles 2>/dev/null); do
+  [ -d \"\$pdir\" ] || continue
+  dir_owner=\$(stat -c \"%u:%g\" \"\$pdir\" 2>/dev/null || stat -c \"%u:%g\" \"\$(dirname \"\$pdir\")\")
+  sdir=\"\$pdir/$target\"
+  if [ ! -d \"\$sdir\" ]; then
+    mkdir -p \"\$sdir\" 2>/dev/null
+    chown \"\$dir_owner\" \"\$sdir\" 2>/dev/null || true
+    chmod 755 \"\$sdir\" 2>/dev/null || true
+  fi
+done
+/system/bin/am broadcast -a android.appwidget.action.APPWIDGET_UPDATE -n com.ery.ziggy/com.myrefucek.FufuFu.MyDataProfileWidget >/dev/null 2>&1 || true
+"
+    run_sh "$SCRIPT"
+    echo "✔ Slot berhasil dibuat: $target"
+}
+
+create_auto_next() {
+    count="${1:-1}"
+    all=$(get_all)
+    max=-1
+    for s in $all; do
+        case "$s" in
+            ''|*[!0-9]*) ;;
+            *)
+                num=$((10#$s))
+                if [ $num -gt $max ]; then
+                    max=$num
+                fi
+                ;;
+        esac
+    done
+
+    next=$((max + 1))
+    created=0
+    curr=$next
+    created_list=""
+
+    while [ $created -lt $count ]; do
+        if [ $curr -lt 100 ]; then
+            name=$(printf "%02d" $curr)
+        else
+            name="$curr"
+        fi
+
+        # Cek apakah sudah ada
+        exists=0
+        for s in $all; do
+            if [ "$s" = "$name" ]; then
+                exists=1
+                break
+            fi
+        done
+
+        if [ $exists -eq 0 ]; then
+            create_single_slot "$name" >/dev/null 2>&1
+            created=$((created + 1))
+            [ -z "$created_list" ] && created_list="$name" || created_list="$created_list, $name"
+        fi
+        curr=$((curr + 1))
+    done
+
+    echo "✔ Berhasil membuat $created slot baru: $created_list"
+}
+
 CLEAR_CACHE_OPT=0
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -229,6 +317,19 @@ case "$CMD" in
     next)
         next_slot
         ;;
+    add)
+        create_auto_next "${2:-1}"
+        ;;
+    batch)
+        create_auto_next "${2:-10}"
+        ;;
+    create)
+        if [ -z "$2" ]; then
+            echo "Usage: termux-backup-slot create <nama_slot>" >&2
+            exit 1
+        fi
+        create_single_slot "$2"
+        ;;
     picker|pick)
         if ! check_root; then
             echo "Error: Akses root (su) diperlukan untuk membuka .backup" >&2
@@ -240,7 +341,7 @@ case "$CMD" in
         if [ -n "$CMD" ]; then
             switch_to "$CMD"
         else
-            echo "Usage: termux-backup-slot [--clear-cache] [get|list|set <slot>|prev|next|picker]"
+            echo "Usage: termux-backup-slot [--clear-cache] [get|list|set <slot>|prev|next|add [1|10|20]|batch [10|20]|create <slot>|picker]"
         fi
         ;;
 esac

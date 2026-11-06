@@ -21196,6 +21196,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     if (mPreferences != null) mPreferences.setWallLastPage(page.name());
                     dismissHelpOverlay();
                     if (mFirstBootTour != null) mFirstBootTour.onPlaceSettled(page.name());
+                    com.termux.webview.FusionWebViewManager webMgr = com.termux.webview.FusionWebViewManager.getInstance();
+                    if (webMgr != null) {
+                        webMgr.onWallPageSettled(page);
+                    }
                     // The "Go to …" read-out lands with the page (showTerminalActionHint).
                     if (mWallReadoutShowing) {
                         mWallReadoutShowing = false;
@@ -21219,6 +21223,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         ensureDockViewsVisibleForTravel();
                     }
                     syncPlaceBarOffset(offsetPx);
+                    syncTerminalWebViewWallOffset();
                     // The terminal's own frame line stays put while its page leaves: it fades.
                     syncTerminalFrameLineTravel();
                     // The dock, the keyboard and the status bar's content travel with the wall
@@ -21252,6 +21257,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                     // The one frame of a slide the borders are re-dressed in: the page's first
                     // frame back on screen.
                     if (!offScreen) mPaneController.onTerminalPlaceShown();
+                    com.termux.webview.FusionWebViewManager webMgr = com.termux.webview.FusionWebViewManager.getInstance();
+                    if (webMgr != null) {
+                        webMgr.onTerminalOffScreenChanged(offScreen);
+                    }
                 }
                 @Override public void onWallOutlineAlphaChanged(float alpha) {
                     // The terminal page's outline is its panes' rims; they fade with the other
@@ -21272,6 +21281,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                         if (mWidgetPaneController != null
                             && page != com.termux.app.wall.PaneWallPage.WIDGETS) {
                             mWidgetPaneController.onWallPageLeaving();
+                        }
+                        com.termux.webview.FusionWebViewManager webMgr = com.termux.webview.FusionWebViewManager.getInstance();
+                        if (webMgr != null) {
+                            webMgr.onWallPageChanged(page);
                         }
                         // Only the bar is re-dressed at release, beside the cheap put-aways above:
                         // it is the pager, and it names the place the wall has committed to. The
@@ -21369,9 +21382,25 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     }
 
     @NonNull
-    private com.termux.app.wall.PaneWallPage currentWallPage() {
+    public com.termux.app.wall.PaneWallPage currentWallPage() {
         return mPaneWallController == null ? com.termux.app.wall.PaneWallPage.TERMINAL
             : mPaneWallController.currentPage();
+    }
+
+    public void goToTerminalCanvas(boolean animate) {
+        if (mPaneWallController != null) {
+            mPaneWallController.goTo(com.termux.app.wall.PaneWallPage.TERMINAL, animate);
+        }
+    }
+
+    public void syncTerminalWebViewWallOffset() {
+        com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            View terminalHost = findViewById(R.id.terminal_pane_host);
+            if (terminalHost != null) {
+                mgr.onTerminalWallOffsetChanged(terminalHost.getTranslationX(), terminalHost.getAlpha());
+            }
+        }
     }
 
     /** Where the wall stands relative to its rest, as its last offset callback said. */
@@ -22068,7 +22097,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 try {
                     Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
                 } catch (Exception ignored) {}
-                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!"));
+                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "🧹 RAM Cache Dibersihkan!"));
             }).start();
         } else if ("PASTE".equalsIgnoreCase(actionKey)) {
             com.termux.x11.LorieView display = getActiveLorieView();
@@ -22467,7 +22496,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 try {
                     Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
                 } catch (Exception ignored) {}
-                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!"));
+                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "🧹 RAM Cache Dibersihkan!"));
             }).start();
         } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
             if (mTermuxTerminalViewClient != null) {
@@ -22696,7 +22725,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 try {
                     Runtime.getRuntime().exec(new String[]{"su", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"}).waitFor();
                 } catch (Exception ignored) {}
-                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "⚡ RAM Cache Dibersihkan!"));
+                runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "🧹 RAM Cache Dibersihkan!"));
             }).start();
         } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
             if (mTermuxTerminalViewClient != null) {
