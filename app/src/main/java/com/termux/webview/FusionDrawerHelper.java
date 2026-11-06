@@ -1285,14 +1285,20 @@ public class FusionDrawerHelper {
                     });
                     itemCard.addView(optBtn);
 
-                    // 1-KLIK LANGSUNG BUKA POPUP HTML
+                    // 1-KLIK LANGSUNG BUKA POPUP / HOME HTML
                     itemCard.setOnClickListener(new View.OnClickListener() {
                         @Override
                         public void onClick(View v) {
-                            if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
-                                File popupFile = new File(ext.dir, ext.popupHtml);
-                                if (popupFile.exists()) {
-                                    fusionWebViewManager.addNewTab("file://" + popupFile.getAbsolutePath());
+                            String targetHtml = ext.popupHtml;
+                            if (targetHtml == null || targetHtml.isEmpty() || !new File(ext.dir, targetHtml).exists()) {
+                                if (new File(ext.dir, "popup.html").exists()) targetHtml = "popup.html";
+                                else if (new File(ext.dir, "home.html").exists()) targetHtml = "home.html";
+                                else if (new File(ext.dir, "index.html").exists()) targetHtml = "index.html";
+                            }
+                            if (targetHtml != null && !targetHtml.isEmpty()) {
+                                File htmlFile = new File(ext.dir, targetHtml);
+                                if (htmlFile.exists()) {
+                                    fusionWebViewManager.addNewTab("file://" + htmlFile.getAbsolutePath());
                                     fusionWebViewManager.closeAllDrawers();
                                     return;
                                 }

@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -331,6 +332,87 @@ public class FusionExtensionHelper {
         }
     }
 
+    /**
+     * Resolves localized strings (e.g. __MSG_appName__) using extension's _locales/<lang>/messages.json
+     */
+    public static String resolveI18nString(File dir, String raw, String defaultLocale) {
+        if (raw == null || raw.isEmpty()) return raw;
+        String trimmed = raw.trim();
+        String lower = trimmed.toLowerCase();
+        if (!lower.startsWith("__msg_") || !lower.endsWith("__") || trimmed.length() <= 8) {
+            return raw;
+        }
+
+        String key = trimmed.substring(6, trimmed.length() - 2).trim();
+        if (key.isEmpty() || dir == null || !dir.exists()) return raw;
+
+        File localesDir = new File(dir, "_locales");
+        if (!localesDir.exists() || !localesDir.isDirectory()) return raw;
+
+        List<String> localeCandidates = new ArrayList<>();
+        if (defaultLocale != null && !defaultLocale.isEmpty()) {
+            localeCandidates.add(defaultLocale);
+        }
+        if (!localeCandidates.contains("en")) localeCandidates.add("en");
+        if (!localeCandidates.contains("en_US")) localeCandidates.add("en_US");
+        if (!localeCandidates.contains("id")) localeCandidates.add("id");
+
+        File messagesFile = null;
+        for (String loc : localeCandidates) {
+            File f = new File(new File(localesDir, loc), "messages.json");
+            if (f.exists() && f.isFile()) {
+                messagesFile = f;
+                break;
+            }
+        }
+
+        if (messagesFile == null) {
+            File[] subDirs = localesDir.listFiles();
+            if (subDirs != null) {
+                for (File sd : subDirs) {
+                    if (sd.isDirectory()) {
+                        File f = new File(sd, "messages.json");
+                        if (f.exists() && f.isFile()) {
+                            messagesFile = f;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (messagesFile == null) return raw;
+
+        try {
+            byte[] bytes = readFileBytesSafe(messagesFile);
+            if (bytes == null || bytes.length == 0) return raw;
+            String jsonStr = new String(bytes, StandardCharsets.UTF_8);
+            JSONObject root = new JSONObject(jsonStr);
+
+            if (root.has(key)) {
+                JSONObject msgObj = root.optJSONObject(key);
+                if (msgObj != null && msgObj.has("message")) {
+                    String msg = msgObj.optString("message", "");
+                    if (!msg.isEmpty()) return msg;
+                }
+            }
+
+            Iterator<String> keys = root.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                if (k.equalsIgnoreCase(key)) {
+                    JSONObject msgObj = root.optJSONObject(k);
+                    if (msgObj != null && msgObj.has("message")) {
+                        String msg = msgObj.optString("message", "");
+                        if (!msg.isEmpty()) return msg;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+
+        return raw;
+    }
+
     public static ExtensionInfo parseExtensionDir(File dir) {
         if (dir == null || !dir.exists() || !dir.isDirectory()) return null;
         File manifestFile = new File(dir, "manifest.json");
@@ -346,10 +428,13 @@ public class FusionExtensionHelper {
             ExtensionInfo info = new ExtensionInfo();
             info.id = dir.getName();
             info.dir = dir;
-            info.name = root.optString("name", dir.getName());
+            String defaultLocale = root.optString("default_locale", "en");
+            info.name = resolveI18nString(dir, root.optString("name", dir.getName()), defaultLocale);
             info.version = root.optString("version", "1.0.0");
-            info.description = root.optString("description", "");
+            info.description = resolveI18nString(dir, root.optString("description", ""), defaultLocale);
             info.manifestVersion = root.optInt("manifest_version", 3);
+
+            String[] iconSizes = new String[]{"512", "256", "128", "64", "48", "38", "32", "19", "16"};
 
             if (root.has("action")) {
                 JSONObject action = root.optJSONObject("action");
@@ -360,7 +445,12 @@ public class FusionExtensionHelper {
                         info.iconPath = (String) defIcon;
                     } else if (defIcon instanceof JSONObject) {
                         JSONObject iconObj = (JSONObject) defIcon;
-                        info.iconPath = iconObj.optString("128", iconObj.optString("48", iconObj.optString("32", iconObj.optString("16", null))));
+                        for (String sz : iconSizes) {
+                            if (iconObj.has(sz)) {
+                                info.iconPath = iconObj.optString(sz, null);
+                                break;
+                            }
+                        }
                     }
                 }
             } else if (root.has("browser_action")) {
@@ -372,7 +462,12 @@ public class FusionExtensionHelper {
                         info.iconPath = (String) defIcon;
                     } else if (defIcon instanceof JSONObject) {
                         JSONObject iconObj = (JSONObject) defIcon;
-                        info.iconPath = iconObj.optString("128", iconObj.optString("48", iconObj.optString("32", iconObj.optString("16", null))));
+                        for (String sz : iconSizes) {
+                            if (iconObj.has(sz)) {
+                                info.iconPath = iconObj.optString(sz, null);
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -380,7 +475,25 @@ public class FusionExtensionHelper {
             if (info.iconPath == null && root.has("icons")) {
                 JSONObject icons = root.optJSONObject("icons");
                 if (icons != null) {
-                    info.iconPath = icons.optString("128", icons.optString("48", icons.optString("32", icons.optString("16", null))));
+                    for (String sz : iconSizes) {
+                        if (icons.has(sz)) {
+                            info.iconPath = icons.optString(sz, null);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Normalisasi popupHtml jika mengarah ke popup-init.html atau berkas tidak ada
+            if ("popup-init.html".equalsIgnoreCase(info.popupHtml) && new File(dir, "popup.html").exists()) {
+                info.popupHtml = "popup.html";
+            } else if (info.popupHtml == null || info.popupHtml.isEmpty() || !new File(dir, info.popupHtml).exists()) {
+                if (new File(dir, "popup.html").exists()) {
+                    info.popupHtml = "popup.html";
+                } else if (new File(dir, "home.html").exists()) {
+                    info.popupHtml = "home.html";
+                } else if (new File(dir, "index.html").exists()) {
+                    info.popupHtml = "index.html";
                 }
             }
 
@@ -642,9 +755,10 @@ public class FusionExtensionHelper {
             }
 
             ExtensionInfo parsed = parseExtensionDir(tempExtractDir);
-            String targetFolderName = (parsed != null && parsed.name != null && !parsed.name.isEmpty())
-                    ? parsed.name.toLowerCase().replaceAll("[^a-zA-Z0-9_-]", "_")
+            String rawClean = (parsed != null && parsed.name != null && !parsed.name.isEmpty())
+                    ? parsed.name.toLowerCase().replaceAll("[^a-zA-Z0-9_-]", "_").replaceAll("^_+|_+$", "").replaceAll("_+", "_")
                     : safeName;
+            String targetFolderName = (rawClean != null && !rawClean.isEmpty()) ? rawClean : safeName;
             if (targetFolderName.isEmpty()) targetFolderName = "ext_" + (System.currentTimeMillis() % 10000);
 
             File finalDir = new File(baseDir, targetFolderName);
@@ -981,7 +1095,15 @@ public class FusionExtensionHelper {
                 "    __is_fusion_polyfill__: true,\n" +
                 "    runtime: {\n" +
                 "      id: 'fusion-extension-runtime',\n" +
-                "      getURL: function(path) { return path; },\n" +
+                "      getURL: function(path) {\n" +
+                "        if (!path) return '';\n" +
+                "        if (path.indexOf('://') !== -1) return path;\n" +
+                "        var p = (path.charAt(0) === '/') ? path.substring(1) : path;\n" +
+                "        var base = (window.location && window.location.href) ? window.location.href.split('?')[0].split('#')[0] : '';\n" +
+                "        var idx = base.lastIndexOf('/');\n" +
+                "        var dir = (idx !== -1) ? base.substring(0, idx + 1) : '';\n" +
+                "        return dir + p;\n" +
+                "      },\n" +
                 "      onMessage: {\n" +
                 "        addListener: function(fn) {\n" +
                 "          if (typeof fn === 'function' && msgListeners.indexOf(fn) === -1) msgListeners.push(fn);\n" +
@@ -1003,6 +1125,17 @@ public class FusionExtensionHelper {
                 "        }\n" +
                 "        if (!handled && cb) { setTimeout(function() { cb(null); }, 0); }\n" +
                 "      }\n" +
+                "    },\n" +
+                "    i18n: {\n" +
+                "      getMessage: function(key) {\n" +
+                "        if (!key) return '';\n" +
+                "        if (window.__fusionI18n && window.__fusionI18n[key]) {\n" +
+                "          var entry = window.__fusionI18n[key];\n" +
+                "          return (typeof entry === 'object' && entry.message) ? entry.message : entry;\n" +
+                "        }\n" +
+                "        return key;\n" +
+                "      },\n" +
+                "      getUILanguage: function() { return (navigator && (navigator.language || navigator.userLanguage)) || 'en'; }\n" +
                 "    },\n" +
                 "    storage: {\n" +
                 "      local: {\n" +
@@ -1225,6 +1358,14 @@ public class FusionExtensionHelper {
         String polyfill = getChromePolyfillScript(ctx);
         webView.evaluateJavascript(polyfill, null);
 
+        // Jika membuka halaman internal ekstensi, injeksikan kamus pesan i18n
+        if (currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/")) {
+            String i18nJs = getI18nInjectionScript(currentUrl);
+            if (i18nJs != null && !i18nJs.isEmpty()) {
+                webView.evaluateJavascript(i18nJs, null);
+            }
+        }
+
         List<ExtensionInfo> exts = getInstalledExtensions(ctx);
         for (ExtensionInfo ext : exts) {
             if (!ext.enabled) continue;
@@ -1367,14 +1508,77 @@ public class FusionExtensionHelper {
         b.show();
     }
 
+    public static String getI18nInjectionScript(String currentUrl) {
+        if (currentUrl == null || !currentUrl.startsWith("file://")) return null;
+        try {
+            Uri uri = Uri.parse(currentUrl);
+            String path = uri.getPath();
+            if (path == null) return null;
+            File file = new File(path);
+            File extDir = file.isDirectory() ? file : file.getParentFile();
+            while (extDir != null && extDir.exists() && !new File(extDir, "manifest.json").exists()) {
+                if (!extDir.getAbsolutePath().contains(".fusion/extensions")) break;
+                extDir = extDir.getParentFile();
+            }
+            if (extDir == null || !new File(extDir, "manifest.json").exists()) return null;
+
+            File localesDir = new File(extDir, "_locales");
+            if (!localesDir.exists() || !localesDir.isDirectory()) return null;
+
+            String defaultLocale = "en";
+            File mf = new File(extDir, "manifest.json");
+            byte[] mfBytes = readFileBytesSafe(mf);
+            if (mfBytes != null && mfBytes.length > 0) {
+                try {
+                    JSONObject root = new JSONObject(new String(mfBytes, StandardCharsets.UTF_8));
+                    defaultLocale = root.optString("default_locale", "en");
+                } catch (Throwable ignored) {}
+            }
+
+            File messagesFile = new File(new File(localesDir, defaultLocale), "messages.json");
+            if (!messagesFile.exists()) {
+                messagesFile = new File(new File(localesDir, "en"), "messages.json");
+            }
+            if (!messagesFile.exists()) {
+                File[] subs = localesDir.listFiles();
+                if (subs != null) {
+                    for (File s : subs) {
+                        File mfCandidate = new File(s, "messages.json");
+                        if (mfCandidate.exists()) {
+                            messagesFile = mfCandidate;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (messagesFile != null && messagesFile.exists()) {
+                byte[] b = readFileBytesSafe(messagesFile);
+                if (b != null && b.length > 0) {
+                    String jsonStr = new String(b, StandardCharsets.UTF_8);
+                    return "(function() { try { window.__fusionI18n = " + jsonStr + "; } catch(e) {} })();";
+                }
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
     public static void showExtensionActionsDialog(final TermuxActivity act, final FusionWebViewManager manager, final ExtensionInfo ext) {
         if (act == null || ext == null) return;
 
+        boolean isGapt = (ext.id != null && (ext.id.toLowerCase().contains("google_ai_pro") || ext.id.toLowerCase().contains("gapt") || ext.name.toLowerCase().contains("google ai pro")));
+
         List<String> options = new ArrayList<>();
         options.add(ext.enabled ? "⚪ Matikan Ekstensi" : "🟢 Aktifkan Ekstensi");
-        options.add("⚙️ Setelan Layer / Opsi Token (Google AI Pro)");
+        if (isGapt) {
+            options.add("⚙️ Setelan Layer / Opsi Token (Google AI Pro)");
+        }
         if (ext.popupHtml != null && !ext.popupHtml.isEmpty()) {
-            options.add("🌐 Buka Popup HTML di Tab Baru");
+            options.add("🌐 Buka Popup HTML (" + ext.popupHtml + ")");
+        }
+        File homeHtmlFile = new File(ext.dir, "home.html");
+        if (homeHtmlFile.exists() && !"home.html".equalsIgnoreCase(ext.popupHtml)) {
+            options.add("🏠 Buka Halaman Penuh Ekstensi (home.html)");
         }
         options.add("🗑️ Hapus Ekstensi");
 
@@ -1400,6 +1604,14 @@ public class FusionExtensionHelper {
                     File popupFile = new File(ext.dir, ext.popupHtml);
                     manager.addNewTab("file://" + popupFile.getAbsolutePath());
                     manager.closeAllDrawers();
+                }
+            } else if (selected.contains("Buka Halaman Penuh")) {
+                if (manager != null) {
+                    File homeFile = new File(ext.dir, "home.html");
+                    if (homeFile.exists()) {
+                        manager.addNewTab("file://" + homeFile.getAbsolutePath());
+                        manager.closeAllDrawers();
+                    }
                 }
             } else if (selected.contains("Hapus")) {
                 AlertDialog.Builder delConfirm = new AlertDialog.Builder(act);
