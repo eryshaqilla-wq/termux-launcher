@@ -833,6 +833,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         int i = this.mNextTabId;
         this.mNextTabId = i + 1;
         FusionTab fusionTab = new FusionTab(i, str, str2, webView, z, z2, z3);
+        if (webView != null && webView.getWebViewClient() instanceof FusionWebViewClient) {
+            ((FusionWebViewClient) webView.getWebViewClient()).setCurrentUrl(str);
+        }
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity != null) {
             fusionTab.mBoundSession = termuxActivity.getCurrentSession();

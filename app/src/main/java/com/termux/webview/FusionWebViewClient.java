@@ -147,6 +147,14 @@ public class FusionWebViewClient extends WebViewClient {
                             if (currentUrl == null) currentUrl = headers.get("referer");
                         }
                     }
+                    if (currentUrl == null || currentUrl.isEmpty()) {
+                        if (this.mManager != null) {
+                            FusionTab tab = this.mManager.getTabForWebView(webView);
+                            if (tab != null && tab.mUrl != null && !tab.mUrl.isEmpty()) {
+                                currentUrl = tab.mUrl;
+                            }
+                        }
+                    }
 
                     File extDir = null;
 
@@ -195,6 +203,43 @@ public class FusionWebViewClient extends WebViewClient {
                         if (candidate.exists() && candidate.isFile()) {
                             String mimeType = getFileMimeType(candidate.getName());
                             String encoding = (mimeType.startsWith("text/") || mimeType.contains("json") || mimeType.contains("javascript")) ? "utf-8" : null;
+
+                            // Localize CSS files on the fly if they contain __MSG_ tokens
+                            if ("text/css".equalsIgnoreCase(mimeType)) {
+                                try {
+                                    byte[] cssBytes = FusionExtensionHelper.readFileBytesSafe(candidate);
+                                    if (cssBytes != null && cssBytes.length > 0) {
+                                        String cssStr = new String(cssBytes, java.nio.charset.StandardCharsets.UTF_8);
+                                        if (cssStr.contains("__MSG_")) {
+                                            String defaultLocale = "en";
+                                            File mf = new File(extDir, "manifest.json");
+                                            byte[] mfBytes = FusionExtensionHelper.readFileBytesSafe(mf);
+                                            if (mfBytes != null && mfBytes.length > 0) {
+                                                try {
+                                                    org.json.JSONObject root = new org.json.JSONObject(new String(mfBytes, java.nio.charset.StandardCharsets.UTF_8));
+                                                    defaultLocale = root.optString("default_locale", "en");
+                                                } catch (Throwable ignored) {}
+                                            }
+                                            cssStr = cssStr.replace("__MSG_@@bidi_dir__", "ltr");
+                                            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("__MSG_([a-zA-Z0-9_]+)__").matcher(cssStr);
+                                            StringBuffer sb = new StringBuffer();
+                                            while (matcher.find()) {
+                                                String k = matcher.group(1);
+                                                String resolved = FusionExtensionHelper.resolveI18nString(extDir, "__MSG_" + k + "__", defaultLocale);
+                                                if (resolved != null && !resolved.startsWith("__MSG_")) {
+                                                    matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(resolved));
+                                                } else {
+                                                    matcher.appendReplacement(sb, "");
+                                                }
+                                            }
+                                            matcher.appendTail(sb);
+                                            byte[] processedBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                                            return new WebResourceResponse(mimeType, encoding, new java.io.ByteArrayInputStream(processedBytes));
+                                        }
+                                    }
+                                } catch (Throwable ignored) {}
+                            }
+
                             return new WebResourceResponse(mimeType, encoding, new FileInputStream(candidate));
                         }
                     }

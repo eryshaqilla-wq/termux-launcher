@@ -1089,12 +1089,16 @@ public class FusionExtensionHelper {
                 "      if (fallbackRaw) extStorage = JSON.parse(fallbackRaw);\n" +
                 "    } catch(e) { extStorage = { gapt_layer: '12m' }; }\n" +
                 "  }\n" +
+                "  if (!extStorage.gapt_layer) extStorage.gapt_layer = '12m';\n" +
+                "  try { window.__GAPT_LAYER = extStorage.gapt_layer; } catch(e) {}\n" +
                 "  var msgListeners = [];\n" +
                 "  var storageListeners = [];\n" +
+                "  var connectListeners = [];\n" +
                 "  var chromeShim = {\n" +
                 "    __is_fusion_polyfill__: true,\n" +
                 "    runtime: {\n" +
                 "      id: 'fusion-extension-runtime',\n" +
+                "      lastError: null,\n" +
                 "      getURL: function(path) {\n" +
                 "        if (!path) return '';\n" +
                 "        if (path.indexOf('://') !== -1) return path;\n" +
@@ -1103,6 +1107,70 @@ public class FusionExtensionHelper {
                 "        var idx = base.lastIndexOf('/');\n" +
                 "        var dir = (idx !== -1) ? base.substring(0, idx + 1) : '';\n" +
                 "        return dir + p;\n" +
+                "      },\n" +
+                "      getManifest: function() {\n" +
+                "        return { name: 'Fusion Extension', version: '1.0.0', manifest_version: 3 };\n" +
+                "      },\n" +
+                "      reload: function() {\n" +
+                "        if (window.location) window.location.reload();\n" +
+                "      },\n" +
+                "      getPlatformInfo: function(cb) {\n" +
+                "        var info = { os: 'android', arch: 'arm64', nacl_arch: 'arm' };\n" +
+                "        if (cb) cb(info);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(info) : undefined;\n" +
+                "      },\n" +
+                "      getContexts: function(filter, cb) {\n" +
+                "        var ctxs = [{ contextType: 'TAB', documentUrl: window.location.href }];\n" +
+                "        if (cb) cb(ctxs);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(ctxs) : undefined;\n" +
+                "      },\n" +
+                "      connect: function(connectInfo) {\n" +
+                "        var name = connectInfo ? connectInfo.name : '';\n" +
+                "        var portMsgListeners = [];\n" +
+                "        var portDisconnectListeners = [];\n" +
+                "        var port = {\n" +
+                "          name: name,\n" +
+                "          onMessage: {\n" +
+                "            addListener: function(fn) {\n" +
+                "              if (typeof fn === 'function' && portMsgListeners.indexOf(fn) === -1) portMsgListeners.push(fn);\n" +
+                "            },\n" +
+                "            removeListener: function(fn) {\n" +
+                "              var idx = portMsgListeners.indexOf(fn);\n" +
+                "              if (idx !== -1) portMsgListeners.splice(idx, 1);\n" +
+                "            }\n" +
+                "          },\n" +
+                "          onDisconnect: {\n" +
+                "            addListener: function(fn) {\n" +
+                "              if (typeof fn === 'function' && portDisconnectListeners.indexOf(fn) === -1) portDisconnectListeners.push(fn);\n" +
+                "            },\n" +
+                "            removeListener: function(fn) {\n" +
+                "              var idx = portDisconnectListeners.indexOf(fn);\n" +
+                "              if (idx !== -1) portDisconnectListeners.splice(idx, 1);\n" +
+                "            }\n" +
+                "          },\n" +
+                "          postMessage: function(msg) {\n" +
+                "            try {\n" +
+                "              for (var i = 0; i < connectListeners.length; i++) {\n" +
+                "                try { connectListeners[i](msg, port); } catch(err) {}\n" +
+                "              }\n" +
+                "            } catch(e) {}\n" +
+                "          },\n" +
+                "          disconnect: function() {\n" +
+                "            for (var i = 0; i < portDisconnectListeners.length; i++) {\n" +
+                "              try { portDisconnectListeners[i](port); } catch(e) {}\n" +
+                "            }\n" +
+                "          }\n" +
+                "        };\n" +
+                "        return port;\n" +
+                "      },\n" +
+                "      onConnect: {\n" +
+                "        addListener: function(fn) {\n" +
+                "          if (typeof fn === 'function' && connectListeners.indexOf(fn) === -1) connectListeners.push(fn);\n" +
+                "        },\n" +
+                "        removeListener: function(fn) {\n" +
+                "          var idx = connectListeners.indexOf(fn);\n" +
+                "          if (idx !== -1) connectListeners.splice(idx, 1);\n" +
+                "        }\n" +
                 "      },\n" +
                 "      onMessage: {\n" +
                 "        addListener: function(fn) {\n" +
@@ -1118,22 +1186,45 @@ public class FusionExtensionHelper {
                 "        for (var i = 0; i < msgListeners.length; i++) {\n" +
                 "          try {\n" +
                 "            var res = msgListeners[i](msg, { id: 'fusion-extension' }, function(response) {\n" +
-                "              if (cb) cb(response);\n" +
+                "              if (cb) {\n" +
+                "                try { cb(response); } catch(err) {}\n" +
+                "              }\n" +
                 "            });\n" +
                 "            if (res === true) handled = true;\n" +
                 "          } catch(err) { console.error('[Chrome Shim onMessage Error]:', err); }\n" +
                 "        }\n" +
-                "        if (!handled && cb) { setTimeout(function() { cb(null); }, 0); }\n" +
+                "        if (!handled && cb) {\n" +
+                "          try { cb(null); } catch(e) {}\n" +
+                "        }\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(null) : undefined;\n" +
                 "      }\n" +
                 "    },\n" +
                 "    i18n: {\n" +
-                "      getMessage: function(key) {\n" +
+                "      getMessage: function(key, substitutions) {\n" +
                 "        if (!key) return '';\n" +
+                "        var msg = null;\n" +
                 "        if (window.__fusionI18n && window.__fusionI18n[key]) {\n" +
                 "          var entry = window.__fusionI18n[key];\n" +
-                "          return (typeof entry === 'object' && entry.message) ? entry.message : entry;\n" +
+                "          msg = (typeof entry === 'object' && entry.message) ? entry.message : entry;\n" +
                 "        }\n" +
-                "        return key;\n" +
+                "        if (!msg && window.__fusionI18n) {\n" +
+                "          var lower = key.toLowerCase();\n" +
+                "          for (var k in window.__fusionI18n) {\n" +
+                "            if (k.toLowerCase() === lower) {\n" +
+                "              var ent = window.__fusionI18n[k];\n" +
+                "              msg = (typeof ent === 'object' && ent.message) ? ent.message : ent;\n" +
+                "              break;\n" +
+                "            }\n" +
+                "          }\n" +
+                "        }\n" +
+                "        if (!msg) return key;\n" +
+                "        if (substitutions) {\n" +
+                "          var subs = Array.isArray(substitutions) ? substitutions : [substitutions];\n" +
+                "          for (var i = 0; i < subs.length; i++) {\n" +
+                "            msg = msg.replace('$' + (i + 1), subs[i]);\n" +
+                "          }\n" +
+                "        }\n" +
+                "        return msg;\n" +
                 "      },\n" +
                 "      getUILanguage: function() { return (navigator && (navigator.language || navigator.userLanguage)) || 'en'; }\n" +
                 "    },\n" +
@@ -1147,10 +1238,12 @@ public class FusionExtensionHelper {
                 "            result[keys] = extStorage[keys];\n" +
                 "          } else if (Array.isArray(keys)) {\n" +
                 "            for (var i = 0; i < keys.length; i++) result[keys[i]] = extStorage[keys[i]];\n" +
-                "          } else if (typeof keys === 'object') {\n" +
+                "          } else if (typeof keys === 'object' && keys !== null) {\n" +
                 "            for (var k in keys) result[k] = (extStorage[k] !== undefined) ? extStorage[k] : keys[k];\n" +
                 "          }\n" +
-                "          if (cb) setTimeout(function() { cb(result); }, 0);\n" +
+                "          if (cb) {\n" +
+                "            try { cb(result); } catch(e) { console.error('[Chrome Shim storage get Error]:', e); }\n" +
+                "          }\n" +
                 "          return (typeof Promise !== 'undefined') ? Promise.resolve(result) : undefined;\n" +
                 "        },\n" +
                 "        set: function(items, cb) {\n" +
@@ -1169,7 +1262,9 @@ public class FusionExtensionHelper {
                 "          for (var i = 0; i < storageListeners.length; i++) {\n" +
                 "            try { storageListeners[i](changes, 'local'); } catch(e) {}\n" +
                 "          }\n" +
-                "          if (cb) setTimeout(function() { cb(); }, 0);\n" +
+                "          if (cb) {\n" +
+                "            try { cb(); } catch(e) {}\n" +
+                "          }\n" +
                 "          return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
                 "        },\n" +
                 "        remove: function(keys, cb) {\n" +
@@ -1181,14 +1276,20 @@ public class FusionExtensionHelper {
                 "          try {\n" +
                 "            if (window.__FusionExtensionBridge__) window.__FusionExtensionBridge__.setStorage(JSON.stringify(extStorage));\n" +
                 "          } catch(e) {}\n" +
-                "          if (cb) setTimeout(cb, 0);\n" +
+                "          if (cb) {\n" +
+                "            try { cb(); } catch(e) {}\n" +
+                "          }\n" +
+                "          return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
                 "        },\n" +
                 "        clear: function(cb) {\n" +
                 "          extStorage = {};\n" +
                 "          try {\n" +
                 "            if (window.__FusionExtensionBridge__) window.__FusionExtensionBridge__.setStorage('{}');\n" +
                 "          } catch(e) {}\n" +
-                "          if (cb) setTimeout(cb, 0);\n" +
+                "          if (cb) {\n" +
+                "            try { cb(); } catch(e) {}\n" +
+                "          }\n" +
+                "          return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
                 "        }\n" +
                 "      },\n" +
                 "      onChanged: {\n" +
@@ -1202,11 +1303,86 @@ public class FusionExtensionHelper {
                 "      }\n" +
                 "    },\n" +
                 "    tabs: {\n" +
+                "      create: function(props, cb) {\n" +
+                "        var url = props ? props.url : '';\n" +
+                "        if (url && window.open) window.open(url, '_blank');\n" +
+                "        var tab = { id: Date.now(), active: true, url: url };\n" +
+                "        if (cb) {\n" +
+                "          try { cb(tab); } catch(e) {}\n" +
+                "        }\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(tab) : undefined;\n" +
+                "      },\n" +
+                "      update: function(tabId, props, cb) {\n" +
+                "        if (props && props.url && window.location) {\n" +
+                "          window.location.href = props.url;\n" +
+                "        }\n" +
+                "        var tab = { id: tabId || 1, active: true, url: (props && props.url) || window.location.href };\n" +
+                "        if (cb) {\n" +
+                "          try { cb(tab); } catch(e) {}\n" +
+                "        }\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(tab) : undefined;\n" +
+                "      },\n" +
+                "      get: function(tabId, cb) {\n" +
+                "        var tab = { id: tabId || 1, active: true, url: window.location.href };\n" +
+                "        if (cb) cb(tab);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(tab) : undefined;\n" +
+                "      },\n" +
+                "      remove: function(tabIds, cb) {\n" +
+                "        if (cb) cb();\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
+                "      },\n" +
                 "      sendMessage: function(tabId, msg, cb) {\n" +
                 "        if (chromeShim.runtime && chromeShim.runtime.sendMessage) chromeShim.runtime.sendMessage(msg, cb);\n" +
                 "      },\n" +
                 "      query: function(info, cb) {\n" +
-                "        if (cb) cb([{ id: 1, active: true, url: window.location.href }]);\n" +
+                "        var list = [{ id: 1, active: true, url: window.location.href }];\n" +
+                "        if (cb) {\n" +
+                "          try { cb(list); } catch(e) {}\n" +
+                "        }\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(list) : undefined;\n" +
+                "      },\n" +
+                "      onUpdated: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
+                "      onActivated: { addListener: function(fn) {}, removeListener: function(fn) {} }\n" +
+                "    },\n" +
+                "    windows: {\n" +
+                "      getCurrent: function(getInfo, cb) {\n" +
+                "        if (typeof getInfo === 'function') { cb = getInfo; getInfo = null; }\n" +
+                "        var win = { id: 1, focused: true, top: 0, left: 0, width: (window.innerWidth || 1080), height: (window.innerHeight || 1920), type: 'normal', state: 'normal' };\n" +
+                "        if (cb) cb(win);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(win) : undefined;\n" +
+                "      },\n" +
+                "      create: function(createData, cb) {\n" +
+                "        var url = createData ? createData.url : '';\n" +
+                "        if (url && window.open) window.open(url, '_blank');\n" +
+                "        var win = { id: Date.now(), focused: true, top: 0, left: 0, width: (window.innerWidth || 1080), height: (window.innerHeight || 1920), type: 'popup', state: 'normal' };\n" +
+                "        if (cb) cb(win);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(win) : undefined;\n" +
+                "      },\n" +
+                "      update: function(windowId, updateInfo, cb) {\n" +
+                "        var win = { id: windowId || 1, focused: true };\n" +
+                "        if (cb) cb(win);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(win) : undefined;\n" +
+                "      },\n" +
+                "      remove: function(windowId, cb) {\n" +
+                "        if (cb) cb();\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(win) : undefined;\n" +
+                "      }\n" +
+                "    },\n" +
+                "    management: {\n" +
+                "      getSelf: function(cb) {\n" +
+                "        var info = { id: 'fusion-extension-runtime', enabled: true, installType: 'development', type: 'extension' };\n" +
+                "        if (cb) cb(info);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(info) : undefined;\n" +
+                "      }\n" +
+                "    },\n" +
+                "    permissions: {\n" +
+                "      contains: function(p, cb) {\n" +
+                "        if (cb) cb(true);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(true) : undefined;\n" +
+                "      },\n" +
+                "      request: function(p, cb) {\n" +
+                "        if (cb) cb(true);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(true) : undefined;\n" +
                 "      }\n" +
                 "    }\n" +
                 "  };\n" +
