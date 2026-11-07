@@ -8,10 +8,16 @@ import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.Toast;
 
@@ -41,6 +47,10 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -48,9 +58,10 @@ import java.util.zip.ZipInputStream;
  * FusionExtensionHelper
  * Kiwi-Style Chrome Extension Engine untuk Fusion WebView.
  * Mendukung instalasi paket ekstensi .zip & .crx (Manifest V2 & V3),
- * injeksi level document_start via WebViewCompat, polyfill API chrome.* (storage, runtime, tabs),
- * iframe multi-frame routing, setelan layer konfigurasi interaktif, serta penghapusan & pembacaan
- * berkas failsafe yang tahan terhadap pembatasan permission Android Scoped Storage / root chroot.
+ * eksekusi headless background worker (service_worker & background scripts),
+ * bi-directional port & message routing (chrome.runtime.connect & sendMessage),
+ * isolated storage per ekstensi, injeksi content scripts (JS & CSS) level document_start,
+ * skema url chrome-extension://, serta proteksi keamanan storage Android root & non-root.
  */
 public class FusionExtensionHelper {
     private static final String TAG = "FusionExtension";
@@ -58,6 +69,12 @@ public class FusionExtensionHelper {
     private static final String PREF_NAME = "fusion_extension_prefs";
     private static final String KEY_STORAGE_CACHE = "ext_storage_json";
     private static String sStorageCache = null;
+
+    public static final Map<String, WebView> sBackgroundWebViews = new ConcurrentHashMap<>();
+    public static final Map<String, ExtensionInfo> sBackgroundExtMap = new ConcurrentHashMap<>();
+    public static final Map<String, List<Runnable>> sPendingBgActions = new ConcurrentHashMap<>();
+    public static final Set<WebView> sActiveTabWebViews = Collections.newSetFromMap(new WeakHashMap<>());
+    public static final Handler sMainHandler = new Handler(Looper.getMainLooper());
 
     public static class ExtensionInfo {
         public String id;
@@ -69,32 +86,83 @@ public class FusionExtensionHelper {
         public int manifestVersion = 3;
         public String popupHtml;
         public String iconPath;
+        public String serviceWorker;                              // MV3 service worker
+        public List<String> backgroundScripts = new ArrayList<>(); // MV2 scripts
+        public String backgroundPage;                             // MV2 page
+        public String backgroundType;                             // "module" or null
+        public JSONObject manifestJson;                           // Raw parsed manifest
         public List<ContentScript> contentScripts = new ArrayList<>();
 
         public static class ContentScript {
             public List<String> matches = new ArrayList<>();
             public List<String> jsFiles = new ArrayList<>();
+            public List<String> cssFiles = new ArrayList<>();
             public String runAt = "document_idle";
             public boolean allFrames = false;
             public String world = "ISOLATED";
+        }
+
+        public boolean hasBackground() {
+            return (serviceWorker != null && !serviceWorker.isEmpty())
+                    || (!backgroundScripts.isEmpty())
+                    || (backgroundPage != null && !backgroundPage.isEmpty());
         }
     }
 
     public static class FusionExtensionBridge {
         private final Context mContext;
+        private final WebView mWebView;
+        private final String mBoundExtId;
+        private final boolean mIsBackground;
 
         public FusionExtensionBridge(Context context) {
+            this(context, null, null, false);
+        }
+
+        public FusionExtensionBridge(Context context, WebView webView) {
+            this(context, webView, null, false);
+        }
+
+        public FusionExtensionBridge(Context context, String boundExtId, boolean isBackground) {
+            this(context, null, boundExtId, isBackground);
+        }
+
+        public FusionExtensionBridge(Context context, WebView webView, String boundExtId, boolean isBackground) {
             this.mContext = context;
+            this.mWebView = webView;
+            this.mBoundExtId = boundExtId;
+            this.mIsBackground = isBackground;
         }
 
         @JavascriptInterface
         public String getStorage() {
-            return FusionExtensionHelper.getStorageJson(mContext);
+            return FusionExtensionHelper.getStorageJson(mContext, mBoundExtId);
+        }
+
+        @JavascriptInterface
+        public String getStorage(String extId) {
+            String target = (extId != null && !extId.isEmpty()) ? extId : mBoundExtId;
+            return FusionExtensionHelper.getStorageJson(mContext, target);
         }
 
         @JavascriptInterface
         public void setStorage(String jsonStr) {
-            FusionExtensionHelper.saveStorageJson(mContext, jsonStr);
+            setStorage(mBoundExtId, jsonStr);
+        }
+
+        @JavascriptInterface
+        public void setStorage(String extId, String jsonStr) {
+            String target = (extId != null && !extId.isEmpty()) ? extId : mBoundExtId;
+            FusionExtensionHelper.saveStorageJson(mContext, target, jsonStr);
+            sMainHandler.post(() -> {
+                String script = "if (window.__fusionNotifyStorageChanged) { window.__fusionNotifyStorageChanged(" +
+                        JSONObject.quote(target) + ", " + JSONObject.quote(jsonStr) + "); }";
+                for (WebView wv : sActiveTabWebViews) {
+                    if (wv != null && wv != mWebView) wv.evaluateJavascript(script, null);
+                }
+                WebView bgWv = findBackgroundWebView(target);
+                if (bgWv != null && bgWv != mWebView) bgWv.evaluateJavascript(script, null);
+            });
         }
 
         @JavascriptInterface
@@ -111,6 +179,163 @@ public class FusionExtensionHelper {
         public void log(String msg) {
             Log.i(TAG, "[Extension JS Log]: " + msg);
         }
+
+        @JavascriptInterface
+        public void connectPort(final String targetExtId, final String portId, final String connectInfoJson) {
+            sMainHandler.post(() -> {
+                try {
+                    String extId = (targetExtId != null && !targetExtId.isEmpty()) ? targetExtId : mBoundExtId;
+                    if (extId == null || extId.isEmpty()) return;
+
+                    ensureBackgroundHostRunning(mContext, extId);
+                    WebView bgWv = findBackgroundWebView(extId);
+                    if (bgWv != null) {
+                        String senderId = (mBoundExtId != null && !mBoundExtId.isEmpty()) ? mBoundExtId : extId;
+                        String script = "if (window.__fusionIncomingPort) { window.__fusionIncomingPort(" +
+                                JSONObject.quote(portId) + ", " +
+                                JSONObject.quote(senderId) + ", " +
+                                JSONObject.quote(connectInfoJson != null ? connectInfoJson : "{}") + "); }";
+                        bgWv.evaluateJavascript(script, null);
+                    } else {
+                        List<Runnable> pending = sPendingBgActions.computeIfAbsent(extId, k -> new ArrayList<>());
+                        pending.add(() -> connectPort(targetExtId, portId, connectInfoJson));
+                    }
+                } catch (Throwable e) {
+                    Log.e(TAG, "Error in connectPort: " + e.getMessage(), e);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void postPortMessage(final String extId, final String portId, final String msgJson, final boolean fromBg) {
+            sMainHandler.post(() -> {
+                try {
+                    String script = "if (window.__fusionReceivePortMessage) { window.__fusionReceivePortMessage(" +
+                            JSONObject.quote(portId) + ", " +
+                            JSONObject.quote(msgJson != null ? msgJson : "{}") + "); }";
+                    if (fromBg) {
+                        for (WebView wv : sActiveTabWebViews) {
+                            if (wv != null) {
+                                wv.evaluateJavascript(script, null);
+                            }
+                        }
+                    } else {
+                        WebView bgWv = findBackgroundWebView(extId);
+                        if (bgWv != null) {
+                            bgWv.evaluateJavascript(script, null);
+                        } else {
+                            List<Runnable> pending = sPendingBgActions.computeIfAbsent(extId, k -> new ArrayList<>());
+                            pending.add(() -> postPortMessage(extId, portId, msgJson, fromBg));
+                        }
+                    }
+                } catch (Throwable e) {
+                    Log.e(TAG, "Error in postPortMessage: " + e.getMessage(), e);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void disconnectPort(final String extId, final String portId, final boolean fromBg) {
+            sMainHandler.post(() -> {
+                try {
+                    String script = "if (window.__fusionDisconnectPort) { window.__fusionDisconnectPort(" +
+                            JSONObject.quote(portId) + "); }";
+                    if (fromBg) {
+                        for (WebView wv : sActiveTabWebViews) {
+                            if (wv != null) wv.evaluateJavascript(script, null);
+                        }
+                    } else {
+                        WebView bgWv = findBackgroundWebView(extId);
+                        if (bgWv != null) bgWv.evaluateJavascript(script, null);
+                    }
+                } catch (Throwable e) {
+                    Log.e(TAG, "Error in disconnectPort: " + e.getMessage(), e);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void sendRuntimeMessage(final String targetExtId, final String msgId, final String msgJson) {
+            sMainHandler.post(() -> {
+                try {
+                    String extId = (targetExtId != null && !targetExtId.isEmpty()) ? targetExtId : mBoundExtId;
+                    if (extId == null || extId.isEmpty()) return;
+
+                    ensureBackgroundHostRunning(mContext, extId);
+                    String senderId = (mBoundExtId != null && !mBoundExtId.isEmpty()) ? mBoundExtId : extId;
+                    String script = "if (window.__fusionIncomingMessage) { window.__fusionIncomingMessage(" +
+                            JSONObject.quote(msgId) + ", " +
+                            JSONObject.quote(senderId) + ", " +
+                            JSONObject.quote(msgJson != null ? msgJson : "{}") + "); }";
+
+                    WebView bgWv = findBackgroundWebView(extId);
+                    if (bgWv != null && bgWv != mWebView) {
+                        bgWv.evaluateJavascript(script, null);
+                    }
+                    for (WebView wv : sActiveTabWebViews) {
+                        if (wv != null && wv != mWebView) {
+                            wv.evaluateJavascript(script, null);
+                        }
+                    }
+                } catch (Throwable e) {
+                    Log.e(TAG, "Error in sendRuntimeMessage: " + e.getMessage(), e);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void sendRuntimeResponse(final String extId, final String msgId, final String resJson) {
+            sMainHandler.post(() -> {
+                try {
+                    String script = "if (window.__fusionReceiveRuntimeResponse) { window.__fusionReceiveRuntimeResponse(" +
+                            JSONObject.quote(msgId) + ", " +
+                            JSONObject.quote(resJson != null ? resJson : "null") + "); }";
+                    for (WebView wv : sActiveTabWebViews) {
+                        if (wv != null) wv.evaluateJavascript(script, null);
+                    }
+                    WebView bgWv = findBackgroundWebView(extId);
+                    if (bgWv != null) bgWv.evaluateJavascript(script, null);
+                } catch (Throwable e) {
+                    Log.e(TAG, "Error in sendRuntimeResponse: " + e.getMessage(), e);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void openWindow(final String extId, final String url) {
+            if (url == null || url.isEmpty()) return;
+            sMainHandler.post(() -> {
+                try {
+                    if (mContext instanceof TermuxActivity) {
+                        TermuxActivity act = (TermuxActivity) mContext;
+                        if (act.mFusionWebViewManager != null) {
+                            String targetUrl = url;
+                            if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("file://")) {
+                                ExtensionInfo ext = findExtensionByIdOrHost(mContext, extId);
+                                if (ext != null && ext.dir != null) {
+                                    targetUrl = "file://" + new File(ext.dir, url).getAbsolutePath();
+                                }
+                            }
+                            act.mFusionWebViewManager.addNewTab(targetUrl);
+                        }
+                    }
+                } catch (Throwable e) {
+                    Log.e(TAG, "Error in openWindow: " + e.getMessage(), e);
+                }
+            });
+        }
+    }
+
+    public static WebView findBackgroundWebView(String extId) {
+        if (extId == null || extId.isEmpty()) return null;
+        WebView wv = sBackgroundWebViews.get(extId);
+        if (wv != null) return wv;
+        for (Map.Entry<String, WebView> entry : sBackgroundWebViews.entrySet()) {
+            if (entry.getKey().equalsIgnoreCase(extId) || entry.getKey().contains(extId) || extId.contains(entry.getKey())) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     public static File getPrimaryExtensionsDir(Context context) {
@@ -151,44 +376,71 @@ public class FusionExtensionHelper {
     }
 
     public static File getStorageFile(Context context) {
+        return getStorageFile(context, null);
+    }
+
+    public static File getStorageFile(Context context, String extId) {
         File dir = getPrimaryExtensionsDir(context);
-        return new File(dir, "storage.json");
+        if (extId == null || extId.isEmpty() || "global".equalsIgnoreCase(extId)
+                || extId.toLowerCase().contains("google_ai_pro") || extId.toLowerCase().contains("gapt")) {
+            return new File(dir, "storage.json");
+        }
+        String safeName = extId.toLowerCase().replaceAll("[^a-zA-Z0-9_-]", "_");
+        return new File(dir, "storage_" + safeName + ".json");
     }
 
     public static synchronized String getStorageJson(Context context) {
-        if (sStorageCache != null && !sStorageCache.isEmpty()) {
-            return sStorageCache;
+        return getStorageJson(context, null);
+    }
+
+    public static synchronized String getStorageJson(Context context, String extId) {
+        if (extId == null || extId.isEmpty() || "global".equalsIgnoreCase(extId)
+                || extId.toLowerCase().contains("google_ai_pro") || extId.toLowerCase().contains("gapt")) {
+            if (sStorageCache != null && !sStorageCache.isEmpty()) {
+                return sStorageCache;
+            }
         }
-        File f = getStorageFile(context);
+        File f = getStorageFile(context, extId);
         if (f.exists() && f.isFile()) {
             try {
                 byte[] bytes = readFileBytesSafe(f);
                 if (bytes != null && bytes.length > 0) {
-                    sStorageCache = new String(bytes, StandardCharsets.UTF_8).trim();
-                    if (!sStorageCache.isEmpty()) return sStorageCache;
+                    String s = new String(bytes, StandardCharsets.UTF_8).trim();
+                    if (!s.isEmpty()) {
+                        if (f.getName().equals("storage.json")) sStorageCache = s;
+                        return s;
+                    }
                 }
             } catch (Throwable ignored) {}
         }
-        if (context != null) {
-            SharedPreferences sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-            String saved = sp.getString(KEY_STORAGE_CACHE, null);
-            if (saved != null && !saved.isEmpty()) {
-                sStorageCache = saved;
-                return sStorageCache;
+        if (f.getName().equals("storage.json")) {
+            if (context != null) {
+                SharedPreferences sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+                String saved = sp.getString(KEY_STORAGE_CACHE, null);
+                if (saved != null && !saved.isEmpty()) {
+                    sStorageCache = saved;
+                    return sStorageCache;
+                }
             }
+            sStorageCache = "{\"gapt_layer\":\"12m\"}";
+            saveStorageJson(context, extId, sStorageCache);
+            return sStorageCache;
         }
-        // Default awal: layer 12m aktif untuk Google AI Pro 2Y Offer
-        sStorageCache = "{\"gapt_layer\":\"12m\"}";
-        saveStorageJson(context, sStorageCache);
-        return sStorageCache;
+        return "{}";
     }
 
     public static synchronized void saveStorageJson(Context context, String jsonStr) {
+        saveStorageJson(context, null, jsonStr);
+    }
+
+    public static synchronized void saveStorageJson(Context context, String extId, String jsonStr) {
         if (jsonStr == null || jsonStr.trim().isEmpty()) {
             jsonStr = "{}";
         }
-        sStorageCache = jsonStr;
-        File f = getStorageFile(context);
+        File f = getStorageFile(context, extId);
+        if (f.getName().equals("storage.json")) {
+            sStorageCache = jsonStr;
+        }
         try {
             File parent = f.getParentFile();
             if (parent != null && !parent.exists()) parent.mkdirs();
@@ -198,13 +450,13 @@ public class FusionExtensionHelper {
             try { f.setReadable(true, false); } catch (Throwable ignored) {}
             try { f.setWritable(true, false); } catch (Throwable ignored) {}
         } catch (Throwable e) {
-            Log.w(TAG, "Standard save storage.json failed: " + e.getMessage() + ", trying shell write...");
+            Log.w(TAG, "Standard save " + f.getName() + " failed: " + e.getMessage() + ", trying su write...");
             try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "echo '" + jsonStr.replace("'", "'\\''") + "' > '" + f.getAbsolutePath() + "' && chmod 777 '" + f.getAbsolutePath() + "'"});
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "echo '" + jsonStr.replace("'", "'\''") + "' > '" + f.getAbsolutePath() + "' && chmod 777 '" + f.getAbsolutePath() + "'"});
                 p.waitFor();
             } catch (Throwable ignored) {}
         }
-        if (context != null) {
+        if (context != null && f.getName().equals("storage.json")) {
             try {
                 SharedPreferences sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
                 sp.edit().putString(KEY_STORAGE_CACHE, jsonStr).apply();
@@ -246,7 +498,7 @@ public class FusionExtensionHelper {
                 byte[] bytes = readFileBytesSafe(f);
                 if (bytes != null && bytes.length > 0) {
                     JSONObject obj = new JSONObject(new String(bytes, StandardCharsets.UTF_8));
-                    java.util.Iterator<String> keys = obj.keys();
+                    Iterator<String> keys = obj.keys();
                     while (keys.hasNext()) {
                         String k = keys.next();
                         stateMap.put(k, obj.optBoolean(k, true));
@@ -278,7 +530,7 @@ public class FusionExtensionHelper {
                     obj.put(entry.getKey(), entry.getValue());
                 }
                 String content = obj.toString(2);
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "echo '" + content.replace("'", "'\\''") + "' > '" + f.getAbsolutePath() + "' && chmod 777 '" + f.getAbsolutePath() + "'"});
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "echo '" + content.replace("'", "'\''") + "' > '" + f.getAbsolutePath() + "' && chmod 777 '" + f.getAbsolutePath() + "'"});
                 p.waitFor();
             } catch (Throwable ignored) {}
         }
@@ -332,9 +584,55 @@ public class FusionExtensionHelper {
         }
     }
 
-    /**
-     * Resolves localized strings (e.g. __MSG_appName__) using extension's _locales/<lang>/messages.json
-     */
+    public static ExtensionInfo findExtensionById(Context context, String extId) {
+        return findExtensionByIdOrHost(context, extId);
+    }
+
+    public static ExtensionInfo findExtensionByIdOrHost(Context context, String idOrHost) {
+        if (idOrHost == null || idOrHost.trim().isEmpty()) return null;
+        String needle = idOrHost.trim().toLowerCase();
+        List<ExtensionInfo> exts = getInstalledExtensions(context);
+        for (ExtensionInfo ext : exts) {
+            if (ext.id != null && ext.id.equalsIgnoreCase(needle)) return ext;
+            if (ext.dir != null && ext.dir.getName().equalsIgnoreCase(needle)) return ext;
+        }
+        for (ExtensionInfo ext : exts) {
+            if (ext.name != null && ext.name.equalsIgnoreCase(needle)) return ext;
+        }
+        for (ExtensionInfo ext : exts) {
+            if (ext.id != null && (ext.id.toLowerCase().contains(needle) || needle.contains(ext.id.toLowerCase()))) return ext;
+            if (ext.name != null && (ext.name.toLowerCase().contains(needle) || needle.contains(ext.name.toLowerCase()))) return ext;
+        }
+        return null;
+    }
+
+    public static ExtensionInfo findExtensionFromUrl(Context context, String url) {
+        if (url == null || url.isEmpty()) return null;
+        if (url.startsWith("chrome-extension://")) {
+            try {
+                String host = Uri.parse(url).getHost();
+                return findExtensionByIdOrHost(context, host);
+            } catch (Throwable ignored) {}
+        }
+        if (url.startsWith("file://") && url.contains(".fusion/extensions/")) {
+            try {
+                String path = Uri.parse(url).getPath();
+                if (path != null) {
+                    File f = new File(path);
+                    File extDir = f.isDirectory() ? f : f.getParentFile();
+                    while (extDir != null && extDir.exists() && !new File(extDir, "manifest.json").exists()) {
+                        if (!extDir.getAbsolutePath().contains(".fusion/extensions")) break;
+                        extDir = extDir.getParentFile();
+                    }
+                    if (extDir != null && new File(extDir, "manifest.json").exists()) {
+                        return parseExtensionDir(extDir);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
     public static String resolveI18nString(File dir, String raw, String defaultLocale) {
         if (raw == null || raw.isEmpty()) return raw;
         String trimmed = raw.trim();
@@ -428,6 +726,7 @@ public class FusionExtensionHelper {
             ExtensionInfo info = new ExtensionInfo();
             info.id = dir.getName();
             info.dir = dir;
+            info.manifestJson = root;
             String defaultLocale = root.optString("default_locale", "en");
             info.name = resolveI18nString(dir, root.optString("name", dir.getName()), defaultLocale);
             info.version = root.optString("version", "1.0.0");
@@ -497,6 +796,24 @@ public class FusionExtensionHelper {
                 }
             }
 
+            // Parse background worker / scripts
+            if (root.has("background")) {
+                Object bgObj = root.opt("background");
+                if (bgObj instanceof JSONObject) {
+                    JSONObject bg = (JSONObject) bgObj;
+                    info.serviceWorker = bg.optString("service_worker", null);
+                    info.backgroundType = bg.optString("type", null);
+                    info.backgroundPage = bg.optString("page", null);
+                    JSONArray scripts = bg.optJSONArray("scripts");
+                    if (scripts != null) {
+                        for (int i = 0; i < scripts.length(); i++) {
+                            String s = scripts.optString(i, null);
+                            if (s != null && !s.isEmpty()) info.backgroundScripts.add(s);
+                        }
+                    }
+                }
+            }
+
             JSONArray csArray = root.optJSONArray("content_scripts");
             if (csArray != null) {
                 for (int i = 0; i < csArray.length(); i++) {
@@ -515,6 +832,13 @@ public class FusionExtensionHelper {
                         for (int j = 0; j < jsArr.length(); j++) {
                             String jsPath = jsArr.optString(j, null);
                             if (jsPath != null && !jsPath.isEmpty()) cs.jsFiles.add(jsPath);
+                        }
+                    }
+                    JSONArray cssArr = csObj.optJSONArray("css");
+                    if (cssArr != null) {
+                        for (int j = 0; j < cssArr.length(); j++) {
+                            String cssPath = cssArr.optString(j, null);
+                            if (cssPath != null && !cssPath.isEmpty()) cs.cssFiles.add(cssPath);
                         }
                     }
                     cs.runAt = csObj.optString("run_at", "document_idle");
@@ -582,7 +906,6 @@ public class FusionExtensionHelper {
     public static byte[] readFileBytesSafe(File file) {
         if (file == null) return null;
 
-        // 1. Baca standar via Java
         try {
             if (file.exists() && file.isFile()) {
                 byte[] b = new byte[(int) file.length()];
@@ -600,7 +923,6 @@ public class FusionExtensionHelper {
             Log.w(TAG, "Standard Java read failed for " + file.getAbsolutePath() + ": " + e.getMessage());
         }
 
-        // 2. Baca via su cat untuk bypass Android Scoped Storage / FUSE permission
         try {
             Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "cat '" + file.getAbsolutePath() + "'"});
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -613,12 +935,10 @@ public class FusionExtensionHelper {
             p.waitFor();
             byte[] res = baos.toByteArray();
             if (res.length > 0) {
-                Log.i(TAG, "Berhasil membaca " + res.length + " bytes via su cat fallback.");
                 return res;
             }
         } catch (Throwable ignored) {}
 
-        // 3. Baca via cat biasa
         try {
             Process p = Runtime.getRuntime().exec(new String[]{"cat", file.getAbsolutePath()});
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -632,31 +952,6 @@ public class FusionExtensionHelper {
             byte[] res = baos.toByteArray();
             if (res.length > 0) return res;
         } catch (Throwable ignored) {}
-
-        // 4. Fallback jika nama file pro.zip, cari di lokasi alternatif yang bisa dibaca
-        if (file.getName().toLowerCase().contains("pro.zip")) {
-            String[] altPaths = new String[]{
-                "/data/data/com.termux/files/home/pro.zip",
-                "/data/data/com.termux/files/home/.fusion/pro.zip",
-                "/root/pro.zip",
-                "/project/pro.zip"
-            };
-            for (String alt : altPaths) {
-                File altFile = new File(alt);
-                if (altFile.exists() && altFile.isFile()) {
-                    try (FileInputStream fis = new FileInputStream(altFile)) {
-                        byte[] b = new byte[(int) altFile.length()];
-                        int total = 0;
-                        while (total < b.length) {
-                            int r = fis.read(b, total, b.length - total);
-                            if (r == -1) break;
-                            total += r;
-                        }
-                        if (total > 0) return b;
-                    } catch (Throwable ignored) {}
-                }
-            }
-        }
 
         return null;
     }
@@ -768,21 +1063,23 @@ public class FusionExtensionHelper {
 
             boolean renamed = tempExtractDir.renameTo(finalDir);
             if (!renamed || !finalDir.exists()) {
-                // Salin manual jika rename lintas filesystem
                 copyDirectory(tempExtractDir, finalDir);
                 deleteRecursive(tempExtractDir);
             }
 
-            // Setel izin full 777 agar bisa dikelola/dihapus kapan saja
             try {
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod -R 777 '" + finalDir.getAbsolutePath() + "'"});
                 p.waitFor();
             } catch (Throwable ignored) {}
 
-            // Aktifkan ekstensi di extensions_state.json
             Map<String, Boolean> stateMap = loadExtensionsState(context);
             stateMap.put(finalDir.getName(), true);
             saveExtensionsState(context, stateMap);
+
+            ExtensionInfo installedExt = parseExtensionDir(finalDir);
+            if (installedExt != null && installedExt.hasBackground()) {
+                ensureBackgroundHostRunning(context, installedExt);
+            }
 
             Log.i(TAG, "Ekstensi berhasil diinstal ke: " + finalDir.getAbsolutePath());
             return true;
@@ -794,8 +1091,7 @@ public class FusionExtensionHelper {
     }
 
     public static boolean extractArchive(File archiveFile, File targetDir) {
-        if (archiveFile == null) return false;
-        if (targetDir == null) return false;
+        if (archiveFile == null || targetDir == null) return false;
         if (!targetDir.exists()) {
             targetDir.mkdirs();
             try {
@@ -820,7 +1116,6 @@ public class FusionExtensionHelper {
 
             int zipOffset = 0;
             if (allBytes.length >= 4) {
-                // Deteksi Cr24 (CRX package)
                 if (allBytes[0] == 'C' && allBytes[1] == 'r' && allBytes[2] == '2' && allBytes[3] == '4') {
                     for (int i = 0; i <= allBytes.length - 4; i++) {
                         if (allBytes[i] == 0x50 && allBytes[i + 1] == 0x4B && allBytes[i + 2] == 0x03 && allBytes[i + 3] == 0x04) {
@@ -840,7 +1135,6 @@ public class FusionExtensionHelper {
                 }
             }
 
-            // Deteksi jika seluruh file di dalam zip dibungkus dalam 1 root folder (misal: "my_ext/manifest.json")
             String rootPrefix = "";
             try (ZipInputStream zisDetect = new ZipInputStream(new ByteArrayInputStream(allBytes, zipOffset, allBytes.length - zipOffset))) {
                 ZipEntry ze;
@@ -856,7 +1150,6 @@ public class FusionExtensionHelper {
                 }
             } catch (Throwable ignored) {}
 
-            // Ekstrak semua entri
             try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(allBytes, zipOffset, allBytes.length - zipOffset))) {
                 ZipEntry entry;
                 byte[] buffer = new byte[8192];
@@ -910,7 +1203,6 @@ public class FusionExtensionHelper {
                 return true;
             }
 
-            // Fallback unzipping via su unzip jika penulisan Java terhalang izin
             try {
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "unzip -o '" + archiveFile.getAbsolutePath() + "' -d '" + targetDir.getAbsolutePath() + "' && chmod -R 777 '" + targetDir.getAbsolutePath() + "'"});
                 p.waitFor();
@@ -924,11 +1216,6 @@ public class FusionExtensionHelper {
         }
     }
 
-    /**
-     * Pelindung Keamanan Mutlak (Ironclad Whitelist Guard)
-     * Memastikan tidak ada perintah penghapusan (terutama su rm -rf) yang menyentuh direktori
-     * sistem atau direktori di luar sandbox ekstensi Fusion. Mencegah brick / mati total.
-     */
     public static boolean isSafeExtensionPath(File f) {
         if (f == null) return false;
         try {
@@ -937,7 +1224,6 @@ public class FusionExtensionHelper {
                 return false;
             }
 
-            // 1. Blacklist Mutlak: Direktori root & partisi sistem vital Android/Linux
             String[] forbiddenPrefixes = new String[] {
                 "/system", "/vendor", "/product", "/odm", "/apex", "/bin", "/sbin", "/etc",
                 "/boot", "/recovery", "/persist", "/metadata", "/dev", "/proc", "/sys",
@@ -950,34 +1236,18 @@ public class FusionExtensionHelper {
                 }
             }
 
-            // 2. Blacklist Direktori Induk Kritis (Jangan pernah izinkan penghapusan folder induk ini)
             String[] forbiddenExact = new String[] {
-                "/",
-                "/root",
-                "/data",
-                "/data/data",
-                "/data/user",
-                "/data/user/0",
-                "/data/data/com.termux",
-                "/data/user/0/com.termux",
-                "/data/data/com.termux/files",
-                "/data/user/0/com.termux/files",
-                "/data/data/com.termux/files/home",
-                "/data/user/0/com.termux/files/home",
-                "/data/data/com.termux/cache",
-                "/data/user/0/com.termux/cache",
-                "/data/local",
-                "/data/local/nhsystem",
-                "/data/local/nhsystem/kali-arm64",
+                "/", "/root", "/data", "/data/data", "/data/user", "/data/user/0",
+                "/data/data/com.termux", "/data/user/0/com.termux",
+                "/data/data/com.termux/files", "/data/user/0/com.termux/files",
+                "/data/data/com.termux/files/home", "/data/user/0/com.termux/files/home",
+                "/data/data/com.termux/cache", "/data/user/0/com.termux/cache",
+                "/data/local", "/data/local/nhsystem", "/data/local/nhsystem/kali-arm64",
                 "/data/local/nhsystem/kali-arm64/root",
-                "/data/data/com.termux/files/home/.fusion",
-                "/data/user/0/com.termux/files/home/.fusion",
-                "/data/data/com.termux/files/home/.fusion/extensions",
-                "/data/user/0/com.termux/files/home/.fusion/extensions",
-                "/data/local/nhsystem/kali-arm64/root/.fusion",
-                "/data/local/nhsystem/kali-arm64/root/.fusion/extensions",
-                "/root/.fusion",
-                "/root/.fusion/extensions"
+                "/data/data/com.termux/files/home/.fusion", "/data/user/0/com.termux/files/home/.fusion",
+                "/data/data/com.termux/files/home/.fusion/extensions", "/data/user/0/com.termux/files/home/.fusion/extensions",
+                "/data/local/nhsystem/kali-arm64/root/.fusion", "/data/local/nhsystem/kali-arm64/root/.fusion/extensions",
+                "/root/.fusion", "/root/.fusion/extensions"
             };
             for (String fe : forbiddenExact) {
                 if (canonical.equals(fe) || canonical.equals(fe + "/")) {
@@ -986,7 +1256,6 @@ public class FusionExtensionHelper {
                 }
             }
 
-            // 3. Whitelist Ketat: Wajib berada DI DALAM salah satu folder ekstensi atau cache Fusion
             String[] allowedParentPrefixes = new String[] {
                 "/data/data/com.termux/files/home/.fusion/extensions/",
                 "/data/user/0/com.termux/files/home/.fusion/extensions/",
@@ -1016,13 +1285,11 @@ public class FusionExtensionHelper {
     public static boolean deleteRecursive(File f) {
         if (f == null || !f.exists()) return true;
 
-        // VERIFIKASI KEAMANAN MUTLAK: Tolak jika tidak berada di whitelist sandbox ekstensi
         if (!isSafeExtensionPath(f)) {
             Log.e(TAG, "⛔ deleteRecursive DIBATALKAN: Path tidak lolos audit keamanan -> " + f.getAbsolutePath());
             return false;
         }
 
-        // 1. Coba hapus rekursif menggunakan Java murni terlebih dahulu
         if (f.isDirectory()) {
             File[] files = f.listFiles();
             if (files != null) {
@@ -1034,17 +1301,15 @@ public class FusionExtensionHelper {
         boolean ok = f.delete();
         if (ok || !f.exists()) return true;
 
-        // 2. Beri izin write lalu coba delete Java lagi
         try {
             f.setWritable(true, false);
             if (f.delete() || !f.exists()) return true;
         } catch (Throwable ignored) {}
 
-        // 3. Fallback su rm -rf HANYA jika lolos validasi whitelist dan path canonical dijamin aman
         try {
             String safePath = f.getCanonicalPath();
             if (isSafeExtensionPath(f) && safePath != null && safePath.length() >= 25) {
-                String escapedPath = safePath.replace("'", "'\\''");
+                String escapedPath = safePath.replace("'", "'\''");
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "rm -rf '" + escapedPath + "'"});
                 p.waitFor();
             }
@@ -1074,45 +1339,570 @@ public class FusionExtensionHelper {
         }
     }
 
+    public static void ensureBackgroundHostRunning(final Context context, final String extId) {
+        if (context == null || extId == null || extId.isEmpty()) return;
+        if (sBackgroundWebViews.containsKey(extId)) return;
+        ExtensionInfo ext = findExtensionByIdOrHost(context, extId);
+        if (ext != null) {
+            ensureBackgroundHostRunning(context, ext);
+        }
+    }
+
+    public static void ensureBackgroundHostRunning(final Context context, final ExtensionInfo ext) {
+        if (context == null || ext == null || !ext.enabled || !ext.hasBackground()) return;
+        if (sBackgroundWebViews.containsKey(ext.id)) return;
+
+        sMainHandler.post(() -> {
+            if (sBackgroundWebViews.containsKey(ext.id)) return;
+            try {
+                WebView bgWv = new WebView(context);
+                WebSettings ws = bgWv.getSettings();
+                ws.setJavaScriptEnabled(true);
+                ws.setDomStorageEnabled(true);
+                ws.setDatabaseEnabled(true);
+                ws.setAllowFileAccess(true);
+                ws.setAllowContentAccess(true);
+                ws.setAllowFileAccessFromFileURLs(true);
+                ws.setAllowUniversalAccessFromFileURLs(true);
+
+                bgWv.addJavascriptInterface(new FusionExtensionBridge(context, bgWv, ext.id, true), "__FusionExtensionBridge__");
+
+                bgWv.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                        if (request != null && request.getUrl() != null) {
+                            WebResourceResponse resp = handleExtensionResourceIntercept(context, request.getUrl(), ext, null);
+                            if (resp != null) return resp;
+                        }
+                        return super.shouldInterceptRequest(view, request);
+                    }
+
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        super.onPageFinished(view, url);
+                        Log.i(TAG, "Background host ready for extension: " + ext.id);
+                        List<Runnable> pending = sPendingBgActions.remove(ext.id);
+                        if (pending != null) {
+                            for (Runnable r : pending) {
+                                try { r.run(); } catch (Throwable ignored) {}
+                            }
+                        }
+                    }
+                });
+
+                String polyfill = getChromePolyfillScript(context, ext, true);
+                StringBuilder html = new StringBuilder();
+                html.append("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Fusion BG: ")
+                    .append(ext.name).append("</title></head><body>\n");
+                html.append("<script>\n").append(polyfill).append("\n</script>\n");
+
+                html.append("<script>\n");
+                html.append("if (typeof importScripts === 'undefined' || !window.__is_fusion_import_scripts__) {\n");
+                html.append("  window.importScripts = function() {\n");
+                html.append("    for (var i = 0; i < arguments.length; i++) {\n");
+                html.append("      var src = arguments[i];\n");
+                html.append("      if (!src) continue;\n");
+                html.append("      try {\n");
+                html.append("        var xhr = new XMLHttpRequest();\n");
+                html.append("        xhr.open('GET', src, false);\n");
+                html.append("        xhr.send(null);\n");
+                html.append("        if (xhr.status === 200 || xhr.status === 0) {\n");
+                html.append("          (1, eval)(xhr.responseText + '\\n//# sourceURL=' + src);\n");
+                html.append("        } else {\n");
+                html.append("          console.error('[Fusion BG] importScripts failed HTTP ' + xhr.status + ' for: ' + src);\n");
+                html.append("        }\n");
+                html.append("      } catch(err) {\n");
+                html.append("        console.error('[Fusion BG] Exception loading ' + src + ':', err);\n");
+                html.append("      }\n");
+                html.append("    }\n");
+                html.append("  };\n");
+                html.append("  window.importScripts.__is_fusion_import_scripts__ = true;\n");
+                html.append("}\n");
+                html.append("if (typeof self.clients === 'undefined') {\n");
+                html.append("  self.clients = {\n");
+                html.append("    claim: function() { return Promise.resolve(); },\n");
+                html.append("    matchAll: function() { return Promise.resolve([]); },\n");
+                html.append("    openWindow: function(u) {\n");
+                html.append("      try { if (window.__FusionExtensionBridge__) window.__FusionExtensionBridge__.openWindow('").append(ext.id).append("', u); } catch(e) {}\n");
+                html.append("      return Promise.resolve(null);\n");
+                html.append("    }\n");
+                html.append("  };\n");
+                html.append("}\n");
+                html.append("if (typeof self.skipWaiting === 'undefined') {\n");
+                html.append("  self.skipWaiting = function() { return Promise.resolve(); };\n");
+                html.append("}\n");
+                html.append("if (typeof self.serviceWorker === 'undefined') {\n");
+                html.append("  self.serviceWorker = {\n");
+                html.append("    state: 'activated',\n");
+                html.append("    scriptURL: 'file://").append(ext.dir.getAbsolutePath()).append("/service-worker.js',\n");
+                html.append("    addEventListener: function() {},\n");
+                html.append("    removeEventListener: function() {}\n");
+                html.append("  };\n");
+                html.append("}\n");
+                html.append("if (typeof self.registration === 'undefined') {\n");
+                html.append("  self.registration = {\n");
+                html.append("    scope: 'chrome-extension://").append(ext.id).append("/',\n");
+                html.append("    active: self.serviceWorker,\n");
+                html.append("    showNotification: function() { return Promise.resolve(); },\n");
+                html.append("    getNotifications: function() { return Promise.resolve([]); },\n");
+                html.append("    unregister: function() { return Promise.resolve(true); }\n");
+                html.append("  };\n");
+                html.append("}\n");
+                html.append("</script>\n");
+
+                if (ext.serviceWorker != null && !ext.serviceWorker.isEmpty()) {
+                    String moduleAttr = "module".equalsIgnoreCase(ext.backgroundType) ? " type=\"module\"" : "";
+                    html.append("<script").append(moduleAttr).append(" src=\"").append(ext.serviceWorker).append("\"></script>\n");
+                } else if (!ext.backgroundScripts.isEmpty()) {
+                    for (String s : ext.backgroundScripts) {
+                        html.append("<script src=\"").append(s).append("\"></script>\n");
+                    }
+                } else if (ext.backgroundPage != null && !ext.backgroundPage.isEmpty()) {
+                    File bgPageFile = new File(ext.dir, ext.backgroundPage);
+                    if (bgPageFile.exists()) {
+                        bgWv.loadUrl("file://" + bgPageFile.getAbsolutePath());
+                        sBackgroundWebViews.put(ext.id, bgWv);
+                        sBackgroundExtMap.put(ext.id, ext);
+                        return;
+                    }
+                }
+                html.append("</body></html>");
+
+                String baseUrl = "file://" + ext.dir.getAbsolutePath() + "/";
+                bgWv.loadDataWithBaseURL(baseUrl, html.toString(), "text/html", "utf-8", null);
+
+                sBackgroundWebViews.put(ext.id, bgWv);
+                sBackgroundExtMap.put(ext.id, ext);
+                Log.i(TAG, "Headless background host launched for extension: " + ext.name + " (" + ext.id + ")");
+            } catch (Throwable e) {
+                Log.e(TAG, "Gagal meluncurkan background host untuk " + ext.id + ": " + e.getMessage(), e);
+            }
+        });
+    }
+
+    public static void startAllBackgroundHosts(final Context context) {
+        if (context == null) return;
+        List<ExtensionInfo> exts = getInstalledExtensions(context);
+        for (ExtensionInfo ext : exts) {
+            if (ext.enabled && ext.hasBackground()) {
+                ensureBackgroundHostRunning(context, ext);
+            }
+        }
+    }
+
+    public static void stopBackgroundHost(String extId) {
+        if (extId == null) return;
+        WebView wv = sBackgroundWebViews.remove(extId);
+        sBackgroundExtMap.remove(extId);
+        sPendingBgActions.remove(extId);
+        if (wv != null) {
+            sMainHandler.post(() -> {
+                try {
+                    wv.stopLoading();
+                    wv.loadUrl("about:blank");
+                    wv.destroy();
+                } catch (Throwable ignored) {}
+            });
+        }
+    }
+
+    public static void stopAllBackgroundHosts() {
+        for (String id : new ArrayList<>(sBackgroundWebViews.keySet())) {
+            stopBackgroundHost(id);
+        }
+    }
+
+    public static File resolveExtensionUrlToFile(Context context, String url) {
+        if (url == null || !url.startsWith("chrome-extension://")) return null;
+        try {
+            Uri uri = Uri.parse(url);
+            String host = uri.getHost();
+            ExtensionInfo ext = findExtensionByIdOrHost(context, host);
+            if (ext != null && ext.dir != null && ext.dir.exists()) {
+                String path = uri.getPath();
+                String rel = (path != null && path.startsWith("/")) ? path.substring(1) : (path != null ? path : "");
+                File target = new File(ext.dir, rel);
+                if (target.exists()) return target;
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    public static WebResourceResponse handleExtensionResourceIntercept(Context context, Uri uri, ExtensionInfo forcedExt, String currentUrl) {
+        if (uri == null) return null;
+        String scheme = uri.getScheme();
+        if (!"file".equalsIgnoreCase(scheme) && !"chrome-extension".equalsIgnoreCase(scheme)) {
+            return null;
+        }
+
+        String path = uri.getPath();
+        if (path == null) return null;
+
+        File targetFile = null;
+
+        if ("file".equalsIgnoreCase(scheme)) {
+            File directFile = new File(path);
+            if (directFile.exists() && directFile.isFile()) {
+                targetFile = directFile;
+            }
+        }
+
+        if (targetFile == null && "chrome-extension".equalsIgnoreCase(scheme)) {
+            String host = uri.getHost();
+            ExtensionInfo ext = (forcedExt != null) ? forcedExt : findExtensionByIdOrHost(context, host);
+            if (ext != null && ext.dir != null && ext.dir.exists()) {
+                String relPath = path.startsWith("/") ? path.substring(1) : path;
+                File candidate = new File(ext.dir, relPath);
+                if (candidate.exists() && candidate.isFile()) {
+                    targetFile = candidate;
+                }
+            }
+        }
+
+        if (targetFile == null) {
+            ExtensionInfo ext = forcedExt;
+            if (ext == null && currentUrl != null) {
+                ext = findExtensionFromUrl(context, currentUrl);
+            }
+            if (ext != null && ext.dir != null && ext.dir.exists()) {
+                String relPath = path.startsWith("/") ? path.substring(1) : path;
+                File candidate = new File(ext.dir, relPath);
+                if (candidate.exists() && candidate.isFile()) {
+                    targetFile = candidate;
+                }
+            }
+        }
+
+        if (targetFile != null && targetFile.exists() && targetFile.isFile()) {
+            String mimeType = getFileMimeType(targetFile.getName());
+            String encoding = (mimeType.startsWith("text/") || mimeType.contains("json") || mimeType.contains("javascript")) ? "utf-8" : null;
+
+            if ("text/css".equalsIgnoreCase(mimeType)) {
+                try {
+                    byte[] cssBytes = readFileBytesSafe(targetFile);
+                    if (cssBytes != null && cssBytes.length > 0) {
+                        String cssStr = new String(cssBytes, StandardCharsets.UTF_8);
+                        if (cssStr.contains("__MSG_")) {
+                            File extDir = targetFile.getParentFile();
+                            while (extDir != null && extDir.exists() && !new File(extDir, "manifest.json").exists()) {
+                                extDir = extDir.getParentFile();
+                            }
+                            if (extDir != null && new File(extDir, "manifest.json").exists()) {
+                                String defaultLocale = "en";
+                                File mf = new File(extDir, "manifest.json");
+                                byte[] mfBytes = readFileBytesSafe(mf);
+                                if (mfBytes != null && mfBytes.length > 0) {
+                                    try {
+                                        JSONObject root = new JSONObject(new String(mfBytes, StandardCharsets.UTF_8));
+                                        defaultLocale = root.optString("default_locale", "en");
+                                    } catch (Throwable ignored) {}
+                                }
+                                cssStr = cssStr.replace("__MSG_@@bidi_dir__", "ltr");
+                                Matcher matcher = Pattern.compile("__MSG_([a-zA-Z0-9_]+)__").matcher(cssStr);
+                                StringBuffer sb = new StringBuffer();
+                                while (matcher.find()) {
+                                    String k = matcher.group(1);
+                                    String resolved = resolveI18nString(extDir, "__MSG_" + k + "__", defaultLocale);
+                                    if (resolved != null && !resolved.startsWith("__MSG_")) {
+                                        matcher.appendReplacement(sb, Matcher.quoteReplacement(resolved));
+                                    } else {
+                                        matcher.appendReplacement(sb, "");
+                                    }
+                                }
+                                matcher.appendTail(sb);
+                                byte[] processed = sb.toString().getBytes(StandardCharsets.UTF_8);
+                                WebResourceResponse cssResp = new WebResourceResponse(mimeType, encoding, new ByteArrayInputStream(processed));
+                                Map<String, String> corsHeaders = new HashMap<>();
+                                corsHeaders.put("Access-Control-Allow-Origin", "*");
+                                corsHeaders.put("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                                corsHeaders.put("Access-Control-Allow-Headers", "*");
+                                cssResp.setResponseHeaders(corsHeaders);
+                                return cssResp;
+                            }
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+
+            try {
+                WebResourceResponse fileResp = new WebResourceResponse(mimeType, encoding, new FileInputStream(targetFile));
+                Map<String, String> corsHeaders = new HashMap<>();
+                corsHeaders.put("Access-Control-Allow-Origin", "*");
+                corsHeaders.put("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+                corsHeaders.put("Access-Control-Allow-Headers", "*");
+                fileResp.setResponseHeaders(corsHeaders);
+                return fileResp;
+            } catch (Throwable ignored) {}
+        }
+
+        return null;
+    }
+
+    public static String getFileMimeType(String fileName) {
+        if (fileName == null) return "application/octet-stream";
+        String lower = fileName.toLowerCase();
+        if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
+        if (lower.endsWith(".js") || lower.endsWith(".mjs")) return "application/javascript";
+        if (lower.endsWith(".json")) return "application/json";
+        if (lower.endsWith(".css")) return "text/css";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".ico")) return "image/x-icon";
+        if (lower.endsWith(".woff2")) return "font/woff2";
+        if (lower.endsWith(".woff")) return "font/woff";
+        if (lower.endsWith(".ttf")) return "font/ttf";
+        return "application/octet-stream";
+    }
+
     public static String getChromePolyfillScript(Context context) {
-        String currentStorageJson = getStorageJson(context).replace("\\", "\\\\").replace("'", "\\'");
+        return getChromePolyfillScript(context, null, false);
+    }
+
+    public static String getChromePolyfillScript(Context context, ExtensionInfo ext, boolean isBackground) {
+        String extId = (ext != null && ext.id != null) ? ext.id : "";
+        String manifestJsonStr = (ext != null && ext.manifestJson != null)
+                ? ext.manifestJson.toString()
+                : "{\"name\":\"Fusion Extension\",\"version\":\"1.0.0\",\"manifest_version\":3}";
+
         return "(function() {\n" +
-                "  if (window.chrome && window.chrome.__is_fusion_polyfill__) return;\n" +
+                "  var root = (typeof window !== 'undefined') ? window : ((typeof self !== 'undefined') ? self : globalThis);\n" +
+                "  var detectedExtId = '" + extId + "';\n" +
+                "  if (!detectedExtId) {\n" +
+                "    try {\n" +
+                "      var h = (root.location && root.location.href) || '';\n" +
+                "      if (h.indexOf('chrome-extension://') === 0) {\n" +
+                "        var sIdx = h.indexOf('/', 19);\n" +
+                "        detectedExtId = (sIdx !== -1) ? h.substring(19, sIdx) : h.substring(19);\n" +
+                "      } else if (h.indexOf('.fusion/extensions/') !== -1) {\n" +
+                "        var parts = h.split('.fusion/extensions/')[1].split('/');\n" +
+                "        if (parts && parts[0]) detectedExtId = parts[0];\n" +
+                "      }\n" +
+                "    } catch(e) {}\n" +
+                "  }\n" +
+                "  if (!detectedExtId) detectedExtId = 'fusion-extension-runtime';\n" +
+                "  if (root.chrome && root.chrome.__is_fusion_polyfill__ && root.chrome.__ext_id__ === detectedExtId) return;\n" +
+                "  var extId = detectedExtId;\n" +
+                "  var isBackground = " + isBackground + ";\n" +
+                "  var manifestObj = " + manifestJsonStr + ";\n" +
                 "  var extStorage = {};\n" +
                 "  try {\n" +
-                "    var raw = window.__FusionExtensionBridge__ ? window.__FusionExtensionBridge__.getStorage() : null;\n" +
+                "    var raw = root.__FusionExtensionBridge__ ? root.__FusionExtensionBridge__.getStorage(extId) : null;\n" +
                 "    if (raw) extStorage = JSON.parse(raw);\n" +
                 "  } catch(e) {}\n" +
-                "  if (!extStorage || !extStorage.gapt_layer) {\n" +
-                "    try {\n" +
-                "      var fallbackRaw = '" + currentStorageJson + "';\n" +
-                "      if (fallbackRaw) extStorage = JSON.parse(fallbackRaw);\n" +
-                "    } catch(e) { extStorage = { gapt_layer: '12m' }; }\n" +
-                "  }\n" +
-                "  if (!extStorage.gapt_layer) extStorage.gapt_layer = '12m';\n" +
-                "  try { window.__GAPT_LAYER = extStorage.gapt_layer; } catch(e) {}\n" +
-                "  var msgListeners = [];\n" +
+                "  if (!extStorage) extStorage = {};\n" +
+                "  var storageSession = {};\n" +
                 "  var storageListeners = [];\n" +
                 "  var connectListeners = [];\n" +
+                "  var messageListeners = [];\n" +
+                "  var activePorts = {};\n" +
+                "  var responseCallbacks = {};\n" +
+                "  root.__fusionNotifyStorageChanged = function(changedExtId, newJsonStr) {\n" +
+                "    if (changedExtId !== extId) return;\n" +
+                "    try {\n" +
+                "      var newStorage = JSON.parse(newJsonStr);\n" +
+                "      var changes = {};\n" +
+                "      for (var k in newStorage) {\n" +
+                "        if (extStorage[k] !== newStorage[k]) {\n" +
+                "          changes[k] = { oldValue: extStorage[k], newValue: newStorage[k] };\n" +
+                "        }\n" +
+                "      }\n" +
+                "      for (var k2 in extStorage) {\n" +
+                "        if (newStorage[k2] === undefined) {\n" +
+                "          changes[k2] = { oldValue: extStorage[k2], newValue: undefined };\n" +
+                "        }\n" +
+                "      }\n" +
+                "      extStorage = newStorage;\n" +
+                "      for (var i = 0; i < storageListeners.length; i++) {\n" +
+                "        try { storageListeners[i](changes, 'local'); } catch(e) {}\n" +
+                "      }\n" +
+                "    } catch(e) {}\n" +
+                "  };\n" +
+                "  root.__fusionIncomingPort = function(portId, senderId, connectInfoJson) {\n" +
+                "    try {\n" +
+                "      var connectInfo = {};\n" +
+                "      try { connectInfo = JSON.parse(connectInfoJson); } catch(e) {}\n" +
+                "      var portMsgListeners = [];\n" +
+                "      var portDisconnectListeners = [];\n" +
+                "      var port = {\n" +
+                "        name: connectInfo.name || '',\n" +
+                "        sender: { id: senderId || extId, url: 'chrome-extension://' + (senderId || extId) },\n" +
+                "        onMessage: {\n" +
+                "          addListener: function(fn) {\n" +
+                "            if (typeof fn === 'function' && portMsgListeners.indexOf(fn) === -1) portMsgListeners.push(fn);\n" +
+                "          },\n" +
+                "          removeListener: function(fn) {\n" +
+                "            var idx = portMsgListeners.indexOf(fn);\n" +
+                "            if (idx !== -1) portMsgListeners.splice(idx, 1);\n" +
+                "          },\n" +
+                "          hasListener: function(fn) { return portMsgListeners.indexOf(fn) !== -1; }\n" +
+                "        },\n" +
+                "        onDisconnect: {\n" +
+                "          addListener: function(fn) {\n" +
+                "            if (typeof fn === 'function' && portDisconnectListeners.indexOf(fn) === -1) portDisconnectListeners.push(fn);\n" +
+                "          },\n" +
+                "          removeListener: function(fn) {\n" +
+                "            var idx = portDisconnectListeners.indexOf(fn);\n" +
+                "            if (idx !== -1) portDisconnectListeners.splice(idx, 1);\n" +
+                "          },\n" +
+                "          hasListener: function(fn) { return portDisconnectListeners.indexOf(fn) !== -1; }\n" +
+                "        },\n" +
+                "        postMessage: function(msg) {\n" +
+                "          try {\n" +
+                "            if (root.__FusionExtensionBridge__) {\n" +
+                "              root.__FusionExtensionBridge__.postPortMessage(extId, portId, JSON.stringify(msg), isBackground);\n" +
+                "            }\n" +
+                "          } catch(err) { console.error('[Fusion Port postMessage Error]:', err); }\n" +
+                "        },\n" +
+                "        disconnect: function() {\n" +
+                "          try {\n" +
+                "            if (root.__FusionExtensionBridge__) {\n" +
+                "              root.__FusionExtensionBridge__.disconnectPort(extId, portId, isBackground);\n" +
+                "            }\n" +
+                "          } catch(err) {}\n" +
+                "          delete activePorts[portId];\n" +
+                "          for (var i = 0; i < portDisconnectListeners.length; i++) {\n" +
+                "            try { portDisconnectListeners[i](port); } catch(e) {}\n" +
+                "          }\n" +
+                "        },\n" +
+                "        __portMsgListeners: portMsgListeners,\n" +
+                "        __portDisconnectListeners: portDisconnectListeners\n" +
+                "      };\n" +
+                "      activePorts[portId] = port;\n" +
+                "      for (var i = 0; i < connectListeners.length; i++) {\n" +
+                "        try { connectListeners[i](port); } catch(err) { console.error('[Fusion onConnect Error]:', err); }\n" +
+                "      }\n" +
+                "    } catch(err) { console.error('[Fusion __fusionIncomingPort Error]:', err); }\n" +
+                "  };\n" +
+                "  root.__fusionReceivePortMessage = function(portId, msgJson) {\n" +
+                "    try {\n" +
+                "      var port = activePorts[portId];\n" +
+                "      if (!port) return;\n" +
+                "      var msg = typeof msgJson === 'string' ? JSON.parse(msgJson) : msgJson;\n" +
+                "      var listeners = port.__portMsgListeners || [];\n" +
+                "      for (var i = 0; i < listeners.length; i++) {\n" +
+                "        try { listeners[i](msg, port); } catch(err) { console.error('[Fusion port.onMessage Error]:', err); }\n" +
+                "      }\n" +
+                "    } catch(err) { console.error('[Fusion __fusionReceivePortMessage Error]:', err); }\n" +
+                "  };\n" +
+                "  root.__fusionDisconnectPort = function(portId) {\n" +
+                "    try {\n" +
+                "      var port = activePorts[portId];\n" +
+                "      if (!port) return;\n" +
+                "      delete activePorts[portId];\n" +
+                "      var listeners = port.__portDisconnectListeners || [];\n" +
+                "      for (var i = 0; i < listeners.length; i++) {\n" +
+                "        try { listeners[i](port); } catch(err) {}\n" +
+                "      }\n" +
+                "    } catch(err) {}\n" +
+                "  };\n" +
+                "  root.__fusionIncomingMessage = function(msgId, senderId, msgJson) {\n" +
+                "    try {\n" +
+                "      var msg = typeof msgJson === 'string' ? JSON.parse(msgJson) : msgJson;\n" +
+                "      var sender = { id: senderId || extId, url: 'chrome-extension://' + (senderId || extId) };\n" +
+                "      var sendResponseCalled = false;\n" +
+                "      var sendResponse = function(resp) {\n" +
+                "        if (sendResponseCalled) return;\n" +
+                "        sendResponseCalled = true;\n" +
+                "        try {\n" +
+                "          if (root.__FusionExtensionBridge__) {\n" +
+                "            root.__FusionExtensionBridge__.sendRuntimeResponse(extId, msgId, JSON.stringify(resp));\n" +
+                "          }\n" +
+                "        } catch(err) {}\n" +
+                "      };\n" +
+                "      for (var i = 0; i < messageListeners.length; i++) {\n" +
+                "        try {\n" +
+                "          var willRespondAsync = messageListeners[i](msg, sender, sendResponse);\n" +
+                "        } catch(err) { console.error('[Fusion onMessage Error]:', err); }\n" +
+                "      }\n" +
+                "    } catch(err) { console.error('[Fusion __fusionIncomingMessage Error]:', err); }\n" +
+                "  };\n" +
+                "  root.__fusionReceiveRuntimeResponse = function(msgId, respJson) {\n" +
+                "    try {\n" +
+                "      var cb = responseCallbacks[msgId];\n" +
+                "      if (typeof cb === 'function') {\n" +
+                "        delete responseCallbacks[msgId];\n" +
+                "        var resp = typeof respJson === 'string' ? JSON.parse(respJson) : respJson;\n" +
+                "        cb(resp);\n" +
+                "      }\n" +
+                "    } catch(err) {}\n" +
+                "  };\n" +
+                "  function createClientPort(targetId, connectInfo) {\n" +
+                "    var name = (connectInfo && connectInfo.name) || '';\n" +
+                "    var portId = 'p_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);\n" +
+                "    var portMsgListeners = [];\n" +
+                "    var portDisconnectListeners = [];\n" +
+                "    var port = {\n" +
+                "      name: name,\n" +
+                "      sender: { id: extId, url: (root.location && root.location.href) || '' },\n" +
+                "      onMessage: {\n" +
+                "        addListener: function(fn) {\n" +
+                "          if (typeof fn === 'function' && portMsgListeners.indexOf(fn) === -1) portMsgListeners.push(fn);\n" +
+                "        },\n" +
+                "        removeListener: function(fn) {\n" +
+                "          var idx = portMsgListeners.indexOf(fn);\n" +
+                "          if (idx !== -1) portMsgListeners.splice(idx, 1);\n" +
+                "        },\n" +
+                "        hasListener: function(fn) { return portMsgListeners.indexOf(fn) !== -1; }\n" +
+                "      },\n" +
+                "      onDisconnect: {\n" +
+                "        addListener: function(fn) {\n" +
+                "          if (typeof fn === 'function' && portDisconnectListeners.indexOf(fn) === -1) portDisconnectListeners.push(fn);\n" +
+                "        },\n" +
+                "        removeListener: function(fn) {\n" +
+                "          var idx = portDisconnectListeners.indexOf(fn);\n" +
+                "          if (idx !== -1) portDisconnectListeners.splice(idx, 1);\n" +
+                "        },\n" +
+                "        hasListener: function(fn) { return portDisconnectListeners.indexOf(fn) !== -1; }\n" +
+                "      },\n" +
+                "      postMessage: function(msg) {\n" +
+                "        try {\n" +
+                "          if (root.__FusionExtensionBridge__) {\n" +
+                "            root.__FusionExtensionBridge__.postPortMessage(targetId, portId, JSON.stringify(msg), isBackground);\n" +
+                "          }\n" +
+                "        } catch(err) { console.error('[Fusion Port postMessage Error]:', err); }\n" +
+                "      },\n" +
+                "      disconnect: function() {\n" +
+                "        try {\n" +
+                "          if (root.__FusionExtensionBridge__) {\n" +
+                "            root.__FusionExtensionBridge__.disconnectPort(targetId, portId, isBackground);\n" +
+                "          }\n" +
+                "        } catch(err) {}\n" +
+                "        delete activePorts[portId];\n" +
+                "        for (var i = 0; i < portDisconnectListeners.length; i++) {\n" +
+                "          try { portDisconnectListeners[i](port); } catch(e) {}\n" +
+                "        }\n" +
+                "      },\n" +
+                "      __portMsgListeners: portMsgListeners,\n" +
+                "      __portDisconnectListeners: portDisconnectListeners\n" +
+                "    };\n" +
+                "    activePorts[portId] = port;\n" +
+                "    try {\n" +
+                "      if (root.__FusionExtensionBridge__) {\n" +
+                "        root.__FusionExtensionBridge__.connectPort(targetId, portId, JSON.stringify(connectInfo || {}));\n" +
+                "      }\n" +
+                "    } catch(err) { console.error('[Fusion connectPort Error]:', err); }\n" +
+                "    return port;\n" +
+                "  }\n" +
                 "  var chromeShim = {\n" +
                 "    __is_fusion_polyfill__: true,\n" +
+                "    __ext_id__: extId,\n" +
                 "    runtime: {\n" +
-                "      id: 'fusion-extension-runtime',\n" +
+                "      id: extId,\n" +
                 "      lastError: null,\n" +
                 "      getURL: function(path) {\n" +
                 "        if (!path) return '';\n" +
                 "        if (path.indexOf('://') !== -1) return path;\n" +
                 "        var p = (path.charAt(0) === '/') ? path.substring(1) : path;\n" +
-                "        var base = (window.location && window.location.href) ? window.location.href.split('?')[0].split('#')[0] : '';\n" +
-                "        var idx = base.lastIndexOf('/');\n" +
-                "        var dir = (idx !== -1) ? base.substring(0, idx + 1) : '';\n" +
-                "        return dir + p;\n" +
+                "        return 'chrome-extension://' + extId + '/' + p;\n" +
                 "      },\n" +
                 "      getManifest: function() {\n" +
-                "        return { name: 'Fusion Extension', version: '1.0.0', manifest_version: 3 };\n" +
+                "        return manifestObj;\n" +
                 "      },\n" +
                 "      reload: function() {\n" +
-                "        if (window.location) window.location.reload();\n" +
+                "        if (root.location) root.location.reload();\n" +
                 "      },\n" +
                 "      getPlatformInfo: function(cb) {\n" +
                 "        var info = { os: 'android', arch: 'arm64', nacl_arch: 'arm' };\n" +
@@ -1120,48 +1910,22 @@ public class FusionExtensionHelper {
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(info) : undefined;\n" +
                 "      },\n" +
                 "      getContexts: function(filter, cb) {\n" +
-                "        var ctxs = [{ contextType: 'TAB', documentUrl: window.location.href }];\n" +
+                "        var ctxs = [{ contextType: isBackground ? 'BACKGROUND' : 'TAB', documentUrl: (root.location && root.location.href) || '' }];\n" +
                 "        if (cb) cb(ctxs);\n" +
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(ctxs) : undefined;\n" +
                 "      },\n" +
-                "      connect: function(connectInfo) {\n" +
-                "        var name = connectInfo ? connectInfo.name : '';\n" +
-                "        var portMsgListeners = [];\n" +
-                "        var portDisconnectListeners = [];\n" +
-                "        var port = {\n" +
-                "          name: name,\n" +
-                "          onMessage: {\n" +
-                "            addListener: function(fn) {\n" +
-                "              if (typeof fn === 'function' && portMsgListeners.indexOf(fn) === -1) portMsgListeners.push(fn);\n" +
-                "            },\n" +
-                "            removeListener: function(fn) {\n" +
-                "              var idx = portMsgListeners.indexOf(fn);\n" +
-                "              if (idx !== -1) portMsgListeners.splice(idx, 1);\n" +
-                "            }\n" +
-                "          },\n" +
-                "          onDisconnect: {\n" +
-                "            addListener: function(fn) {\n" +
-                "              if (typeof fn === 'function' && portDisconnectListeners.indexOf(fn) === -1) portDisconnectListeners.push(fn);\n" +
-                "            },\n" +
-                "            removeListener: function(fn) {\n" +
-                "              var idx = portDisconnectListeners.indexOf(fn);\n" +
-                "              if (idx !== -1) portDisconnectListeners.splice(idx, 1);\n" +
-                "            }\n" +
-                "          },\n" +
-                "          postMessage: function(msg) {\n" +
-                "            try {\n" +
-                "              for (var i = 0; i < connectListeners.length; i++) {\n" +
-                "                try { connectListeners[i](msg, port); } catch(err) {}\n" +
-                "              }\n" +
-                "            } catch(e) {}\n" +
-                "          },\n" +
-                "          disconnect: function() {\n" +
-                "            for (var i = 0; i < portDisconnectListeners.length; i++) {\n" +
-                "              try { portDisconnectListeners[i](port); } catch(e) {}\n" +
-                "            }\n" +
-                "          }\n" +
-                "        };\n" +
-                "        return port;\n" +
+                "      connect: function(arg1, arg2) {\n" +
+                "        var targetId = extId;\n" +
+                "        var connectInfo = null;\n" +
+                "        if (typeof arg1 === 'string') {\n" +
+                "          targetId = arg1;\n" +
+                "          connectInfo = arg2 || {};\n" +
+                "        } else if (typeof arg1 === 'object' && arg1 !== null) {\n" +
+                "          connectInfo = arg1;\n" +
+                "        } else {\n" +
+                "          connectInfo = {};\n" +
+                "        }\n" +
+                "        return createClientPort(targetId, connectInfo);\n" +
                 "      },\n" +
                 "      onConnect: {\n" +
                 "        addListener: function(fn) {\n" +
@@ -1170,48 +1934,78 @@ public class FusionExtensionHelper {
                 "        removeListener: function(fn) {\n" +
                 "          var idx = connectListeners.indexOf(fn);\n" +
                 "          if (idx !== -1) connectListeners.splice(idx, 1);\n" +
-                "        }\n" +
+                "        },\n" +
+                "        hasListener: function(fn) { return connectListeners.indexOf(fn) !== -1; }\n" +
+                "      },\n" +
+                "      onConnectExternal: {\n" +
+                "        addListener: function(fn) {\n" +
+                "          if (typeof fn === 'function' && connectListeners.indexOf(fn) === -1) connectListeners.push(fn);\n" +
+                "        },\n" +
+                "        removeListener: function(fn) {\n" +
+                "          var idx = connectListeners.indexOf(fn);\n" +
+                "          if (idx !== -1) connectListeners.splice(idx, 1);\n" +
+                "        },\n" +
+                "        hasListener: function(fn) { return connectListeners.indexOf(fn) !== -1; }\n" +
                 "      },\n" +
                 "      onMessage: {\n" +
                 "        addListener: function(fn) {\n" +
-                "          if (typeof fn === 'function' && msgListeners.indexOf(fn) === -1) msgListeners.push(fn);\n" +
+                "          if (typeof fn === 'function' && messageListeners.indexOf(fn) === -1) messageListeners.push(fn);\n" +
                 "        },\n" +
                 "        removeListener: function(fn) {\n" +
-                "          var idx = msgListeners.indexOf(fn);\n" +
-                "          if (idx !== -1) msgListeners.splice(idx, 1);\n" +
-                "        }\n" +
+                "          var idx = messageListeners.indexOf(fn);\n" +
+                "          if (idx !== -1) messageListeners.splice(idx, 1);\n" +
+                "        },\n" +
+                "        hasListener: function(fn) { return messageListeners.indexOf(fn) !== -1; }\n" +
                 "      },\n" +
-                "      sendMessage: function(msg, cb) {\n" +
-                "        var handled = false;\n" +
-                "        for (var i = 0; i < msgListeners.length; i++) {\n" +
-                "          try {\n" +
-                "            var res = msgListeners[i](msg, { id: 'fusion-extension' }, function(response) {\n" +
-                "              if (cb) {\n" +
-                "                try { cb(response); } catch(err) {}\n" +
-                "              }\n" +
-                "            });\n" +
-                "            if (res === true) handled = true;\n" +
-                "          } catch(err) { console.error('[Chrome Shim onMessage Error]:', err); }\n" +
+                "      onMessageExternal: {\n" +
+                "        addListener: function(fn) {\n" +
+                "          if (typeof fn === 'function' && messageListeners.indexOf(fn) === -1) messageListeners.push(fn);\n" +
+                "        },\n" +
+                "        removeListener: function(fn) {\n" +
+                "          var idx = messageListeners.indexOf(fn);\n" +
+                "          if (idx !== -1) messageListeners.splice(idx, 1);\n" +
+                "        },\n" +
+                "        hasListener: function(fn) { return messageListeners.indexOf(fn) !== -1; }\n" +
+                "      },\n" +
+                "      sendMessage: function(arg1, arg2, arg3) {\n" +
+                "        var targetId = extId;\n" +
+                "        var msg = arg1;\n" +
+                "        var cb = arg2;\n" +
+                "        if (typeof arg1 === 'string' && typeof arg2 !== 'function') {\n" +
+                "          targetId = arg1;\n" +
+                "          msg = arg2;\n" +
+                "          cb = arg3;\n" +
                 "        }\n" +
-                "        if (!handled && cb) {\n" +
-                "          try { cb(null); } catch(e) {}\n" +
+                "        var msgId = 'm_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);\n" +
+                "        if (typeof cb === 'function') {\n" +
+                "          responseCallbacks[msgId] = cb;\n" +
                 "        }\n" +
-                "        return (typeof Promise !== 'undefined') ? Promise.resolve(null) : undefined;\n" +
-                "      }\n" +
+                "        try {\n" +
+                "          if (root.__FusionExtensionBridge__) {\n" +
+                "            root.__FusionExtensionBridge__.sendRuntimeMessage(targetId, msgId, JSON.stringify(msg));\n" +
+                "          }\n" +
+                "        } catch(err) { console.error('[Fusion sendMessage Error]:', err); }\n" +
+                "        return (typeof Promise !== 'undefined') ? new Promise(function(resolve) {\n" +
+                "          responseCallbacks[msgId] = resolve;\n" +
+                "        }) : undefined;\n" +
+                "      },\n" +
+                "      onInstalled: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
+                "      onStartup: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
+                "      setUninstallURL: function(url, cb) { if (cb) cb(); return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined; }\n" +
                 "    },\n" +
                 "    i18n: {\n" +
                 "      getMessage: function(key, substitutions) {\n" +
                 "        if (!key) return '';\n" +
                 "        var msg = null;\n" +
-                "        if (window.__fusionI18n && window.__fusionI18n[key]) {\n" +
-                "          var entry = window.__fusionI18n[key];\n" +
+                "        if (root.__fusionI18n && root.__fusionI18n[key]) {\n" +
+                "          var entry = root.__fusionI18n[key];\n" +
                 "          msg = (typeof entry === 'object' && entry.message) ? entry.message : entry;\n" +
                 "        }\n" +
-                "        if (!msg && window.__fusionI18n) {\n" +
+                "        if (!msg && root.__fusionI18n) {\n" +
                 "          var lower = key.toLowerCase();\n" +
-                "          for (var k in window.__fusionI18n) {\n" +
+                "          for (var k in root.__fusionI18n) {\n" +
                 "            if (k.toLowerCase() === lower) {\n" +
-                "              var ent = window.__fusionI18n[k];\n" +
+                "              var ent = root.__fusionI18n[k];\n" +
                 "              msg = (typeof ent === 'object' && ent.message) ? ent.message : ent;\n" +
                 "              break;\n" +
                 "            }\n" +
@@ -1226,70 +2020,170 @@ public class FusionExtensionHelper {
                 "        }\n" +
                 "        return msg;\n" +
                 "      },\n" +
-                "      getUILanguage: function() { return (navigator && (navigator.language || navigator.userLanguage)) || 'en'; }\n" +
+                "      getUILanguage: function() { return (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage)) || 'en'; },\n" +
+                "      getAcceptLanguages: function(cb) {\n" +
+                "        var langs = ['en-US', 'en', 'id'];\n" +
+                "        if (cb) cb(langs);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve(langs) : undefined;\n" +
+                "      }\n" +
                 "    },\n" +
                 "    storage: {\n" +
                 "      local: {\n" +
                 "        get: function(keys, cb) {\n" +
-                "          var result = {};\n" +
-                "          if (!keys) {\n" +
-                "            result = Object.assign({}, extStorage);\n" +
-                "          } else if (typeof keys === 'string') {\n" +
-                "            result[keys] = extStorage[keys];\n" +
-                "          } else if (Array.isArray(keys)) {\n" +
-                "            for (var i = 0; i < keys.length; i++) result[keys[i]] = extStorage[keys[i]];\n" +
-                "          } else if (typeof keys === 'object' && keys !== null) {\n" +
-                "            for (var k in keys) result[k] = (extStorage[k] !== undefined) ? extStorage[k] : keys[k];\n" +
-                "          }\n" +
-                "          if (cb) {\n" +
-                "            try { cb(result); } catch(e) { console.error('[Chrome Shim storage get Error]:', e); }\n" +
-                "          }\n" +
-                "          return (typeof Promise !== 'undefined') ? Promise.resolve(result) : undefined;\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              var result = {};\n" +
+                "              if (!keys) {\n" +
+                "                result = Object.assign({}, extStorage);\n" +
+                "              } else if (typeof keys === 'string') {\n" +
+                "                result[keys] = extStorage[keys];\n" +
+                "              } else if (Array.isArray(keys)) {\n" +
+                "                for (var i = 0; i < keys.length; i++) result[keys[i]] = extStorage[keys[i]];\n" +
+                "              } else if (typeof keys === 'object' && keys !== null) {\n" +
+                "                for (var k in keys) result[k] = (extStorage[k] !== undefined) ? extStorage[k] : keys[k];\n" +
+                "              }\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(result); } catch(e) { console.error('[Chrome Shim storage get Error]:', e); }\n" +
+                "              }\n" +
+                "              resolve(result);\n" +
+                "            }, 0);\n" +
+                "          });\n" +
                 "        },\n" +
                 "        set: function(items, cb) {\n" +
-                "          var changes = {};\n" +
-                "          if (items && typeof items === 'object') {\n" +
-                "            for (var k in items) {\n" +
-                "              var oldVal = extStorage[k];\n" +
-                "              extStorage[k] = items[k];\n" +
-                "              changes[k] = { oldValue: oldVal, newValue: items[k] };\n" +
-                "              try { localStorage.setItem(k, items[k]); } catch(e) {}\n" +
-                "            }\n" +
-                "            try {\n" +
-                "              if (window.__FusionExtensionBridge__) window.__FusionExtensionBridge__.setStorage(JSON.stringify(extStorage));\n" +
-                "            } catch(e) {}\n" +
-                "          }\n" +
-                "          for (var i = 0; i < storageListeners.length; i++) {\n" +
-                "            try { storageListeners[i](changes, 'local'); } catch(e) {}\n" +
-                "          }\n" +
-                "          if (cb) {\n" +
-                "            try { cb(); } catch(e) {}\n" +
-                "          }\n" +
-                "          return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              var changes = {};\n" +
+                "              if (items && typeof items === 'object') {\n" +
+                "                for (var k in items) {\n" +
+                "                  var oldVal = extStorage[k];\n" +
+                "                  extStorage[k] = items[k];\n" +
+                "                  changes[k] = { oldValue: oldVal, newValue: items[k] };\n" +
+                "                  try { if (typeof localStorage !== 'undefined') localStorage.setItem(k, items[k]); } catch(e) {}\n" +
+                "                }\n" +
+                "                try {\n" +
+                "                  if (root.__FusionExtensionBridge__) root.__FusionExtensionBridge__.setStorage(extId, JSON.stringify(extStorage));\n" +
+                "                } catch(e) {}\n" +
+                "              }\n" +
+                "              for (var i = 0; i < storageListeners.length; i++) {\n" +
+                "                try { storageListeners[i](changes, 'local'); } catch(e) {}\n" +
+                "              }\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(); } catch(e) {}\n" +
+                "              }\n" +
+                "              resolve();\n" +
+                "            }, 0);\n" +
+                "          });\n" +
                 "        },\n" +
                 "        remove: function(keys, cb) {\n" +
-                "          var list = Array.isArray(keys) ? keys : [keys];\n" +
-                "          for (var i = 0; i < list.length; i++) {\n" +
-                "            delete extStorage[list[i]];\n" +
-                "            try { localStorage.removeItem(list[i]); } catch(e) {}\n" +
-                "          }\n" +
-                "          try {\n" +
-                "            if (window.__FusionExtensionBridge__) window.__FusionExtensionBridge__.setStorage(JSON.stringify(extStorage));\n" +
-                "          } catch(e) {}\n" +
-                "          if (cb) {\n" +
-                "            try { cb(); } catch(e) {}\n" +
-                "          }\n" +
-                "          return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              var list = Array.isArray(keys) ? keys : [keys];\n" +
+                "              for (var i = 0; i < list.length; i++) {\n" +
+                "                delete extStorage[list[i]];\n" +
+                "                try { if (typeof localStorage !== 'undefined') localStorage.removeItem(list[i]); } catch(e) {}\n" +
+                "              }\n" +
+                "              try {\n" +
+                "                if (root.__FusionExtensionBridge__) root.__FusionExtensionBridge__.setStorage(extId, JSON.stringify(extStorage));\n" +
+                "              } catch(e) {}\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(); } catch(e) {}\n" +
+                "              }\n" +
+                "              resolve();\n" +
+                "            }, 0);\n" +
+                "          });\n" +
                 "        },\n" +
                 "        clear: function(cb) {\n" +
-                "          extStorage = {};\n" +
-                "          try {\n" +
-                "            if (window.__FusionExtensionBridge__) window.__FusionExtensionBridge__.setStorage('{}');\n" +
-                "          } catch(e) {}\n" +
-                "          if (cb) {\n" +
-                "            try { cb(); } catch(e) {}\n" +
-                "          }\n" +
-                "          return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              extStorage = {};\n" +
+                "              try {\n" +
+                "                if (root.__FusionExtensionBridge__) root.__FusionExtensionBridge__.setStorage(extId, '{}');\n" +
+                "              } catch(e) {}\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(); } catch(e) {}\n" +
+                "              }\n" +
+                "              resolve();\n" +
+                "            }, 0);\n" +
+                "          });\n" +
+                "        }\n" +
+                "      },\n" +
+                "      sync: {\n" +
+                "        get: function(keys, cb) { return chromeShim.storage.local.get(keys, cb); },\n" +
+                "        set: function(items, cb) { return chromeShim.storage.local.set(items, cb); },\n" +
+                "        remove: function(keys, cb) { return chromeShim.storage.local.remove(keys, cb); },\n" +
+                "        clear: function(cb) { return chromeShim.storage.local.clear(cb); }\n" +
+                "      },\n" +
+                "      session: {\n" +
+                "        get: function(keys, cb) {\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              var result = {};\n" +
+                "              if (!keys) {\n" +
+                "                result = Object.assign({}, storageSession);\n" +
+                "              } else if (typeof keys === 'string') {\n" +
+                "                result[keys] = storageSession[keys];\n" +
+                "              } else if (Array.isArray(keys)) {\n" +
+                "                for (var i = 0; i < keys.length; i++) result[keys[i]] = storageSession[keys[i]];\n" +
+                "              } else if (typeof keys === 'object' && keys !== null) {\n" +
+                "                for (var k in keys) result[k] = (storageSession[k] !== undefined) ? storageSession[k] : keys[k];\n" +
+                "              }\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(result); } catch(e) {}\n" +
+                "              }\n" +
+                "              resolve(result);\n" +
+                "            }, 0);\n" +
+                "          });\n" +
+                "        },\n" +
+                "        set: function(items, cb) {\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              if (items && typeof items === 'object') {\n" +
+                "                for (var k in items) storageSession[k] = items[k];\n" +
+                "              }\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(); } catch(e) {}\n" +
+                "              }\n" +
+                "              resolve();\n" +
+                "            }, 0);\n" +
+                "          });\n" +
+                "        },\n" +
+                "        remove: function(keys, cb) {\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              var list = Array.isArray(keys) ? keys : [keys];\n" +
+                "              for (var i = 0; i < list.length; i++) delete storageSession[list[i]];\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(); } catch(e) {}\n" +
+                "              }\n" +
+                "              resolve();\n" +
+                "            }, 0);\n" +
+                "          });\n" +
+                "        },\n" +
+                "        clear: function(cb) {\n" +
+                "          return new Promise(function(resolve) {\n" +
+                "            setTimeout(function() {\n" +
+                "              storageSession = {};\n" +
+                "              if (typeof cb === 'function') {\n" +
+                "                try { cb(); } catch(e) {}\n" +
+                "              }\n" +
+                "              resolve();\n" +
+                "            }, 0);\n" +
+                "          });\n" +
+                "        },\n" +
+                "        getBytesInUse: function(keys, cb) {\n" +
+                "          if (cb) cb(0);\n" +
+                "          return (typeof Promise !== 'undefined') ? Promise.resolve(0) : undefined;\n" +
+                "        }\n" +
+                "      },\n" +
+                "      managed: {\n" +
+                "        get: function(keys, cb) {\n" +
+                "          var res = {};\n" +
+                "          if (cb) cb(res);\n" +
+                "          return (typeof Promise !== 'undefined') ? Promise.resolve(res) : undefined;\n" +
+                "        },\n" +
+                "        getBytesInUse: function(keys, cb) {\n" +
+                "          if (cb) cb(0);\n" +
+                "          return (typeof Promise !== 'undefined') ? Promise.resolve(0) : undefined;\n" +
                 "        }\n" +
                 "      },\n" +
                 "      onChanged: {\n" +
@@ -1305,7 +2199,7 @@ public class FusionExtensionHelper {
                 "    tabs: {\n" +
                 "      create: function(props, cb) {\n" +
                 "        var url = props ? props.url : '';\n" +
-                "        if (url && window.open) window.open(url, '_blank');\n" +
+                "        if (url && typeof window !== 'undefined' && window.open) window.open(url, '_blank');\n" +
                 "        var tab = { id: Date.now(), active: true, url: url };\n" +
                 "        if (cb) {\n" +
                 "          try { cb(tab); } catch(e) {}\n" +
@@ -1313,17 +2207,17 @@ public class FusionExtensionHelper {
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(tab) : undefined;\n" +
                 "      },\n" +
                 "      update: function(tabId, props, cb) {\n" +
-                "        if (props && props.url && window.location) {\n" +
-                "          window.location.href = props.url;\n" +
+                "        if (props && props.url && root.location) {\n" +
+                "          root.location.href = props.url;\n" +
                 "        }\n" +
-                "        var tab = { id: tabId || 1, active: true, url: (props && props.url) || window.location.href };\n" +
+                "        var tab = { id: tabId || 1, active: true, url: (props && props.url) || (root.location && root.location.href) || '' };\n" +
                 "        if (cb) {\n" +
                 "          try { cb(tab); } catch(e) {}\n" +
                 "        }\n" +
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(tab) : undefined;\n" +
                 "      },\n" +
                 "      get: function(tabId, cb) {\n" +
-                "        var tab = { id: tabId || 1, active: true, url: window.location.href };\n" +
+                "        var tab = { id: tabId || 1, active: true, url: (root.location && root.location.href) || '' };\n" +
                 "        if (cb) cb(tab);\n" +
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(tab) : undefined;\n" +
                 "      },\n" +
@@ -1332,14 +2226,16 @@ public class FusionExtensionHelper {
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
                 "      },\n" +
                 "      sendMessage: function(tabId, msg, cb) {\n" +
-                "        if (chromeShim.runtime && chromeShim.runtime.sendMessage) chromeShim.runtime.sendMessage(msg, cb);\n" +
+                "        if (chromeShim.runtime && chromeShim.runtime.sendMessage) return chromeShim.runtime.sendMessage(msg, cb);\n" +
                 "      },\n" +
                 "      query: function(info, cb) {\n" +
-                "        var list = [{ id: 1, active: true, url: window.location.href }];\n" +
-                "        if (cb) {\n" +
-                "          try { cb(list); } catch(e) {}\n" +
-                "        }\n" +
-                "        return (typeof Promise !== 'undefined') ? Promise.resolve(list) : undefined;\n" +
+                "        var list = [{ id: 1, active: true, url: (root.location && root.location.href) || '' }];\n" +
+                "        return new Promise(function(resolve) {\n" +
+                "          setTimeout(function() {\n" +
+                "            if (typeof cb === 'function') { try { cb(list); } catch(e) {} }\n" +
+                "            resolve(list);\n" +
+                "          }, 0);\n" +
+                "        });\n" +
                 "      },\n" +
                 "      onUpdated: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
                 "      onActivated: { addListener: function(fn) {}, removeListener: function(fn) {} }\n" +
@@ -1347,14 +2243,18 @@ public class FusionExtensionHelper {
                 "    windows: {\n" +
                 "      getCurrent: function(getInfo, cb) {\n" +
                 "        if (typeof getInfo === 'function') { cb = getInfo; getInfo = null; }\n" +
-                "        var win = { id: 1, focused: true, top: 0, left: 0, width: (window.innerWidth || 1080), height: (window.innerHeight || 1920), type: 'normal', state: 'normal' };\n" +
+                "        var win = { id: 1, focused: true, top: 0, left: 0, width: (typeof window !== 'undefined' && window.innerWidth) || 1080, height: (typeof window !== 'undefined' && window.innerHeight) || 1920, type: 'normal', state: 'normal' };\n" +
                 "        if (cb) cb(win);\n" +
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(win) : undefined;\n" +
                 "      },\n" +
                 "      create: function(createData, cb) {\n" +
                 "        var url = createData ? createData.url : '';\n" +
-                "        if (url && window.open) window.open(url, '_blank');\n" +
-                "        var win = { id: Date.now(), focused: true, top: 0, left: 0, width: (window.innerWidth || 1080), height: (window.innerHeight || 1920), type: 'popup', state: 'normal' };\n" +
+                "        if (url && root.__FusionExtensionBridge__) {\n" +
+                "          root.__FusionExtensionBridge__.openWindow(extId, url);\n" +
+                "        } else if (url && typeof window !== 'undefined' && window.open) {\n" +
+                "          window.open(url, '_blank');\n" +
+                "        }\n" +
+                "        var win = { id: Date.now(), focused: true, top: 0, left: 0, width: (typeof window !== 'undefined' && window.innerWidth) || 1080, height: (typeof window !== 'undefined' && window.innerHeight) || 1920, type: 'popup', state: 'normal' };\n" +
                 "        if (cb) cb(win);\n" +
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(win) : undefined;\n" +
                 "      },\n" +
@@ -1370,7 +2270,7 @@ public class FusionExtensionHelper {
                 "    },\n" +
                 "    management: {\n" +
                 "      getSelf: function(cb) {\n" +
-                "        var info = { id: 'fusion-extension-runtime', enabled: true, installType: 'development', type: 'extension' };\n" +
+                "        var info = { id: extId, enabled: true, installType: 'development', type: 'extension' };\n" +
                 "        if (cb) cb(info);\n" +
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(info) : undefined;\n" +
                 "      }\n" +
@@ -1384,28 +2284,140 @@ public class FusionExtensionHelper {
                 "        if (cb) cb(true);\n" +
                 "        return (typeof Promise !== 'undefined') ? Promise.resolve(true) : undefined;\n" +
                 "      }\n" +
+                "    },\n" +
+                "    alarms: {\n" +
+                "      create: function(name, alarmInfo) {},\n" +
+                "      get: function(name, cb) { if (cb) cb(null); return (typeof Promise !== 'undefined') ? Promise.resolve(null) : undefined; },\n" +
+                "      getAll: function(cb) { if (cb) cb([]); return (typeof Promise !== 'undefined') ? Promise.resolve([]) : undefined; },\n" +
+                "      clear: function(name, cb) { if (cb) cb(true); return (typeof Promise !== 'undefined') ? Promise.resolve(true) : undefined; },\n" +
+                "      clearAll: function(cb) { if (cb) cb(true); return (typeof Promise !== 'undefined') ? Promise.resolve(true) : undefined; },\n" +
+                "      onAlarm: { addListener: function(fn) {}, removeListener: function(fn) {} }\n" +
+                "    },\n" +
+                "    action: {\n" +
+                "      setTitle: function(details, cb) { if (cb) cb(); },\n" +
+                "      getTitle: function(details, cb) { if (cb) cb(''); },\n" +
+                "      setIcon: function(details, cb) { if (cb) cb(); },\n" +
+                "      setBadgeText: function(details, cb) { if (cb) cb(); },\n" +
+                "      getBadgeText: function(details, cb) { if (cb) cb(''); },\n" +
+                "      setBadgeBackgroundColor: function(details, cb) { if (cb) cb(); },\n" +
+                "      enable: function(tabId, cb) { if (cb) cb(); },\n" +
+                "      disable: function(tabId, cb) { if (cb) cb(); },\n" +
+                "      onClicked: { addListener: function(fn) {}, removeListener: function(fn) {} }\n" +
+                "    },\n" +
+                "    browserAction: {\n" +
+                "      setTitle: function(details, cb) { if (cb) cb(); },\n" +
+                "      getTitle: function(details, cb) { if (cb) cb(''); },\n" +
+                "      setIcon: function(details, cb) { if (cb) cb(); },\n" +
+                "      setBadgeText: function(details, cb) { if (cb) cb(); },\n" +
+                "      getBadgeText: function(details, cb) { if (cb) cb(''); },\n" +
+                "      setBadgeBackgroundColor: function(details, cb) { if (cb) cb(); },\n" +
+                "      enable: function(tabId, cb) { if (cb) cb(); },\n" +
+                "      disable: function(tabId, cb) { if (cb) cb(); },\n" +
+                "      onClicked: { addListener: function(fn) {}, removeListener: function(fn) {} }\n" +
+                "    },\n" +
+                "    webNavigation: {\n" +
+                "      onBeforeNavigate: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
+                "      onCommitted: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
+                "      onDOMContentLoaded: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
+                "      onCompleted: { addListener: function(fn) {}, removeListener: function(fn) {} },\n" +
+                "      onErrorOccurred: { addListener: function(fn) {}, removeListener: function(fn) {} }\n" +
+                "    },\n" +
+                "    scripting: {\n" +
+                "      executeScript: function(injection, cb) {\n" +
+                "        if (cb) cb([]);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve([]) : undefined;\n" +
+                "      },\n" +
+                "      insertCSS: function(injection, cb) {\n" +
+                "        if (cb) cb();\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
+                "      },\n" +
+                "      removeCSS: function(injection, cb) {\n" +
+                "        if (cb) cb();\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
+                "      }\n" +
+                "    },\n" +
+                "    declarativeNetRequest: {\n" +
+                "      updateDynamicRules: function(options, cb) {\n" +
+                "        if (cb) cb();\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve() : undefined;\n" +
+                "      },\n" +
+                "      getDynamicRules: function(cb) {\n" +
+                "        if (cb) cb([]);\n" +
+                "        return (typeof Promise !== 'undefined') ? Promise.resolve([]) : undefined;\n" +
+                "      }\n" +
                 "    }\n" +
                 "  };\n" +
-                "  window.chrome = Object.assign(window.chrome || {}, chromeShim);\n" +
+                "  root.chrome = Object.assign(root.chrome || {}, chromeShim);\n" +
+                "  if (typeof window !== 'undefined') window.chrome = root.chrome;\n" +
+                "  if (typeof self !== 'undefined') self.chrome = root.chrome;\n" +
+                "  if (typeof globalThis !== 'undefined') globalThis.chrome = root.chrome;\n" +
                 "})();\n";
     }
 
     public static String buildContentScriptWrapper(ExtensionInfo ext, ExtensionInfo.ContentScript cs, int scriptIndex) {
-        if (ext == null || cs == null || cs.jsFiles.isEmpty()) return null;
+        if (ext == null || cs == null) return null;
+        if (cs.jsFiles.isEmpty() && cs.cssFiles.isEmpty()) return null;
 
         StringBuilder jsCodeBuilder = new StringBuilder();
+
+        for (String cssFileRel : cs.cssFiles) {
+            File f = new File(ext.dir, cssFileRel);
+            if (f.exists() && f.isFile()) {
+                try {
+                    byte[] bytes = readFileBytesSafe(f);
+                    if (bytes != null && bytes.length > 0) {
+                        String cssText = new String(bytes, StandardCharsets.UTF_8);
+                        String defaultLocale = "en";
+                        File mf = new File(ext.dir, "manifest.json");
+                        byte[] mfBytes = readFileBytesSafe(mf);
+                        if (mfBytes != null && mfBytes.length > 0) {
+                            try {
+                                JSONObject root = new JSONObject(new String(mfBytes, StandardCharsets.UTF_8));
+                                defaultLocale = root.optString("default_locale", "en");
+                            } catch (Throwable ignored) {}
+                        }
+                        cssText = cssText.replace("__MSG_@@bidi_dir__", "ltr");
+                        Matcher m = Pattern.compile("__MSG_([a-zA-Z0-9_]+)__").matcher(cssText);
+                        StringBuffer sb = new StringBuffer();
+                        while (m.find()) {
+                            String k = m.group(1);
+                            String resolved = resolveI18nString(ext.dir, "__MSG_" + k + "__", defaultLocale);
+                            if (resolved != null && !resolved.startsWith("__MSG_")) {
+                                m.appendReplacement(sb, Matcher.quoteReplacement(resolved));
+                            } else {
+                                m.appendReplacement(sb, "");
+                            }
+                        }
+                        m.appendTail(sb);
+                        String processedCss = sb.toString();
+
+                        jsCodeBuilder.append("/* --- CSS: ").append(cssFileRel).append(" --- */\n");
+                        jsCodeBuilder.append("(function() {\n");
+                        jsCodeBuilder.append("  try {\n");
+                        jsCodeBuilder.append("    var st = document.createElement('style');\n");
+                        jsCodeBuilder.append("    st.setAttribute('data-fusion-ext', ").append(JSONObject.quote(ext.id)).append(");\n");
+                        jsCodeBuilder.append("    st.textContent = ").append(JSONObject.quote(processedCss)).append(";\n");
+                        jsCodeBuilder.append("    (document.head || document.documentElement).appendChild(st);\n");
+                        jsCodeBuilder.append("  } catch(e) {}\n");
+                        jsCodeBuilder.append("})();\n;\n");
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
+
         for (String jsFileRel : cs.jsFiles) {
             File f = new File(ext.dir, jsFileRel);
             if (f.exists() && f.isFile()) {
                 try {
                     byte[] bytes = readFileBytesSafe(f);
                     if (bytes != null && bytes.length > 0) {
-                        jsCodeBuilder.append("/* --- ").append(jsFileRel).append(" --- */\n");
+                        jsCodeBuilder.append("/* --- JS: ").append(jsFileRel).append(" --- */\n");
                         jsCodeBuilder.append(new String(bytes, StandardCharsets.UTF_8)).append("\n;\n");
                     }
                 } catch (Throwable ignored) {}
             }
         }
+
         String combinedScript = jsCodeBuilder.toString();
         if (combinedScript.trim().isEmpty()) return null;
 
@@ -1431,7 +2443,7 @@ public class FusionExtensionHelper {
         sb.append("        var p = patterns[i];\n");
         sb.append("        if (p === '<all_urls>' || p === '*://*/*' || p === '*') return true;\n");
         sb.append("        try {\n");
-        sb.append("          var regStr = '^' + p.replace(/\\\\/g, '\\\\\\\\').replace(/\\./g, '\\\\.').replace(/\\*:\\/\\//g, 'https?:\\\\/\\\\/').replace(/http:\\/\\/\\*/g, 'http:\\\\/\\\\/.*').replace(/https:\\/\\/\\*/g, 'https:\\\\/\\\\/.*').replace(/\\*/g, '.*') + '$';\n");
+        sb.append("          var regStr = '^' + p.replace(/\\\\/g, '\\\\\\\').replace(/\\./g, '\\\\.').replace(/\\*:\\/\\//g, 'https?:\\\\/\\\\/').replace(/http:\\/\\/\\*/g, 'http:\\\\/\\\\/.*').replace(/https:\\/\\/\\*/g, 'https:\\\\/\\\\/.*').replace(/\\*/g, '.*') + '$';\n");
         sb.append("          if (new RegExp(regStr).test(url)) return true;\n");
         sb.append("        } catch(e) {\n");
         sb.append("          if (url.indexOf(p) !== -1) return true;\n");
@@ -1471,13 +2483,12 @@ public class FusionExtensionHelper {
         if (webView == null) return;
         try {
             Context ctx = webView.getContext();
-            String polyfill = getChromePolyfillScript(ctx);
+            sActiveTabWebViews.add(webView);
 
+            String polyfill = getChromePolyfillScript(ctx, null, false);
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-                // Register polyfill chrome.* runtime
                 WebViewCompat.addDocumentStartJavaScript(webView, polyfill, Collections.singleton("*"));
 
-                // Register semua content script yang aktif
                 List<ExtensionInfo> exts = getInstalledExtensions(ctx);
                 for (ExtensionInfo ext : exts) {
                     if (!ext.enabled) continue;
@@ -1491,6 +2502,8 @@ public class FusionExtensionHelper {
                 }
                 Log.i(TAG, "Berhasil meregistrasikan DocumentStartJavaScript untuk " + exts.size() + " ekstensi.");
             }
+
+            startAllBackgroundHosts(ctx);
         } catch (Throwable e) {
             Log.e(TAG, "Gagal setupWebView ekstensi: " + e.getMessage());
         }
@@ -1530,11 +2543,19 @@ public class FusionExtensionHelper {
         }
 
         Context ctx = webView.getContext();
-        // Injeksi polyfill jika belum ada
-        String polyfill = getChromePolyfillScript(ctx);
+        sActiveTabWebViews.add(webView);
+
+        boolean docStartSupported = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
+
+        // Jika DocumentStartScript didukung oleh Chromium WebView engine, polyfill dan scripts
+        // ber-timing document_start sudah otomatis dieksekusi sebelum script halaman berjalan.
+        if (docStartSupported && "document_start".equalsIgnoreCase(triggerTiming)) {
+            return;
+        }
+
+        String polyfill = getChromePolyfillScript(ctx, null, false);
         webView.evaluateJavascript(polyfill, null);
 
-        // Jika membuka halaman internal ekstensi, injeksikan kamus pesan i18n
         if (currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/")) {
             String i18nJs = getI18nInjectionScript(currentUrl);
             if (i18nJs != null && !i18nJs.isEmpty()) {
@@ -1548,6 +2569,10 @@ public class FusionExtensionHelper {
             for (int i = 0; i < ext.contentScripts.size(); i++) {
                 ExtensionInfo.ContentScript cs = ext.contentScripts.get(i);
                 if (isUrlMatched(currentUrl, cs.matches)) {
+                    // Jangan injeksi ulang script document_start jika engine sudah menanganinya
+                    if (docStartSupported && "document_start".equalsIgnoreCase(cs.runAt)) {
+                        continue;
+                    }
                     String wrapped = buildContentScriptWrapper(ext, cs, i);
                     if (wrapped != null) {
                         webView.evaluateJavascript(wrapped, null);
@@ -1769,6 +2794,11 @@ public class FusionExtensionHelper {
                 stateMap.put(ext.id, ext.enabled);
                 saveExtensionsState(act, stateMap);
                 FusionToast.makeText(act, ext.name + (ext.enabled ? " diaktifkan." : " dinonaktifkan."), Toast.LENGTH_SHORT).show();
+                if (ext.enabled && ext.hasBackground()) {
+                    ensureBackgroundHostRunning(act, ext);
+                } else if (!ext.enabled) {
+                    stopBackgroundHost(ext.id);
+                }
                 if (manager != null && manager.mActiveWebView != null) {
                     setupWebView(manager.mActiveWebView);
                 }
@@ -1794,6 +2824,7 @@ public class FusionExtensionHelper {
                 delConfirm.setTitle("Hapus Ekstensi?");
                 delConfirm.setMessage("Yakin ingin menghapus ekstensi \"" + ext.name + "\"?");
                 delConfirm.setPositiveButton("Hapus", (d, w) -> {
+                    stopBackgroundHost(ext.id);
                     boolean deleted = deleteRecursive(ext.dir);
                     Map<String, Boolean> stateMap = loadExtensionsState(act);
                     stateMap.remove(ext.id);
@@ -1847,7 +2878,6 @@ public class FusionExtensionHelper {
                 setLayerConfig(act, chosen);
                 FusionToast.makeText(act, "✅ Layer AI Pro disetel ke: " + chosen, Toast.LENGTH_SHORT).show();
 
-                // Live postMessage ke halaman webview jika sedang membuka Google One
                 if (manager != null && manager.mActiveWebView != null) {
                     manager.mActiveWebView.evaluateJavascript(
                         "(function() {\n" +
@@ -1871,7 +2901,6 @@ public class FusionExtensionHelper {
         final List<File> archives = scanCandidateArchives();
 
         List<String> displayNames = new ArrayList<>();
-        // Opsi 1: Pemilih Berkas Resmi Android (SAF) - 100% Dukungan Non-Root & Akses SDCard Tanpa Batasan Scoped Storage
         displayNames.add("📁 Buka File Manager Android (SAF - Non-Root / SDCard)");
 
         for (File f : archives) {
@@ -1889,7 +2918,6 @@ public class FusionExtensionHelper {
         b.setTitle("📦 Pilih Paket Ekstensi (.zip / .crx)");
         b.setItems(items, (dialog, which) -> {
             if (which == 0) {
-                // Buka File Picker Bawaan Android via SAF
                 launchExtensionPicker(act);
             } else if (which > 0 && which <= archives.size()) {
                 File selected = archives.get(which - 1);
@@ -1904,7 +2932,6 @@ public class FusionExtensionHelper {
                     FusionToast.makeText(act, "❌ Gagal memasang ekstensi: berkas arsip tidak dapat diekstrak.", Toast.LENGTH_LONG).show();
                 }
             } else {
-                // Input path manual
                 AlertDialog.Builder inputDialog = new AlertDialog.Builder(act);
                 inputDialog.setTitle("Ketik Path Paket Ekstensi");
                 final EditText input = new EditText(act);

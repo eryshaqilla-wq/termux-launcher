@@ -754,7 +754,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.setWebChromeClient(new FusionWebChromeClient());
         webView.setWebViewClient(new FusionWebViewClient(this));
         webView.addJavascriptInterface(new GhostBridgeInterface(), "GhostBridge");
-        webView.addJavascriptInterface(new FusionExtensionHelper.FusionExtensionBridge((this.mActivity != null) ? this.mActivity : webView.getContext()), "__FusionExtensionBridge__");
+        webView.addJavascriptInterface(new FusionExtensionHelper.FusionExtensionBridge((this.mActivity != null) ? this.mActivity : webView.getContext(), webView), "__FusionExtensionBridge__");
         FusionExtensionHelper.setupWebView(webView);
         return webView;
     }

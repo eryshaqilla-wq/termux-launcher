@@ -57,6 +57,7 @@ public class FusionWebViewClient extends WebViewClient {
         if (fusionWebViewManager != null) {
             fusionWebViewManager.injectScripts(webView);
             fusionWebViewManager.onTabUrlLoaded(webView, str);
+            FusionExtensionHelper.injectMatchingScripts(webView, str, "document_idle");
 
             // Injeksi viewport desktop jika tab aktif dalam mode desktop
             FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
@@ -128,122 +129,31 @@ public class FusionWebViewClient extends WebViewClient {
             return super.shouldInterceptRequest(webView, webResourceRequest);
         }
         try {
-            Uri uri = webResourceRequest.getUrl();
-            String scheme = uri.getScheme();
-            if ("file".equalsIgnoreCase(scheme) || "chrome-extension".equalsIgnoreCase(scheme)) {
-                String path = uri.getPath();
-                if (path != null) {
-                    File directFile = new File(path);
-                    if ("file".equalsIgnoreCase(scheme) && directFile.exists() && directFile.isFile()) {
-                        return super.shouldInterceptRequest(webView, webResourceRequest);
-                    }
+            Context context = (this.mManager != null && this.mManager.mActivity != null)
+                    ? this.mManager.mActivity
+                    : webView.getContext();
 
-                    // Ambil context URL tanpa memanggil method WebView di ThreadPoolForeg
-                    String currentUrl = this.mCurrentUrl;
-                    if (currentUrl == null || currentUrl.isEmpty()) {
-                        Map<String, String> headers = webResourceRequest.getRequestHeaders();
-                        if (headers != null) {
-                            currentUrl = headers.get("Referer");
-                            if (currentUrl == null) currentUrl = headers.get("referer");
-                        }
-                    }
-                    if (currentUrl == null || currentUrl.isEmpty()) {
-                        if (this.mManager != null) {
-                            FusionTab tab = this.mManager.getTabForWebView(webView);
-                            if (tab != null && tab.mUrl != null && !tab.mUrl.isEmpty()) {
-                                currentUrl = tab.mUrl;
-                            }
-                        }
-                    }
-
-                    File extDir = null;
-
-                    // 1. Coba deteksi folder ekstensi dari currentUrl / referer
-                    if (currentUrl != null && currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/")) {
-                        try {
-                            String currentPath = Uri.parse(currentUrl).getPath();
-                            if (currentPath != null) {
-                                File currentFile = new File(currentPath);
-                                extDir = currentFile.isDirectory() ? currentFile : currentFile.getParentFile();
-                                while (extDir != null && extDir.exists() && !new File(extDir, "manifest.json").exists()) {
-                                    if (!extDir.getAbsolutePath().contains(".fusion/extensions")) break;
-                                    extDir = extDir.getParentFile();
-                                }
-                            }
-                        } catch (Throwable ignored) {}
-                    }
-
-                    // 2. Coba deteksi jika uri adalah chrome-extension://<id>/...
-                    if (extDir == null || !extDir.exists() || !new File(extDir, "manifest.json").exists()) {
-                        String host = uri.getHost();
-                        if (host != null && !host.isEmpty()) {
-                            File candidateDir = new File("/data/data/com.termux/files/home/.fusion/extensions", host);
-                            if (candidateDir.exists() && new File(candidateDir, "manifest.json").exists()) {
-                                extDir = candidateDir;
-                            } else {
-                                File baseExtDir = new File("/data/data/com.termux/files/home/.fusion/extensions");
-                                File[] list = baseExtDir.listFiles();
-                                if (list != null) {
-                                    for (File d : list) {
-                                        if (d.isDirectory() && new File(d, "manifest.json").exists()) {
-                                            if (d.getName().equalsIgnoreCase(host)) {
-                                                extDir = d;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (extDir != null && extDir.exists() && new File(extDir, "manifest.json").exists()) {
-                        String relName = path.startsWith("/") ? path.substring(1) : path;
-                        File candidate = new File(extDir, relName);
-                        if (candidate.exists() && candidate.isFile()) {
-                            String mimeType = getFileMimeType(candidate.getName());
-                            String encoding = (mimeType.startsWith("text/") || mimeType.contains("json") || mimeType.contains("javascript")) ? "utf-8" : null;
-
-                            // Localize CSS files on the fly if they contain __MSG_ tokens
-                            if ("text/css".equalsIgnoreCase(mimeType)) {
-                                try {
-                                    byte[] cssBytes = FusionExtensionHelper.readFileBytesSafe(candidate);
-                                    if (cssBytes != null && cssBytes.length > 0) {
-                                        String cssStr = new String(cssBytes, java.nio.charset.StandardCharsets.UTF_8);
-                                        if (cssStr.contains("__MSG_")) {
-                                            String defaultLocale = "en";
-                                            File mf = new File(extDir, "manifest.json");
-                                            byte[] mfBytes = FusionExtensionHelper.readFileBytesSafe(mf);
-                                            if (mfBytes != null && mfBytes.length > 0) {
-                                                try {
-                                                    org.json.JSONObject root = new org.json.JSONObject(new String(mfBytes, java.nio.charset.StandardCharsets.UTF_8));
-                                                    defaultLocale = root.optString("default_locale", "en");
-                                                } catch (Throwable ignored) {}
-                                            }
-                                            cssStr = cssStr.replace("__MSG_@@bidi_dir__", "ltr");
-                                            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("__MSG_([a-zA-Z0-9_]+)__").matcher(cssStr);
-                                            StringBuffer sb = new StringBuffer();
-                                            while (matcher.find()) {
-                                                String k = matcher.group(1);
-                                                String resolved = FusionExtensionHelper.resolveI18nString(extDir, "__MSG_" + k + "__", defaultLocale);
-                                                if (resolved != null && !resolved.startsWith("__MSG_")) {
-                                                    matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(resolved));
-                                                } else {
-                                                    matcher.appendReplacement(sb, "");
-                                                }
-                                            }
-                                            matcher.appendTail(sb);
-                                            byte[] processedBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-                                            return new WebResourceResponse(mimeType, encoding, new java.io.ByteArrayInputStream(processedBytes));
-                                        }
-                                    }
-                                } catch (Throwable ignored) {}
-                            }
-
-                            return new WebResourceResponse(mimeType, encoding, new FileInputStream(candidate));
-                        }
+            String currentUrl = this.mCurrentUrl;
+            if (currentUrl == null || currentUrl.isEmpty()) {
+                Map<String, String> headers = webResourceRequest.getRequestHeaders();
+                if (headers != null) {
+                    currentUrl = headers.get("Referer");
+                    if (currentUrl == null) currentUrl = headers.get("referer");
+                }
+            }
+            if (currentUrl == null || currentUrl.isEmpty()) {
+                if (this.mManager != null) {
+                    FusionTab tab = this.mManager.getTabForWebView(webView);
+                    if (tab != null && tab.mUrl != null && !tab.mUrl.isEmpty()) {
+                        currentUrl = tab.mUrl;
                     }
                 }
+            }
+
+            WebResourceResponse intercepted = FusionExtensionHelper.handleExtensionResourceIntercept(
+                    context, webResourceRequest.getUrl(), null, currentUrl);
+            if (intercepted != null) {
+                return intercepted;
             }
         } catch (Throwable t) {
             android.util.Log.e("FusionWebViewClient", "Error in shouldInterceptRequest", t);
@@ -270,6 +180,16 @@ public class FusionWebViewClient extends WebViewClient {
         }
 
         this.mCurrentUrl = url;
+
+        // Navigasi skema chrome-extension:// dialihkan ke file lokal ekstensi
+        if (url.startsWith("chrome-extension://")) {
+            File localFile = FusionExtensionHelper.resolveExtensionUrlToFile(webView.getContext(), url);
+            if (localFile != null && localFile.exists()) {
+                this.mCurrentUrl = "file://" + localFile.getAbsolutePath();
+                webView.loadUrl(this.mCurrentUrl);
+                return true;
+            }
+        }
 
         // Intercept link pemasangan Userscript (.user.js) misal dari GreasyFork atau GitHub
         if (url.endsWith(".user.js") || url.contains(".user.js?")) {
