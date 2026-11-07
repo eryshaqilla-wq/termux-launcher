@@ -306,18 +306,16 @@ public class FusionExtensionHelper {
             if (url == null || url.isEmpty()) return;
             sMainHandler.post(() -> {
                 try {
-                    if (mContext instanceof TermuxActivity) {
-                        TermuxActivity act = (TermuxActivity) mContext;
-                        if (act.mFusionWebViewManager != null) {
-                            String targetUrl = url;
-                            if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("file://")) {
-                                ExtensionInfo ext = findExtensionByIdOrHost(mContext, extId);
-                                if (ext != null && ext.dir != null) {
-                                    targetUrl = "file://" + new File(ext.dir, url).getAbsolutePath();
-                                }
+                    FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                    if (mgr != null) {
+                        String targetUrl = url;
+                        if (!url.startsWith("http://") && !url.startsWith("https://") && !url.startsWith("file://")) {
+                            ExtensionInfo ext = findExtensionByIdOrHost(mContext, extId);
+                            if (ext != null && ext.dir != null) {
+                                targetUrl = "file://" + new File(ext.dir, url).getAbsolutePath();
                             }
-                            act.mFusionWebViewManager.addNewTab(targetUrl);
                         }
+                        mgr.addNewTab(targetUrl);
                     }
                 } catch (Throwable e) {
                     Log.e(TAG, "Error in openWindow: " + e.getMessage(), e);
