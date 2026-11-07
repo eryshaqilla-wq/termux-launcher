@@ -157,9 +157,7 @@ public class FusionExtensionHelper {
             sMainHandler.post(() -> {
                 String script = "if (window.__fusionNotifyStorageChanged) { window.__fusionNotifyStorageChanged(" +
                         JSONObject.quote(target) + ", " + JSONObject.quote(jsonStr) + "); }";
-                for (WebView wv : sActiveTabWebViews) {
-                    if (wv != null && wv != mWebView) wv.evaluateJavascript(script, null);
-                }
+                broadcastToActiveTabs(script, mWebView);
                 WebView bgWv = findBackgroundWebView(target);
                 if (bgWv != null && bgWv != mWebView) bgWv.evaluateJavascript(script, null);
             });
@@ -214,11 +212,7 @@ public class FusionExtensionHelper {
                             JSONObject.quote(portId) + ", " +
                             JSONObject.quote(msgJson != null ? msgJson : "{}") + "); }";
                     if (fromBg) {
-                        for (WebView wv : sActiveTabWebViews) {
-                            if (wv != null) {
-                                wv.evaluateJavascript(script, null);
-                            }
-                        }
+                        broadcastToActiveTabs(script, null);
                     } else {
                         WebView bgWv = findBackgroundWebView(extId);
                         if (bgWv != null) {
@@ -241,9 +235,7 @@ public class FusionExtensionHelper {
                     String script = "if (window.__fusionDisconnectPort) { window.__fusionDisconnectPort(" +
                             JSONObject.quote(portId) + "); }";
                     if (fromBg) {
-                        for (WebView wv : sActiveTabWebViews) {
-                            if (wv != null) wv.evaluateJavascript(script, null);
-                        }
+                        broadcastToActiveTabs(script, null);
                     } else {
                         WebView bgWv = findBackgroundWebView(extId);
                         if (bgWv != null) bgWv.evaluateJavascript(script, null);
@@ -272,11 +264,7 @@ public class FusionExtensionHelper {
                     if (bgWv != null && bgWv != mWebView) {
                         bgWv.evaluateJavascript(script, null);
                     }
-                    for (WebView wv : sActiveTabWebViews) {
-                        if (wv != null && wv != mWebView) {
-                            wv.evaluateJavascript(script, null);
-                        }
-                    }
+                    broadcastToActiveTabs(script, mWebView);
                 } catch (Throwable e) {
                     Log.e(TAG, "Error in sendRuntimeMessage: " + e.getMessage(), e);
                 }
@@ -290,9 +278,7 @@ public class FusionExtensionHelper {
                     String script = "if (window.__fusionReceiveRuntimeResponse) { window.__fusionReceiveRuntimeResponse(" +
                             JSONObject.quote(msgId) + ", " +
                             JSONObject.quote(resJson != null ? resJson : "null") + "); }";
-                    for (WebView wv : sActiveTabWebViews) {
-                        if (wv != null) wv.evaluateJavascript(script, null);
-                    }
+                    broadcastToActiveTabs(script, null);
                     WebView bgWv = findBackgroundWebView(extId);
                     if (bgWv != null) bgWv.evaluateJavascript(script, null);
                 } catch (Throwable e) {
@@ -324,6 +310,26 @@ public class FusionExtensionHelper {
         }
     }
 
+    public static void broadcastToActiveTabs(String script, WebView excludeWebView) {
+        if (script == null || script.isEmpty()) return;
+        Iterator<WebView> it = sActiveTabWebViews.iterator();
+        while (it.hasNext()) {
+            WebView wv = it.next();
+            if (wv == null) {
+                try { it.remove(); } catch (Throwable ignored) {}
+                continue;
+            }
+            if (wv == excludeWebView) continue;
+            try {
+                if (wv.isAttachedToWindow()) {
+                    wv.evaluateJavascript(script, null);
+                }
+            } catch (Throwable ignored) {
+                try { it.remove(); } catch (Throwable ignored2) {}
+            }
+        }
+    }
+
     public static WebView findBackgroundWebView(String extId) {
         if (extId == null || extId.isEmpty()) return null;
         WebView wv = sBackgroundWebViews.get(extId);
@@ -332,6 +338,11 @@ public class FusionExtensionHelper {
             if (entry.getKey().equalsIgnoreCase(extId) || entry.getKey().contains(extId) || extId.contains(entry.getKey())) {
                 return entry.getValue();
             }
+        }
+        ExtensionInfo info = findExtensionByIdOrHost(null, extId);
+        if (info != null && info.id != null) {
+            WebView mapped = sBackgroundWebViews.get(info.id);
+            if (mapped != null) return mapped;
         }
         return null;
     }
@@ -380,6 +391,7 @@ public class FusionExtensionHelper {
     public static File getStorageFile(Context context, String extId) {
         File dir = getPrimaryExtensionsDir(context);
         if (extId == null || extId.isEmpty() || "global".equalsIgnoreCase(extId)
+                || "fusion-extension-runtime".equalsIgnoreCase(extId)
                 || extId.toLowerCase().contains("google_ai_pro") || extId.toLowerCase().contains("gapt")) {
             return new File(dir, "storage.json");
         }
@@ -393,6 +405,7 @@ public class FusionExtensionHelper {
 
     public static synchronized String getStorageJson(Context context, String extId) {
         if (extId == null || extId.isEmpty() || "global".equalsIgnoreCase(extId)
+                || "fusion-extension-runtime".equalsIgnoreCase(extId)
                 || extId.toLowerCase().contains("google_ai_pro") || extId.toLowerCase().contains("gapt")) {
             if (sStorageCache != null && !sStorageCache.isEmpty()) {
                 return sStorageCache;
@@ -1400,12 +1413,18 @@ public class FusionExtensionHelper {
                 html.append("    for (var i = 0; i < arguments.length; i++) {\n");
                 html.append("      var src = arguments[i];\n");
                 html.append("      if (!src) continue;\n");
+                html.append("      if (typeof src === 'string' && src.charAt(0) === '/' && src.indexOf('//') !== 0) {\n");
+                html.append("        src = src.substring(1);\n");
+                html.append("      }\n");
                 html.append("      try {\n");
                 html.append("        var xhr = new XMLHttpRequest();\n");
                 html.append("        xhr.open('GET', src, false);\n");
                 html.append("        xhr.send(null);\n");
                 html.append("        if (xhr.status === 200 || xhr.status === 0) {\n");
-                html.append("          (1, eval)(xhr.responseText + '\\n//# sourceURL=' + src);\n");
+                html.append("          var s = document.createElement('script');\n");
+                html.append("          s.text = xhr.responseText + '\\n//# sourceURL=' + src;\n");
+                html.append("          (document.head || document.documentElement).appendChild(s);\n");
+                html.append("          s.remove();\n");
                 html.append("        } else {\n");
                 html.append("          console.error('[Fusion BG] importScripts failed HTTP ' + xhr.status + ' for: ' + src);\n");
                 html.append("        }\n");
@@ -1415,6 +1434,8 @@ public class FusionExtensionHelper {
                 html.append("    }\n");
                 html.append("  };\n");
                 html.append("  window.importScripts.__is_fusion_import_scripts__ = true;\n");
+                html.append("  self.importScripts = window.importScripts;\n");
+                html.append("  try { globalThis.importScripts = window.importScripts; } catch(e) {}\n");
                 html.append("}\n");
                 html.append("if (typeof self.clients === 'undefined') {\n");
                 html.append("  self.clients = {\n");
@@ -1426,9 +1447,11 @@ public class FusionExtensionHelper {
                 html.append("    }\n");
                 html.append("  };\n");
                 html.append("}\n");
+                html.append("try { globalThis.clients = self.clients; } catch(e) {}\n");
                 html.append("if (typeof self.skipWaiting === 'undefined') {\n");
                 html.append("  self.skipWaiting = function() { return Promise.resolve(); };\n");
                 html.append("}\n");
+                html.append("try { globalThis.skipWaiting = self.skipWaiting; } catch(e) {}\n");
                 html.append("if (typeof self.serviceWorker === 'undefined') {\n");
                 html.append("  self.serviceWorker = {\n");
                 html.append("    state: 'activated',\n");
@@ -2441,8 +2464,10 @@ public class FusionExtensionHelper {
         sb.append("        var p = patterns[i];\n");
         sb.append("        if (p === '<all_urls>' || p === '*://*/*' || p === '*') return true;\n");
         sb.append("        try {\n");
-        sb.append("          var regStr = '^' + p.replace(/\\\\/g, '\\\\\\\').replace(/\\./g, '\\\\.').replace(/\\*:\\/\\//g, 'https?:\\\\/\\\\/').replace(/http:\\/\\/\\*/g, 'http:\\\\/\\\\/.*').replace(/https:\\/\\/\\*/g, 'https:\\\\/\\\\/.*').replace(/\\*/g, '.*') + '$';\n");
-        sb.append("          if (new RegExp(regStr).test(url)) return true;\n");
+        sb.append("          var escaped = p.split('*').map(function(s) {\n");
+        sb.append("            return s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n");
+        sb.append("          }).join('.*');\n");
+        sb.append("          if (new RegExp('^' + escaped + '$').test(url)) return true;\n");
         sb.append("        } catch(e) {\n");
         sb.append("          if (url.indexOf(p) !== -1) return true;\n");
         sb.append("        }\n");
@@ -2485,20 +2510,9 @@ public class FusionExtensionHelper {
 
             String polyfill = getChromePolyfillScript(ctx, null, false);
             if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-                WebViewCompat.addDocumentStartJavaScript(webView, polyfill, Collections.singleton("*"));
-
-                List<ExtensionInfo> exts = getInstalledExtensions(ctx);
-                for (ExtensionInfo ext : exts) {
-                    if (!ext.enabled) continue;
-                    for (int i = 0; i < ext.contentScripts.size(); i++) {
-                        ExtensionInfo.ContentScript cs = ext.contentScripts.get(i);
-                        String wrapped = buildContentScriptWrapper(ext, cs, i);
-                        if (wrapped != null && !wrapped.isEmpty()) {
-                            WebViewCompat.addDocumentStartJavaScript(webView, wrapped, Collections.singleton("*"));
-                        }
-                    }
-                }
-                Log.i(TAG, "Berhasil meregistrasikan DocumentStartJavaScript untuk " + exts.size() + " ekstensi.");
+                try {
+                    WebViewCompat.addDocumentStartJavaScript(webView, polyfill, Collections.singleton("*"));
+                } catch (Throwable ignored) {}
             }
 
             startAllBackgroundHosts(ctx);
@@ -2543,14 +2557,6 @@ public class FusionExtensionHelper {
         Context ctx = webView.getContext();
         sActiveTabWebViews.add(webView);
 
-        boolean docStartSupported = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
-
-        // Jika DocumentStartScript didukung oleh Chromium WebView engine, polyfill dan scripts
-        // ber-timing document_start sudah otomatis dieksekusi sebelum script halaman berjalan.
-        if (docStartSupported && "document_start".equalsIgnoreCase(triggerTiming)) {
-            return;
-        }
-
         String polyfill = getChromePolyfillScript(ctx, null, false);
         webView.evaluateJavascript(polyfill, null);
 
@@ -2567,9 +2573,10 @@ public class FusionExtensionHelper {
             for (int i = 0; i < ext.contentScripts.size(); i++) {
                 ExtensionInfo.ContentScript cs = ext.contentScripts.get(i);
                 if (isUrlMatched(currentUrl, cs.matches)) {
-                    // Jangan injeksi ulang script document_start jika engine sudah menanganinya
-                    if (docStartSupported && "document_start".equalsIgnoreCase(cs.runAt)) {
-                        continue;
+                    if ("document_start".equalsIgnoreCase(triggerTiming)) {
+                        if (!"document_start".equalsIgnoreCase(cs.runAt)) continue;
+                    } else if ("document_end".equalsIgnoreCase(triggerTiming)) {
+                        if (!"document_end".equalsIgnoreCase(cs.runAt)) continue;
                     }
                     String wrapped = buildContentScriptWrapper(ext, cs, i);
                     if (wrapped != null) {

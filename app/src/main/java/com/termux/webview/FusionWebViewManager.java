@@ -2109,7 +2109,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public static String cleanSiteTitle(String title) {
         if (title == null) return null;
         title = title.trim();
-        if (title.isEmpty() || "New Tab".equalsIgnoreCase(title) || "about:blank".equalsIgnoreCase(title)) {
+        if (title.isEmpty() || "New Tab".equalsIgnoreCase(title) || "about:blank".equalsIgnoreCase(title) || "undefined".equalsIgnoreCase(title)) {
             return null;
         }
 
