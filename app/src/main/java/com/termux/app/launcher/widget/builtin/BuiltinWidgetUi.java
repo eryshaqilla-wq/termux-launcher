@@ -26,16 +26,9 @@ import androidx.annotation.Nullable;
 public final class BuiltinWidgetUi {
     @NonNull public final Context context;
     @NonNull public final BuiltinWidgetStyle style;
-    /** The widget's live corner, which the inner shapes are cut from. */
-    @NonNull public final BuiltinWidgetCorner corner;
 
     public BuiltinWidgetUi(@NonNull Context context, @NonNull BuiltinWidgetStyle style) {
-        this(context, style, new BuiltinWidgetCorner(style.cornerRadiusPx, style.density));
-    }
-
-    public BuiltinWidgetUi(@NonNull Context context, @NonNull BuiltinWidgetStyle style,
-                           @NonNull BuiltinWidgetCorner corner) {
-        this.context = context; this.style = style; this.corner = corner;
+        this.context = context; this.style = style;
     }
 
     public int dp(float value) { return style.dp(value); }
@@ -47,9 +40,23 @@ public final class BuiltinWidgetUi {
         return text(text, sp, style.numerals, style.onSurface);
     }
 
-    /** A caption: the design's sans 11sp semibold in the variant colour. */
+    /** A caption: the design's sans 11sp semibold in the variant colour (Tonal); mono in Pane. */
     @NonNull public TextView caption(@NonNull CharSequence text) {
-        return text(text, 11f, style.sansBold, style.onSurfaceVariant);
+        return style.isPane()
+            ? text(text, 10.5f, style.monoMedium, style.onSurfaceVariant)
+            : text(text, 11f, style.sansBold, style.onSurfaceVariant);
+    }
+
+    /**
+     * The design's two caption forms in one call: Tonal shows {@code tonalText} as a sans caption;
+     * Pane shows a Nerd {@code paneGlyph} in primary followed by {@code paneText} in mono, the way
+     * a pane names its path.
+     */
+    @NonNull public View caption(@NonNull CharSequence tonalText, @NonNull String paneGlyph,
+                                 @NonNull CharSequence paneText) {
+        if (!style.isPane()) return caption(tonalText);
+        TextView label = text(paneText, 10.5f, style.monoMedium, style.onSurfaceVariant);
+        return row(5, glyph(paneGlyph, 10.5f, style.primary), flex(label));
     }
 
     /** A mono label in the variant colour, the design's secondary line. */
@@ -216,23 +223,9 @@ public final class BuiltinWidgetUi {
         return shape;
     }
 
-    /** The inner radius: the card's corner less the inset, never below zero, as it stands now. */
+    /** The inner radius: the card's corner less the inset, never below zero. */
     public float innerRadius(int insetDp) {
-        return corner.innerRadiusPx(insetDp);
-    }
-
-    /**
-     * A container {@code insetDp} inside the card, rounded to the card's corner less that, and
-     * kept so whenever the Look's Corners move (in place: no rebuild).
-     */
-    @NonNull public android.graphics.drawable.GradientDrawable innerRounded(@ColorInt int fill,
-                                                                           int insetDp) {
-        return corner.track(rounded(fill, 0f), insetDp);
-    }
-
-    /** {@code view} draws or clips with the corner it reads at the time; it redraws as it moves. */
-    @NonNull public <V extends View> V followCorner(@NonNull V view) {
-        return corner.follow(view);
+        return Math.max(0f, style.cornerRadiusPx - dp(insetDp));
     }
 
     // ----- small views ----------------------------------------------------------------------

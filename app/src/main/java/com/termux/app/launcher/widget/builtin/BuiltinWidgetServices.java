@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -40,12 +41,14 @@ public final class BuiltinWidgetServices {
         default void onSystemImeRequested() { }
         /** That dialog is gone: the keyboard with it, and the terminal's own arrangement back. */
         default void onSystemImeReleased() { }
-        /** A Terminal widget came on screen: its shell's pane goes into {@code widget}. */
-        default void attachTerminalWidget(int widgetId, @NonNull TerminalWidgetView widget) { }
-        /** That widget left the screen; its shell keeps running. */
-        default void detachTerminalWidget(int widgetId, @NonNull TerminalWidgetView widget) { }
-        /** The widget's shell had ended and the card was tapped: a new shell for it. */
-        default void restartTerminalWidget(int widgetId) { }
+        /** Launch an application entry from a shortcut. */
+        default void launchAppShortcut(@NonNull com.termux.app.launcher.model.LauncherAppEntry entry, @NonNull View sourceView) { }
+        /** Resolves app entry for package/activity/userId. */
+        @Nullable default com.termux.app.launcher.model.LauncherAppEntry findAppByRef(@NonNull com.termux.app.launcher.model.AppRef ref) { return null; }
+        /** Resolves rendered icon for app entry into ImageView. */
+        default void bindAppIcon(@NonNull android.widget.ImageView imageView, @NonNull com.termux.app.launcher.model.LauncherAppEntry entry, int sizePx) { }
+        /** Resolves current launcher text color. */
+        default int launcherTextColor() { return android.graphics.Color.WHITE; }
     }
 
     /** A once-a-minute heartbeat, aligned to the system's minute tick. */
@@ -65,29 +68,10 @@ public final class BuiltinWidgetServices {
 
     private final List<TickListener> tickListeners = new ArrayList<>();
     private final List<PermissionListener> permissionListeners = new ArrayList<>();
+    private boolean tickRegistered;
     private final BroadcastReceiver tickReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) { tick(); }
     };
-    /** The tick receiver, kept a turn after the last listener so a rebuild registers no new one. */
-    @NonNull private final SourceLease tickLease = new SourceLease(SourceLease.on(main),
-        new SourceLease.Registration() {
-            @Override public boolean open() {
-                IntentFilter filter = new IntentFilter(Intent.ACTION_TIME_TICK);
-                filter.addAction(Intent.ACTION_TIME_CHANGED);
-                filter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
-                try {
-                    context.registerReceiver(tickReceiver, filter);
-                    return true;
-                } catch (RuntimeException ignored) {
-                    // Without the tick the clock still shows the time it was built with.
-                    return false;
-                }
-            }
-
-            @Override public void close() {
-                try { context.unregisterReceiver(tickReceiver); } catch (RuntimeException ignored) { }
-            }
-        });
 
     @Nullable private WeatherController weather;
     private int weatherUsers;
@@ -112,12 +96,25 @@ public final class BuiltinWidgetServices {
 
     public void addTickListener(@NonNull TickListener listener) {
         if (!tickListeners.contains(listener)) tickListeners.add(listener);
-        tickLease.ensureOpen();
+        if (!tickRegistered) {
+            IntentFilter filter = new IntentFilter(Intent.ACTION_TIME_TICK);
+            filter.addAction(Intent.ACTION_TIME_CHANGED);
+            filter.addAction(Intent.ACTION_TIMEZONE_CHANGED);
+            try {
+                context.registerReceiver(tickReceiver, filter);
+                tickRegistered = true;
+            } catch (RuntimeException ignored) {
+                // Without the tick the clock still shows the time it was built with.
+            }
+        }
     }
 
     public void removeTickListener(@NonNull TickListener listener) {
         tickListeners.remove(listener);
-        if (tickListeners.isEmpty()) tickLease.closeSoon();
+        if (tickListeners.isEmpty() && tickRegistered) {
+            try { context.unregisterReceiver(tickReceiver); } catch (RuntimeException ignored) { }
+            tickRegistered = false;
+        }
     }
 
     private void tick() {
@@ -149,10 +146,10 @@ public final class BuiltinWidgetServices {
     public void releaseWeather(@NonNull WeatherController.Listener listener) {
         weatherListeners.remove(listener);
         weatherUsers = Math.max(0, weatherUsers - 1);
-        // The controller is kept with its forecast: a widget that rebuilds acquires it again at
-        // once, and a new controller would have fetched the weather afresh for every rebuild,
-        // its answer redrawing the widget into the next rebuild. It holds nothing between fetches.
-        if (weatherUsers == 0 && weather != null) weather.stop();
+        if (weatherUsers == 0 && weather != null) {
+            weather.stop();
+            weather = null;
+        }
     }
 
     private void fanOutWeather(@NonNull WeatherController.Weather value) {
@@ -210,7 +207,10 @@ public final class BuiltinWidgetServices {
     /** The page is gone: every source stops whatever it still holds. */
     public void destroy() {
         tickListeners.clear();
-        tickLease.closeNow();
+        if (tickRegistered) {
+            try { context.unregisterReceiver(tickReceiver); } catch (RuntimeException ignored) { }
+            tickRegistered = false;
+        }
         weatherListeners.clear();
         if (weather != null) { weather.stop(); weather = null; }
         weatherUsers = 0;
