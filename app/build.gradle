@@ -535,6 +535,9 @@ def downloadBootstrap(String arch, String expectedChecksum, String version) {
     def out = new BufferedOutputStream(new FileOutputStream(file))
 
     def connection = new URL(remoteUrl).openConnection()
+    connection.setRequestProperty("User-Agent", "Termux-Launcher-Build/1.0")
+    connection.setConnectTimeout(30000)
+    connection.setReadTimeout(60000)
     connection.setInstanceFollowRedirects(true)
     def digestStream = new java.security.DigestInputStream(connection.inputStream, digest)
     out << digestStream

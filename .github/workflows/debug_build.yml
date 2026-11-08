@@ -34,6 +34,20 @@ jobs:
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Pre-download Termux bootstraps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p app/src/main/cpp
+          if [ "${{ matrix.package_variant }}" = "apt-android-7" ]; then
+            BOOTSTRAP_TAG="bootstrap-2026.10.18-r1+apt.android-7"
+          else
+            BOOTSTRAP_TAG="bootstrap-2022.04.28-r6+apt-android-5"
+          fi
+          echo "Pre-downloading bootstrap packages from tag $BOOTSTRAP_TAG via GitHub API..."
+          gh release download "$BOOTSTRAP_TAG" --repo termux/termux-packages -p "bootstrap-*.zip" -D app/src/main/cpp/ || true
+          ls -lh app/src/main/cpp/
+
       - name: Run unit tests
         shell: bash {0}
         env:
