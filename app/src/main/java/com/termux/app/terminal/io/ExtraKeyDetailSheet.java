@@ -26,6 +26,7 @@ import com.google.android.material.shape.MaterialShapeDrawable;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 import com.termux.R;
+import com.termux.app.TermuxActivity;
 import com.termux.app.material.M3;
 import com.termux.shared.termux.extrakeys.ExtraKeysConstants;
 import com.termux.shared.termux.font.NerdFontSpans;
@@ -170,80 +171,102 @@ public final class ExtraKeyDetailSheet {
                 // The label follows the action: a tool arrives with its title, a plain key with
                 // none, and the field below is right there for anyone who wants their own.
                 key.display = picked.display;
+                if (TermuxActivity.isDefaultLauncherToolKey(picked.key)
+                        || (picked.key != null && (picked.key.startsWith("app:") || ExtraKeyActionLabels.isNamedKey(picked.key)))) {
+                    key.target = null;
+                    key.env = null;
+                }
                 changed(true);
             })));
         body.addView(commandField("Command / Script / Key", "e.g. htop, clear, ./script.sh, ESC", key));
         body.addView(labelField(context.getString(R.string.settings_extra_keys_sheet_label),
             context.getString(R.string.settings_extra_keys_sheet_label_hint), key));
 
-        body.addView(sectionLabel("Target Eksekusi & Lingkungan OS"));
-        String targetDesc;
-        if (key.isBackground()) {
-            targetDesc = "⚡ Background (Latar Belakang)";
-        } else if (key.isForeground()) {
-            targetDesc = "🖥️ Foreground (Tab Baru di Kanvas Tengah)";
-        } else {
-            targetDesc = "💻 Tab Aktif (Inline)";
-        }
-        body.addView(selectorRow("Mode: " + targetDesc, null, () -> {
-            final String[] modeNames = new String[]{
-                "⚡ Background (Latar Belakang - Tanpa Terminal)",
-                "🖥️ Foreground (Tab Baru di Kanvas Tengah)",
-                "💻 Tab Aktif (Inline - Kirim ke Sesi Aktif)"
-            };
-            final String[] modeKeys = new String[]{
-                "background",
-                "foreground",
-                "inline"
-            };
-            int curIdx = 0;
-            if (key.isForeground()) curIdx = 1;
-            else if ("inline".equalsIgnoreCase(key.target)) curIdx = 2;
+        boolean isCustomScriptOrShell = key.key != null && !key.key.isEmpty()
+            && !TermuxActivity.isDefaultLauncherToolKey(key.key)
+            && !key.key.startsWith("app:")
+            && !ExtraKeyActionLabels.isNamedKey(key.key)
+            && !"AIRPLANE".equalsIgnoreCase(key.key)
+            && !"BOOST".equalsIgnoreCase(key.key)
+            && !"KEYBOARD".equalsIgnoreCase(key.key)
+            && !key.key.startsWith("tool:backup.");
 
-            new com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-                .setTitle("Pilih Mode Eksekusi")
-                .setSingleChoiceItems(modeNames, curIdx, (d, which) -> {
-                    key.target = modeKeys[which];
-                    d.dismiss();
-                    changed(true);
-                })
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
-        }));
-
-        if (key.isForeground() || key.isBackground()) {
-            String envDesc;
-            String curEnv = key.getResolvedEnv();
-            if ("chroot".equalsIgnoreCase(curEnv)) envDesc = "🐉 Kali NetHunter Chroot";
-            else if ("droidspaces".equalsIgnoreCase(curEnv)) envDesc = "📦 Droidspaces Container (Ubuntu)";
-            else if ("proot".equalsIgnoreCase(curEnv)) envDesc = "🐧 PRoot Distro";
-            else if ("native".equalsIgnoreCase(curEnv)) envDesc = "💻 Native Termux";
-            else envDesc = "⚡ Auto-Detect (Chroot / PRoot / Native)";
-
-            body.addView(selectorRow("Lingkungan: " + envDesc, null, () -> {
-                final String[] envNames = new String[]{
-                    "⚡ Auto-Detect (Chroot / PRoot / Native) [Default]",
-                    "🐉 Kali NetHunter Chroot",
-                    "📦 Droidspaces Container (Ubuntu)",
-                    "🐧 PRoot Distro",
-                    "💻 Native Termux"
+        if (isCustomScriptOrShell) {
+            body.addView(sectionLabel("Target Eksekusi & Lingkungan OS"));
+            String targetDesc;
+            if (key.isBackground()) {
+                targetDesc = "⚡ Background (Latar Belakang)";
+            } else if (key.isForeground()) {
+                targetDesc = "🖥️ Foreground (Tab Baru di Kanvas Tengah)";
+            } else {
+                targetDesc = "💻 Tab Aktif (Inline)";
+            }
+            body.addView(selectorRow("Mode: " + targetDesc, null, () -> {
+                final String[] modeNames = new String[]{
+                    "⚡ Background (Latar Belakang - Tanpa Terminal)",
+                    "🖥️ Foreground (Tab Baru di Kanvas Tengah)",
+                    "💻 Tab Aktif (Inline - Kirim ke Sesi Aktif)"
                 };
-                final String[] envKeys = new String[]{
-                    "auto",
-                    "chroot",
-                    "droidspaces",
-                    "proot",
-                    "native"
+                final String[] modeKeys = new String[]{
+                    "background",
+                    "foreground",
+                    "inline"
                 };
+                int curIdx = 0;
+                if (key.isForeground()) curIdx = 1;
+                else if ("inline".equalsIgnoreCase(key.target)) curIdx = 2;
+
                 new com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
-                    .setTitle("Pilih Lingkungan Eksekusi")
-                    .setItems(envNames, (d, which) -> {
-                        key.env = envKeys[which];
+                    .setTitle("Pilih Mode Eksekusi")
+                    .setSingleChoiceItems(modeNames, curIdx, (d, which) -> {
+                        key.target = modeKeys[which];
+                        d.dismiss();
                         changed(true);
                     })
                     .setNegativeButton(android.R.string.cancel, null)
                     .show();
             }));
+
+            if (key.isForeground() || key.isBackground()) {
+                String envDesc;
+                String curEnv = key.getResolvedEnv();
+                if ("chroot".equalsIgnoreCase(curEnv)) envDesc = "🐉 Kali NetHunter Chroot";
+                else if ("droidspaces".equalsIgnoreCase(curEnv)) envDesc = "📦 Droidspaces Container (Ubuntu)";
+                else if ("proot".equalsIgnoreCase(curEnv)) envDesc = "🐧 PRoot Distro";
+                else if ("native".equalsIgnoreCase(curEnv)) envDesc = "💻 Native Termux";
+                else envDesc = "⚡ Auto-Detect (Chroot / PRoot / Native)";
+
+                body.addView(selectorRow("Lingkungan: " + envDesc, null, () -> {
+                    final String[] envNames = new String[]{
+                        "⚡ Auto-Detect (Chroot / PRoot / Native) [Default]",
+                        "🐉 Kali NetHunter Chroot",
+                        "📦 Droidspaces Container (Ubuntu)",
+                        "🐧 PRoot Distro",
+                        "💻 Native Termux"
+                    };
+                    final String[] envKeys = new String[]{
+                        "auto",
+                        "chroot",
+                        "droidspaces",
+                        "proot",
+                        "native"
+                    };
+                    new com.google.android.material.dialog.MaterialAlertDialogBuilder(context)
+                        .setTitle("Pilih Lingkungan Eksekusi")
+                        .setItems(envNames, (d, which) -> {
+                            key.env = envKeys[which];
+                            changed(true);
+                        })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .show();
+                }));
+            }
+        } else if (TermuxActivity.isDefaultLauncherToolKey(key.key)) {
+            body.addView(sectionLabel("Tipe Aksi"));
+            body.addView(selectorRow("⚙️ Fitur Default Launcher (Natif)", null, null));
+        } else if (key.key != null && key.key.startsWith("app:")) {
+            body.addView(sectionLabel("Tipe Aksi"));
+            body.addView(selectorRow("📱 Aplikasi Android (Natif)", null, null));
         }
 
         body.addView(sectionLabel(context.getString(R.string.settings_extra_keys_color)));

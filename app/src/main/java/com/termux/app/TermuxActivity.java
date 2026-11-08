@@ -22461,6 +22461,39 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             || clean.startsWith("tool:ipc.run") || clean.startsWith("ipc.run");
     }
 
+    public static boolean isDefaultLauncherToolKey(@Nullable String key) {
+        if (key == null) return false;
+        String clean = key.trim();
+        if (clean.endsWith("\n")) clean = clean.substring(0, clean.length() - 1).trim();
+        if (isIpcToolKey(clean)) return false;
+        if ("AIRPLANE".equalsIgnoreCase(clean) || "tool:airplane.toggle".equalsIgnoreCase(clean)) return false;
+        if (clean.startsWith("tool:backup.") || "BACKUP".equalsIgnoreCase(clean)) return false;
+        if (clean.startsWith("app:")) return false;
+        return clean.startsWith("tool:");
+    }
+
+    public void executeLauncherTool(@NonNull String actionKey) {
+        String clean = actionKey.trim();
+        if (clean.endsWith("\n")) clean = clean.substring(0, clean.length() - 1).trim();
+        String spec = clean.startsWith("tool:") ? clean.substring("tool:".length()) : clean;
+        String toolName = spec;
+        org.json.JSONObject arguments = new org.json.JSONObject();
+        int colon = spec.indexOf(':');
+        if (colon > 0) {
+            toolName = spec.substring(0, colon);
+            for (String pair : spec.substring(colon + 1).split(",")) {
+                int equals = pair.indexOf('=');
+                if (equals <= 0) continue;
+                try {
+                    arguments.put(pair.substring(0, equals).trim(),
+                        pair.substring(equals + 1).trim());
+                } catch (org.json.JSONException ignored) {
+                }
+            }
+        }
+        com.termux.app.terminal.TerminalActionDispatcher.getInstance().execute(toolName, arguments);
+    }
+
     public static String resolveIpcToolCommand(@NonNull String key) {
         String clean = key.trim();
         if (clean.endsWith("\n")) clean = clean.substring(0, clean.length() - 1).trim();
@@ -22508,6 +22541,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mTermuxTerminalViewClient != null) {
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
             }
+        } else if (isDefaultLauncherToolKey(actionKey)) {
+            executeLauncherTool(actionKey);
         } else if (isIpcToolKey(actionKey)) {
             String command = resolveIpcToolCommand(actionKey);
             String title = (key.display != null && !key.display.trim().isEmpty())
@@ -22737,6 +22772,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (mTermuxTerminalViewClient != null) {
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
             }
+        } else if (isDefaultLauncherToolKey(actionKey)) {
+            executeLauncherTool(actionKey);
         } else if (isIpcToolKey(actionKey)) {
             String command = resolveIpcToolCommand(actionKey);
             String title = (key.display != null && !key.display.trim().isEmpty())
@@ -22750,15 +22787,19 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             } else {
                 launchScriptInBackground(command, title, key.getResolvedEnv());
             }
-        } else if (actionKey.endsWith("\n") || !actionKey.isEmpty()) {
-            boolean isFg = key.isForeground();
-            if (isFg) {
-                if (mPaneWallController != null) {
-                    mPaneWallController.goTo(com.termux.app.wall.PaneWallPage.TERMINAL, isVisible());
-                }
-                launchProgramInNewTab(key);
-            } else {
-                launchScriptInBackground(actionKey, key.display, key.getResolvedEnv());
+        } else if (key.isForeground() || key.isNewTab()) {
+            if (mPaneWallController != null) {
+                mPaneWallController.goTo(com.termux.app.wall.PaneWallPage.TERMINAL, isVisible());
+            }
+            launchProgramInNewTab(key);
+        } else if (key.isBackground()) {
+            launchScriptInBackground(actionKey, key.display, key.getResolvedEnv());
+        } else if (actionKey.endsWith("\n")) {
+            launchScriptInBackground(actionKey, key.display, key.getResolvedEnv());
+        } else {
+            if (mTermuxTerminalExtraKeys != null && !actionKey.isEmpty()) {
+                View dummyView = new View(this);
+                mTermuxTerminalExtraKeys.onTerminalExtraKeyButtonClick(dummyView, actionKey, false, false, false, false);
             }
         }
     }

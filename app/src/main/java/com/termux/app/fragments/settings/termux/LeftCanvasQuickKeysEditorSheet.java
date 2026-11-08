@@ -22,7 +22,9 @@ import com.google.android.material.bottomsheet.BottomSheetDragHandleView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.color.MaterialColors;
 import com.termux.R;
+import com.termux.app.TermuxActivity;
 import com.termux.app.material.M3;
+import com.termux.app.terminal.io.ExtraKeyActionLabels;
 import com.termux.app.terminal.io.ExtraKeyActionPicker;
 import com.termux.app.terminal.io.ExtraKeyDetailSheet;
 import com.termux.app.terminal.io.ExtraKeysLayoutModel;
@@ -217,12 +219,19 @@ public final class LeftCanvasQuickKeysEditorSheet {
             sheet.hide();
             final List<ExtraKeysLayoutModel.Key> targetList = keys;
             ExtraKeyActionPicker.show(context, picked -> {
-                // If picked, add it and configure as new_tab by default for launcher convenience
-                if (picked.target == null || picked.target.isEmpty()) {
-                    picked.target = "new_tab";
-                }
-                if (picked.env == null || picked.env.isEmpty()) {
-                    picked.env = "auto";
+                // Konfigurasi target hanya untuk custom shell script atau ipc tools (default foreground/new_tab & auto env)
+                // Fitur asli/default launcher tool (tool:app.open_settings), apps (app:), dan named key tidak boleh dipaksa target/env!
+                if (picked.key != null && (TermuxActivity.isIpcToolKey(picked.key)
+                        || (!picked.key.startsWith("tool:") && !picked.key.startsWith("app:") && !ExtraKeyActionLabels.isNamedKey(picked.key)))) {
+                    if (picked.target == null || picked.target.isEmpty()) {
+                        picked.target = "new_tab";
+                    }
+                    if (picked.env == null || picked.env.isEmpty()) {
+                        picked.env = "auto";
+                    }
+                } else {
+                    picked.target = null;
+                    picked.env = null;
                 }
                 targetList.add(picked);
                 preferences.setLeftCanvasQuickExtraKeys(ExtraKeysLayoutModel.serializeKeyList(targetList));
