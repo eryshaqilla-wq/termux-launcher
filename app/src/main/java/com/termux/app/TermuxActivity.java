@@ -13818,9 +13818,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             com.termux.app.haptics.Haptics.tick(accessoryContainer, android.view.HapticFeedbackConstants.CLOCK_TICK);
         }
 
-        mExtraKeysViews.clear();
-        mExtraKeysView = null;
-        rebuildTerminalToolbarPages();
         applyChromeSpec(buildChromeSpec());
         setTerminalToolbarHeight();
         mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
@@ -14328,9 +14325,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     /** The keys' width in the column: the row's height turned on its side. */
     private int extraKeysColumnKeysWidthPx() {
         int matrix = 0;
-        TermuxTerminalExtraKeys activeKeys = mIsAccessoryStackCollapsed
-            ? getTermuxTerminalExtraKeys(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX)
-            : mTermuxTerminalExtraKeys;
+        TermuxTerminalExtraKeys activeKeys = mTermuxTerminalExtraKeys;
         if (activeKeys != null && activeKeys.getExtraKeysInfo() != null) {
             matrix = activeKeys.getExtraKeysInfo().getMatrix().length;
         }
@@ -14623,7 +14618,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private void rebuildTerminalToolbarPages() {
         ViewPager pager = getTerminalToolbarViewPager();
         if (pager == null || pager.getAdapter() == null) return;
-        int targetPage = mIsAccessoryStackCollapsed ? 0 : Math.min(pager.getCurrentItem(), Math.max(0, getExtraKeysPageCount() - 1));
+        int targetPage = Math.min(pager.getCurrentItem(), Math.max(0, getExtraKeysPageCount() - 1));
         pager.setCurrentItem(0, false);
         pager.getAdapter().notifyDataSetChanged();
         pager.setCurrentItem(targetPage, false);
@@ -15309,9 +15304,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         ViewGroup.LayoutParams toolbarLayoutParams = terminalToolbarViewPager.getLayoutParams();
 
         int matrix = 0;
-        TermuxTerminalExtraKeys activeKeys = mIsAccessoryStackCollapsed
-            ? getTermuxTerminalExtraKeys(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX)
-            : mTermuxTerminalExtraKeys;
+        TermuxTerminalExtraKeys activeKeys = mTermuxTerminalExtraKeys;
         if (activeKeys != null && activeKeys.getExtraKeysInfo() != null) {
             matrix = activeKeys.getExtraKeysInfo().getMatrix().length;
         }
@@ -18774,20 +18767,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * wherever the place stands the keys, so nothing has to ask which surface is holding it.
      */
     private ExtraKeysView getExtraKeysView() {
-        if (mIsAccessoryStackCollapsed) {
-            ExtraKeysView compact = getExtraKeysView(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX);
-            if (compact != null) return compact;
-        }
         return mExtraKeysView;
     }
 
     public TermuxTerminalExtraKeys getTermuxTerminalExtraKeys(int page) {
         if (mTermuxTerminalExtraKeysPages.isEmpty()) rebuildExtraKeysPageClients();
-        if (mIsAccessoryStackCollapsed) {
-            if (mTermuxTerminalExtraKeysPages.size() > TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX) {
-                return mTermuxTerminalExtraKeysPages.get(TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX);
-            }
-        }
         if (page < 0 || page >= mTermuxTerminalExtraKeysPages.size()) page = 0;
         return mTermuxTerminalExtraKeysPages.get(page);
     }
@@ -18802,9 +18786,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
      * than leaving a blank one to swipe into.
      */
     public int getExtraKeysPageCount() {
-        if (mIsAccessoryStackCollapsed) {
-            return 1;
-        }
         if (mTermuxTerminalExtraKeysPages.isEmpty()) rebuildExtraKeysPageClients();
         int normalCount = 0;
         for (int i = 0; i < Math.min(2, mTermuxTerminalExtraKeysPages.size()); i++) {

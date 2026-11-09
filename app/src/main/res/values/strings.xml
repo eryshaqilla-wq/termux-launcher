@@ -57,10 +57,10 @@
     <string name="settings_status_bar_horizontal_swipe_session">Pindah Sesi (Next / Previous)</string>
     <string name="settings_status_bar_horizontal_swipe_none">Nonaktif</string>
     <string name="settings_dock_gestures_header">Dock gestures</string>
-    <string name="settings_two_finger_dock_swipe_title">Two-finger swipe to hide dock</string>
-    <string name="settings_two_finger_dock_swipe_summary">Swipe 2 fingers right to hide dock, left to show</string>
-    <string name="tool_dock_toggle">Toggle Dock</string>
-    <string name="tool_desc_dock_toggle">Toggle between full dock and compact 1-row extra keys.</string>
+    <string name="settings_two_finger_dock_swipe_title">Two-finger swipe to hide app icons &amp; A-Z</string>
+    <string name="settings_two_finger_dock_swipe_summary">Swipe 2 fingers right to hide apps and A-Z, left to show</string>
+    <string name="tool_dock_toggle">Toggle Dock Apps &amp; A-Z</string>
+    <string name="tool_desc_dock_toggle">Toggle visibility of app launcher bar and A-Z indexer.</string>
     <string name="tool_statusbar_toggle">Toggle Status Bar</string>
     <string name="tool_desc_statusbar_toggle">Buka atau tutup panel status bar expanded (Jam / Extra Keys).</string>
     <string name="widget_add">Add widget</string>

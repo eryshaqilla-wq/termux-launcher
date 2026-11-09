@@ -54,8 +54,7 @@ public class TerminalToolbarViewPager {
             View layout;
             int keyPages = mActivity.getExtraKeysPageCount();
             if (position < keyPages) {
-                int pageIndex = mActivity.isAccessoryStackCollapsed()
-                    ? TermuxTerminalExtraKeys.COMPACT_PAGE_INDEX : position;
+                int pageIndex = position;
                 // The page is the activity's own key view, lent here: the same instance the
                 // portable host takes when the place stands the keys on another edge, so a latched
                 // modifier and the picked colours survive the move either way.
