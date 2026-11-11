@@ -139,7 +139,8 @@ public class TermuxTerminalExtraKeys extends TerminalExtraKeys {
             TerminalView terminalView = mActivity.getTerminalView();
             if (terminalView != null && terminalView.mEmulator != null)
                 terminalView.mEmulator.toggleAutoScrollDisabled();
-        } else if ("DOCK".equals(key) || "DOCK_TOGGLE".equals(key)) {
+        } else if ("DOCK".equalsIgnoreCase(key) || "DOCK_TOGGLE".equalsIgnoreCase(key)
+                || "tool:dock.toggle".equalsIgnoreCase(key) || "dock.toggle".equalsIgnoreCase(key)) {
             mActivity.toggleAccessoryStackCollapsed();
         } else if (key != null && TermuxActivity.isIpcToolKey(key)) {
             String command = TermuxActivity.resolveIpcToolCommand(key);

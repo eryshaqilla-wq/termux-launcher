@@ -262,11 +262,29 @@ public final class ExtraKeyDetailSheet {
                 }));
             }
         } else if (TermuxActivity.isDefaultLauncherToolKey(key.key)) {
+            key.target = null;
+            key.env = null;
             body.addView(sectionLabel("Tipe Aksi"));
-            body.addView(selectorRow("⚙️ Fitur Default Launcher (Natif)", null, null));
+            body.addView(selectorRow("⚙️ Fitur Default Launcher (Natif)", null, () -> openActionPicker(picked -> {
+                key.key = picked.key;
+                key.macro = picked.macro;
+                key.display = picked.display;
+                key.target = null;
+                key.env = null;
+                changed(true);
+            })));
         } else if (key.key != null && key.key.startsWith("app:")) {
+            key.target = null;
+            key.env = null;
             body.addView(sectionLabel("Tipe Aksi"));
-            body.addView(selectorRow("📱 Aplikasi Android (Natif)", null, null));
+            body.addView(selectorRow("📱 Aplikasi Android (Natif)", null, () -> openActionPicker(picked -> {
+                key.key = picked.key;
+                key.macro = picked.macro;
+                key.display = picked.display;
+                key.target = null;
+                key.env = null;
+                changed(true);
+            })));
         }
 
         body.addView(sectionLabel(context.getString(R.string.settings_extra_keys_color)));
@@ -467,9 +485,14 @@ public final class ExtraKeyDetailSheet {
 
     /** A tappable value row with a trailing chevron, and an optional clear control before it. */
     private View selectorRow(@NonNull String value, @Nullable Runnable onClear,
-                             @NonNull Runnable onClick) {
-        MaterialCardView card = M3.clickableCard(context, true);
-        card.setOnClickListener(v -> onClick.run());
+                             @Nullable Runnable onClick) {
+        MaterialCardView card = M3.clickableCard(context, onClick != null);
+        if (onClick != null) {
+            card.setOnClickListener(v -> onClick.run());
+        } else {
+            card.setClickable(false);
+            card.setFocusable(false);
+        }
         LinearLayout rowView = row();
         rowView.setMinimumHeight(dp(52));
         rowView.setPaddingRelative(dp(14), dp(6), dp(8), dp(6));
@@ -496,12 +519,14 @@ public final class ExtraKeyDetailSheet {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
 
-        TextView chevron = new TextView(context);
-        chevron.setText("›");
-        M3.textAppearance(chevron, com.google.android.material.R.attr.textAppearanceTitleLarge);
-        chevron.setTextColor(colorSubtle);
-        chevron.setPadding(dp(6), 0, dp(6), 0);
-        rowView.addView(chevron);
+        if (onClick != null) {
+            TextView chevron = new TextView(context);
+            chevron.setText("›");
+            M3.textAppearance(chevron, com.google.android.material.R.attr.textAppearanceTitleLarge);
+            chevron.setTextColor(colorSubtle);
+            chevron.setPadding(dp(6), 0, dp(6), 0);
+            rowView.addView(chevron);
+        }
         return card;
     }
 

@@ -519,7 +519,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FrameLayout frameLayout = this.mPaneHost;
         if (frameLayout != null) {
             frameLayout.setVisibility(0);
-            frameLayout.bringToFront();
         }
         if (str == null || str.length() == 0 || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
             str = "file:///android_asset/webview_engine/home.html";

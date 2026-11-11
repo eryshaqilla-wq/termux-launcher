@@ -22518,6 +22518,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 } catch (Exception ignored) {}
                 runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "🧹 RAM Cache Dibersihkan!"));
             }).start();
+        } else if ("tool:dock.toggle".equalsIgnoreCase(actionKey) || "dock.toggle".equalsIgnoreCase(actionKey)
+                || "DOCK".equalsIgnoreCase(actionKey) || "DOCK_TOGGLE".equalsIgnoreCase(actionKey)) {
+            toggleAccessoryStackCollapsed();
         } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
             if (mTermuxTerminalViewClient != null) {
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
@@ -22749,6 +22752,9 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 } catch (Exception ignored) {}
                 runOnUiThread(() -> FusionToast.show(TermuxActivity.this, "🧹 RAM Cache Dibersihkan!"));
             }).start();
+        } else if ("tool:dock.toggle".equalsIgnoreCase(actionKey) || "dock.toggle".equalsIgnoreCase(actionKey)
+                || "DOCK".equalsIgnoreCase(actionKey) || "DOCK_TOGGLE".equalsIgnoreCase(actionKey)) {
+            toggleAccessoryStackCollapsed();
         } else if ("KEYBOARD".equalsIgnoreCase(actionKey)) {
             if (mTermuxTerminalViewClient != null) {
                 mTermuxTerminalViewClient.onToggleSoftKeyboardRequest();
