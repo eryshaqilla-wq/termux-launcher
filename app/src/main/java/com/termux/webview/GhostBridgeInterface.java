@@ -20,6 +20,8 @@ import org.json.JSONObject;
 public class GhostBridgeInterface implements Runnable {
     public static String sCurrentWalletName = "default";
     public static String sCurrentWalletAddress = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
+    public static String sCurrentSolWalletName = "default";
+    public static String sCurrentSolWalletAddress = "";
     public static String sLastTxHash = "";
     public static String sWcUri = "";
     public static boolean sIsAutoMode = false;
@@ -118,6 +120,11 @@ public class GhostBridgeInterface implements Runnable {
     public static void setWallet(String str, String str2) {
         sCurrentWalletName = str;
         sCurrentWalletAddress = str2;
+    }
+
+    public static void setSolWallet(String str, String str2) {
+        sCurrentSolWalletName = str;
+        sCurrentSolWalletAddress = str2;
     }
 
     public static void setWc(String str) {
@@ -367,6 +374,20 @@ public class GhostBridgeInterface implements Runnable {
         if (str == null) {
             return "{\"error\":\"Empty payload\"}";
         }
+        if (str.contains("sol_connect") || str.contains("solana_requestAccounts")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
+            String solAddr = sCurrentSolWalletAddress;
+            if (solAddr == null || solAddr.isEmpty()) {
+                solAddr = FusionWalletHelper.getMasterSolAddress();
+            }
+            if (solAddr != null && !solAddr.isEmpty()) {
+                return "{\"result\":{\"publicKey\":\"" + solAddr + "\"}}";
+            }
+            return forwardToDaemon(str);
+        }
         if (str.contains("eth_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
@@ -416,6 +437,32 @@ public class GhostBridgeInterface implements Runnable {
     @JavascriptInterface
     public String readWalletFile(String str) {
         return readFileFromWalletDir(str);
+    }
+
+    @JavascriptInterface
+    public String getSolWalletAddress() {
+        if (sCurrentSolWalletAddress != null && !sCurrentSolWalletAddress.isEmpty()) {
+            return sCurrentSolWalletAddress;
+        }
+        return FusionWalletHelper.getMasterSolAddress();
+    }
+
+    @JavascriptInterface
+    public String getSolWalletName() {
+        if (sCurrentSolWalletName != null && !sCurrentSolWalletName.isEmpty()) {
+            return sCurrentSolWalletName;
+        }
+        return FusionWalletHelper.getMasterSolName();
+    }
+
+    @JavascriptInterface
+    public boolean isSolanaActive() {
+        return FusionWalletHelper.hasSolanaWallets();
+    }
+
+    @JavascriptInterface
+    public void setSolWalletDirect(String str, String str2) {
+        setSolWallet(str, str2);
     }
 
     @Override // java.lang.Runnable

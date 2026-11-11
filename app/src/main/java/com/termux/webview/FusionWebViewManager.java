@@ -98,6 +98,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public String mCurrentProfile = "default";
     public String mCurrentWalletName = "Master .env";
     public String mCurrentWalletAddress = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
+    public String mCurrentSolWalletName = "Master Solana";
+    public String mCurrentSolWalletAddress = "";
     public String mCurrentChainKey = "base";
     public String mWcUri = "";
     public boolean mIsGhostMode = false;
@@ -979,8 +981,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 if (this.mPaneHost.getVisibility() == View.VISIBLE) {
                     this.mPaneHost.setVisibility(View.GONE);
                 }
-            } else if (isMiddleCanvasWebViewActive() && this.mPaneHost.getVisibility() != View.VISIBLE) {
+            } else if (hasMiddleCanvasWebView() && this.mPaneHost.getVisibility() != View.VISIBLE) {
                 this.mPaneHost.setVisibility(View.VISIBLE);
+                this.mPaneHost.bringToFront();
             }
         }
     }
@@ -992,9 +995,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 if (this.mActivity != null) {
                     this.mActivity.endWebViewExternalTextInput();
                 }
-            } else if (isMiddleCanvasWebViewActive()) {
+            } else if (hasMiddleCanvasWebView()) {
                 this.mPaneHost.setVisibility(View.VISIBLE);
-                if (this.mActivity != null) {
+                this.mPaneHost.bringToFront();
+                if (isMiddleCanvasWebViewActive() && this.mActivity != null) {
                     this.mActivity.beginWebViewExternalTextInput();
                 }
             }
@@ -1037,6 +1041,19 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         for (int i = 0; i < this.mTabList.size(); i++) {
             FusionTab tab = (FusionTab) this.mTabList.get(i);
             if (tab != null && tab.mBoundSession == session && !tab.mIsMinimized && tab.mWebView != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasMiddleCanvasWebView() {
+        if (this.mActivity == null) return false;
+        TerminalSession session = this.mActivity.getCurrentSession();
+        if (session == null || this.mTabList == null) return false;
+        for (int i = 0; i < this.mTabList.size(); i++) {
+            FusionTab tab = (FusionTab) this.mTabList.get(i);
+            if (tab != null && (tab.mBoundSession == session || tab.mBoundSession == null) && tab.mWebView != null) {
                 return true;
             }
         }
@@ -1666,7 +1683,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         String tabProfile = (ownerTab != null && ownerTab.mProfile != null && !ownerTab.mProfile.isEmpty())
                 ? ownerTab.mProfile : this.mCurrentProfile;
         FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(tabProfile);
-        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + tabProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
+        String solName = (this.mCurrentSolWalletName != null && !this.mCurrentSolWalletName.isEmpty())
+                ? this.mCurrentSolWalletName : FusionWalletHelper.getMasterSolName();
+        String solAddr = (this.mCurrentSolWalletAddress != null && !this.mCurrentSolWalletAddress.isEmpty())
+                ? this.mCurrentSolWalletAddress : FusionWalletHelper.getMasterSolAddress();
+
+        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + tabProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__FUSION_SOL_WALLET_NAME__ = '" + solName + "'; window.__FUSION_SOL_WALLET_ADDRESS__ = '" + solAddr + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "ghost_injected.js");
         FusionUserscriptHelper.injectMatchingScripts(webView, webView.getUrl());
@@ -2264,6 +2286,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mCurrentWalletName = name;
         this.mCurrentWalletAddress = address;
         GhostBridgeInterface.setWallet(name, address);
+
+        String solName = FusionWalletHelper.getSolName(i);
+        String solAddr = FusionWalletHelper.getSolAddress(i);
+        if (solAddr != null && !solAddr.isEmpty()) {
+            this.mCurrentSolWalletName = solName;
+            this.mCurrentSolWalletAddress = solAddr;
+            GhostBridgeInterface.setSolWallet(solName, solAddr);
+        }
+
         updateMenuTexts();
         LinearLayout linearLayout = this.mMenuCard;
         if (linearLayout != null) {
@@ -2284,6 +2315,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         WebView webView = this.mActiveWebView;
         if (webView != null) {
             webView.evaluateJavascript("if(window.ethereum){window.ethereum.selectedAddress='" + address + "';window.dispatchEvent(new CustomEvent('accountsChanged',{detail:['" + address + "']}));}", null);
+            if (solAddr != null && !solAddr.isEmpty()) {
+                webView.evaluateJavascript("if(window.solana){window.__FUSION_SOL_WALLET_ADDRESS__='" + solAddr + "';if(window.solana.publicKey){window.solana.publicKey._val='" + solAddr + "';}window.solana.emit('accountChanged','" + solAddr + "');}", null);
+            }
         }
     }
 
@@ -2860,8 +2894,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             }
         }
+        if (this.mPaneHost != null) {
+            this.mPaneHost.setVisibility(View.VISIBLE);
+            this.mPaneHost.bringToFront();
+        }
         LinearLayout linearLayout = this.mControlPill;
         if (linearLayout != null) {
+            if (linearLayout.getParent() == null && this.mPaneHost != null) {
+                FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                layoutParams.setMargins(0, 8, 12, 0);
+                this.mPaneHost.addView(linearLayout, layoutParams);
+            }
             linearLayout.setVisibility(0);
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
@@ -2938,6 +2981,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         webView2.resumeTimers();
                     }
                 }
+                if (this.mPaneHost == null) {
+                    initViews();
+                }
+                FrameLayout frameLayout3 = this.mPaneHost;
+                if (frameLayout3 != null) {
+                    frameLayout3.setVisibility(0);
+                    frameLayout3.bringToFront();
+                }
                 if (fusionTab2.mIsMinimized) {
                     if (webView3 != null) {
                         webView3.setVisibility(8);
@@ -2959,6 +3010,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     termuxActivity.endWebViewExternalTextInput();
                     LinearLayout linearLayout2 = this.mControlPill;
                     if (linearLayout2 != null) {
+                        if (linearLayout2.getParent() == null && this.mPaneHost != null) {
+                            FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                            layoutParams.setMargins(0, 8, 12, 0);
+                            this.mPaneHost.addView(linearLayout2, layoutParams);
+                        }
                         linearLayout2.setVisibility(0);
                         linearLayout2.setElevation(160.0f);
                         linearLayout2.setScaleX(1.0f);
@@ -2973,14 +3029,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 TextView textView2 = this.mMinPillBtn;
                 if (textView2 != null) {
                     textView2.setText(" MIN ");
-                }
-                if (this.mPaneHost == null) {
-                    initViews();
-                }
-                FrameLayout frameLayout3 = this.mPaneHost;
-                if (frameLayout3 != null) {
-                    frameLayout3.setVisibility(0);
-                    frameLayout3.bringToFront();
                 }
                 if (webView3 != null) {
                     if (webView3.getParent() == null && (frameLayout2 = this.mPaneHost) != null) {

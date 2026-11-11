@@ -395,6 +395,135 @@
     window.addEventListener("eip6963:requestProvider", announce);
 })();
 
+// ============================================================================
+// GHOST SOLANA WEB3 INJECTION (THE ELITE 6 KTP & MULTI-IDENTITY SPOOFER)
+// ============================================================================
+(function() {
+    if (window.__GHOST_SOLANA_INITIALIZED__) return;
+    window.__GHOST_SOLANA_INITIALIZED__ = true;
+
+    var GHOST_URL = "http://127.0.0.1:3333";
+
+    async function callGhostRpc(method, params) {
+        params = params || [];
+        if (window.GhostBridge && window.GhostBridge.postRpc) {
+            try {
+                var raw = window.GhostBridge.postRpc(JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: method, params: params }));
+                var parsed = JSON.parse(raw);
+                if (parsed.error) throw new Error(typeof parsed.error === "string" ? parsed.error : (parsed.error.message || JSON.stringify(parsed.error)));
+                return parsed.result;
+            } catch(e) {
+                if (e.message && e.message.indexOf("offline") === -1) throw e;
+            }
+        }
+        try {
+            var res = await fetch(GHOST_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: method, params: params })
+            });
+            var data = await res.json();
+            if (data.error) throw new Error(typeof data.error === "string" ? data.error : (data.error.message || JSON.stringify(data.error)));
+            return data.result;
+        } catch (err) {
+            console.error("[GhostSolana] RPC Error:", err);
+            throw err;
+        }
+    }
+
+    function GhostPublicKey(val) {
+        this._val = val;
+    }
+    GhostPublicKey.prototype.toBase58 = function() { return this._val; };
+    GhostPublicKey.prototype.toString = function() { return this._val; };
+    GhostPublicKey.prototype.toJSON = function() { return this._val; };
+    GhostPublicKey.prototype.equals = function(other) { return this._val === (other ? other.toString() : ""); };
+
+    function GhostSolanaProvider() {
+        this.isGhost = true;
+        this.isPhantom = true;
+        this.isSolflare = true;
+        this.isBackpack = true;
+        this.isOkxWallet = true;
+        this.isCoinbaseWallet = true;
+        this.isTrustWallet = true;
+        this.isConnected = false;
+        this.publicKey = null;
+        this._events = {};
+    }
+
+    GhostSolanaProvider.prototype.on = function(event, handler) {
+        if (!this._events[event]) this._events[event] = [];
+        this._events[event].push(handler);
+    };
+
+    GhostSolanaProvider.prototype.emit = function(event) {
+        var args = Array.prototype.slice.call(arguments, 1);
+        if (this._events[event]) {
+            this._events[event].forEach(function(h) { h.apply(null, args); });
+        }
+    };
+
+    GhostSolanaProvider.prototype.connect = async function(opts) {
+        var res = await callGhostRpc("sol_connect", [opts || {}]);
+        this.publicKey = new GhostPublicKey(res.publicKey);
+        this.isConnected = true;
+        this.emit("connect", this.publicKey);
+        return { publicKey: this.publicKey };
+    };
+
+    GhostSolanaProvider.prototype.disconnect = async function() {
+        this.isConnected = false;
+        this.publicKey = null;
+        this.emit("disconnect");
+    };
+
+    GhostSolanaProvider.prototype.signTransaction = async function(transaction) {
+        var wire = transaction.serialize ? transaction.serialize({ requireAllSignatures: false }) : transaction;
+        var base64Tx = btoa(String.fromCharCode.apply(null, new Uint8Array(wire)));
+        var signedBase64 = await callGhostRpc("sol_signTransaction", [base64Tx]);
+        var binary = atob(signedBase64);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return transaction.constructor && transaction.constructor.from ? transaction.constructor.from(bytes) : bytes;
+    };
+
+    GhostSolanaProvider.prototype.signAllTransactions = async function(transactions) {
+        var results = [];
+        for (var i = 0; i < transactions.length; i++) {
+            results.push(await this.signTransaction(transactions[i]));
+        }
+        return results;
+    };
+
+    GhostSolanaProvider.prototype.signAndSendTransaction = async function(transaction, options) {
+        var wire = transaction.serialize ? transaction.serialize({ requireAllSignatures: false }) : transaction;
+        var base64Tx = btoa(String.fromCharCode.apply(null, new Uint8Array(wire)));
+        var signature = await callGhostRpc("sol_signAndSendTransaction", [base64Tx, options || {}]);
+        return { signature: signature };
+    };
+
+    GhostSolanaProvider.prototype.signMessage = async function(message, display) {
+        var base64Msg = btoa(String.fromCharCode.apply(null, new Uint8Array(message)));
+        var res = await callGhostRpc("sol_signMessage", [base64Msg, display || "hex"]);
+        var sigBytes = atob(res.signature).split("").map(function(c) { return c.charCodeAt(0); });
+        return { signature: new Uint8Array(sigBytes) };
+    };
+
+    var solProvider = new GhostSolanaProvider();
+
+    window.solana = solProvider;
+    window.phantom = window.phantom || {};
+    window.phantom.solana = solProvider;
+    window.solflare = solProvider;
+    window.backpack = solProvider;
+    window.okxwallet = window.okxwallet || {};
+    window.okxwallet.solana = solProvider;
+    window.coinbaseSolana = solProvider;
+    window.trustwallet = window.trustwallet || {};
+    window.trustwallet.solana = solProvider;
+})();
+
 
 // ============================================================================
 // AGY CO-PILOT HUD, IN-PAGE SLASH AUTOCOMPLETE & ACCURATE RECORDER ENGINE (v3.0)

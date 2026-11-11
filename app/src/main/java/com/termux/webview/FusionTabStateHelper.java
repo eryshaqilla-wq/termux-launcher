@@ -275,13 +275,34 @@ public class FusionTabStateHelper {
             if (view2 != null) {
                 view2.setVisibility(0);
             }
+            FrameLayout frameLayout = fusionWebViewManager.mPaneHost;
+            if (frameLayout != null) {
+                frameLayout.setVisibility(View.VISIBLE);
+                frameLayout.bringToFront();
+            }
+            LinearLayout linearLayout2 = fusionWebViewManager.mControlPill;
+            if (linearLayout2 != null) {
+                if (linearLayout2.getParent() == null && frameLayout != null) {
+                    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                    layoutParams.setMargins(0, 8, 12, 0);
+                    frameLayout.addView(linearLayout2, layoutParams);
+                }
+                linearLayout2.setVisibility(View.VISIBLE);
+                linearLayout2.setElevation(160.0f);
+                linearLayout2.setScaleX(1.0f);
+                linearLayout2.setScaleY(1.0f);
+                linearLayout2.setTranslationX(0.0f);
+                linearLayout2.setTranslationY(0.0f);
+                linearLayout2.bringToFront();
+            }
+            fusionWebViewManager.updateContextUi();
             TermuxActivity r2 = fusionWebViewManager.mActivity;
             if (r2 != null) {
                 r2.endWebViewExternalTextInput();
                 r2.refreshTerminalWindowBar();
                 FusionToast.makeText((Context) r2, "WebView diminimalkan", 0).show();
-                return;
             }
+            return;
         } else {
             activeTab.mIsMinimized = false;
             View view3 = fusionWebViewManager.mTerminalPaneHost;
@@ -294,17 +315,29 @@ public class FusionTabStateHelper {
             webView.bringToFront();
             FrameLayout frameLayout = fusionWebViewManager.mPaneHost;
             if (frameLayout != null) {
-                frameLayout.setVisibility(0);
+                frameLayout.setVisibility(View.VISIBLE);
                 frameLayout.bringToFront();
             }
             LinearLayout linearLayout2 = fusionWebViewManager.mControlPill;
             if (linearLayout2 != null) {
+                if (linearLayout2.getParent() == null && frameLayout != null) {
+                    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                    layoutParams.setMargins(0, 8, 12, 0);
+                    frameLayout.addView(linearLayout2, layoutParams);
+                }
+                linearLayout2.setVisibility(View.VISIBLE);
+                linearLayout2.setElevation(160.0f);
+                linearLayout2.setScaleX(1.0f);
+                linearLayout2.setScaleY(1.0f);
+                linearLayout2.setTranslationX(0.0f);
+                linearLayout2.setTranslationY(0.0f);
                 linearLayout2.bringToFront();
             }
             TextView textView2 = fusionWebViewManager.mMinPillBtn;
             if (textView2 != null) {
                 textView2.setText(" MIN ");
             }
+            fusionWebViewManager.updateContextUi();
             TermuxActivity r2 = fusionWebViewManager.mActivity;
             if (r2 != null) {
                 r2.beginWebViewExternalTextInput();

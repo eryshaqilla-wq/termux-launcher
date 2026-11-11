@@ -15,6 +15,62 @@ public class FusionWalletHelper {
     public static String[] sNames = {"Master .env"};
     public static String[] sAddresses = {"0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359"};
 
+    public static int sSolMasterIndex = 0;
+    public static String[] sSolNames = {"Master Solana"};
+    public static String[] sSolAddresses = {""};
+
+    public static boolean hasSolanaWallets() {
+        return sSolAddresses != null && sSolAddresses.length > 0 && !sSolAddresses[0].isEmpty();
+    }
+
+    public static String getMasterSolAddress() {
+        if (sSolAddresses == null || sSolAddresses.length == 0) return "";
+        int i = sSolMasterIndex;
+        if (i < 0 || i >= sSolAddresses.length) return sSolAddresses[0];
+        return sSolAddresses[i];
+    }
+
+    public static String getMasterSolName() {
+        if (sSolNames == null || sSolNames.length == 0) return "Master Solana";
+        int i = sSolMasterIndex;
+        if (i < 0 || i >= sSolNames.length) return sSolNames[0];
+        return sSolNames[i];
+    }
+
+    public static String getSolAddress(int i) {
+        if (sSolAddresses == null || i < 0 || i >= sSolAddresses.length) return "";
+        return sSolAddresses[i];
+    }
+
+    public static String getSolName(int i) {
+        if (sSolNames == null || i < 0 || i >= sSolNames.length) return "";
+        return sSolNames[i];
+    }
+
+    public static String[] getSolNames() {
+        return sSolNames;
+    }
+
+    public static String[] getSolAddresses() {
+        return sSolAddresses;
+    }
+
+    public static int getSolMasterIndex() {
+        return sSolMasterIndex;
+    }
+
+    public static String findSolAddressByName(String str) {
+        if (str == null) return getMasterSolAddress();
+        if (sSolNames != null && sSolAddresses != null) {
+            for (int i = 0; i < sSolNames.length && i < sSolAddresses.length; i++) {
+                if (str.equalsIgnoreCase(sSolNames[i])) {
+                    return sSolAddresses[i];
+                }
+            }
+        }
+        return getMasterSolAddress();
+    }
+
     public static String findAddressByName(String str) {
         if (str == null) {
             return getMasterAddress();
@@ -207,6 +263,11 @@ public class FusionWalletHelper {
     }
 
     public static void reload(Context context) {
+        reloadEvm(context);
+        reloadSolana(context);
+    }
+
+    public static void reloadEvm(Context context) {
         InputStream fileInputStream = null;
         String str = sCustomWalletPath;
         if (str != null) {
@@ -278,6 +339,71 @@ public class FusionWalletHelper {
             sNames = strArr;
             sAddresses = strArr2;
         } catch (Exception unused6) {
+        }
+    }
+
+    public static void reloadSolana(Context context) {
+        InputStream solInputStream = null;
+        String str = sCustomWalletPath;
+        if (str != null) {
+            try {
+                File file = new File(str);
+                if (file.isDirectory()) {
+                    file = new File(file, "wallets_solana_db.json");
+                }
+                if (file.exists()) {
+                    solInputStream = new FileInputStream(file);
+                }
+            } catch (Exception unused) {
+            }
+        }
+        if (solInputStream == null) {
+            String[] solSearchPaths = new String[]{
+                new File(getWalletDir(), "wallets_solana_db.json").getAbsolutePath(),
+                "/data/data/com.termux/files/home/wallet/wallets_solana_db.json",
+                "/wallet/wallets_solana_db.json",
+                "/root/wallet/wallets_solana_db.json",
+                "/data/local/nhsystem/kali-arm64/root/wallet/wallets_solana_db.json"
+            };
+            for (String p : solSearchPaths) {
+                try {
+                    File f = new File(p);
+                    if (f.exists() && f.canRead()) {
+                        solInputStream = new FileInputStream(f);
+                        break;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        if (solInputStream == null) {
+            return;
+        }
+        try {
+            ByteArrayOutputStream solBaos = new ByteArrayOutputStream();
+            byte[] solBArr = new byte[4096];
+            while (true) {
+                int i = solInputStream.read(solBArr);
+                if (i == -1) break;
+                solBaos.write(solBArr, 0, i);
+            }
+            solInputStream.close();
+            JSONObject solObj = new JSONObject(new String(solBaos.toByteArray(), "UTF-8"));
+            sSolMasterIndex = solObj.optInt("master_index", 0);
+            JSONArray solWallets = solObj.optJSONArray("wallets");
+            if (solWallets != null && solWallets.length() > 0) {
+                int solLen = solWallets.length();
+                String[] solN = new String[solLen];
+                String[] solA = new String[solLen];
+                for (int j = 0; j < solLen; j++) {
+                    JSONObject wObj = solWallets.getJSONObject(j);
+                    solN[j] = wObj.optString("name", "Sol-" + (j + 1));
+                    solA[j] = wObj.optString("address", "");
+                }
+                sSolNames = solN;
+                sSolAddresses = solA;
+            }
+        } catch (Exception ignored) {
         }
     }
 
