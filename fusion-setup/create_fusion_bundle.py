@@ -299,6 +299,56 @@ echo "telegram.cjs tidak ditemukan di $TARGET_DIR"
 exit 1
 """)
 
+# Wrapper wallet-ui (Wallet Web UI Launcher)
+with open(os.path.join(BUNDLE_DIR, "bin/wallet-ui"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/wallet_ui_server.cjs" ]; then
+    cd "$TARGET_DIR" && exec node wallet_ui_server.cjs "$@"
+elif [ -f "$TARGET_DIR/wallet.cjs" ]; then
+    cd "$TARGET_DIR" && exec node wallet.cjs ui "$@"
+fi
+echo "wallet_ui_server.cjs tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+
+# Wrapper ai (Tri-Engine Autonomous Controller)
+if os.path.exists("/usr/local/bin/ai"):
+    shutil.copy2("/usr/local/bin/ai", os.path.join(BUNDLE_DIR, "bin/ai"))
+    os.chmod(os.path.join(BUNDLE_DIR, "bin/ai"), 0o755)
+elif os.path.exists("/root/wallet/auto_engine.cjs"):
+    with open(os.path.join(BUNDLE_DIR, "bin/ai"), "w") as f:
+        f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/auto_engine.cjs" ]; then
+    cd "$TARGET_DIR" && exec node auto_engine.cjs "$@"
+fi
+echo "auto_engine.cjs tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+
 if os.path.exists("/usr/local/bin/agy-copilot"):
     shutil.copy2("/usr/local/bin/agy-copilot", os.path.join(BUNDLE_DIR, "bin/agy-copilot"))
 if os.path.exists("/usr/local/bin/agy-switch"):
@@ -328,7 +378,8 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS Suite (dari /root/wallet/ atau /project/node2cjs/)
 for f_cjs in [
-    "wallet.cjs", "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs", "tele_session_string.txt",
+    "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "auto_engine.cjs", "x_native.cjs",
+    "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs", "tele_session_string.txt",
     "password_resolver.cjs", "passwords_db.json", "passwords.txt", "recipes_db.json",
     "config_telegram.json", "query_db.json", "module_db.json", "pantau.json",
     "tele_filter_config.json", "eso.db", "sent_history.db", "webview_profiles.json",
@@ -336,14 +387,15 @@ for f_cjs in [
     "modules.json", "queries.json", "watchlist.json", "tg_config.json", "x_accounts.json",
     "x_session.json", "scankomen_trigger.json", "loop_state.json", "filter_config.json",
     "tg_cache.json", "button_query_db.json", "email.txt", "ref.txt", "claim_gift.cjs",
-    "leadloop_cards.json", "ka_agents_cards.json"
+    "leadloop_cards.json", "ka_agents_cards.json", "wallets_solana_db.json", "solana_wallets.json",
+    "kantor_tokens.json", "copy_mint.cjs", "bagent_sniper.cjs"
 ]:
     for src_dir in ["/root/wallet", "/project/node2cjs"]:
         src_path = os.path.join(src_dir, f_cjs)
         if os.path.exists(src_path):
             shutil.copy2(src_path, os.path.join(BUNDLE_DIR, "wallet", f_cjs))
             break
-print("✓ Added CJS suite (wallet.cjs, x_webview.cjs, pemantau.cjs, telegram.cjs, 9router.cjs) to bundle")
+print("✓ Added CJS suite (wallet.cjs, wallet_ui_server.cjs, wallet_solana.cjs, auto_engine.cjs, x_webview.cjs, pemantau.cjs, telegram.cjs, 9router.cjs) to bundle")
 
 # Salin Web UI assets jika ada (web/index.html, dll)
 for w_dir in ["/root/wallet/web", "/project/node2cjs/web"]:
@@ -356,7 +408,7 @@ for w_dir in ["/root/wallet/web", "/project/node2cjs/web"]:
         break
 
 # 2. Salin Regular JS/Python Suite (dari /root/wallet/ atau /project/node2cjs/)
-for f_js in ["wallet.js", "x_webview.js", "pemantautelegram.py", "package.json", "chains_db.json"]:
+for f_js in ["wallet.js", "wallet_solana.js", "x_webview.js", "pemantautelegram.py", "package.json", "chains_db.json"]:
     for src_candidate in [os.path.join("/root/wallet", f_js), os.path.join("/project/node2cjs", f_js)]:
         if os.path.exists(src_candidate):
             shutil.copy2(src_candidate, os.path.join(BUNDLE_DIR, "wallet", f_js))
@@ -504,6 +556,13 @@ for target in [
     os.path.join(FUSION_SETUP_DIR, "fusion_payload.tar.gz"),
     os.path.join(ASSETS_DIR, "wallet.js"),
     os.path.join(ASSETS_DIR, "wallet.cjs"),
+    os.path.join(ASSETS_DIR, "wallet_ui_server.cjs"),
+    os.path.join(ASSETS_DIR, "wallet_ui.html"),
+    os.path.join(ASSETS_DIR, "wallet_solana.cjs"),
+    os.path.join(ASSETS_DIR, "wallet_solana.js"),
+    os.path.join(ASSETS_DIR, "auto_engine.cjs"),
+    os.path.join(ASSETS_DIR, "wallets_solana_db.json"),
+    os.path.join(ASSETS_DIR, "solana_wallets.json"),
     os.path.join(ASSETS_DIR, "x_webview.js"),
     os.path.join(ASSETS_DIR, "x_webview.cjs"),
     os.path.join(ASSETS_DIR, "pemantau.cjs"),
@@ -541,6 +600,12 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/bashnh")):
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet"), os.path.join(ASSETS_DIR, "wallet"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet"), os.path.join(FUSION_SETUP_DIR, "wallet"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/wallet-ui")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet-ui"), os.path.join(ASSETS_DIR, "wallet-ui"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/wallet-ui"), os.path.join(FUSION_SETUP_DIR, "wallet-ui"))
+if os.path.exists(os.path.join(BUNDLE_DIR, "bin/ai")):
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/ai"), os.path.join(ASSETS_DIR, "ai"))
+    shutil.copy2(os.path.join(BUNDLE_DIR, "bin/ai"), os.path.join(FUSION_SETUP_DIR, "ai"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/pemantau")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(ASSETS_DIR, "pemantau"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/pemantau"), os.path.join(FUSION_SETUP_DIR, "pemantau"))

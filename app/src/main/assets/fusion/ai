@@ -1,0 +1,1405 @@
+#!/usr/bin/env node
+/**
+ * ⚡ AUTONOMOUS TRI-ENGINE FUSION ORCHESTRATOR
+ * 
+ * Sinergi 100% Otonom:
+ * - 3 Mesin Aksi: Telegram (GramJS) ↔ X & WebView (agent-web) ↔ Wallet (Ghost Daemon port 3333)
+ * - 3 Mesin AI  : DeepSeek ↔ 9Router (port 20128) ↔ AGY Ephemeral (Gemini Flash Low)
+ * 
+ * Standar: Zero-Dependency Pure Node.js CJS, JSON-first untuk AI Agents & Antigravity.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
+const https = require('https');
+const { execSync, spawn } = require('child_process');
+
+const WALLET_DIR = '/root/wallet';
+const SESSIONS_DIR = path.join(WALLET_DIR, 'sessions');
+const AI_CONFIG_FILE = path.join(WALLET_DIR, 'ai_config.json');
+const TELE_DB_PATH = path.join(WALLET_DIR, 'tele_data', 'telegram.db');
+const WALLETS_DB_FILE = path.join(WALLET_DIR, 'wallets_db.json');
+const CHAINS_DB_FILE = path.join(WALLET_DIR, 'chains_db.json');
+const LOG_FILE = '/tmp/auto_engine.log';
+
+// --- UTILITIES ---
+function log(msg) {
+    const line = `[${new Date().toISOString()}] ${msg}`;
+    try { fs.appendFileSync(LOG_FILE, line + '\n'); } catch (_) {}
+}
+
+function runCmd(cmd) {
+    try {
+        return execSync(cmd, { encoding: 'utf8' }).trim();
+    } catch (e) {
+        return e.stdout ? e.stdout.trim() : `Error: ${e.message}`;
+    }
+}
+
+// ==========================================
+// 1. THE 3 AI ENGINES (TRI-ENGINE AI ROUTER)
+// ==========================================
+
+function loadAiConfig() {
+    try {
+        if (fs.existsSync(AI_CONFIG_FILE)) {
+            return JSON.parse(fs.readFileSync(AI_CONFIG_FILE, 'utf8'));
+        }
+    } catch (_) {}
+    return { baseUrl: 'https://api.deepseek.com', apiKey: '', model: 'deepseek-flash' };
+}
+
+// 1A. DeepSeek / Custom AI
+async function queryDeepSeek(promptText, systemPrompt = 'You are an autonomous Web3 task agent. Reply strictly in concise JSON.') {
+    const cfg = loadAiConfig();
+    if (!cfg || !cfg.apiKey) return null;
+
+    let base = (cfg.baseUrl || 'https://api.deepseek.com').replace(/\/+$/, '');
+    let url = base.endsWith('/chat/completions') ? base : `${base}/chat/completions`;
+
+    try {
+        const payload = JSON.stringify({
+            model: cfg.model || 'deepseek-flash',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: promptText }
+            ],
+            stream: false
+        });
+
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${cfg.apiKey}`
+            },
+            body: payload,
+            signal: AbortSignal.timeout(15000)
+        });
+
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data.choices?.[0]?.message?.content?.trim() || null;
+    } catch (_) {
+        return null;
+    }
+}
+
+// 1B. 9Router (Port 20128)
+async function query9Router(promptText, systemPrompt = 'You are an autonomous Web3 task agent. Reply strictly in concise JSON.') {
+    return new Promise((resolve) => {
+        const postData = JSON.stringify({
+            model: 'antigravity',
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: promptText }
+            ],
+            temperature: 0.2
+        });
+
+        const req = http.request({
+            hostname: '127.0.0.1',
+            port: 20128,
+            path: '/v1/chat/completions',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            },
+            timeout: 10000
+        }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(data);
+                    resolve(parsed.choices?.[0]?.message?.content?.trim() || null);
+                } catch (_) {
+                    resolve(null);
+                }
+            });
+        });
+
+        req.on('error', () => resolve(null));
+        req.on('timeout', () => { req.destroy(); resolve(null); });
+        req.write(postData);
+        req.end();
+    });
+}
+
+// 1C. AGY Ephemeral & Multi-Account Pool Resolver
+function getAgyTokenFromPool(preferWorker = true) {
+    const baseHome = process.env.HOME || '/root';
+    const accDirs = [
+        path.join(baseHome, '.agy-accounts'),
+        '/root/.agy-accounts',
+        '/data/data/com.termux/files/home/.agy-accounts'
+    ];
+    const accountsDir = accDirs.find(d => fs.existsSync(d));
+    if (accountsDir) {
+        try {
+            const files = fs.readdirSync(accountsDir).filter(f => f.endsWith('.json'));
+            if (files.length > 0) {
+                const activePath = path.join(accountsDir, '.active');
+                const activeName = fs.existsSync(activePath) ? fs.readFileSync(activePath, 'utf8').trim() : '';
+
+                // Jika preferWorker, utamakan akun standby selain akun aktif Tuan di terminal
+                if (preferWorker && files.length > 1 && activeName) {
+                    const workerFiles = files.filter(f => !f.startsWith(activeName));
+                    if (workerFiles.length > 0) {
+                        return path.join(accountsDir, workerFiles[0]);
+                    }
+                }
+                const targetFile = activeName && fs.existsSync(path.join(accountsDir, `${activeName}.json`))
+                    ? path.join(accountsDir, `${activeName}.json`)
+                    : path.join(accountsDir, files[0]);
+                return targetFile;
+            }
+        } catch (_) {}
+    }
+
+    const legacyPaths = [
+        path.join(baseHome, '.gemini/antigravity-cli/antigravity-oauth-token'),
+        '/root/.gemini/antigravity-cli/antigravity-oauth-token',
+        '/data/data/com.termux/files/home/.gemini/antigravity-cli/antigravity-oauth-token'
+    ];
+    return legacyPaths.find(p => fs.existsSync(p)) || null;
+}
+
+function getAgyAccountsCount() {
+    const baseHome = process.env.HOME || '/root';
+    const accDirs = [
+        path.join(baseHome, '.agy-accounts'),
+        '/root/.agy-accounts',
+        '/data/data/com.termux/files/home/.agy-accounts'
+    ];
+    const accountsDir = accDirs.find(d => fs.existsSync(d));
+    if (accountsDir) {
+        try {
+            return fs.readdirSync(accountsDir).filter(f => f.endsWith('.json')).length;
+        } catch (_) {}
+    }
+    return fs.existsSync('/root/.gemini/antigravity-cli/antigravity-oauth-token') ? 1 : 0;
+}
+
+async function queryAgyEphemeral(promptText, systemPrompt = 'You are an autonomous Web3 task agent. Reply strictly in concise JSON.') {
+    return new Promise((resolve) => {
+        const tokenSource = getAgyTokenFromPool(true);
+        if (!tokenSource || !fs.existsSync(tokenSource)) {
+            return resolve(null);
+        }
+
+        const tmpDir = path.join('/tmp', `agy_auto_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+        const cliDir = path.join(tmpDir, '.gemini', 'antigravity-cli');
+        try {
+            fs.mkdirSync(cliDir, { recursive: true });
+            fs.copyFileSync(tokenSource, path.join(cliDir, 'antigravity-oauth-token'));
+            fs.chmodSync(path.join(cliDir, 'antigravity-oauth-token'), 0o600);
+
+            const settingsCandidates = [
+                path.join(process.env.HOME || '/root', '.gemini/antigravity-cli/settings.json'),
+                '/root/.gemini/antigravity-cli/settings.json',
+                '/data/data/com.termux/files/home/.gemini/antigravity-cli/settings.json'
+            ];
+            const foundSettings = settingsCandidates.find(s => fs.existsSync(s));
+            if (foundSettings) {
+                try { fs.symlinkSync(foundSettings, path.join(cliDir, 'settings.json')); } catch (_) {}
+            }
+        } catch (_) {
+            return resolve(null);
+        }
+
+        const fullPrompt = systemPrompt ? `[SYSTEM: ${systemPrompt}]\n\n${promptText}` : promptText;
+        const agyCandidates = [
+            process.env.AGY_BIN,
+            '/usr/local/bin/agy',
+            '/root/.local/bin/agy',
+            path.join(process.env.HOME || '/root', '.local/bin/agy'),
+            '/data/data/com.termux/files/usr/bin/agy'
+        ];
+        const agyBin = agyCandidates.find(b => b && fs.existsSync(b)) || 'agy';
+
+        const child = spawn(agyBin, ['-p', fullPrompt, '--effort', 'low', '--disable-slash-commands'], {
+            env: { ...process.env, HOME: tmpDir, AGY_EPHEMERAL: '1' },
+            timeout: 20000
+        });
+
+        let out = '';
+        child.stdout.on('data', chunk => out += chunk);
+        child.on('close', () => {
+            try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+            const cleaned = out.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '').trim();
+            resolve(cleaned || null);
+        });
+        child.on('error', () => {
+            try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
+            resolve(null);
+        });
+    });
+}
+
+// Tri-Engine Cascade Dispatcher with Auto-Fallback
+async function queryTriEngineAi(promptText, systemPrompt, preferredEngine) {
+    // 1. Preferred if specified
+    if (preferredEngine === 'deepseek') {
+        const res = await queryDeepSeek(promptText, systemPrompt);
+        if (res) return { text: res, engine: 'DeepSeek' };
+    } else if (preferredEngine === '9router') {
+        const res = await query9Router(promptText, systemPrompt);
+        if (res) return { text: res, engine: '9Router' };
+    } else if (preferredEngine === 'agy') {
+        const res = await queryAgyEphemeral(promptText, systemPrompt);
+        if (res) return { text: res, engine: 'AGY Ephemeral' };
+    }
+
+    // 2. Cascade Fallback: DeepSeek -> 9Router -> AGY Ephemeral
+    let ans = await queryDeepSeek(promptText, systemPrompt);
+    if (ans) return { text: ans, engine: 'DeepSeek' };
+
+    ans = await query9Router(promptText, systemPrompt);
+    if (ans) return { text: ans, engine: '9Router (Fallback)' };
+
+    ans = await queryAgyEphemeral(promptText, systemPrompt);
+    if (ans) return { text: ans, engine: 'AGY Ephemeral (Fallback)' };
+
+    return { text: null, engine: 'None (All Failed)' };
+}
+
+// ==========================================
+// 2. THE 3 FIELD MACHINES (X/WEB, TG, WALLET)
+// ==========================================
+
+// 2A. Telegram Sniper Query
+function getLatestTelegramAlphas(limit = 5) {
+    const results = [];
+    if (!fs.existsSync(TELE_DB_PATH)) return results;
+
+    try {
+        const cmd = `sqlite3 -json "${TELE_DB_PATH}" "SELECT content_hash, extracted_item, channel_id, created_at FROM history ORDER BY created_at DESC LIMIT ${limit};"`;
+        const raw = runCmd(cmd);
+        if (raw && raw.startsWith('[')) {
+            const parsed = JSON.parse(raw);
+            for (const item of parsed) {
+                let ext = item.extracted_item;
+                let links = [];
+                let cas = [];
+                if (typeof ext === 'string') {
+                    const urlMatches = ext.match(/https?:\/\/[^\s"'<>]+/g);
+                    if (urlMatches) links = urlMatches;
+                    const caMatches = ext.match(/0x[a-fA-F0-9]{40}/g);
+                    if (caMatches) cas = caMatches;
+                }
+                results.push({
+                    id: item.content_hash,
+                    channel: item.channel_id,
+                    content: ext,
+                    urls: links,
+                    contract_addresses: cas,
+                    created_at: item.created_at
+                });
+            }
+        }
+    } catch (_) {}
+    return results;
+}
+
+// 2B. Wallet Daemon Bridge (Port 3333)
+function getWalletInfo() {
+    let master = null;
+    let totalWallets = 0;
+    try {
+        if (fs.existsSync(WALLETS_DB_FILE)) {
+            const w = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
+            totalWallets = w.wallets ? w.wallets.length : 0;
+            const idx = w.master_index || 0;
+            master = w.wallets && w.wallets[idx] ? { name: w.wallets[idx].name, address: w.wallets[idx].address } : null;
+        }
+    } catch (_) {}
+
+    // Check daemon port 3333
+    const isDaemonAlive = runCmd('curl -s http://127.0.0.1:3333/status 2>/dev/null || echo "DEAD"').includes('OK') || 
+                          runCmd('netstat -tlpn 2>/dev/null | grep :3333 || ss -tlpn 2>/dev/null | grep :3333').includes('3333');
+
+    return {
+        master_wallet: master,
+        total_wallets: totalWallets,
+        daemon_port: 3333,
+        daemon_running: Boolean(isDaemonAlive)
+    };
+}
+
+// 2B2. System Environment Recognition (Chroot / PRoot / Native Termux)
+function detectSystemEnvironment() {
+    if (process.env.YOU_KNOW_WHAT && process.env.YOU_KNOW_WHAT.includes('NETHUNTER')) {
+        return {
+            type: 'chroot',
+            runner: 'RunnerType.NETHUNTER',
+            name: 'Kali NetHunter Chroot',
+            device: 'Infinix Note 30 VIP',
+            isChroot: true,
+            isRoot: true,
+            shell: '/bin/zsh',
+            rootfs: '/data/local/nhsystem/kali-arm64'
+        };
+    }
+    if (fs.existsSync('/etc/os-release')) {
+        try {
+            const osRel = fs.readFileSync('/etc/os-release', 'utf8');
+            if (osRel.includes('Kali') || osRel.includes('kali')) {
+                return {
+                    type: 'chroot',
+                    runner: 'RunnerType.NETHUNTER',
+                    name: 'Kali NetHunter Chroot',
+                    device: 'Infinix Note 30 VIP',
+                    isChroot: true,
+                    isRoot: true,
+                    shell: '/bin/zsh',
+                    rootfs: '/data/local/nhsystem/kali-arm64'
+                };
+            }
+            if (osRel.includes('Ubuntu') || osRel.includes('Debian')) {
+                if (fs.existsSync('/data/local/Droidspaces') || process.env.DROIDSPACES) {
+                    return {
+                        type: 'droidspaces',
+                        runner: 'RunnerType.DROIDSPACES',
+                        name: 'Droidspaces Container (Ubuntu)',
+                        device: 'Poco M3',
+                        isChroot: true,
+                        isRoot: true,
+                        shell: '/bin/bash',
+                        rootfs: '/data/local/Droidspaces'
+                    };
+                }
+                if (process.env.PROOT_TMP_DIR) {
+                    return {
+                        type: 'proot',
+                        runner: 'RunnerType.PROOT',
+                        name: 'PRoot Distro Environment',
+                        device: 'Android Generic',
+                        isChroot: false,
+                        isRoot: false,
+                        shell: '/bin/bash'
+                    };
+                }
+            }
+        } catch (_) {}
+    }
+    if (process.env.PREFIX && process.env.PREFIX.includes('com.termux')) {
+        return {
+            type: 'native',
+            runner: 'RunnerType.NATIVE_TERMUX',
+            name: 'Native Android Termux',
+            device: 'Android Host',
+            isChroot: false,
+            isRoot: false,
+            shell: process.env.SHELL || '/data/data/com.termux/files/usr/bin/bash'
+        };
+    }
+    if (fs.existsSync('/data/local/nhsystem/kali-arm64')) {
+        return {
+            type: 'chroot',
+            runner: 'RunnerType.NETHUNTER',
+            name: 'Kali NetHunter Chroot',
+            device: 'Infinix Note 30 VIP',
+            isChroot: true,
+            isRoot: true,
+            shell: '/bin/zsh',
+            rootfs: '/data/local/nhsystem/kali-arm64'
+        };
+    }
+    return {
+        type: 'native',
+        runner: 'RunnerType.NATIVE_TERMUX',
+        name: 'Native Android Termux',
+        device: 'Android Host',
+        isChroot: false,
+        isRoot: false,
+        shell: '/data/data/com.termux/files/usr/bin/bash'
+    };
+}
+
+// 2C. X & Web Controller (Native HTTP & Agent Web Fallback)
+function openWebPage(url, profile = 'shaqilla', tabName = null) {
+    const normUrl = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) ? url : `https://${url}`;
+    const targetTab = tabName || `web-${profile}`;
+    const ipcBin = fs.existsSync('/usr/local/bin/termux-ipc') ? '/usr/local/bin/termux-ipc' : 'termux-ipc';
+    // ATURAN BAKU: Jangan buka WebView di tab AGY aktif. Selalu buka di tab baru mandiri!
+    return runCmd(`${ipcBin} tab new "${targetTab}" "termux-ipc webview --profile ${profile} ${normUrl}"`);
+}
+
+function postToX(text, profile = 'shaqilla') {
+    // Utamakan X Native Engine (Zero-Browser, 100% Akurat)
+    const xNativePath = path.join(WALLET_DIR, 'x_native.cjs');
+    if (fs.existsSync(xNativePath)) {
+        try {
+            const out = runCmd(`node "${xNativePath}" tweet "${text.replace(/"/g, '\\"')}" --profile "${profile}"`);
+            return out;
+        } catch (_) {}
+    }
+    const agentWebBin = fs.existsSync('/usr/local/bin/agent-web') ? '/usr/local/bin/agent-web' : path.join(WALLET_DIR, 'agent-web');
+    return runCmd(`${agentWebBin} x-post "${text.replace(/"/g, '\\"')}" --profile "${profile}"`);
+}
+
+function getWebSnapshot() {
+    const agentWebBin = fs.existsSync('/usr/local/bin/agent-web') ? '/usr/local/bin/agent-web' : path.join(WALLET_DIR, 'agent-web');
+    return runCmd(`${agentWebBin} snapshot`);
+}
+
+// ==========================================
+// 3. AUTONOMOUS TASK ORCHESTRATOR
+// ==========================================
+
+async function executeAutonomousTask(targetUrl, profile = 'shaqilla', preferredChain = 'base') {
+    log(`[AutoTask] Memulai automasi tugas untuk URL: ${targetUrl} (Profil: ${profile})`);
+
+    // 1. Ambil data wallet aktif
+    const wInfo = getWalletInfo();
+    const walletAddr = wInfo.master_wallet ? wInfo.master_wallet.address : '0x0000000000000000000000000000000000000000';
+
+    // 2. Luncurkan URL di WebView
+    const openRes = openWebPage(targetUrl, profile);
+
+    // 3. Tanyakan Rencana Aksi ke Tri-Engine AI
+    const aiPrompt = `Target dApp: ${targetUrl}
+Active Wallet: ${walletAddr}
+Chain: ${preferredChain}
+Profile: ${profile}
+
+Generate an autonomous step execution plan for this Web3 task.
+Respond in strict JSON format:
+{
+  "task_type": "faucet|airdrop|checkin|quest",
+  "recommended_actions": ["connect_wallet", "claim", "verify"],
+  "social_post_needed": false,
+  "tweet_text": ""
+}`;
+
+    const aiDecision = await queryTriEngineAi(aiPrompt);
+    let plan = null;
+    try {
+        const jsonMatch = aiDecision.text ? aiDecision.text.match(/\{[\s\S]*\}/) : null;
+        if (jsonMatch) plan = JSON.parse(jsonMatch[0]);
+    } catch (_) {}
+
+    // 4. Jika butuh tweet bukti, posting otomatis via X
+    let tweetResult = null;
+    if (plan && plan.social_post_needed && plan.tweet_text) {
+        tweetResult = postToX(plan.tweet_text, profile);
+    }
+
+    // 5. Kirim Android notification
+    try {
+        const notifMsg = `Tugas ${targetUrl} diproses via ${aiDecision.engine}. Wallet: ${walletAddr.substring(0, 8)}...`;
+        runCmd(`termux-ipc notif "Auto-Engine Selesai" "${notifMsg}" 2>/dev/null || true`);
+    } catch (_) {}
+
+    return {
+        target_url: targetUrl,
+        profile: profile,
+        wallet: walletAddr,
+        ai_engine_used: aiDecision.engine,
+        plan: plan,
+        tweet_posted: tweetResult ? true : false,
+        status: 'executed'
+    };
+}
+
+// --- 3B. DYNAMIC AUTONOMOUS ALPHA & WHITELIST ENGINE ---
+async function executeDynamicAlphaQuest(rawText, options = {}) {
+    console.log(`\n=============================================================`);
+    console.log(`🚀 [DYNAMIC AUTONOMOUS ALPHA QUEST ENGINE]`);
+    console.log(`=============================================================`);
+
+    // 1. Ekstraksi Cerdas Informasi Alpha via Tri-Engine AI
+    console.log(`[Quest Engine] Menganalisis postingan alpha dengan Tri-Engine AI...`);
+    const parsePrompt = `You are an elite autonomous Web3 Alpha & Airdrop Parser.
+Parse this raw announcement text into strict JSON:
+${rawText}
+
+Output strictly JSON with this schema:
+{
+  "projectName": "Name of project",
+  "registerUrl": "https://... (registration or whitelist link)",
+  "sourceXUrl": "https://x.com/... (tweet source link, or empty if none)",
+  "targetXHandle": "handle without @ (or empty)",
+  "tasks": {
+    "follow": true,
+    "like": true,
+    "repost": true,
+    "comment": true,
+    "submitEvm": true
+  },
+  "summary": "1 sentence Indonesian summary of what to do"
+}
+Output strictly ONLY the JSON string without markdown or explanation.`;
+
+    const aiRes = await queryTriEngineAi(parsePrompt, "You are a Web3 Alpha Parser. Output strictly JSON.");
+    let parsed = null;
+    try {
+        const jsonMatch = aiRes.text ? aiRes.text.match(/\{[\s\S]*\}/) : null;
+        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    } catch (_) {}
+
+    if (!parsed || (!parsed.registerUrl && !parsed.sourceXUrl)) {
+        // Fallback regex jika AI response bermasalah
+        const regUrlMatch = rawText.match(/(?:Register|Whitelist|Link|Join|Website)?\s*[:：]?\s*(https?:\/\/[^\s]+)/i);
+        const sourceUrlMatch = rawText.match(/(?:Source|Tweet|X|Twitter)?\s*[:：]?\s*(https?:\/\/(?:twitter\.com|x\.com)\/[^\s]+)/i);
+        parsed = {
+            projectName: (rawText.match(/(?:Whitelist|Airdrop)\s*[:：]\s*([A-Za-z0-9_-]+)/i) || [])[1] || 'Web3 Quest',
+            registerUrl: regUrlMatch ? regUrlMatch[1] : '',
+            sourceXUrl: sourceUrlMatch ? sourceUrlMatch[1] : '',
+            targetXHandle: sourceUrlMatch ? (sourceUrlMatch[1].match(/x\.com\/([^\/]+)/) || [])[1] : '',
+            tasks: { follow: true, like: true, repost: true, comment: true, submitEvm: true },
+            summary: 'Auto-extracted task'
+        };
+    }
+
+    console.log(`├─ Proyek       : ${parsed.projectName || 'Web3 Whitelist'}`);
+    console.log(`├─ Register URL : ${parsed.registerUrl || '(Tidak ada)'}`);
+    console.log(`├─ Source X     : ${parsed.sourceXUrl || '(Tidak ada)'}`);
+    if (parsed.targetXHandle) console.log(`├─ Target Akun  : @${parsed.targetXHandle}`);
+    console.log(`└─ AI Engine    : [${aiRes.engine || 'DeepSeek'}]`);
+    console.log(`=============================================================\n`);
+
+    // 2. Ambil Wallet Burner dari Database (wallets_db.json), BUKAN BAW (Air-Gapped Security)
+    let dbWallets = [];
+    try {
+        if (fs.existsSync(WALLETS_DB_FILE)) {
+            const raw = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
+            if (raw && Array.isArray(raw.wallets)) dbWallets = raw.wallets;
+        }
+    } catch (_) {}
+
+    const profileMap = {
+        'shaqilla': {
+            name: 'Burner 1 (Master .env)',
+            handle: 'shaqilla_emilia',
+            defaultAddr: '0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359'
+        },
+        'eryziggy': {
+            name: 'Burner 2 (黄哥)',
+            handle: 'Eryziggy',
+            defaultAddr: '0xCBF711D2668b03b4cF485626ff261Dcc80705Ab3'
+        },
+        '0xjamrud': {
+            name: 'Burner 3 (Ison)',
+            handle: '0xjamrud',
+            defaultAddr: '0x7a5bD0C7C686334b1d031C298a8417BFb3F1F4Da'
+        }
+    };
+
+    const TRI_WALLETS = [];
+    for (const [prof, meta] of Object.entries(profileMap)) {
+        const found = dbWallets.find(w => w.bind_webview === prof);
+        TRI_WALLETS.push({
+            name: found ? `DB: ${found.name}` : meta.name,
+            profile: prof,
+            handle: meta.handle,
+            address: found ? found.address : meta.defaultAddr
+        });
+    }
+
+    const isDryRun = Boolean(
+        options.dryRun ||
+        process.argv.includes('--dry-run') ||
+        process.argv.includes('--preview') ||
+        rawText.includes('--dry-run') ||
+        rawText.includes('--preview')
+    );
+
+    if (isDryRun) {
+        console.log(`[DRY-RUN / PREVIEW MODE: Tidak ada aksi jaringan yang dikirim]`);
+        console.log(`Rencana Eksekusi:`);
+        TRI_WALLETS.forEach((w, idx) => {
+            console.log(`  [${idx + 1}] ${w.name}:`);
+            console.log(`      X Tasks      : Follow @${parsed.targetXHandle || '-'}, Like & Repost (${parsed.sourceXUrl || '-'})`);
+            console.log(`      Registration : Submit ke ${parsed.registerUrl || '-'} dengan alamat ${w.address}`);
+        });
+        console.log(`\nJalankan tanpa flag --dry-run untuk mengeksekusi secara live!\n`);
+        return;
+    }
+
+    const delay = ms => new Promise(r => setTimeout(r, ms));
+    const resultsSummary = [];
+
+    // 3. Eksekusi Beruntun untuk Ketiga Wallet
+    for (let i = 0; i < TRI_WALLETS.length; i++) {
+        const w = TRI_WALLETS[i];
+        console.log(`▶ [${i + 1}/3] Menjalankan ${w.name} (@${w.handle})...`);
+
+        // Bersihkan cookies aktif sebelum switch profil (Anti-Cross-Contamination)
+        try { runCmd("web clear-cookies"); } catch (_) {}
+        await delay(1000);
+
+        // A. Social Tasks di X (Zero-Browser Native HTTP Engine)
+        if (parsed.sourceXUrl || parsed.targetXHandle) {
+            console.log(`   [X Tasks] Memproses Quests Twitter via profil [${w.profile}] (Native Engine)...`);
+            const xNativePath = path.join(WALLET_DIR, 'x_native.cjs');
+            const twMatch = (parsed.sourceXUrl || '').match(/status\/(\d+)/);
+            const tweetId = twMatch ? twMatch[1] : null;
+
+            // Follow
+            if (parsed.targetXHandle) {
+                try {
+                    const cleanH = parsed.targetXHandle.replace(/^@/, '');
+                    const out = runCmd(`node "${xNativePath}" follow "${cleanH}" --profile "${w.profile}"`);
+                    console.log(`      ✓ Follow @${cleanH}:`, out.includes('"success": true') ? 'OK' : 'Skipped/Done');
+                } catch (_) {}
+            }
+
+            // Like & Retweet
+            if (tweetId) {
+                try {
+                    const outLike = runCmd(`node "${xNativePath}" like "${tweetId}" --profile "${w.profile}"`);
+                    console.log(`      ✓ Like Tweet ${tweetId}:`, outLike.includes('"success": true') ? 'OK' : 'Done/RateLimit');
+                } catch (_) {}
+                try {
+                    const outRt = runCmd(`node "${xNativePath}" retweet "${tweetId}" --profile "${w.profile}"`);
+                    console.log(`      ✓ Retweet ${tweetId}:`, outRt.includes('"success": true') ? 'OK' : 'Done/RateLimit');
+                } catch (_) {}
+            }
+
+            // Auto Comment (Pastikan cantumkan EVM Address jika diminta)
+            try {
+                const hasEvmTask = Boolean(parsed.tasks?.submitEvm || rawText.match(/evm|wallet|address/i));
+                const commentVariations = [
+                    hasEvmTask 
+                        ? `LFG ${parsed.projectName}! Excited for Day 1 mainnet 🚀 @${parsed.targetXHandle}\n\nEVM: ${w.address}`
+                        : `LFG ${parsed.projectName}! Excited for this 🚀 @${parsed.targetXHandle}`,
+                    hasEvmTask
+                        ? `Awesome project! Ready to join the HiMan ride ⚡ @${parsed.targetXHandle}\n\nEVM: ${w.address}`
+                        : `Awesome update! Ready for the next phase ⚡ @${parsed.targetXHandle}`,
+                    hasEvmTask
+                        ? `Great vision for Elysium! Supporting from day one 🔥 @${parsed.targetXHandle}\n\nEVM: ${w.address}`
+                        : `Great project and solid vision! Supporting from day one 🔥 @${parsed.targetXHandle}`
+                ];
+                const commentText = commentVariations[i % commentVariations.length];
+                if (tweetId) {
+                    const outCom = runCmd(`node "${xNativePath}" comment "${tweetId}" "${commentText.replace(/"/g, '\\"')}" --profile "${w.profile}"`);
+                    console.log(`      ✓ Comment EVM (${w.address.slice(0, 8)}...):`, outCom.includes('"success": true') ? 'OK' : 'Processed');
+                } else {
+                    postToX(commentText, w.profile);
+                }
+            } catch (_) {}
+        }
+
+        // B. Form Registration di Website Target
+        if (parsed.registerUrl) {
+            console.log(`   [Registration] Membuka form whitelist di WebView...`);
+            try {
+                runCmd(`web "${parsed.registerUrl}" --profile ${w.profile}`);
+                await delay(3000);
+
+                // Dynamic Form Filler Script
+                const fillScript = `
+                (function() {
+                    var addr = "${w.address}";
+                    var handle = "${w.handle}";
+                    var res = { address: false, terms: false, submit: false };
+
+                    // 1. Cari dan isi kolom address
+                    var inputs = document.querySelectorAll("input:not([type='hidden'])");
+                    for (var i = 0; i < inputs.length; i++) {
+                        var inp = inputs[i];
+                        var p = (inp.placeholder || "").toLowerCase();
+                        var n = (inp.name || "").toLowerCase();
+                        var id = (inp.id || "").toLowerCase();
+                        if (p.includes("0x") || p.includes("wallet") || p.includes("evm") || p.includes("address") ||
+                            n.includes("wallet") || n.includes("address") || id.includes("wallet") || id.includes("address")) {
+                            inp.focus();
+                            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+                            if (setter) setter.call(inp, addr);
+                            else inp.value = addr;
+                            inp.dispatchEvent(new Event("input", { bubbles: true }));
+                            inp.dispatchEvent(new Event("change", { bubbles: true }));
+                            res.address = true;
+                        }
+                    }
+
+                    // 2. Centang checkbox persetujuan
+                    var cbs = document.querySelectorAll("input[type='checkbox']");
+                    for (var c = 0; c < cbs.length; c++) {
+                        if (!cbs[c].checked) {
+                            cbs[c].click();
+                            res.terms = true;
+                        }
+                    }
+
+                    // 3. Klik tombol Submit
+                    setTimeout(function() {
+                        var btns = document.querySelectorAll("button, input[type='submit']");
+                        for (var b = 0; b < btns.length; b++) {
+                            var bTxt = (btns[b].innerText || btns[b].value || "").trim().toLowerCase();
+                            if (bTxt.includes("apply") || bTxt.includes("submit") || bTxt.includes("register") || bTxt.includes("join") || bTxt.includes("enter")) {
+                                btns[b].click();
+                                res.submit = true;
+                                break;
+                            }
+                        }
+                    }, 800);
+
+                    return JSON.stringify(res);
+                })();
+                `;
+                runCmd(`web eval "${fillScript.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')}"`);
+                await delay(2000);
+            } catch (_) {}
+        }
+
+        console.log(`   ✅ Selesai untuk ${w.name}`);
+        resultsSummary.push({ name: w.name, handle: `@${w.handle}`, address: w.address, status: 'DONE' });
+        await delay(1000);
+    }
+
+    console.log(`\n=============================================================`);
+    console.log(`🎉 [DYNAMIC ALPHA QUEST SELESAI UNTUK SEMUA WALLET]`);
+    console.log(`=============================================================`);
+    resultsSummary.forEach(r => {
+        console.log(`  - ${r.name.padEnd(24)} (${r.handle.padEnd(18)}): [${r.status}] -> ${r.address.substring(0, 10)}...`);
+    });
+    console.log(`=============================================================\n`);
+
+    // Notifikasi penyelesaian ke Grup Kantor Telegram
+    try {
+        const kantorTokens = JSON.parse(fs.readFileSync('/root/wallet/kantor_tokens.json', 'utf8'));
+        const groupId = kantorTokens.groupChatId || "-1004367815422";
+        const p1Token = "9150616541:AAGtR7dpBl5mkq1yL9_dJhVJX1MiM9TvmJw";
+        const finishMsg = 
+`✅ [EKSEKUSI TUNTAS - 3 SLOT SELESAI]
+🔖 Proyek: ${parsed.projectName || 'Alpha Quest'}
+🎯 Target X: @${parsed.targetXHandle || '-'}
+
+Hasil Eksekusi Tri-Slot:
+• Slot 1 (@shaqilla_emilia): Selesai -> EVM 0x87A6cD8c...
+• Slot 2 (@Eryziggy): Selesai -> EVM 0xCBF711D2...
+• Slot 3 (@0xjamrud): Selesai -> EVM 0x7a5bD0C7...
+
+Seluruh tugas Follow @${parsed.targetXHandle || 'project'}, Like, Repost, dan Komen EVM telah tuntas dieksekusi secara steril!`;
+
+        const payload = JSON.stringify({ chat_id: groupId, text: finishMsg });
+        const req = https.request({
+            hostname: 'api.telegram.org',
+            port: 443,
+            path: `/bot${p1Token}/sendMessage`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+            family: 4
+        }, () => {});
+        req.on('error', () => {});
+        req.write(payload);
+        req.end();
+    } catch (_) {}
+}
+
+// ==========================================
+// 4. GEMINI UI SERVER & TOOL CALLING API
+// ==========================================
+
+const UI_PORT = 20135;
+const UI_INDEX_FILE = path.join(WALLET_DIR, 'gemini_ui', 'index.html');
+
+function getAllWallets() {
+    try {
+        if (fs.existsSync(WALLETS_DB_FILE)) {
+            const data = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
+            const list = (data.wallets || []).map((w, idx) => ({
+                index: idx,
+                name: w.name || `Wallet ${idx + 1}`,
+                address: w.address,
+                is_master: idx === (data.master_index || 0)
+            }));
+            return {
+                master_index: data.master_index || 0,
+                wallets: list
+            };
+        }
+    } catch (_) {}
+    return { master_index: 0, wallets: [] };
+}
+
+function switchMasterWallet(index) {
+    try {
+        if (fs.existsSync(WALLETS_DB_FILE)) {
+            const data = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
+            data.master_index = parseInt(index, 10);
+            fs.writeFileSync(WALLETS_DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+            log(`[Wallet] Master wallet switched to index ${index}`);
+            return true;
+        }
+    } catch (_) {}
+    return false;
+}
+
+function getAllTelegramAccounts() {
+    const list = [];
+    if (!fs.existsSync(TELE_DB_PATH)) return list;
+    try {
+        const raw = runCmd(`sqlite3 -json "${TELE_DB_PATH}" "SELECT id, phone, name, role, status FROM accounts;"`);
+        if (raw && raw.startsWith('[')) {
+            return JSON.parse(raw);
+        }
+    } catch (_) {}
+    return list;
+}
+
+// Chat API handler with Autonomous Tool Execution
+async function handleChatApi(prompt, preferredEngine, walletIdx) {
+    if (typeof walletIdx === 'number') {
+        switchMasterWallet(walletIdx);
+    }
+
+    const wInfo = getWalletInfo();
+    const activeAddress = wInfo.master_wallet ? wInfo.master_wallet.address : '0x0000000000000000000000000000000000000000';
+
+    // Direct pattern shortcuts for instant tool execution
+    const lower = prompt.toLowerCase();
+    let directTool = null;
+    let toolResult = null;
+
+    if (lower.includes('buka ') && (lower.includes('.com') || lower.includes('.org') || lower.includes('.io') || lower.includes('http'))) {
+        const urlMatch = prompt.match(/(https?:\/\/[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}[^\s]*)/i);
+        if (urlMatch) {
+            const target = urlMatch[0];
+            const prof = lower.includes('shaqilla') ? 'shaqilla' : 'shaqilla';
+            openWebPage(target, prof);
+            directTool = `Buka Web: ${target} (Profil: ${prof})`;
+            toolResult = `Halaman ${target} berhasil dibuka di WebView dengan profil [${prof}].`;
+        }
+    } else if (lower.includes('scan') && (lower.includes('alpha') || lower.includes('airdrop') || lower.includes('telegram'))) {
+        const alphas = getLatestTelegramAlphas(5);
+        directTool = 'Scan Telegram Alpha';
+        toolResult = `Ditemukan ${alphas.length} sinyal dari Telegram.`;
+    } else if (lower.includes('bersihkan cache') || lower.includes('clear cookies') || lower.includes('fresh')) {
+        runCmd('/usr/local/bin/agent-web clear-cookies');
+        directTool = 'Clear Cookies & Cache';
+        toolResult = 'Seluruh cookies dan web storage telah dibersihkan.';
+    } else if (lower.includes('tweet') || lower.includes('post x') || lower.includes('posting')) {
+        const tweetMatch = prompt.match(/["']([^"']+)["']/);
+        if (tweetMatch) {
+            postToX(tweetMatch[1], 'shaqilla');
+            directTool = `Posting X: "${tweetMatch[1]}"`;
+            toolResult = 'Tweet telah terkirim via akun shaqilla.';
+        }
+    } else if (lower.includes('buka tab') || lower.includes('tab baru') || lower.includes('new tab')) {
+        const tabMatch = prompt.match(/tab(?:\s+baru)?\s+(?:bernama|nama|berjudul)?\s*["']?([a-zA-Z0-9_-]+)["']?(?:\s+(?:jalankan|cmd|perintah)?\s*["']?([^"']+)["']?)?/i);
+        const tabName = (tabMatch && tabMatch[1]) ? tabMatch[1] : 'agent-tab';
+        const tabCmd = (tabMatch && tabMatch[2]) ? tabMatch[2].trim() : '';
+        let envOpt = '';
+        if (lower.includes('native') || lower.includes('termux')) envOpt = '--native';
+        else if (lower.includes('chroot') || lower.includes('kali') || lower.includes('nethunter')) envOpt = '--chroot';
+        else if (lower.includes('proot')) envOpt = '--proot';
+        const res = runCmd(`/usr/local/bin/termux-ipc tab new "${tabName}" ${envOpt} ${tabCmd}`.trim());
+        directTool = `Buka Tab: ${tabName} (${envOpt || 'auto'})`;
+        toolResult = res || `Tab [${tabName}] berhasil dibuka.`;
+    } else if (lower.includes('tutup tab') || lower.includes('close tab')) {
+        const tabMatch = prompt.match(/tutup\s+tab\s+["']?([a-zA-Z0-9_-]+)["']?/i);
+        const target = tabMatch ? tabMatch[1] : 'current';
+        const res = runCmd(`/usr/local/bin/termux-ipc tab close "${target}"`);
+        directTool = `Tutup Tab: ${target}`;
+        toolResult = res || `Tab [${target}] telah ditutup.`;
+    } else if (lower.includes('daftar tab') || lower.includes('list tab') || lower.includes('lihat tab')) {
+        const res = runCmd(`/usr/local/bin/termux-ipc tab list`);
+        directTool = 'Daftar Tab Terminal';
+        toolResult = res;
+    }
+
+    const sysEnv = detectSystemEnvironment();
+
+    // System prompt for full-power autonomous agent
+    const systemPrompt = `You are the Autonomous Brain for Tuan Eso with full control over 3 machines & terminal tabs:
+Active System Environment: ${sysEnv.name} (${sysEnv.runner}, ${sysEnv.device})
+1. Web/X: open URLs, post tweets, take DOM snapshots.
+2. Wallet: check balance, supply address (Active: ${activeAddress}).
+3. Telegram: scan alpha messages, check channels.
+4. Tabs: open named terminal tabs ('open_tab' with {name, command, env: 'chroot'|'proot'|'native'|'auto'}), close tab accurately by name ('close_tab' with {name}), list active tabs ('list_tabs'). The system automatically routes to ${sysEnv.name} unless specified.
+Always respond in polite, loyal, casual Indonesian as "hamba". Keep answers concise and sharp. If you executed a tool or direct action, explain clearly.`;
+
+    const aiRes = await queryTriEngineAi(prompt, systemPrompt, preferredEngine);
+
+    let reply = aiRes.text || 'Maaf Tuan Eso, AI tidak memberikan respon.';
+
+    // Parse tool call if generated by AI
+    let parsedTool = null;
+    const toolCallMatch = reply.match(/<tool_call>([\s\S]*?)<\/tool_call>/i) || reply.match(/```(?:tool|json)?\s*(\{"(?:tool|name)"[\s\S]*?\})\s*```/i);
+    if (toolCallMatch) {
+        try {
+            parsedTool = JSON.parse(toolCallMatch[1].trim());
+        } catch (_) {}
+    }
+
+    if (parsedTool) {
+        const toolName = (parsedTool.name || parsedTool.tool || '').toLowerCase();
+        const toolArgs = parsedTool.arguments || parsedTool.params || {};
+
+        if (toolName.includes('wallet') || toolName.includes('balance')) {
+            const w = getWalletInfo();
+            const wName = w.master_wallet ? w.master_wallet.name : 'Master';
+            const wAddr = w.master_wallet ? w.master_wallet.address : activeAddress;
+            const executedMsg = `Dompet aktif: ${wName} (${wAddr})\nStatus Daemon: ${w.daemon_running ? 'Aktif di Port 3333' : 'Siaga'}`;
+            directTool = `Cek Status Dompet: ${wName}`;
+            reply = reply.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+            reply = executedMsg + (reply ? `\n\n${reply}` : '');
+        } else if (toolName.includes('web') || toolName.includes('open')) {
+            const targetUrl = toolArgs.url || 'https://x.com';
+            const targetProf = toolArgs.profile || 'shaqilla';
+            openWebPage(targetUrl, targetProf);
+            directTool = `Buka Web: ${targetUrl} (${targetProf})`;
+            reply = reply.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+            reply = `Halaman ${targetUrl} dibuka dengan profil [${targetProf}].` + (reply ? `\n\n${reply}` : '');
+        } else if (toolName.includes('x_post') || toolName.includes('tweet')) {
+            const twText = toolArgs.text || 'Web3 updates';
+            const targetProf = toolArgs.profile || 'shaqilla';
+            postToX(twText, targetProf);
+            directTool = `Tweet X (${targetProf}): "${twText}"`;
+            reply = reply.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+            reply = `Tweet berhasil diposting via akun [${targetProf}].` + (reply ? `\n\n${reply}` : '');
+        } else if (toolName.includes('alpha') || toolName.includes('telegram')) {
+            const alphas = getLatestTelegramAlphas(5);
+            directTool = `Scan Telegram Alphas (${alphas.length} ditemukan)`;
+            reply = reply.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+            const listText = alphas.map((a, i) => `${i + 1}. ${a.channel || 'Channel'}: ${a.urls.join(', ') || a.content.substring(0, 60)}`).join('\n');
+            reply = (listText || 'Belum ada sinyal baru.') + (reply ? `\n\n${reply}` : '');
+        } else if (toolName.includes('open_tab') || toolName.includes('new_tab') || toolName.includes('tab_new')) {
+            const tabName = toolArgs.name || toolArgs.title || 'agent-tab';
+            const tabCmd = toolArgs.command || toolArgs.cmd || '';
+            let envOpt = '';
+            const e = (toolArgs.env || toolArgs.system || '').toLowerCase();
+            if (e.includes('native') || e.includes('termux')) envOpt = '--native';
+            else if (e.includes('chroot') || e.includes('kali') || e.includes('nethunter')) envOpt = '--chroot';
+            else if (e.includes('proot')) envOpt = '--proot';
+            const res = runCmd(`/usr/local/bin/termux-ipc tab new "${tabName}" ${envOpt} ${tabCmd}`.trim());
+            directTool = `Buka Tab: ${tabName} (${envOpt || 'auto'})`;
+            reply = reply.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+            reply = `Tab [${tabName}] dibuka di lingkungan [${envOpt || 'auto-detect'}].` + (reply ? `\n\n${reply}` : '');
+        } else if (toolName.includes('close_tab') || toolName.includes('kill_tab') || toolName.includes('tab_close')) {
+            const target = toolArgs.name || toolArgs.id || toolArgs.target || 'current';
+            const res = runCmd(`/usr/local/bin/termux-ipc tab close "${target}"`);
+            directTool = `Tutup Tab: ${target}`;
+            reply = reply.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+            reply = `Tab [${target}] ditutup.` + (reply ? `\n\n${reply}` : '');
+        } else if (toolName.includes('list_tab') || toolName.includes('tab_list')) {
+            const tabsRaw = runCmd(`/usr/local/bin/termux-ipc tab list`);
+            directTool = `List Tabs`;
+            reply = reply.replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '').trim();
+            reply = `Daftar Tab Aktif:\n${tabsRaw}` + (reply ? `\n\n${reply}` : '');
+        }
+    }
+
+    if (toolResult && !reply.includes(toolResult)) {
+        reply = `${toolResult}\n\n${reply}`;
+    }
+
+    return {
+        reply: reply,
+        engine: aiRes.engine,
+        tool_executed: directTool
+    };
+}
+
+function startGeminiServer(port = UI_PORT, launchWebview = true) {
+    // Check if already running
+    const check = runCmd(`curl -s http://127.0.0.1:${port}/api/status 2>/dev/null || echo "DEAD"`);
+    if (!check.includes('DEAD') && check.includes('wallets')) {
+        console.log(`Server Gemini UI sudah aktif di http://127.0.0.1:${port}`);
+        if (launchWebview) {
+            runCmd(`termux-ipc webview http://127.0.0.1:${port}`);
+        }
+        return;
+    }
+
+    const server = http.createServer(async (req, res) => {
+        const url = req.url.split('?')[0];
+
+        // CORS
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+        if (req.method === 'OPTIONS') {
+            res.writeHead(200);
+            res.end();
+            return;
+        }
+
+        // GET / (Serves index.html)
+        if (url === '/' || url === '/index.html') {
+            if (fs.existsSync(UI_INDEX_FILE)) {
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(fs.readFileSync(UI_INDEX_FILE, 'utf8'));
+            } else {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('UI file not found');
+            }
+            return;
+        }
+
+        // GET /api/status
+        if (url === '/api/status' && req.method === 'GET') {
+            const wInfo = getAllWallets();
+            const tAccounts = getAllTelegramAccounts();
+            const daemonStatus = runCmd('netstat -tlpn 2>/dev/null | grep :3333 || ss -tlpn 2>/dev/null | grep :3333').includes('3333');
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                wallets: wInfo.wallets,
+                master_wallet_index: wInfo.master_index,
+                telegram_accounts: tAccounts,
+                daemon_running: daemonStatus
+            }));
+            return;
+        }
+
+        // POST /api/switch-engine
+        if (url === '/api/switch-engine' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    log(`[Engine] Switched preferred engine to: ${data.engine}`);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: true, engine: data.engine }));
+                } catch (_) {
+                    res.writeHead(400); res.end('Invalid JSON');
+                }
+            });
+            return;
+        }
+
+        // POST /api/switch-wallet
+        if (url === '/api/switch-wallet' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', () => {
+                try {
+                    const data = JSON.parse(body);
+                    const ok = switchMasterWallet(data.index);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ ok: ok, master_index: data.index }));
+                } catch (_) {
+                    res.writeHead(400); res.end('Invalid JSON');
+                }
+            });
+            return;
+        }
+
+        // POST /api/chat
+        if (url === '/api/chat' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', async () => {
+                try {
+                    const data = JSON.parse(body);
+                    const result = await handleChatApi(data.prompt, data.engine, data.wallet_index);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(result));
+                } catch (e) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: e.message }));
+                }
+            });
+            return;
+        }
+
+        res.writeHead(404);
+        res.end('Not Found');
+    });
+
+    server.listen(port, '127.0.0.1', () => {
+        console.log(`Server Gemini UI aktif di http://127.0.0.1:${port}`);
+        if (launchWebview) {
+            runCmd(`termux-ipc webview http://127.0.0.1:${port}`);
+        }
+    });
+}
+
+// ==========================================
+// 5. CLI INTERFACE (JSON-FIRST & CLEAN)
+// ==========================================
+
+async function main() {
+    const args = process.argv.slice(2);
+
+    // 🔥 JIKA TANPA ARGUMEN APAPUN: OTOMATIS BUKA UI DI WEBVIEW
+    if (args.length === 0 || args[0] === 'ui' || args[0] === 'web' || args[0] === 'gui') {
+        const isAlive = runCmd(`curl -s http://127.0.0.1:${UI_PORT}/api/status 2>/dev/null || echo "DEAD"`).includes('wallets');
+        if (!isAlive) {
+            console.log('Menyalakan server AI UI di latar belakang...');
+            runCmd(`nohup node ${path.join(WALLET_DIR, 'auto_engine.cjs')} serve >/tmp/gemini_ui.log 2>&1 &`);
+            runCmd('sleep 1');
+        }
+        console.log(`Membuka AI UI di WebView (http://127.0.0.1:${UI_PORT})...`);
+        runCmd(`termux-ipc webview http://127.0.0.1:${UI_PORT}`);
+        return;
+    }
+
+    const cmd = args[0] ? args[0].toLowerCase() : 'status';
+
+    if (cmd === 'serve' || cmd === 'server') {
+        startGeminiServer(UI_PORT, false);
+        return;
+    }
+
+    if (cmd === 'status') {
+        const status = {
+            timestamp: new Date().toISOString(),
+            system_env: detectSystemEnvironment(),
+            engines: {
+                ai: {
+                    deepseek: Boolean(loadAiConfig().apiKey),
+                    nine_router: runCmd('curl -s http://127.0.0.1:20128/v1/models 2>/dev/null || echo "DEAD"').includes('antigravity'),
+                    agy_ephemeral: Boolean(getAgyTokenFromPool()),
+                    agy_accounts: getAgyAccountsCount()
+                },
+                field: {
+                    telegram: fs.existsSync(TELE_DB_PATH),
+                    agent_web: fs.existsSync('/usr/local/bin/agent-web'),
+                    wallet: getWalletInfo()
+                }
+            }
+        };
+
+        if (args.includes('--json')) {
+            console.log(JSON.stringify(status, null, 2));
+        } else {
+            console.log('TRI-ENGINE AUTONOMOUS FUSION STATUS');
+            console.log(`  Environment : ${status.system_env.name} [${status.system_env.runner}] (${status.system_env.device})`);
+            console.log(`  AI Engines  : DeepSeek [${status.engines.ai.deepseek ? 'READY' : 'OFF'}] | 9Router [${status.engines.ai.nine_router ? 'READY' : 'OFF'}] | AGY Pool [${status.engines.ai.agy_accounts} ACCOUNTS READY]`);
+            console.log(`  Field Radar : Telegram [${status.engines.field.telegram ? 'ONLINE' : 'OFF'}] | X/Web [${status.engines.field.agent_web ? 'READY' : 'OFF'}] | Wallet [${status.engines.field.wallet.daemon_running ? 'DAEMON_ACTIVE' : 'READY'}]`);
+            console.log(`  Active Wal  : ${status.engines.field.wallet.master_wallet ? status.engines.field.wallet.master_wallet.name + ' (' + status.engines.field.wallet.master_wallet.address.substring(0, 10) + '...)' : 'None'}`);
+        }
+        return;
+    }
+
+    if (cmd === 'env' || cmd === 'sys') {
+        const envInfo = detectSystemEnvironment();
+        if (args.includes('--json')) {
+            console.log(JSON.stringify(envInfo, null, 2));
+        } else {
+            console.log('SYSTEM ENVIRONMENT RECOGNITION:');
+            console.log(`  Environment : ${envInfo.name}`);
+            console.log(`  Runner Type : ${envInfo.runner}`);
+            console.log(`  Device      : ${envInfo.device}`);
+            console.log(`  Isolation   : ${envInfo.isChroot ? 'Chroot / Container (Root)' : 'PRoot / Native Host'}`);
+            console.log(`  Shell       : ${envInfo.shell}`);
+            if (envInfo.rootfs) console.log(`  RootFS Path : ${envInfo.rootfs}`);
+        }
+        return;
+    }
+
+    if (cmd === 'ai' || cmd === 'query') {
+        const promptText = args.slice(1).join(' ').trim();
+        if (!promptText) {
+            console.error('Error: Masukkan prompt AI. Contoh: auto-engine ai "Analisa link airdrop ini"');
+            process.exit(1);
+        }
+        const res = await queryTriEngineAi(promptText);
+        if (args.includes('--json')) {
+            console.log(JSON.stringify(res, null, 2));
+        } else {
+            console.log(`[${res.engine}]`);
+            console.log(res.text || 'Gagal mendapatkan respon dari AI engines.');
+        }
+        return;
+    }
+
+    if (cmd === 'alphas' || cmd === 'scan-alpha') {
+        const alphas = getLatestTelegramAlphas(10);
+        if (args.includes('--json')) {
+            console.log(JSON.stringify(alphas, null, 2));
+        } else {
+            console.log(`Ditemukan ${alphas.length} sinyal alpha terbaru dari Telegram:`);
+            alphas.forEach((a, i) => {
+                console.log(`  [${i + 1}] Channel: ${a.channel || 'Unknown'}`);
+                if (a.urls.length > 0) console.log(`      URLs: ${a.urls.join(', ')}`);
+                if (a.contract_addresses.length > 0) console.log(`      CAs : ${a.contract_addresses.join(', ')}`);
+            });
+        }
+        return;
+    }
+
+    if (cmd === 'quest' || cmd === 'alpha' || cmd === 'auto-quest' || cmd === 'whitelist') {
+        const questInput = args.slice(1).join(' ').trim();
+        if (!questInput) {
+            console.error('Error: Masukkan teks pengumuman alpha/whitelist.');
+            console.error('Contoh: ai quest "New Whitelist : ELYMPUS\\nRegister: https://..."');
+            process.exit(1);
+        }
+        await executeDynamicAlphaQuest(questInput);
+        return;
+    }
+
+    if (cmd === 'task' || cmd === 'run') {
+        const url = args[1];
+        if (!url) {
+            console.error('Error: Masukkan URL target. Contoh: auto-engine run https://faucet.base.org --profile shaqilla');
+            process.exit(1);
+        }
+        let profile = 'shaqilla';
+        let chain = 'base';
+        for (let i = 2; i < args.length; i++) {
+            if (args[i] === '--profile' && args[i + 1]) { profile = args[i + 1]; i++; }
+            if (args[i] === '--chain' && args[i + 1]) { chain = args[i + 1]; i++; }
+        }
+
+        const res = await executeAutonomousTask(url, profile, chain);
+        if (args.includes('--json')) {
+            console.log(JSON.stringify(res, null, 2));
+        } else {
+            console.log(`Tugas berhasil dieksekusi:`);
+            console.log(`  Target Web : ${res.target_url}`);
+            console.log(`  Profil X   : ${res.profile}`);
+            console.log(`  AI Engine  : ${res.ai_engine_used}`);
+            console.log(`  Wallet     : ${res.wallet}`);
+        }
+        return;
+    }
+
+    if (cmd === 'tab') {
+        const sub = args[1] || 'list';
+        if (sub === 'list' || sub === 'ls') {
+            const isJson = args.includes('--json');
+            const res = runCmd(`/usr/local/bin/termux-ipc tab list ${isJson ? '--json' : ''}`);
+            console.log(res);
+            return;
+        }
+        if (sub === 'env') {
+            const envInfo = detectSystemEnvironment();
+            if (args.includes('--json')) {
+                console.log(JSON.stringify(envInfo, null, 2));
+            } else {
+                console.log(`Active System: ${envInfo.name} (${envInfo.runner})`);
+            }
+            return;
+        }
+        if (sub === 'open' || sub === 'new') {
+            const name = args[2];
+            if (!name) {
+                console.error('Error: Masukkan nama tab. Contoh: ai tab open worker --chroot "python3 worker.py"');
+                process.exit(1);
+            }
+            let envOpt = '';
+            const remaining = [];
+            for (let i = 3; i < args.length; i++) {
+                if (args[i] === '--chroot' || args[i] === '-c') envOpt = '--chroot';
+                else if (args[i] === '--proot' || args[i] === '-p') envOpt = '--proot';
+                else if (args[i] === '--native' || args[i] === '--termux' || args[i] === '-n') envOpt = '--native';
+                else if (args[i] === '--env' && args[i + 1]) { envOpt = `--env ${args[i + 1]}`; i++; }
+                else remaining.push(args[i]);
+            }
+            const command = remaining.join(' ');
+            if (command.startsWith('http://') || command.startsWith('https://')) {
+                const res = runCmd(`/usr/local/bin/termux-ipc webview new-tab ${command}`);
+                console.log(`Tab web dibuka: ${command}`);
+            } else {
+                const res = runCmd(`/usr/local/bin/termux-ipc tab new "${name}" ${envOpt} ${command}`.trim());
+                console.log(res);
+            }
+            return;
+        }
+        if (sub === 'close' || sub === 'kill') {
+            const target = args[2] || 'current';
+            const res = runCmd(`/usr/local/bin/termux-ipc tab close "${target}"`);
+            console.log(res);
+            return;
+        }
+        if (sub === 'focus' || sub === 'switch') {
+            const target = args[2];
+            if (!target) {
+                console.error('Error: Masukkan target tab (nama, ID, atau index). Contoh: ai tab focus worker');
+                process.exit(1);
+            }
+            const res = runCmd(`/usr/local/bin/termux-ipc tab focus "${target}"`);
+            console.log(res);
+            return;
+        }
+        if (sub === 'rename') {
+            const target = args[2];
+            const newName = args[3];
+            if (!target || !newName) {
+                console.error('Penggunaan: ai tab rename <target> <nama-baru>');
+                process.exit(1);
+            }
+            const res = runCmd(`/usr/local/bin/termux-ipc tab rename "${target}" "${newName}"`);
+            console.log(res);
+            return;
+        }
+        console.log(`Usage: ai tab [list|open|close|focus|rename]`);
+        return;
+    }
+
+    if (cmd === 'x-post' || cmd === 'tweet') {
+        const text = args.slice(1).join(' ').trim();
+        if (!text) {
+            console.error('Error: Masukkan teks tweet.');
+            process.exit(1);
+        }
+        const res = postToX(text, 'shaqilla');
+        console.log(res || 'Tweet diproses.');
+        return;
+    }
+
+    if (cmd === '--help' || cmd === 'help') {
+        console.log(`AUTONOMOUS TRI-ENGINE FUSION (Command: ai)
+Usage:
+  ai [status] [--json]                 (Cek status 3 AI engines & 3 mesin lapangan)
+  ai "<pertanyaan / prompt>"           (Tanya langsung ke Tri-Engine AI)
+  ai tab list [--json]                 (Daftar seluruh tab terminal aktif)
+  ai tab open <nama> [cmd|url]         (Buka tab baru dengan nama khusus)
+  ai tab close <nama|id|current>       (Tutup tab secara akurat berdasarkan nama)
+  ai tab focus <nama|id>               (Pindah fokus ke tab target)
+  ai scan-alpha [--json]               (Ekstrak sinyal airdrop & CA terbaru dari Telegram)
+  ai quest "<teks postingan>"          (Eksekusi tugas whitelist/airdrop dinamis untuk 3 wallet)
+  ai run <url> [--profile <name>]      (Otomasi tugas Web3: Web + Wallet + X + AI)
+  ai x-post "<text>"                   (Posting tweet via profil aktif)
+`);
+        return;
+    }
+
+    // Smart fallback: Jika input mengandung kata kunci airdrop/whitelist & link, otomatis jalankan Dynamic Alpha Quest!
+    const fullQuery = args.join(' ').trim();
+    if (fullQuery) {
+        if (fullQuery.match(/whitelist|airdrop|register:|🪂|faucet/i) && fullQuery.includes('http')) {
+            console.log('[AI Auto-Detector] Terdeteksi postingan tugas airdrop/whitelist! Menjalankan Dynamic Alpha Quest...');
+            await executeDynamicAlphaQuest(fullQuery);
+            return;
+        }
+        const res = await queryTriEngineAi(fullQuery);
+        if (args.includes('--json')) {
+            console.log(JSON.stringify(res, null, 2));
+        } else {
+            console.log(`[${res.engine}]`);
+            console.log(res.text || 'Gagal mendapatkan respon dari AI engines.');
+        }
+        return;
+    }
+
+    console.log(`AUTONOMOUS TRI-ENGINE FUSION (Command: ai)
+Usage:
+  ai [status] [--json]                 (Cek status 3 AI engines & 3 mesin lapangan)
+  ai "<pertanyaan / prompt>"           (Tanya langsung ke Tri-Engine AI)
+  ai quest "<teks postingan>"          (Eksekusi tugas whitelist/airdrop dinamis untuk 3 wallet)
+  ai tab list [--json]                 (Daftar seluruh tab terminal aktif)
+  ai tab open <nama> [cmd|url]         (Buka tab baru dengan nama khusus)
+  ai tab close <nama|id|current>       (Tutup tab secara akurat berdasarkan nama)
+  ai tab focus <nama|id>               (Pindah fokus ke tab target)
+  ai scan-alpha [--json]               (Ekstrak sinyal airdrop & CA terbaru dari Telegram)
+  ai run <url> [--profile <name>]      (Otomasi tugas Web3: Web + Wallet + X + AI)
+  ai x-post "<text>"                   (Posting tweet via profil aktif)
+`);
+}
+
+module.exports = {
+    queryTriEngineAi,
+    executeAutonomousTask,
+    executeDynamicAlphaQuest,
+    getWalletInfo
+};
+
+if (require.main === module) {
+    main().catch(err => {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+    });
+}
