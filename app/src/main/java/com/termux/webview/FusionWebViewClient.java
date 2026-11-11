@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.net.http.SslError;
+import android.view.View;
 import android.webkit.HttpAuthHandler;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.SslErrorHandler;
@@ -12,6 +13,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import com.termux.app.FusionToast;
 
 import java.io.File;
 import java.io.FileInputStream;
