@@ -376,18 +376,24 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
     os.chmod(os.path.join(BUNDLE_DIR, "bin", b), 0o755)
 
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
-# 1. Salin Standalone CJS & Code Suite (HANYA KODE MURNI & ASSETS HTML, 100% STERIL DARI DATA/SESI/CONFIG PRIBADI)
+# 1. Salin Standalone CJS & Code Suite beserta Template Konfigurasi
 for f_cjs in [
     "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "auto_engine.cjs", "x_native.cjs",
     "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs",
-    "password_resolver.cjs", "claim_gift.cjs", "copy_mint.cjs", "bagent_sniper.cjs"
+    "password_resolver.cjs", "claim_gift.cjs", "copy_mint.cjs", "bagent_sniper.cjs",
+    "config_telegram.json", "tele_filter_config.json", "filter_config.json",
+    "query_db.json", "module_db.json", "pantau.json", "webview_profiles.json",
+    "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
+    "modules.json", "queries.json", "watchlist.json", "tg_config.json",
+    "scankomen_trigger.json", "loop_state.json", "tg_cache.json", "button_query_db.json",
+    "leadloop_cards.json", "ka_agents_cards.json", "kantor_tokens.json"
 ]:
     for src_dir in ["/root/wallet", "/project/node2cjs"]:
         src_path = os.path.join(src_dir, f_cjs)
         if os.path.exists(src_path):
             shutil.copy2(src_path, os.path.join(BUNDLE_DIR, "wallet", f_cjs))
             break
-print("✓ Added pure CJS code suite (wallet.cjs, wallet_ui_server.cjs, wallet_solana.cjs, auto_engine.cjs, x_webview.cjs, pemantau.cjs, telegram.cjs, 9router.cjs) to bundle")
+print("✓ Added CJS suite & templates to bundle")
 
 # Salin Web UI assets jika ada (web/index.html, dll)
 for w_dir in ["/root/wallet/web", "/project/node2cjs/web"]:
@@ -406,7 +412,14 @@ for f_js in ["wallet.js", "wallet_solana.js", "x_webview.js", "pemantautelegram.
             shutil.copy2(src_candidate, os.path.join(BUNDLE_DIR, "wallet", f_js))
             break
 
-# 3. Buat Template Kosong Standar (100% STERIL dari data, wallet, sesi, password, atau config pribadi)
+# 3. Salin RPC Configurations & Gate Configurations
+for rpc in glob.glob("/root/wallet/config_rpc*.json") + glob.glob("/project/node2cjs/config_rpc*.json"):
+    shutil.copy2(rpc, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(rpc)))
+
+for g_conf in glob.glob("/project/node2cjs/gate*.json") + glob.glob("/root/wallet/gate*.json") + glob.glob("/project/node2cjs/www.gate*.json"):
+    shutil.copy2(g_conf, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(g_conf)))
+
+# 4. Buat Template Kosong Standar untuk Database Dompet (Steril dari data/private key pribadi)
 dummy_wallet = {"master_index": None, "wallets": []}
 with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
     json.dump(dummy_wallet, f, indent=2)
@@ -414,27 +427,13 @@ with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
 with open(os.path.join(BUNDLE_DIR, "wallet/wallets_solana_db.json"), "w") as f:
     json.dump(dummy_wallet, f, indent=2)
 
-with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
-    f.write("{}\n")
+if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
+    with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
+        f.write("{}\n")
 
-with open(os.path.join(BUNDLE_DIR, "wallet/passwords_db.json"), "w") as f:
-    f.write("{}\n")
-
-dummy_tg = {"api_id": "", "api_hash": "", "phone": ""}
-with open(os.path.join(BUNDLE_DIR, "wallet/config_telegram.json"), "w") as f:
-    json.dump(dummy_tg, f, indent=2)
-
-dummy_filter = {"whitelist": [], "blacklist": []}
-with open(os.path.join(BUNDLE_DIR, "wallet/tele_filter_config.json"), "w") as f:
-    json.dump(dummy_filter, f, indent=2)
-
-dummy_ai = {"baseUrl": "https://api.deepseek.com", "apiKey": "", "model": "deepseek-flash"}
-with open(os.path.join(BUNDLE_DIR, "wallet/ai_config.json"), "w") as f:
-    json.dump(dummy_ai, f, indent=2)
-
-dummy_selectors = {"like": [], "retweet": [], "reply": []}
-with open(os.path.join(BUNDLE_DIR, "wallet/ai_selectors.json"), "w") as f:
-    json.dump(dummy_selectors, f, indent=2)
+if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/passwords_db.json")):
+    with open(os.path.join(BUNDLE_DIR, "wallet/passwords_db.json"), "w") as f:
+        f.write("{}\n")
 
 # Copy login.template, termux.properties, dan setup.sh
 login_tmpl = "/project/termux-launcher/fusion-setup/login.template"
