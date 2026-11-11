@@ -101,6 +101,27 @@ public class FusionWebViewClient extends WebViewClient {
 
     @Override // android.webkit.WebViewClient
     public boolean onRenderProcessGone(WebView webView, RenderProcessGoneDetail renderProcessGoneDetail) {
+        if (this.mManager != null && this.mManager.mActivity != null) {
+            this.mManager.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        if (mManager != null) {
+                            mManager.closeWebViewInternal();
+                            if (mManager.mTerminalPaneHost != null) {
+                                mManager.mTerminalPaneHost.setVisibility(View.VISIBLE);
+                            }
+                            if (mManager.mActivity != null) {
+                                mManager.mActivity.endWebViewExternalTextInput();
+                                mManager.mActivity.refreshTerminalWindowBar();
+                                FusionToast.makeText((Context) mManager.mActivity, (CharSequence) "⚠️ WebView render process terminated / recovered", 0).show();
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+            });
+        }
         return true;
     }
 

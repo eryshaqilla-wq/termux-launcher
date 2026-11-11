@@ -983,7 +983,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             } else if (hasMiddleCanvasWebView() && this.mPaneHost.getVisibility() != View.VISIBLE) {
                 this.mPaneHost.setVisibility(View.VISIBLE);
-                this.mPaneHost.bringToFront();
             }
         }
     }
@@ -997,7 +996,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             } else if (hasMiddleCanvasWebView()) {
                 this.mPaneHost.setVisibility(View.VISIBLE);
-                this.mPaneHost.bringToFront();
                 if (isMiddleCanvasWebViewActive() && this.mActivity != null) {
                     this.mActivity.beginWebViewExternalTextInput();
                 }
@@ -1994,9 +1992,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     if (mTerminalPaneHost != null) {
                         mTerminalPaneHost.setVisibility(View.GONE);
                     }
-                    if (mPaneHost != null) {
+                    if (mPaneHost != null && mPaneHost.getVisibility() != View.VISIBLE) {
                         mPaneHost.setVisibility(View.VISIBLE);
-                        mPaneHost.bringToFront();
                     }
                     if (mControlPill != null) {
                         mControlPill.bringToFront();
@@ -2894,9 +2891,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             }
         }
-        if (this.mPaneHost != null) {
+        if (this.mPaneHost != null && this.mPaneHost.getVisibility() != View.VISIBLE) {
             this.mPaneHost.setVisibility(View.VISIBLE);
-            this.mPaneHost.bringToFront();
         }
         LinearLayout linearLayout = this.mControlPill;
         if (linearLayout != null) {
@@ -2985,9 +2981,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     initViews();
                 }
                 FrameLayout frameLayout3 = this.mPaneHost;
-                if (frameLayout3 != null) {
+                if (frameLayout3 != null && frameLayout3.getVisibility() != View.VISIBLE) {
                     frameLayout3.setVisibility(0);
-                    frameLayout3.bringToFront();
                 }
                 if (fusionTab2.mIsMinimized) {
                     if (webView3 != null) {

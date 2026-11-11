@@ -276,9 +276,8 @@ public class FusionTabStateHelper {
                 view2.setVisibility(0);
             }
             FrameLayout frameLayout = fusionWebViewManager.mPaneHost;
-            if (frameLayout != null) {
+            if (frameLayout != null && frameLayout.getVisibility() != View.VISIBLE) {
                 frameLayout.setVisibility(View.VISIBLE);
-                frameLayout.bringToFront();
             }
             LinearLayout linearLayout2 = fusionWebViewManager.mControlPill;
             if (linearLayout2 != null) {
@@ -314,9 +313,8 @@ public class FusionTabStateHelper {
             webView.resumeTimers();
             webView.bringToFront();
             FrameLayout frameLayout = fusionWebViewManager.mPaneHost;
-            if (frameLayout != null) {
+            if (frameLayout != null && frameLayout.getVisibility() != View.VISIBLE) {
                 frameLayout.setVisibility(View.VISIBLE);
-                frameLayout.bringToFront();
             }
             LinearLayout linearLayout2 = fusionWebViewManager.mControlPill;
             if (linearLayout2 != null) {
