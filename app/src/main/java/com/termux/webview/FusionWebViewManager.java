@@ -1063,6 +1063,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (this.mViewsInitialized && this.mPaneHost != null) {
             return;
         }
+        ViewParent parent;
         TermuxActivity r0 = this.mActivity;
         if (r0 == null) {
             return;
