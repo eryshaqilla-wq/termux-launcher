@@ -3110,31 +3110,27 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             int activeIdx = this.mActiveTab;
             if (activeIdx >= 0 && activeIdx < size) {
                 FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
-                if (candidate != null && (currentSession == null || candidate.mBoundSession == null || candidate.mBoundSession == currentSession)) {
+                if (candidate != null && candidate.mBoundSession != null && candidate.mBoundSession == currentSession) {
                     i = activeIdx;
-                    if (candidate.mBoundSession == null && currentSession != null) {
-                        candidate.mBoundSession = currentSession;
-                    }
                 }
             }
             if (i < 0 && currentSession != null) {
                 for (int i2 = 0; i2 < size; i2++) {
                     FusionTab fusionTab = (FusionTab) arrayList.get(i2);
-                    if (fusionTab != null && (fusionTab.mBoundSession == null || fusionTab.mBoundSession == currentSession)) {
+                    if (fusionTab != null && fusionTab.mBoundSession == currentSession) {
                         i = i2;
-                        if (fusionTab.mBoundSession == null) {
-                            fusionTab.mBoundSession = currentSession;
-                        }
                         break;
                     }
                 }
             }
-            if (i < 0 && activeIdx >= 0 && activeIdx < size) {
-                FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
-                if (candidate != null && !candidate.mIsMinimized) {
-                    i = activeIdx;
-                    if (candidate.mBoundSession == null && currentSession != null) {
-                        candidate.mBoundSession = currentSession;
+            // Bind newly created tab that has no session yet
+            if (i < 0 && currentSession != null) {
+                for (int i2 = 0; i2 < size; i2++) {
+                    FusionTab fusionTab = (FusionTab) arrayList.get(i2);
+                    if (fusionTab != null && fusionTab.mBoundSession == null) {
+                        fusionTab.mBoundSession = currentSession;
+                        i = i2;
+                        break;
                     }
                 }
             }
