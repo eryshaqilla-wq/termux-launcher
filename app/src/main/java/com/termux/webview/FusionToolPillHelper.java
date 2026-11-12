@@ -74,42 +74,18 @@ public class FusionToolPillHelper {
         return n;
     }
 
-    public static void initAndShowToolPill(final FusionWebViewManager manager) {
+    public static void initToolPill(final FusionWebViewManager manager) {
         if (manager == null || manager.mActivity == null || manager.mPaneHost == null) {
             return;
         }
         final AppCompatActivity act = manager.mActivity;
         FrameLayout host = manager.mPaneHost;
 
-        // Reset default ke menciut setiap inisialisasi
-        sIsCollapsed = true;
-
-        if (sToolScroll != null) {
-            ViewParent parent = sToolScroll.getParent();
-            if (parent != host) {
-                if (parent != null) {
-                    ((ViewGroup) parent).removeView(sToolScroll);
-                }
-                float density = act.getResources().getDisplayMetrics().density;
-                FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, 8388661);
-                int targetTop = (int) (58 * density);
-                if (manager.mControlPill != null && manager.mControlPill.getBottom() > 0) {
-                    targetTop = manager.mControlPill.getBottom() + (int) (4 * density);
-                }
-                lp.setMargins(0, targetTop, 10, 0);
-                host.addView(sToolScroll, lp);
-            }
-            sToolScroll.setVisibility(View.VISIBLE);
-            sToolScroll.bringToFront();
-            syncToolPillPosition(manager);
-            updateToolPillUi(manager);
-            return;
-        }
-
         float density = act.getResources().getDisplayMetrics().density;
 
         // Container scroll horizontal responsif
         HorizontalScrollView scroll = new HorizontalScrollView(act);
+        manager.mToolScroll = scroll;
         sToolScroll = scroll;
         scroll.setHorizontalScrollBarEnabled(false);
         scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -117,6 +93,7 @@ public class FusionToolPillHelper {
 
         // Box styling 100% identik dengan mControlPill
         LinearLayout pill = new LinearLayout(act);
+        manager.mToolPill = pill;
         sToolPill = pill;
         pill.setLayerType(1, null);
         pill.setOrientation(LinearLayout.HORIZONTAL);
@@ -126,6 +103,7 @@ public class FusionToolPillHelper {
 
         // 0. Tombol saat menciut: [ TOOL ] (tanpa icon, style identik dengan bar atas)
         TextView toggleBtn = new TextView(act);
+        manager.mToolToggleBtn = toggleBtn;
         sToggleBtn = toggleBtn;
         toggleBtn.setText(" TOOL ");
         FusionUiHelper.setSolidBtn(toggleBtn);
@@ -144,6 +122,7 @@ public class FusionToolPillHelper {
 
         // 1. Next Wallet: [ WALLET > ]
         TextView walletNextBtn = new TextView(act);
+        manager.mToolWalletNextBtn = walletNextBtn;
         sWalletNextBtn = walletNextBtn;
         walletNextBtn.setText(" WALLET > ");
         FusionUiHelper.setSolidBtn(walletNextBtn);
@@ -163,6 +142,7 @@ public class FusionToolPillHelper {
 
         // 2. Network + No Wallet: [ Base eso-1 ] -> Sekali klik memunculkan drawer
         TextView netWalletBtn = new TextView(act);
+        manager.mToolNetWalletBtn = netWalletBtn;
         sNetWalletBtn = netWalletBtn;
         netWalletBtn.setText(" Base eso-1 ");
         FusionUiHelper.setSolidBtn(netWalletBtn);
@@ -181,6 +161,7 @@ public class FusionToolPillHelper {
 
         // 3. Copy Wallet: [ COPY WALLET ]
         TextView copyWalletBtn = new TextView(act);
+        manager.mToolCopyWalletBtn = copyWalletBtn;
         sCopyWalletBtn = copyWalletBtn;
         copyWalletBtn.setText(" COPY WALLET ");
         FusionUiHelper.setSolidBtn(copyWalletBtn);
@@ -240,6 +221,7 @@ public class FusionToolPillHelper {
 
         // 4. Reload: [ RELOAD ]
         TextView reloadBtn = new TextView(act);
+        manager.mToolReloadBtn = reloadBtn;
         sReloadBtn = reloadBtn;
         reloadBtn.setText(" RELOAD ");
         FusionUiHelper.setSolidBtn(reloadBtn);
@@ -259,6 +241,7 @@ public class FusionToolPillHelper {
 
         // 5. Wipe: [ WIPE ]
         TextView wipeBtn = new TextView(act);
+        manager.mToolWipeBtn = wipeBtn;
         sWipeBtn = wipeBtn;
         wipeBtn.setText(" WIPE ");
         FusionUiHelper.setSolidBtn(wipeBtn);
@@ -285,6 +268,7 @@ public class FusionToolPillHelper {
 
         // 6. FP Info & Rotate: [ FP: S24 Ultra ]
         TextView fpBtn = new TextView(act);
+        manager.mToolFpBtn = fpBtn;
         sFpBtn = fpBtn;
         fpBtn.setText(" FP: S24 Ultra ");
         FusionUiHelper.setSolidBtn(fpBtn);
@@ -307,6 +291,7 @@ public class FusionToolPillHelper {
 
         // 7. Collapse: [ > ]
         TextView collapseBtn = new TextView(act);
+        manager.mToolCollapseBtn = collapseBtn;
         sCollapseBtn = collapseBtn;
         collapseBtn.setText(" > ");
         FusionUiHelper.setSolidBtn(collapseBtn);
@@ -344,63 +329,98 @@ public class FusionToolPillHelper {
         updateToolPillUi(manager);
     }
 
+    public static void initAndShowToolPill(final FusionWebViewManager manager) {
+        if (manager == null) return;
+        if (manager.mToolScroll == null) {
+            initToolPill(manager);
+        }
+        showToolPill(manager);
+    }
+
     public static void toggleCollapse(FusionWebViewManager manager) {
-        sIsCollapsed = !sIsCollapsed;
+        if (manager == null) return;
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
+        if (activeTab != null) {
+            activeTab.mIsToolPillCollapsed = !activeTab.mIsToolPillCollapsed;
+            sIsCollapsed = activeTab.mIsToolPillCollapsed;
+        } else {
+            sIsCollapsed = !sIsCollapsed;
+        }
         updateToolPillUi(manager);
     }
 
     public static void collapse(FusionWebViewManager manager) {
-        sIsCollapsed = true;
+        if (manager == null) return;
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
+        if (activeTab != null) {
+            activeTab.mIsToolPillCollapsed = true;
+            sIsCollapsed = true;
+        } else {
+            sIsCollapsed = true;
+        }
         updateToolPillUi(manager);
     }
 
     public static void updateToolPillUi(FusionWebViewManager manager) {
-        if (sToolScroll == null || manager == null) {
-            return;
-        }
+        if (manager == null) return;
+        HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
+        if (scroll == null) return;
 
-        if (sIsCollapsed) {
-            if (sToggleBtn != null) sToggleBtn.setVisibility(View.VISIBLE);
-            if (sWalletNextBtn != null) sWalletNextBtn.setVisibility(View.GONE);
-            if (sNetWalletBtn != null) sNetWalletBtn.setVisibility(View.GONE);
-            if (sCopyWalletBtn != null) sCopyWalletBtn.setVisibility(View.GONE);
-            if (sReloadBtn != null) sReloadBtn.setVisibility(View.GONE);
-            if (sWipeBtn != null) sWipeBtn.setVisibility(View.GONE);
-            if (sFpBtn != null) sFpBtn.setVisibility(View.GONE);
-            if (sCollapseBtn != null) sCollapseBtn.setVisibility(View.GONE);
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
+        boolean isCollapsed = activeTab != null ? activeTab.mIsToolPillCollapsed : sIsCollapsed;
+
+        TextView toggleBtn = manager.mToolToggleBtn != null ? manager.mToolToggleBtn : sToggleBtn;
+        TextView walletNextBtn = manager.mToolWalletNextBtn != null ? manager.mToolWalletNextBtn : sWalletNextBtn;
+        TextView netWalletBtn = manager.mToolNetWalletBtn != null ? manager.mToolNetWalletBtn : sNetWalletBtn;
+        TextView copyWalletBtn = manager.mToolCopyWalletBtn != null ? manager.mToolCopyWalletBtn : sCopyWalletBtn;
+        TextView reloadBtn = manager.mToolReloadBtn != null ? manager.mToolReloadBtn : sReloadBtn;
+        TextView wipeBtn = manager.mToolWipeBtn != null ? manager.mToolWipeBtn : sWipeBtn;
+        TextView fpBtn = manager.mToolFpBtn != null ? manager.mToolFpBtn : sFpBtn;
+        TextView collapseBtn = manager.mToolCollapseBtn != null ? manager.mToolCollapseBtn : sCollapseBtn;
+
+        if (isCollapsed) {
+            if (toggleBtn != null) toggleBtn.setVisibility(View.VISIBLE);
+            if (walletNextBtn != null) walletNextBtn.setVisibility(View.GONE);
+            if (netWalletBtn != null) netWalletBtn.setVisibility(View.GONE);
+            if (copyWalletBtn != null) copyWalletBtn.setVisibility(View.GONE);
+            if (reloadBtn != null) reloadBtn.setVisibility(View.GONE);
+            if (wipeBtn != null) wipeBtn.setVisibility(View.GONE);
+            if (fpBtn != null) fpBtn.setVisibility(View.GONE);
+            if (collapseBtn != null) collapseBtn.setVisibility(View.GONE);
         } else {
-            if (sToggleBtn != null) sToggleBtn.setVisibility(View.GONE);
-            if (sWalletNextBtn != null) sWalletNextBtn.setVisibility(View.VISIBLE);
-            if (sNetWalletBtn != null) sNetWalletBtn.setVisibility(View.VISIBLE);
-            if (sCopyWalletBtn != null) sCopyWalletBtn.setVisibility(View.VISIBLE);
-            if (sReloadBtn != null) sReloadBtn.setVisibility(View.VISIBLE);
-            if (sWipeBtn != null) sWipeBtn.setVisibility(View.VISIBLE);
-            if (sFpBtn != null) sFpBtn.setVisibility(View.VISIBLE);
-            if (sCollapseBtn != null) sCollapseBtn.setVisibility(View.VISIBLE);
+            if (toggleBtn != null) toggleBtn.setVisibility(View.GONE);
+            if (walletNextBtn != null) walletNextBtn.setVisibility(View.VISIBLE);
+            if (netWalletBtn != null) netWalletBtn.setVisibility(View.VISIBLE);
+            if (copyWalletBtn != null) copyWalletBtn.setVisibility(View.VISIBLE);
+            if (reloadBtn != null) reloadBtn.setVisibility(View.VISIBLE);
+            if (wipeBtn != null) wipeBtn.setVisibility(View.GONE);
+            if (fpBtn != null) fpBtn.setVisibility(View.VISIBLE);
+            if (collapseBtn != null) collapseBtn.setVisibility(View.VISIBLE);
         }
 
         // Update Network + Wallet Name Badge
-        if (sNetWalletBtn != null) {
+        if (netWalletBtn != null) {
             String wName = manager.mCurrentWalletName;
             if (wName == null || wName.isEmpty()) {
                 wName = "eso-1";
             }
-            sNetWalletBtn.setText(" " + getShortNetworkName() + " " + wName + " ");
+            netWalletBtn.setText(" " + getShortNetworkName() + " " + wName + " ");
         }
 
         // Update Fingerprint Badge
-        if (sFpBtn != null) {
-            sFpBtn.setText(" FP: " + formatShortFpName(sCurrentFpName) + " ");
+        if (fpBtn != null) {
+            fpBtn.setText(" FP: " + formatShortFpName(sCurrentFpName) + " ");
         }
 
         syncToolPillPosition(manager);
     }
 
     public static void syncToolPillPosition(FusionWebViewManager manager) {
-        if (sToolScroll == null || manager == null || manager.mActivity == null) {
-            return;
-        }
-        ViewGroup.LayoutParams lp = sToolScroll.getLayoutParams();
+        if (manager == null || manager.mActivity == null) return;
+        HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
+        if (scroll == null) return;
+
+        ViewGroup.LayoutParams lp = scroll.getLayoutParams();
         if (lp instanceof FrameLayout.LayoutParams) {
             FrameLayout.LayoutParams flp = (FrameLayout.LayoutParams) lp;
             float density = manager.mActivity.getResources().getDisplayMetrics().density;
@@ -415,23 +435,41 @@ public class FusionToolPillHelper {
             }
             if (flp.topMargin != targetTop) {
                 flp.topMargin = targetTop;
-                sToolScroll.setLayoutParams(flp);
+                scroll.setLayoutParams(flp);
             }
         }
+    }
+
+    public static void syncTabToolState(FusionWebViewManager manager, FusionTab tab) {
+        if (manager == null || tab == null) return;
+        HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
+        if (scroll != null) {
+            if (!tab.mIsMinimized) {
+                scroll.setVisibility(View.VISIBLE);
+                scroll.setElevation(160.0f);
+                scroll.bringToFront();
+            } else {
+                scroll.setVisibility(View.GONE);
+            }
+        }
+        updateToolPillUi(manager);
+        syncToolPillPosition(manager);
     }
 
     public static void showToolPill(FusionWebViewManager manager) {
         if (manager == null) return;
         FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
         if (activeTab != null && activeTab.mIsMinimized) {
-            hideToolPill();
+            hideToolPill(manager);
             return;
         }
-        if (sToolScroll == null) {
-            initAndShowToolPill(manager);
-            return;
+        HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
+        if (scroll == null) {
+            initToolPill(manager);
+            scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
+            if (scroll == null) return;
         }
-        if (sToolScroll.getParent() == null && manager.mPaneHost != null && manager.mActivity != null) {
+        if (scroll.getParent() == null && manager.mPaneHost != null && manager.mActivity != null) {
             float density = manager.mActivity.getResources().getDisplayMetrics().density;
             FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, 8388661);
             int targetTop = (int) (58 * density);
@@ -439,23 +477,36 @@ public class FusionToolPillHelper {
                 targetTop = manager.mControlPill.getBottom() + (int) (4 * density);
             }
             lp.setMargins(0, targetTop, 10, 0);
-            manager.mPaneHost.addView(sToolScroll, lp);
+            manager.mPaneHost.addView(scroll, lp);
         }
-        sToolScroll.setVisibility(View.VISIBLE);
-        sToolScroll.bringToFront();
+        scroll.setVisibility(View.VISIBLE);
+        scroll.setElevation(160.0f);
+        scroll.bringToFront();
         syncToolPillPosition(manager);
         updateToolPillUi(manager);
     }
 
-    public static void hideToolPill() {
+    public static void hideToolPill(FusionWebViewManager manager) {
+        if (manager != null && manager.mToolScroll != null) {
+            manager.mToolScroll.setVisibility(View.GONE);
+        }
         if (sToolScroll != null) {
             sToolScroll.setVisibility(View.GONE);
         }
     }
 
-    public static void bringToFront() {
-        if (sToolScroll != null && sToolScroll.getVisibility() == View.VISIBLE) {
-            sToolScroll.bringToFront();
+    public static void hideToolPill() {
+        hideToolPill(null);
+    }
+
+    public static void bringToFront(FusionWebViewManager manager) {
+        HorizontalScrollView scroll = (manager != null && manager.mToolScroll != null) ? manager.mToolScroll : sToolScroll;
+        if (scroll != null && scroll.getVisibility() == View.VISIBLE) {
+            scroll.bringToFront();
         }
+    }
+
+    public static void bringToFront() {
+        bringToFront(null);
     }
 }

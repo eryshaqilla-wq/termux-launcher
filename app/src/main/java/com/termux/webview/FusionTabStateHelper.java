@@ -158,10 +158,7 @@ public class FusionTabStateHelper {
         updatePillCollapseUi(fusionWebViewManager, fusionTab);
         updateDesktopMenuText(fusionWebViewManager, fusionTab);
         applyOpacity(fusionWebViewManager, fusionTab);
-        if (!fusionTab.mIsMinimized) {
-            FusionToolPillHelper.showToolPill(fusionWebViewManager);
-            FusionToolPillHelper.bringToFront();
-        }
+        FusionToolPillHelper.syncTabToolState(fusionWebViewManager, fusionTab);
         TextView textView = fusionWebViewManager.mMinPillBtn;
         if (textView != null) {
             if (fusionTab.mIsMinimized) {

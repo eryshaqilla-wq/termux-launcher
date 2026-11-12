@@ -16,6 +16,7 @@ public class FusionTab {
     public String mTitle = "New Tab";
     public boolean mIsMinimized = false;
     public boolean mIsPillCollapsed = false;
+    public boolean mIsToolPillCollapsed = true;
     public int mOpacityLevel = 0;
     public boolean mIsRecording = false;
     public FusionProxyHelper.ProxyItem mProxyItem = null;

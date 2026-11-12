@@ -484,16 +484,30 @@
         return res.subarray(res.length - 32);
     }
 
-    function GhostPublicKey(val) {
-        this._val = val || "";
-        this._bn = this._val;
+    function createGhostPublicKey(val) {
+        var str = (typeof val === "string") ? val : (val && val.toBase58 ? val.toBase58() : "");
+        var bytes = decodeBase58(str);
+        var pk = new Uint8Array(bytes);
+        pk._val = str;
+        pk.toBase58 = function() { return this._val; };
+        pk.toString = function() { return this._val; };
+        pk.toJSON = function() { return this._val; };
+        pk.toBytes = function() { return new Uint8Array(this); };
+        pk.toBuffer = function() { return this; };
+        pk.equals = function(other) { return this._val === (other ? other.toString() : ""); };
+        return pk;
     }
+
+    function GhostPublicKey(val) {
+        return createGhostPublicKey(val);
+    }
+    GhostPublicKey.prototype = Object.create(Uint8Array.prototype);
     GhostPublicKey.prototype.toBase58 = function() { return this._val; };
     GhostPublicKey.prototype.toString = function() { return this._val; };
     GhostPublicKey.prototype.toJSON = function() { return this._val; };
     GhostPublicKey.prototype.equals = function(other) { return this._val === (other ? other.toString() : ""); };
-    GhostPublicKey.prototype.toBytes = function() { return decodeBase58(this._val); };
-    GhostPublicKey.prototype.toBuffer = function() { return decodeBase58(this._val); };
+    GhostPublicKey.prototype.toBytes = function() { return new Uint8Array(this); };
+    GhostPublicKey.prototype.toBuffer = function() { return this; };
 
     function GhostSolanaProvider() {
         this.isGhost = true;
@@ -505,19 +519,37 @@
         this.isTrustWallet = true;
         var initAddr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
         this.isConnected = !!initAddr;
-        this.publicKey = initAddr ? new GhostPublicKey(initAddr) : null;
+        this.publicKey = initAddr ? createGhostPublicKey(initAddr) : null;
         this._events = {};
     }
 
     GhostSolanaProvider.prototype.on = function(event, handler) {
         if (!this._events[event]) this._events[event] = [];
         this._events[event].push(handler);
+        return this;
+    };
+    GhostSolanaProvider.prototype.addListener = GhostSolanaProvider.prototype.on;
+
+    GhostSolanaProvider.prototype.off = function(event, handler) {
+        if (this._events[event]) {
+            this._events[event] = this._events[event].filter(function(h) { return h !== handler; });
+        }
+        return this;
+    };
+    GhostSolanaProvider.prototype.removeListener = GhostSolanaProvider.prototype.off;
+
+    GhostSolanaProvider.prototype.removeAllListeners = function(event) {
+        if (event) delete this._events[event];
+        else this._events = {};
+        return this;
     };
 
     GhostSolanaProvider.prototype.emit = function(event) {
         var args = Array.prototype.slice.call(arguments, 1);
         if (this._events[event]) {
-            this._events[event].forEach(function(h) { h.apply(null, args); });
+            this._events[event].forEach(function(h) {
+                try { h.apply(null, args); } catch(e) {}
+            });
         }
     };
 
@@ -530,9 +562,10 @@
             } catch(e) {}
         }
         if (!addr) addr = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
-        this.publicKey = new GhostPublicKey(addr);
+        this.publicKey = createGhostPublicKey(addr);
         this.isConnected = true;
         this.emit("connect", this.publicKey);
+        this.emit("accountChanged", this.publicKey);
         return { publicKey: this.publicKey };
     };
 
@@ -540,6 +573,20 @@
         this.isConnected = false;
         this.publicKey = null;
         this.emit("disconnect");
+        this.emit("accountChanged", null);
+    };
+
+    GhostSolanaProvider.prototype.signIn = async function(input) {
+        var connectRes = await this.connect();
+        return {
+            account: {
+                address: connectRes.publicKey.toBase58(),
+                publicKey: connectRes.publicKey.toBytes(),
+                chains: ["solana:mainnet"]
+            },
+            signedMessage: new Uint8Array(64),
+            signature: new Uint8Array(64)
+        };
     };
 
     GhostSolanaProvider.prototype.request = async function(args) {
@@ -551,6 +598,9 @@
         }
         if (method === "disconnect") {
             return await this.disconnect();
+        }
+        if (method === "signIn") {
+            return await this.signIn(params);
         }
         if (method === "signTransaction") {
             return await this.signTransaction(params.transaction);
@@ -645,6 +695,10 @@
             "solana:signMessage": {
                 version: "1.0.0",
                 signMessage: async function(input) { return await solProvider.signMessage(input.message); }
+            },
+            "solana:signIn": {
+                version: "1.0.0",
+                signIn: async function(input) { return await solProvider.signIn(input); }
             }
         },
         get accounts() {
@@ -657,16 +711,29 @@
                 address: addr,
                 publicKey: decodeBase58(addr),
                 chains: ["solana:mainnet", "solana:devnet", "solana:testnet"],
-                features: ["standard:connect", "standard:events", "standard:disconnect", "solana:signAndSendTransaction", "solana:signTransaction", "solana:signMessage"]
+                features: ["standard:connect", "standard:events", "standard:disconnect", "solana:signAndSendTransaction", "solana:signTransaction", "solana:signMessage", "solana:signIn"]
             }];
         }
     };
+
+    var solflareStandardWallet = Object.assign({}, solStandardWallet, {
+        name: "Solflare",
+        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNGRjU1MDAiLz48L3N2Zz4="
+    });
+    var backpackStandardWallet = Object.assign({}, solStandardWallet, {
+        name: "Backpack",
+        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNFMzExMmMiLz48L3N2Zz4="
+    });
 
     function registerSolanaStandard() {
         try {
             window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", {
                 detail: function(register) {
-                    if (typeof register === "function") register(solStandardWallet);
+                    if (typeof register === "function") {
+                        register(solStandardWallet);
+                        register(solflareStandardWallet);
+                        register(backpackStandardWallet);
+                    }
                 }
             }));
         } catch(e) {}
@@ -674,9 +741,16 @@
     window.addEventListener("wallet-standard:app-ready", function(event) {
         if (event && event.detail && typeof event.detail.register === "function") {
             event.detail.register(solStandardWallet);
+            event.detail.register(solflareStandardWallet);
+            event.detail.register(backpackStandardWallet);
         }
     });
     registerSolanaStandard();
+    try {
+        window.dispatchEvent(new Event("phantom#initialized"));
+        window.dispatchEvent(new Event("solana#initialized"));
+        window.dispatchEvent(new CustomEvent("solana:initialized"));
+    } catch(e) {}
 
     // ============================================================================
     // GHOST TRON PROVIDER (window.tronWeb, window.tronLink)

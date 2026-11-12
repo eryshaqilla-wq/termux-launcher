@@ -411,7 +411,7 @@ public class GhostBridgeInterface implements Runnable {
         if (str == null) {
             return "{\"error\":\"Empty payload\"}";
         }
-        if (str.contains("sol_connect") || str.contains("solana_requestAccounts")) {
+        if (str.contains("sol_connect") || str.contains("solana_requestAccounts") || str.contains("sol_accounts") || str.contains("sol_getAccounts") || str.contains("solana_accounts")) {
             String solAddr = sCurrentSolWalletAddress;
             if (solAddr == null || solAddr.isEmpty()) {
                 solAddr = FusionWalletHelper.getMasterSolAddress();
@@ -424,6 +424,15 @@ public class GhostBridgeInterface implements Runnable {
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
             return forwardToDaemon(str);
+        }
+        if (str.contains("sol_signIn")) {
+            String solAddr = sCurrentSolWalletAddress;
+            if (solAddr == null || solAddr.isEmpty()) {
+                solAddr = FusionWalletHelper.getMasterSolAddress();
+            }
+            if (solAddr != null && !solAddr.isEmpty()) {
+                return "{\"result\":{\"account\":{\"address\":\"" + solAddr + "\"}}}";
+            }
         }
         if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
             String tronAddr = sCurrentTronWalletAddress;

@@ -70,6 +70,16 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public TextView mCollapsePillBtn;
     public TextView mContextStatusText;
     public LinearLayout mControlPill;
+    public android.widget.HorizontalScrollView mToolScroll;
+    public LinearLayout mToolPill;
+    public TextView mToolToggleBtn;
+    public TextView mToolWalletNextBtn;
+    public TextView mToolNetWalletBtn;
+    public TextView mToolCopyWalletBtn;
+    public TextView mToolReloadBtn;
+    public TextView mToolWipeBtn;
+    public TextView mToolFpBtn;
+    public TextView mToolCollapseBtn;
     public TextView mCopyAddressBtn;
     public TextView mDesktopBtn;
     public TextView mDevModeBtn;
@@ -539,10 +549,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout.setVisibility(0);
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
-            FusionToolPillHelper.showToolPill(this);
-            FusionToolPillHelper.bringToFront();
-            FusionToolPillHelper.showToolPill(this);
-            FusionToolPillHelper.bringToFront();
+        }
+        if (this.mToolScroll != null) {
+            this.mToolScroll.setVisibility(0);
+            this.mToolScroll.setElevation(160.0f);
+            this.mToolScroll.bringToFront();
+            FusionToolPillHelper.syncToolPillPosition(this);
+            FusionToolPillHelper.updateToolPillUi(this);
+        }
         }
         fusionTabCreateTabInternal.mWebView.loadUrl(str);
         updateContextUi();
@@ -689,9 +703,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (linearLayout2 != null) {
             linearLayout2.setVisibility(8);
         }
+        if (this.mToolScroll != null) {
+            this.mToolScroll.setVisibility(8);
+        }
         FusionDrawerHelper.closeAllDrawers(this);
         FusionRecPillHelper.hideRecPill();
-        FusionToolPillHelper.hideToolPill();
+        FusionToolPillHelper.hideToolPill(this);
         View view2 = this.mTerminalPaneHost;
         if (view2 != null) {
             view2.setVisibility(0);
@@ -1101,6 +1118,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
                 frameLayout2.addView(linearLayout, linearLayout.getLayoutParams());
             }
+            if (this.mToolScroll != null) {
+                FrameLayout frameLayoutTool = this.mPaneHost;
+                if (frameLayoutTool != null && (parent = this.mToolScroll.getParent()) != frameLayoutTool) {
+                    if (parent != null) {
+                        ((ViewGroup) parent).removeView(this.mToolScroll);
+                    }
+                    frameLayoutTool.addView(this.mToolScroll, this.mToolScroll.getLayoutParams());
+                }
+            } else {
+                FusionToolPillHelper.initToolPill(this);
+            }
         } else {
             LinearLayout linearLayout2 = new LinearLayout(this.mActivity);
             this.mControlPill = linearLayout2;
@@ -1194,6 +1222,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             layoutParams7.setMargins(2, 0, 2, 0);
             this.mControlPill.addView(textView6, layoutParams7);
             this.mControlPill.setElevation(160.0f);
+            FusionToolPillHelper.initToolPill(this);
             boolean z = true;
             LinearLayout linearLayout4 = new LinearLayout(this.mActivity);
             this.mMenuCard = linearLayout4;
@@ -1636,6 +1665,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mMenuCard.addView(menuCloseBtn, lpMenuClose);
 
             this.mControlPill.setVisibility(8);
+            if (this.mToolScroll != null) {
+                this.mToolScroll.setVisibility(8);
+            }
             this.mMenuCard.setVisibility(8);
             FrameLayout frameLayout4 = this.mPaneHost;
             if (frameLayout4 != null) {
@@ -1645,7 +1677,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         updateMenuTexts();
         FusionRecPillHelper.initAndShowRecPill(this);
-        FusionToolPillHelper.initAndShowToolPill(this);
+        FusionToolPillHelper.initToolPill(this);
     }
 
     public void injectAssetScript(WebView webView, String str) {
@@ -2016,7 +2048,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     }
                     if (mControlPill != null) {
                         mControlPill.bringToFront();
-                        FusionToolPillHelper.bringToFront();
+                    }
+                    if (mToolScroll != null) {
+                        mToolScroll.bringToFront();
                     }
                 }
                 if (targetUrl != null && !targetUrl.trim().isEmpty() && mActiveWebView != null) {
@@ -2971,8 +3005,19 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout.setVisibility(0);
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
-            FusionToolPillHelper.showToolPill(this);
-            FusionToolPillHelper.bringToFront();
+        }
+        if (this.mToolScroll != null) {
+            if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
+                float density = this.mActivity.getResources().getDisplayMetrics().density;
+                FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                layoutParams.setMargins(0, (int) (58 * density), 10, 0);
+                this.mPaneHost.addView(this.mToolScroll, layoutParams);
+            }
+            this.mToolScroll.setVisibility(0);
+            this.mToolScroll.setElevation(160.0f);
+            this.mToolScroll.bringToFront();
+            FusionToolPillHelper.syncToolPillPosition(this);
+            FusionToolPillHelper.updateToolPillUi(this);
         }
         LinearLayout linearLayout2 = this.mMenuCard;
         if (linearLayout2 != null && linearLayout2.getVisibility() == 0) {
@@ -3068,7 +3113,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     }
                     FusionDrawerHelper.closeAllDrawers(this);
                     FusionRecPillHelper.hideRecPill();
-                    FusionToolPillHelper.hideToolPill();
+                    FusionToolPillHelper.hideToolPill(this);
+                    if (this.mToolScroll != null) {
+                        this.mToolScroll.setVisibility(8);
+                    }
                     View view = this.mTerminalPaneHost;
                     if (view != null) {
                         view.setVisibility(0);
@@ -3125,11 +3173,16 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     linearLayout3.setTranslationX(0.0f);
                     linearLayout3.setTranslationY(0.0f);
                     linearLayout3.bringToFront();
-                    FusionToolPillHelper.bringToFront();
+                    if (this.mToolScroll != null) {
+                        this.mToolScroll.setVisibility(0);
+                        this.mToolScroll.setElevation(160.0f);
+                        this.mToolScroll.bringToFront();
+                        FusionToolPillHelper.syncToolPillPosition(this);
+                        FusionToolPillHelper.updateToolPillUi(this);
+                    }
                 }
                 updateContextUi();
                 FusionRecPillHelper.showRecPill(this);
-                FusionToolPillHelper.showToolPill(this);
                 return;
             }
         }
@@ -3148,6 +3201,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (linearLayout4 != null) {
             linearLayout4.setVisibility(8);
         }
+        if (this.mToolScroll != null) {
+            this.mToolScroll.setVisibility(8);
+        }
         LinearLayout linearLayout5 = this.mMenuCard;
         if (linearLayout5 != null) {
             linearLayout5.setVisibility(8);
@@ -3158,7 +3214,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         FusionDrawerHelper.closeAllDrawers(this);
         FusionRecPillHelper.hideRecPill();
-        FusionToolPillHelper.hideToolPill();
+        FusionToolPillHelper.hideToolPill(this);
         View view4 = this.mTerminalPaneHost;
         if (view4 != null) {
             view4.setVisibility(0);
