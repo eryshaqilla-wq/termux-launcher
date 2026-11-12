@@ -494,7 +494,12 @@ public class FusionWalletHelper {
     }
 
     public static String getStartWalletDaemonCommand() {
-        String net = FusionChainHelper.getCurrentChainKey();
+        return getStartWalletDaemonCommand(null);
+    }
+
+    public static String getStartWalletDaemonCommand(String activeUrl) {
+        String detected = FusionChainHelper.detectChainFromUrl(activeUrl);
+        String net = (detected != null && !detected.isEmpty()) ? detected : FusionChainHelper.getCurrentChainKey();
         String netFlag = (net != null && !net.isEmpty()) ? ("--" + net + " ") : "";
         return "if command -v wallet >/dev/null 2>&1; then " +
                "wallet " + netFlag + "--auto --ghostwallet 3333; " +

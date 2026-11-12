@@ -47,6 +47,10 @@ public class FusionWebViewClient extends WebViewClient {
         this.mCurrentUrl = url;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
+            String autoChain = FusionChainHelper.detectChainFromUrl(url);
+            if (autoChain != null && !autoChain.isEmpty() && !autoChain.equalsIgnoreCase(fusionWebViewManager.mCurrentChainKey)) {
+                fusionWebViewManager.switchChain(autoChain);
+            }
             fusionWebViewManager.injectScripts(webView);
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
         }

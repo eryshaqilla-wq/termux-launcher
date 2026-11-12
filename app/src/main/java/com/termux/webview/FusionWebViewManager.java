@@ -3013,7 +3013,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionToast.makeText((Context) r1, "[OK] GhostWallet Aktif di Port 3333!", 0).show();
             return;
         }
-        TermuxIpcServer.injectCommand(r1, FusionWalletHelper.getStartWalletDaemonCommand(), true);
+        String curUrl = (this.mActiveWebView != null) ? this.mActiveWebView.getUrl() : this.mCurrentUrl;
+        String cmd = FusionWalletHelper.getStartWalletDaemonCommand(curUrl);
+        TermuxIpcServer.injectCommand(r1, cmd, true);
         FusionToast.makeText((Context) r1, "Memulai GhostWallet di terminal (port 3333)...", 0).show();
         updateMenuTexts();
         toggleMinimize();
