@@ -73,20 +73,33 @@ public class FusionWalletHelper {
     }
 
     public static String getTronAddress(int i) {
-        if (sTronAddresses == null || i < 0 || i >= sTronAddresses.length) return "";
-        if (sTronAddresses[i] != null && !sTronAddresses[i].isEmpty()) {
+        if (sTronAddresses == null || sTronAddresses.length == 0) return "";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty() && sTronNames != null && sTronAddresses != null) {
+            for (int j = 0; j < sTronNames.length && j < sTronAddresses.length; j++) {
+                if (evmName.equalsIgnoreCase(sTronNames[j])) {
+                    return sTronAddresses[j];
+                }
+            }
+        }
+        if (i >= 0 && i < sTronAddresses.length && sTronAddresses[i] != null && !sTronAddresses[i].isEmpty()) {
             return sTronAddresses[i];
         }
-        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
-            sTronAddresses[i] = evmToTronAddress(sAddresses[i]);
-            return sTronAddresses[i];
-        }
-        return "";
+        return getMasterTronAddress();
     }
 
     public static String getTronName(int i) {
-        if (sTronNames == null || i < 0 || i >= sTronNames.length) return "";
-        return sTronNames[i];
+        if (sTronNames == null || sTronNames.length == 0) return "Master Tron";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty()) {
+            for (String tn : sTronNames) {
+                if (evmName.equalsIgnoreCase(tn)) return tn;
+            }
+        }
+        if (i >= 0 && i < sTronNames.length && sTronNames[i] != null && !sTronNames[i].isEmpty()) {
+            return sTronNames[i];
+        }
+        return getMasterTronName();
     }
 
     public static String[] getTronNames() {
@@ -126,19 +139,32 @@ public class FusionWalletHelper {
         return sSuiNames[i];
     }
     public static String getSuiAddress(int i) {
-        if (sSuiAddresses == null || i < 0 || i >= sSuiAddresses.length) return "";
-        if (sSuiAddresses[i] != null && !sSuiAddresses[i].isEmpty()) {
+        if (sSuiAddresses == null || sSuiAddresses.length == 0) return "";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty() && sSuiNames != null && sSuiAddresses != null) {
+            for (int j = 0; j < sSuiNames.length && j < sSuiAddresses.length; j++) {
+                if (evmName.equalsIgnoreCase(sSuiNames[j])) {
+                    return sSuiAddresses[j];
+                }
+            }
+        }
+        if (i >= 0 && i < sSuiAddresses.length && sSuiAddresses[i] != null && !sSuiAddresses[i].isEmpty()) {
             return sSuiAddresses[i];
         }
-        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
-            sSuiAddresses[i] = "0x" + hashHex("sui:", sAddresses[i]);
-            return sSuiAddresses[i];
-        }
-        return "";
+        return getMasterSuiAddress();
     }
     public static String getSuiName(int i) {
-        if (sSuiNames == null || i < 0 || i >= sSuiNames.length) return "";
-        return sSuiNames[i];
+        if (sSuiNames == null || sSuiNames.length == 0) return "Master Sui";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty()) {
+            for (String sn : sSuiNames) {
+                if (evmName.equalsIgnoreCase(sn)) return sn;
+            }
+        }
+        if (i >= 0 && i < sSuiNames.length && sSuiNames[i] != null && !sSuiNames[i].isEmpty()) {
+            return sSuiNames[i];
+        }
+        return getMasterSuiName();
     }
 
     public static String getMasterAptosAddress() {
@@ -154,19 +180,32 @@ public class FusionWalletHelper {
         return sAptosNames[i];
     }
     public static String getAptosAddress(int i) {
-        if (sAptosAddresses == null || i < 0 || i >= sAptosAddresses.length) return "";
-        if (sAptosAddresses[i] != null && !sAptosAddresses[i].isEmpty()) {
+        if (sAptosAddresses == null || sAptosAddresses.length == 0) return "";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty() && sAptosNames != null && sAptosAddresses != null) {
+            for (int j = 0; j < sAptosNames.length && j < sAptosAddresses.length; j++) {
+                if (evmName.equalsIgnoreCase(sAptosNames[j])) {
+                    return sAptosAddresses[j];
+                }
+            }
+        }
+        if (i >= 0 && i < sAptosAddresses.length && sAptosAddresses[i] != null && !sAptosAddresses[i].isEmpty()) {
             return sAptosAddresses[i];
         }
-        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
-            sAptosAddresses[i] = "0x" + hashHex("aptos:", sAddresses[i]);
-            return sAptosAddresses[i];
-        }
-        return "";
+        return getMasterAptosAddress();
     }
     public static String getAptosName(int i) {
-        if (sAptosNames == null || i < 0 || i >= sAptosNames.length) return "";
-        return sAptosNames[i];
+        if (sAptosNames == null || sAptosNames.length == 0) return "Master Aptos";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty()) {
+            for (String an : sAptosNames) {
+                if (evmName.equalsIgnoreCase(an)) return an;
+            }
+        }
+        if (i >= 0 && i < sAptosNames.length && sAptosNames[i] != null && !sAptosNames[i].isEmpty()) {
+            return sAptosNames[i];
+        }
+        return getMasterAptosName();
     }
 
     public static String getMasterIotaAddress() {
@@ -182,19 +221,32 @@ public class FusionWalletHelper {
         return sIotaNames[i];
     }
     public static String getIotaAddress(int i) {
-        if (sIotaAddresses == null || i < 0 || i >= sIotaAddresses.length) return "";
-        if (sIotaAddresses[i] != null && !sIotaAddresses[i].isEmpty()) {
+        if (sIotaAddresses == null || sIotaAddresses.length == 0) return "";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty() && sIotaNames != null && sIotaAddresses != null) {
+            for (int j = 0; j < sIotaNames.length && j < sIotaAddresses.length; j++) {
+                if (evmName.equalsIgnoreCase(sIotaNames[j])) {
+                    return sIotaAddresses[j];
+                }
+            }
+        }
+        if (i >= 0 && i < sIotaAddresses.length && sIotaAddresses[i] != null && !sIotaAddresses[i].isEmpty()) {
             return sIotaAddresses[i];
         }
-        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
-            sIotaAddresses[i] = "0x" + hashHex("iota:", sAddresses[i]);
-            return sIotaAddresses[i];
-        }
-        return "";
+        return getMasterIotaAddress();
     }
     public static String getIotaName(int i) {
-        if (sIotaNames == null || i < 0 || i >= sIotaNames.length) return "";
-        return sIotaNames[i];
+        if (sIotaNames == null || sIotaNames.length == 0) return "Master IOTA";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty()) {
+            for (String in : sIotaNames) {
+                if (evmName.equalsIgnoreCase(in)) return in;
+            }
+        }
+        if (i >= 0 && i < sIotaNames.length && sIotaNames[i] != null && !sIotaNames[i].isEmpty()) {
+            return sIotaNames[i];
+        }
+        return getMasterIotaName();
     }
 
     public static String getMasterSolAddress() {
@@ -212,24 +264,33 @@ public class FusionWalletHelper {
     }
 
     public static String getSolAddress(int i) {
-        if (sSolAddresses == null || i < 0 || i >= sSolAddresses.length) return "";
-        if (sSolAddresses[i] != null && !sSolAddresses[i].isEmpty()) {
+        if (sSolAddresses == null || sSolAddresses.length == 0) return "";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty() && sSolNames != null && sSolAddresses != null) {
+            for (int j = 0; j < sSolNames.length && j < sSolAddresses.length; j++) {
+                if (evmName.equalsIgnoreCase(sSolNames[j])) {
+                    return sSolAddresses[j];
+                }
+            }
+        }
+        if (i >= 0 && i < sSolAddresses.length && sSolAddresses[i] != null && !sSolAddresses[i].isEmpty()) {
             return sSolAddresses[i];
         }
-        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
-            try {
-                java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-                byte[] hash = md.digest(("sol:" + sAddresses[i]).getBytes("UTF-8"));
-                sSolAddresses[i] = encodeBase58(hash);
-                return sSolAddresses[i];
-            } catch (Exception ignored) {}
-        }
-        return "";
+        return getMasterSolAddress();
     }
 
     public static String getSolName(int i) {
-        if (sSolNames == null || i < 0 || i >= sSolNames.length) return "";
-        return sSolNames[i];
+        if (sSolNames == null || sSolNames.length == 0) return "Master Solana";
+        String evmName = getName(i);
+        if (evmName != null && !evmName.isEmpty()) {
+            for (String sn : sSolNames) {
+                if (evmName.equalsIgnoreCase(sn)) return sn;
+            }
+        }
+        if (i >= 0 && i < sSolNames.length && sSolNames[i] != null && !sSolNames[i].isEmpty()) {
+            return sSolNames[i];
+        }
+        return getMasterSolName();
     }
 
     public static String[] getSolNames() {
