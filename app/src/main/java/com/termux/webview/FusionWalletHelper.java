@@ -18,23 +18,23 @@ public class FusionWalletHelper {
 
     public static int sSolMasterIndex = 0;
     public static String[] sSolNames = {"Master Solana"};
-    public static String[] sSolAddresses = {""};
+    public static String[] sSolAddresses = {"8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf"};
 
     public static int sTronMasterIndex = 0;
     public static String[] sTronNames = {"Master Tron"};
-    public static String[] sTronAddresses = {""};
+    public static String[] sTronAddresses = {"TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF"};
 
     public static int sSuiMasterIndex = 0;
     public static String[] sSuiNames = {"Master Sui"};
-    public static String[] sSuiAddresses = {""};
+    public static String[] sSuiAddresses = {"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151"};
 
     public static int sAptosMasterIndex = 0;
     public static String[] sAptosNames = {"Master Aptos"};
-    public static String[] sAptosAddresses = {""};
+    public static String[] sAptosAddresses = {"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae"};
 
     public static int sIotaMasterIndex = 0;
     public static String[] sIotaNames = {"Master IOTA"};
-    public static String[] sIotaAddresses = {""};
+    public static String[] sIotaAddresses = {"0x1bf2ae6b747595ee8558c4d7d66ddb33f731e999aec9bc32cceb879ec810ca15"};
 
     public static boolean hasSolanaWallets() {
         return sSolAddresses != null && sSolAddresses.length > 0 && !sSolAddresses[0].isEmpty();

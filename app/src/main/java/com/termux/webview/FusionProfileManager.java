@@ -277,6 +277,19 @@ public class FusionProfileManager {
      * Konfigurasi WebView dengan Native Chromium Profile & Document Start Stealth Script.
      * Harus dipanggil tepat saat WebView baru dibuat (sebelum navigasi URL).
      */
+    public static String getEffectiveUserAgent(DeviceProfile device, boolean isDesktop) {
+        if (isDesktop) {
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+        }
+        String ua = (device != null && device.userAgent != null && !device.userAgent.isEmpty())
+                ? device.userAgent
+                : "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36";
+        if (!ua.contains("Phantom/")) {
+            ua = ua + " Phantom/24.1.0/";
+        }
+        return ua;
+    }
+
     public static void setupProfileForWebView(WebView webView, String profileName, boolean isDesktop) {
         if (webView == null) return;
         if (profileName == null || profileName.isEmpty()) {
@@ -285,11 +298,7 @@ public class FusionProfileManager {
 
         DeviceProfile device = getDeviceForProfile(profileName);
         WebSettings settings = webView.getSettings();
-        if (isDesktop) {
-            settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
-        } else {
-            settings.setUserAgentString(device.userAgent);
-        }
+        settings.setUserAgentString(getEffectiveUserAgent(device, isDesktop));
 
         // 1. Native Chromium Multi-Profile Isolation
         if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
@@ -369,11 +378,7 @@ public class FusionProfileManager {
             DeviceProfile device = getDeviceForProfile(targetProfile);
             if (webView != null) {
                 WebSettings settings = webView.getSettings();
-                if (isDesktop) {
-                    settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
-                } else {
-                    settings.setUserAgentString(device.userAgent);
-                }
+                settings.setUserAgentString(getEffectiveUserAgent(device, isDesktop));
             }
             return;
         }

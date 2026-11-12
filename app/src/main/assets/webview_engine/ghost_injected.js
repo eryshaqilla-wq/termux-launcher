@@ -576,6 +576,9 @@
         this.isConnected = true;
         this.emit("connect", this.publicKey);
         this.emit("accountChanged", this.publicKey);
+        if (typeof solStandardWallet !== "undefined") {
+            this.emit("change", { accounts: solStandardWallet.accounts });
+        }
         return { publicKey: this.publicKey };
     };
 
@@ -584,6 +587,7 @@
         this.publicKey = null;
         this.emit("disconnect");
         this.emit("accountChanged", null);
+        this.emit("change", { accounts: [] });
     };
 
     GhostSolanaProvider.prototype.signIn = async function(input) {
@@ -664,6 +668,7 @@
     window.solana = solProvider;
     window.phantom = window.phantom || {};
     window.phantom.solana = solProvider;
+    window.phantom.ethereum = (typeof fakeProvider !== "undefined") ? fakeProvider : null;
     window.solflare = solProvider;
     window.backpack = solProvider;
     window.okxwallet = window.okxwallet || {};
@@ -673,17 +678,35 @@
     window.trustwallet.solana = solProvider;
 
     // Solana Wallet Standard Register & Event Handling
-    var solStandardWallet = {
-        version: "1.0.0",
-        name: "Phantom",
-        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0QjAwODIiLz48L3N2Zz4=",
-        chains: ["solana:mainnet", "solana:devnet", "solana:testnet"],
-        features: {
+    function createStandardSolWallet(name, icon) {
+        var walletObj = {
+            version: "1.0.0",
+            name: name,
+            icon: icon,
+            chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
+            get accounts() {
+                if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
+                var addr = solProvider.publicKey ? solProvider.publicKey.toBase58() : "";
+                if (!addr) {
+                    addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
+                }
+                if (!addr) addr = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
+                return [{
+                    address: addr,
+                    publicKey: decodeBase58(addr),
+                    chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
+                    features: ["standard:connect", "standard:events", "standard:disconnect", "solana:signAndSendTransaction", "solana:signTransaction", "solana:signMessage", "solana:signIn"]
+                }];
+            }
+        };
+        walletObj.features = {
             "standard:connect": {
                 version: "1.0.0",
                 connect: async function() {
                     await solProvider.connect();
-                    return { accounts: solStandardWallet.accounts };
+                    var accs = walletObj.accounts;
+                    solProvider.emit("change", { accounts: accs });
+                    return { accounts: accs };
                 }
             },
             "standard:events": {
@@ -692,7 +715,10 @@
             },
             "standard:disconnect": {
                 version: "1.0.0",
-                disconnect: async function() { await solProvider.disconnect(); }
+                disconnect: async function() {
+                    await solProvider.disconnect();
+                    solProvider.emit("change", { accounts: [] });
+                }
             },
             "solana:signAndSendTransaction": {
                 version: "1.0.0",
@@ -710,50 +736,35 @@
                 version: "1.0.0",
                 signIn: async function(input) { return await solProvider.signIn(input); }
             }
-        },
-        get accounts() {
-            if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
-            var addr = solProvider.publicKey ? solProvider.publicKey.toBase58() : "";
-            if (!addr) {
-                addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
-            }
-            if (!addr) return [];
-            return [{
-                address: addr,
-                publicKey: decodeBase58(addr),
-                chains: ["solana:mainnet", "solana:devnet", "solana:testnet"],
-                features: ["standard:connect", "standard:events", "standard:disconnect", "solana:signAndSendTransaction", "solana:signTransaction", "solana:signMessage", "solana:signIn"]
-            }];
-        }
-    };
+        };
+        return walletObj;
+    }
 
-    var solflareStandardWallet = Object.assign({}, solStandardWallet, {
-        name: "Solflare",
-        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNGRjU1MDAiLz48L3N2Zz4="
-    });
-    var backpackStandardWallet = Object.assign({}, solStandardWallet, {
-        name: "Backpack",
-        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNFMzExMmMiLz48L3N2Zz4="
-    });
+    var solStandardWallet = createStandardSolWallet("Phantom", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0QjAwODIiLz48L3N2Zz4=");
+    var solflareStandardWallet = createStandardSolWallet("Solflare", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNGRjU1MDAiLz48L3N2Zz4=");
+    var backpackStandardWallet = createStandardSolWallet("Backpack", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNFMzExMmMiLz48L3N2Zz4=");
 
     function registerSolanaStandard() {
         try {
             window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", {
-                detail: function(register) {
-                    if (typeof register === "function") {
-                        register(solStandardWallet);
-                        register(solflareStandardWallet);
-                        register(backpackStandardWallet);
+                detail: function(api) {
+                    var reg = (typeof api === "function") ? api : (api && api.register);
+                    if (typeof reg === "function") {
+                        reg(solStandardWallet);
+                        reg(solflareStandardWallet);
+                        reg(backpackStandardWallet);
                     }
                 }
             }));
         } catch(e) {}
     }
     window.addEventListener("wallet-standard:app-ready", function(event) {
-        if (event && event.detail && typeof event.detail.register === "function") {
-            event.detail.register(solStandardWallet);
-            event.detail.register(solflareStandardWallet);
-            event.detail.register(backpackStandardWallet);
+        var api = event ? event.detail : null;
+        var reg = (typeof api === "function") ? api : (api && api.register);
+        if (typeof reg === "function") {
+            reg(solStandardWallet);
+            reg(solflareStandardWallet);
+            reg(backpackStandardWallet);
         }
     });
     registerSolanaStandard();
@@ -1088,19 +1099,22 @@
     function registerSuiStandard() {
         try {
             window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", {
-                detail: function(register) {
-                    if (typeof register === "function") {
-                        register(standardWallet);
-                        register(suiWalletStandard);
+                detail: function(api) {
+                    var reg = (typeof api === "function") ? api : (api && api.register);
+                    if (typeof reg === "function") {
+                        reg(standardWallet);
+                        reg(suiWalletStandard);
                     }
                 }
             }));
         } catch(e) {}
     }
     window.addEventListener("wallet-standard:app-ready", function(event) {
-        if (event && event.detail && typeof event.detail.register === "function") {
-            event.detail.register(standardWallet);
-            event.detail.register(suiWalletStandard);
+        var api = event ? event.detail : null;
+        var reg = (typeof api === "function") ? api : (api && api.register);
+        if (typeof reg === "function") {
+            reg(standardWallet);
+            reg(suiWalletStandard);
         }
     });
     registerSuiStandard();
@@ -1283,21 +1297,31 @@
     function registerAptosStandard() {
         try {
             window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", {
-                detail: function(register) { if (typeof register === "function") register(aptosStandardWallet); }
+                detail: function(api) {
+                    var reg = (typeof api === "function") ? api : (api && api.register);
+                    if (typeof reg === "function") reg(aptosStandardWallet);
+                }
             }));
             window.dispatchEvent(new CustomEvent("aptos:register-wallet", {
-                detail: function(register) { if (typeof register === "function") register(aptosStandardWallet); }
+                detail: function(api) {
+                    var reg = (typeof api === "function") ? api : (api && api.register);
+                    if (typeof reg === "function") reg(aptosStandardWallet);
+                }
             }));
         } catch(e) {}
     }
     window.addEventListener("wallet-standard:app-ready", function(event) {
-        if (event && event.detail && typeof event.detail.register === "function") {
-            event.detail.register(aptosStandardWallet);
+        var api = event ? event.detail : null;
+        var reg = (typeof api === "function") ? api : (api && api.register);
+        if (typeof reg === "function") {
+            reg(aptosStandardWallet);
         }
     });
     window.addEventListener("aptos:appReady", function(event) {
-        if (event && event.detail && typeof event.detail.register === "function") {
-            event.detail.register(aptosStandardWallet);
+        var api = event ? event.detail : null;
+        var reg = (typeof api === "function") ? api : (api && api.register);
+        if (typeof reg === "function") {
+            reg(aptosStandardWallet);
         }
     });
     registerAptosStandard();
@@ -1495,23 +1519,26 @@
     function registerIotaStandard() {
         try {
             window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", {
-                detail: function(register) {
-                    if (typeof register === "function") {
-                        register(iotaStandardWallet);
-                        register(iotaOfficialStandardWallet);
-                        register(bloomStandardWallet);
-                        register(tangleStandardWallet);
+                detail: function(api) {
+                    var reg = (typeof api === "function") ? api : (api && api.register);
+                    if (typeof reg === "function") {
+                        reg(iotaStandardWallet);
+                        reg(iotaOfficialStandardWallet);
+                        reg(bloomStandardWallet);
+                        reg(tangleStandardWallet);
                     }
                 }
             }));
         } catch(e) {}
     }
     window.addEventListener("wallet-standard:app-ready", function(event) {
-        if (event && event.detail && typeof event.detail.register === "function") {
-            event.detail.register(iotaStandardWallet);
-            event.detail.register(iotaOfficialStandardWallet);
-            event.detail.register(bloomStandardWallet);
-            event.detail.register(tangleStandardWallet);
+        var api = event ? event.detail : null;
+        var reg = (typeof api === "function") ? api : (api && api.register);
+        if (typeof reg === "function") {
+            reg(iotaStandardWallet);
+            reg(iotaOfficialStandardWallet);
+            reg(bloomStandardWallet);
+            reg(tangleStandardWallet);
         }
     });
     registerIotaStandard();

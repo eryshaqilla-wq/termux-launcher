@@ -643,7 +643,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     @Override
                     public void run() {
                         if (mActiveWebView != null) {
-                            mActiveWebView.getSettings().setUserAgentString(dev.userAgent);
+                            mActiveWebView.getSettings().setUserAgentString(FusionProfileManager.getEffectiveUserAgent(dev, false));
                             mActiveWebView.evaluateJavascript(
                                 "window.__FUSION_DEVICE__ = " + dev.toJsonString() + ";" +
                                 "if(window.__applyFingerprintFaker) window.__applyFingerprintFaker();", null
