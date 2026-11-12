@@ -117,7 +117,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public String mCurrentAptosWalletName = "eso-1";
     public String mCurrentAptosWalletAddress = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
     public String mCurrentIotaWalletName = "eso-1";
-    public String mCurrentIotaWalletAddress = "0x1bf2ae6b747595ee8558c4d7d66ddb33f731e999aec9bc32cceb879ec810ca15";
+    public String mCurrentIotaWalletAddress = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
     public String mCurrentChainKey = "base";
     public String mWcUri = "";
     public boolean mIsGhostMode = false;
@@ -1112,6 +1112,34 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mCurrentSolWalletName = mSolName;
             this.mCurrentSolWalletAddress = mSolAddr;
             GhostBridgeInterface.setSolWallet(mSolName, mSolAddr);
+        }
+        String mTronName = FusionWalletHelper.getMasterTronName();
+        String mTronAddr = FusionWalletHelper.getMasterTronAddress();
+        if (mTronAddr != null && !mTronAddr.isEmpty()) {
+            this.mCurrentTronWalletName = mTronName;
+            this.mCurrentTronWalletAddress = mTronAddr;
+            GhostBridgeInterface.setTronWallet(mTronName, mTronAddr);
+        }
+        String mSuiName = FusionWalletHelper.getMasterSuiName();
+        String mSuiAddr = FusionWalletHelper.getMasterSuiAddress();
+        if (mSuiAddr != null && !mSuiAddr.isEmpty()) {
+            this.mCurrentSuiWalletName = mSuiName;
+            this.mCurrentSuiWalletAddress = mSuiAddr;
+            GhostBridgeInterface.setSuiWallet(mSuiName, mSuiAddr);
+        }
+        String mAptosName = FusionWalletHelper.getMasterAptosName();
+        String mAptosAddr = FusionWalletHelper.getMasterAptosAddress();
+        if (mAptosAddr != null && !mAptosAddr.isEmpty()) {
+            this.mCurrentAptosWalletName = mAptosName;
+            this.mCurrentAptosWalletAddress = mAptosAddr;
+            GhostBridgeInterface.setAptosWallet(mAptosName, mAptosAddr);
+        }
+        String mIotaName = FusionWalletHelper.getMasterIotaName();
+        String mIotaAddr = FusionWalletHelper.getMasterIotaAddress();
+        if (mIotaAddr != null && !mIotaAddr.isEmpty()) {
+            this.mCurrentIotaWalletName = mIotaName;
+            this.mCurrentIotaWalletAddress = mIotaAddr;
+            GhostBridgeInterface.setIotaWallet(mIotaName, mIotaAddr);
         }
         try {
             StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().permitAll().build());

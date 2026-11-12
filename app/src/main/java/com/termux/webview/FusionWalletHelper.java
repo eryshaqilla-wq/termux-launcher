@@ -35,8 +35,8 @@ public class FusionWalletHelper {
     public static String[] sAptosAddresses = {"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae"};
 
     public static int sIotaMasterIndex = 0;
-    public static String[] sIotaNames = {"Master IOTA"};
-    public static String[] sIotaAddresses = {"0x1bf2ae6b747595ee8558c4d7d66ddb33f731e999aec9bc32cceb879ec810ca15"};
+    public static String[] sIotaNames = {"eso-1"};
+    public static String[] sIotaAddresses = {"0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd"};
 
     public static boolean hasSolanaWallets() {
         return sSolAddresses != null && sSolAddresses.length > 0 && !sSolAddresses[0].isEmpty();
@@ -656,7 +656,7 @@ public class FusionWalletHelper {
             sAptosNames = new String[]{"eso-1"};
             sAptosAddresses = new String[]{"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae"};
             sIotaNames = new String[]{"eso-1"};
-            sIotaAddresses = new String[]{"0x1bf2ae6b747595ee8558c4d7d66ddb33f731e999aec9bc32cceb879ec810ca15"};
+            sIotaAddresses = new String[]{"0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd"};
         }
         if (!sIsReloading) {
             sIsReloading = true;
