@@ -298,6 +298,19 @@ public class FusionTabStateHelper {
                 linearLayout2.setTranslationY(0.0f);
                 linearLayout2.bringToFront();
             }
+            if (fusionWebViewManager.mToolScroll != null) {
+                if (fusionWebViewManager.mToolScroll.getParent() == null && frameLayout != null) {
+                    float density = fusionWebViewManager.mActivity != null ? fusionWebViewManager.mActivity.getResources().getDisplayMetrics().density : 2.0f;
+                    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                    layoutParams.setMargins(0, (int) (58 * density), 10, 0);
+                    frameLayout.addView(fusionWebViewManager.mToolScroll, layoutParams);
+                }
+                fusionWebViewManager.mToolScroll.setVisibility(View.VISIBLE);
+                fusionWebViewManager.mToolScroll.setElevation(160.0f);
+                fusionWebViewManager.mToolScroll.bringToFront();
+                FusionToolPillHelper.syncToolPillPosition(fusionWebViewManager);
+                FusionToolPillHelper.updateToolPillUi(fusionWebViewManager);
+            }
             fusionWebViewManager.updateContextUi();
             TermuxActivity r2 = fusionWebViewManager.mActivity;
             if (r2 != null) {
@@ -334,6 +347,19 @@ public class FusionTabStateHelper {
                 linearLayout2.setTranslationX(0.0f);
                 linearLayout2.setTranslationY(0.0f);
                 linearLayout2.bringToFront();
+            }
+            if (fusionWebViewManager.mToolScroll != null) {
+                if (fusionWebViewManager.mToolScroll.getParent() == null && frameLayout != null) {
+                    float density = fusionWebViewManager.mActivity != null ? fusionWebViewManager.mActivity.getResources().getDisplayMetrics().density : 2.0f;
+                    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                    layoutParams.setMargins(0, (int) (58 * density), 10, 0);
+                    frameLayout.addView(fusionWebViewManager.mToolScroll, layoutParams);
+                }
+                fusionWebViewManager.mToolScroll.setVisibility(View.VISIBLE);
+                fusionWebViewManager.mToolScroll.setElevation(160.0f);
+                fusionWebViewManager.mToolScroll.bringToFront();
+                FusionToolPillHelper.syncToolPillPosition(fusionWebViewManager);
+                FusionToolPillHelper.updateToolPillUi(fusionWebViewManager);
             }
             TextView textView2 = fusionWebViewManager.mMinPillBtn;
             if (textView2 != null) {

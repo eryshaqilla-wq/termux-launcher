@@ -1503,12 +1503,16 @@ public class FusionExtensionHelper {
 
     public static void startAllBackgroundHosts(final Context context) {
         if (context == null) return;
-        List<ExtensionInfo> exts = getInstalledExtensions(context);
-        for (ExtensionInfo ext : exts) {
-            if (ext.enabled && ext.hasBackground()) {
-                ensureBackgroundHostRunning(context, ext);
-            }
-        }
+        new Thread(() -> {
+            try {
+                List<ExtensionInfo> exts = getInstalledExtensions(context);
+                for (ExtensionInfo ext : exts) {
+                    if (ext.enabled && ext.hasBackground()) {
+                        sMainHandler.post(() -> ensureBackgroundHostRunning(context, ext));
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }, "FusionExtHostStarter").start();
     }
 
     public static void stopBackgroundHost(String extId) {

@@ -473,13 +473,9 @@ public class FusionToolPillHelper {
         sHasFormFocus = tab.mHasFormFocus;
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll != null) {
-            if (!tab.mIsMinimized) {
-                scroll.setVisibility(View.VISIBLE);
-                scroll.setElevation(160.0f);
-                scroll.bringToFront();
-            } else {
-                scroll.setVisibility(View.GONE);
-            }
+            scroll.setVisibility(View.VISIBLE);
+            scroll.setElevation(160.0f);
+            scroll.bringToFront();
         }
         updateToolPillUi(manager);
         syncToolPillPosition(manager);
@@ -487,11 +483,6 @@ public class FusionToolPillHelper {
 
     public static void showToolPill(FusionWebViewManager manager) {
         if (manager == null) return;
-        FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
-        if (activeTab != null && activeTab.mIsMinimized) {
-            hideToolPill(manager);
-            return;
-        }
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll == null) {
             initToolPill(manager);

@@ -443,11 +443,38 @@ public class FusionWalletHelper {
                "fi";
     }
 
+    private static volatile boolean sIsReloading = false;
+
     public static void init(Context context) {
-        if (sLoaded && sAddresses != null && sAddresses.length > 0 && !sAddresses[0].isEmpty()) {
+        if (sAddresses == null || sAddresses.length == 0 || sAddresses[0] == null || sAddresses[0].isEmpty()) {
+            sMasterIndex = 0;
+            sNames = new String[]{"eso-1"};
+            sAddresses = new String[]{"0xd184F5Eb1F94378410BCAd0D9D33e3C03c3550d9"};
+            sSolNames = new String[]{"eso-1"};
+            sSolAddresses = new String[]{"8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf"};
+            sTronNames = new String[]{"eso-1"};
+            sTronAddresses = new String[]{"TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF"};
+            sSuiNames = new String[]{"eso-1"};
+            sSuiAddresses = new String[]{"0x" + hashHex("sui:", sAddresses[0])};
+            sAptosNames = new String[]{"eso-1"};
+            sAptosAddresses = new String[]{"0x" + hashHex("aptos:", sAddresses[0])};
+            sIotaNames = new String[]{"eso-1"};
+            sIotaAddresses = new String[]{"0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6"};
+        }
+        if (sLoaded) {
             return;
         }
-        reload(context);
+        if (!sIsReloading) {
+            sIsReloading = true;
+            new Thread(() -> {
+                try {
+                    reload(context);
+                } catch (Throwable ignored) {
+                } finally {
+                    sIsReloading = false;
+                }
+            }, "FusionWalletLoader").start();
+        }
     }
 
     public static void reload(Context context) {

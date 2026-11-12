@@ -521,7 +521,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (fusionWebViewManager == null) {
             sInstance = new FusionWebViewManager(termuxActivity);
         } else {
+            boolean activityChanged = (fusionWebViewManager.mActivity != termuxActivity);
             fusionWebViewManager.mActivity = termuxActivity;
+            if (activityChanged && termuxActivity != null) {
+                fusionWebViewManager.mViewsInitialized = false;
+                fusionWebViewManager.mPaneHost = null;
+                fusionWebViewManager.mTerminalPaneHost = null;
+                termuxActivity.runOnUiThread(fusionWebViewManager::initViews);
+            }
         }
     }
 
@@ -538,6 +545,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FrameLayout frameLayout = this.mPaneHost;
         if (frameLayout != null) {
             frameLayout.setVisibility(0);
+            frameLayout.setAlpha(1.0f);
+            frameLayout.setTranslationX(0.0f);
+            frameLayout.bringToFront();
         }
         if (str == null || str.length() == 0 || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
             str = "file:///android_asset/webview_engine/home.html";
@@ -557,7 +567,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionToolPillHelper.syncToolPillPosition(this);
             FusionToolPillHelper.updateToolPillUi(this);
         }
-        fusionTabCreateTabInternal.mWebView.loadUrl(str);
+        if (fusionTabCreateTabInternal != null && fusionTabCreateTabInternal.mWebView != null) {
+            fusionTabCreateTabInternal.mWebView.loadUrl(str);
+        }
         updateContextUi();
     }
 
@@ -1076,14 +1088,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     /* JADX WARN: Type inference failed for: r0v0, types: [android.content.Context, com.termux.app.TermuxActivity] */
     /* JADX WARN: Type inference failed for: r7v1 */
     public void initViews() {
-        if (this.mViewsInitialized && this.mPaneHost != null) {
-            return;
-        }
-        ViewParent parent;
         TermuxActivity r0 = this.mActivity;
         if (r0 == null) {
             return;
         }
+        if (this.mViewsInitialized && this.mPaneHost != null && this.mPaneHost.getContext() == r0) {
+            return;
+        }
+        ViewParent parent;
         this.mViewsInitialized = true;
         FusionWalletHelper.init(r0);
         FusionChainHelper.init(r0);
@@ -1107,6 +1119,25 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FrameLayout frameLayout = this.mPaneHost;
         if (frameLayout != null) {
             frameLayout.setPadding(0, 0, 0, 0);
+            frameLayout.setAlpha(1.0f);
+            frameLayout.setTranslationX(0.0f);
+            frameLayout.bringToFront();
+        }
+
+        // Re-parent active webviews if needed
+        if (this.mPaneHost != null && this.mTabList != null) {
+            for (int ti = 0; ti < this.mTabList.size(); ti++) {
+                FusionTab tab = (FusionTab) this.mTabList.get(ti);
+                if (tab != null && tab.mWebView != null) {
+                    ViewParent p = tab.mWebView.getParent();
+                    if (p != this.mPaneHost) {
+                        if (p instanceof ViewGroup) {
+                            ((ViewGroup) p).removeView(tab.mWebView);
+                        }
+                        this.mPaneHost.addView(tab.mWebView, new FrameLayout.LayoutParams(-1, -1));
+                    }
+                }
+            }
         }
         LinearLayout linearLayout = this.mControlPill;
         if (linearLayout != null) {
@@ -3003,8 +3034,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             }
         }
-        if (this.mPaneHost != null && this.mPaneHost.getVisibility() != View.VISIBLE) {
+        if (this.mPaneHost != null) {
             this.mPaneHost.setVisibility(View.VISIBLE);
+            this.mPaneHost.setAlpha(1.0f);
+            this.mPaneHost.setTranslationX(0.0f);
+            this.mPaneHost.bringToFront();
         }
         LinearLayout linearLayout = this.mControlPill;
         if (linearLayout != null) {
@@ -3072,26 +3106,40 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         ArrayList arrayList = null;
         int i = -1;
         TerminalSession currentSession = termuxActivity.getCurrentSession();
-        if (currentSession != null && (arrayList = this.mTabList) != null && (size = arrayList.size()) > 0) {
+        if ((arrayList = this.mTabList) != null && (size = arrayList.size()) > 0) {
             int activeIdx = this.mActiveTab;
             if (activeIdx >= 0 && activeIdx < size) {
                 FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
-                if (candidate != null && candidate.mBoundSession == currentSession) {
+                if (candidate != null && (currentSession == null || candidate.mBoundSession == null || candidate.mBoundSession == currentSession)) {
                     i = activeIdx;
+                    if (candidate.mBoundSession == null && currentSession != null) {
+                        candidate.mBoundSession = currentSession;
+                    }
                 }
             }
-            if (i < 0) {
+            if (i < 0 && currentSession != null) {
                 for (int i2 = 0; i2 < size; i2++) {
                     FusionTab fusionTab = (FusionTab) arrayList.get(i2);
-                    if (fusionTab != null && (terminalSession = fusionTab.mBoundSession) != null && terminalSession == currentSession) {
+                    if (fusionTab != null && (fusionTab.mBoundSession == null || fusionTab.mBoundSession == currentSession)) {
                         i = i2;
+                        if (fusionTab.mBoundSession == null) {
+                            fusionTab.mBoundSession = currentSession;
+                        }
                         break;
+                    }
+                }
+            }
+            if (i < 0 && activeIdx >= 0 && activeIdx < size) {
+                FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
+                if (candidate != null && !candidate.mIsMinimized) {
+                    i = activeIdx;
+                    if (candidate.mBoundSession == null && currentSession != null) {
+                        candidate.mBoundSession = currentSession;
                     }
                 }
             }
             if (i >= 0) {
                 this.mActiveTab = i;
-        FusionToolPillHelper.collapse(this);
                 FusionTab fusionTab2 = (FusionTab) arrayList.get(i);
                 WebView webView3 = fusionTab2.mWebView;
                 this.mActiveWebView = webView3;
@@ -3107,8 +3155,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     initViews();
                 }
                 FrameLayout frameLayout3 = this.mPaneHost;
-                if (frameLayout3 != null && frameLayout3.getVisibility() != View.VISIBLE) {
-                    frameLayout3.setVisibility(0);
+                if (frameLayout3 != null) {
+                    frameLayout3.setVisibility(View.VISIBLE);
+                    frameLayout3.setAlpha(1.0f);
+                    frameLayout3.setTranslationX(0.0f);
+                    frameLayout3.bringToFront();
                 }
                 if (fusionTab2.mIsMinimized) {
                     if (webView3 != null) {
@@ -3124,10 +3175,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     }
                     FusionDrawerHelper.closeAllDrawers(this);
                     FusionRecPillHelper.hideRecPill();
-                    FusionToolPillHelper.hideToolPill(this);
-                    if (this.mToolScroll != null) {
-                        this.mToolScroll.setVisibility(8);
-                    }
                     View view = this.mTerminalPaneHost;
                     if (view != null) {
                         view.setVisibility(0);
@@ -3147,6 +3194,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         linearLayout2.setTranslationX(0.0f);
                         linearLayout2.setTranslationY(0.0f);
                         linearLayout2.bringToFront();
+                    }
+                    // RULE SAMA DENGAN mControlPill (floating kanan atas): mToolScroll TETAP AKTIF & VISIBLE!
+                    if (this.mToolScroll != null) {
+                        if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
+                            float density = this.mActivity.getResources().getDisplayMetrics().density;
+                            FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                            layoutParams.setMargins(0, (int) (58 * density), 10, 0);
+                            this.mPaneHost.addView(this.mToolScroll, layoutParams);
+                        }
+                        this.mToolScroll.setVisibility(0);
+                        this.mToolScroll.setElevation(160.0f);
+                        this.mToolScroll.bringToFront();
+                        FusionToolPillHelper.syncToolPillPosition(this);
+                        FusionToolPillHelper.updateToolPillUi(this);
                     }
                     updateContextUi();
                     return;
@@ -3184,13 +3245,19 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     linearLayout3.setTranslationX(0.0f);
                     linearLayout3.setTranslationY(0.0f);
                     linearLayout3.bringToFront();
-                    if (this.mToolScroll != null) {
-                        this.mToolScroll.setVisibility(0);
-                        this.mToolScroll.setElevation(160.0f);
-                        this.mToolScroll.bringToFront();
-                        FusionToolPillHelper.syncToolPillPosition(this);
-                        FusionToolPillHelper.updateToolPillUi(this);
+                }
+                if (this.mToolScroll != null) {
+                    if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
+                        float density = this.mActivity.getResources().getDisplayMetrics().density;
+                        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                        layoutParams.setMargins(0, (int) (58 * density), 10, 0);
+                        this.mPaneHost.addView(this.mToolScroll, layoutParams);
                     }
+                    this.mToolScroll.setVisibility(0);
+                    this.mToolScroll.setElevation(160.0f);
+                    this.mToolScroll.bringToFront();
+                    FusionToolPillHelper.syncToolPillPosition(this);
+                    FusionToolPillHelper.updateToolPillUi(this);
                 }
                 updateContextUi();
                 FusionRecPillHelper.showRecPill(this);
