@@ -1881,10 +1881,21 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             view.setVisibility(8);
         }
         WebView webView = this.mActiveWebView;
+        final String chainKey = FusionChainHelper.getCurrentChainKey();
+        final String chainIdHex = FusionChainHelper.getChainIdHex();
         if (webView != null) {
-            String chainIdHex = FusionChainHelper.getChainIdHex();
             webView.evaluateJavascript("if(window.ethereum){window.ethereum.chainId='" + chainIdHex + "';window.ethereum.networkVersion='" + FusionChainHelper.getChainIdDec() + "';window.dispatchEvent(new CustomEvent('chainChanged',{detail:'" + chainIdHex + "'}));}", null);
         }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (GhostBridgeInterface.checkRpcAlive()) {
+                        GhostBridgeInterface.forwardToDaemon("{\"jsonrpc\":\"2.0\",\"id\":" + System.currentTimeMillis() + ",\"method\":\"wallet_switchEthereumChain\",\"params\":[{\"chainId\":\"" + chainIdHex + "\",\"chain\":\"" + chainKey + "\"}]}");
+                    }
+                } catch (Exception ignored) {}
+            }
+        }).start();
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
             FusionToast.makeText((Context) appCompatActivity, (CharSequence) ("Jaringan: " + FusionChainHelper.getCurrentChainName()), 0).show();

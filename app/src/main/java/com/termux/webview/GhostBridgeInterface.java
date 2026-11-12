@@ -259,6 +259,9 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getWalletAddress() {
+        if (!checkRpcAlive()) {
+            return "";
+        }
         if (sCurrentWalletAddress != null && !sCurrentWalletAddress.isEmpty()) {
             return sCurrentWalletAddress;
         }
@@ -412,6 +415,10 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"error\":\"Empty payload\"}";
         }
         if (str.contains("sol_connect") || str.contains("solana_requestAccounts") || str.contains("sol_accounts") || str.contains("sol_getAccounts") || str.contains("solana_accounts")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
             String solAddr = sCurrentSolWalletAddress;
             if (solAddr == null || solAddr.isEmpty()) {
                 solAddr = FusionWalletHelper.getMasterSolAddress();
@@ -419,13 +426,13 @@ public class GhostBridgeInterface implements Runnable {
             if (solAddr != null && !solAddr.isEmpty()) {
                 return "{\"result\":{\"publicKey\":\"" + solAddr + "\"}}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("sol_signIn")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("sol_signIn")) {
             String solAddr = sCurrentSolWalletAddress;
             if (solAddr == null || solAddr.isEmpty()) {
                 solAddr = FusionWalletHelper.getMasterSolAddress();
@@ -435,6 +442,10 @@ public class GhostBridgeInterface implements Runnable {
             }
         }
         if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
             String tronAddr = sCurrentTronWalletAddress;
             if (tronAddr == null || tronAddr.isEmpty()) {
                 tronAddr = FusionWalletHelper.getMasterTronAddress();
@@ -442,13 +453,13 @@ public class GhostBridgeInterface implements Runnable {
             if (tronAddr != null && !tronAddr.isEmpty()) {
                 return "{\"result\":{\"code\":200,\"message\":\"success\",\"address\":\"" + tronAddr + "\"}}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts") || str.contains("sui_accounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts")) {
             String suiAddr = sCurrentSuiWalletAddress;
             if (suiAddr == null || suiAddr.isEmpty()) {
                 suiAddr = FusionWalletHelper.getMasterSuiAddress();
@@ -456,13 +467,13 @@ public class GhostBridgeInterface implements Runnable {
             if (suiAddr != null && !suiAddr.isEmpty()) {
                 return "{\"result\":[{\"address\":\"" + suiAddr + "\",\"publicKey\":\"" + suiAddr + "\"}]}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount")) {
             String aptosAddr = sCurrentAptosWalletAddress;
             if (aptosAddr == null || aptosAddr.isEmpty()) {
                 aptosAddr = FusionWalletHelper.getMasterAptosAddress();
@@ -470,13 +481,13 @@ public class GhostBridgeInterface implements Runnable {
             if (aptosAddr != null && !aptosAddr.isEmpty()) {
                 return "{\"result\":{\"address\":\"" + aptosAddr + "\",\"publicKey\":\"" + aptosAddr + "\"}}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
             String iotaAddr = sCurrentIotaWalletAddress;
             if (iotaAddr == null || iotaAddr.isEmpty()) {
                 iotaAddr = FusionWalletHelper.getMasterIotaAddress();
@@ -484,13 +495,13 @@ public class GhostBridgeInterface implements Runnable {
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
                 return "{\"result\":[{\"address\":\"" + iotaAddr + "\",\"publicKey\":\"" + iotaAddr + "\"}]}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("eth_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("eth_requestAccounts")) {
             String ethAddr = sCurrentWalletAddress;
             if (ethAddr == null || ethAddr.isEmpty()) {
                 ethAddr = FusionWalletHelper.getMasterAddress();
@@ -498,13 +509,12 @@ public class GhostBridgeInterface implements Runnable {
             if (ethAddr != null && !ethAddr.isEmpty()) {
                 return "{\"result\":[\"" + ethAddr + "\"]}";
             }
-            if (!checkRpcAlive()) {
-                notifyDaemonOffline();
-                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
-            }
             return "{\"result\":[\"" + sCurrentWalletAddress + "\"]}";
         }
         if (str.contains("eth_accounts")) {
+            if (!checkRpcAlive()) {
+                return "{\"result\":[]}";
+            }
             String ethAddr = sCurrentWalletAddress;
             if (ethAddr == null || ethAddr.isEmpty()) {
                 ethAddr = FusionWalletHelper.getMasterAddress();
@@ -550,6 +560,9 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getSolWalletAddress() {
+        if (!checkRpcAlive()) {
+            return "";
+        }
         if (sCurrentSolWalletAddress != null && !sCurrentSolWalletAddress.isEmpty()) {
             return sCurrentSolWalletAddress;
         }
@@ -576,6 +589,9 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getTronWalletAddress() {
+        if (!checkRpcAlive()) {
+            return "";
+        }
         if (sCurrentTronWalletAddress != null && !sCurrentTronWalletAddress.isEmpty()) {
             return sCurrentTronWalletAddress;
         }
@@ -602,6 +618,9 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getSuiWalletAddress() {
+        if (!checkRpcAlive()) {
+            return "";
+        }
         if (sCurrentSuiWalletAddress != null && !sCurrentSuiWalletAddress.isEmpty()) {
             return sCurrentSuiWalletAddress;
         }
@@ -628,6 +647,9 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getAptosWalletAddress() {
+        if (!checkRpcAlive()) {
+            return "";
+        }
         if (sCurrentAptosWalletAddress != null && !sCurrentAptosWalletAddress.isEmpty()) {
             return sCurrentAptosWalletAddress;
         }
@@ -654,6 +676,9 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getIotaWalletAddress() {
+        if (!checkRpcAlive()) {
+            return "";
+        }
         if (sCurrentIotaWalletAddress != null && !sCurrentIotaWalletAddress.isEmpty()) {
             return sCurrentIotaWalletAddress;
         }

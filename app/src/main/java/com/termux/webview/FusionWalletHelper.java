@@ -431,12 +431,14 @@ public class FusionWalletHelper {
     }
 
     public static String getStartWalletDaemonCommand() {
+        String net = FusionChainHelper.getCurrentChainKey();
+        String netFlag = (net != null && !net.isEmpty()) ? ("--" + net + " ") : "";
         return "if command -v wallet >/dev/null 2>&1; then " +
-               "wallet --auto --ghostwallet 3333; " +
+               "wallet " + netFlag + "--auto --ghostwallet 3333; " +
                "else " +
                "for d in \"$FUSION_WALLET_DIR\" \"$HOME/wallet\" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do " +
                "if [ -n \"$d\" ] && [ -d \"$d\" ]; then " +
-               "cd \"$d\" && { if [ -f wallet.cjs ]; then node wallet.cjs --auto --ghostwallet 3333; elif [ -f wallet.js ]; then node wallet.js --auto --ghostwallet 3333; fi; } && break; " +
+               "cd \"$d\" && { if [ -f wallet.cjs ]; then node wallet.cjs " + netFlag + "--auto --ghostwallet 3333; elif [ -f wallet.js ]; then node wallet.js " + netFlag + "--auto --ghostwallet 3333; fi; } && break; " +
                "fi; done; " +
                "fi";
     }

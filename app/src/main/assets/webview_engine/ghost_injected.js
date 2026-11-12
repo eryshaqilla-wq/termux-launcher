@@ -173,12 +173,23 @@
         } catch(_) {}
     })();
 
-    var isDaemon = function() {
+    window.__ghostIsDaemonAlive = function() {
         if (window.GhostBridge && window.GhostBridge.isDaemonAlive) {
             try { return window.GhostBridge.isDaemonAlive(); } catch(e) {}
         }
         return false;
     };
+    window.__ghostRequireDaemon = function() {
+        if (!window.__ghostIsDaemonAlive()) {
+            if (window.GhostBridge && window.GhostBridge.notifyDaemonOffline) {
+                try { window.GhostBridge.notifyDaemonOffline(); } catch(e) {}
+            }
+            var err = new Error("Daemon wallet.js belum aktif! Harap start daemon terlebih dahulu.");
+            err.code = 4001;
+            throw err;
+        }
+    };
+    var isDaemon = window.__ghostIsDaemonAlive;
     var walletAddress = isDaemon() && (window.GhostBridge && window.GhostBridge.getWalletAddress) ? window.GhostBridge.getWalletAddress() : "";
     var initialChainHex = (window.GhostBridge && window.GhostBridge.getChainIdHex) ? window.GhostBridge.getChainIdHex() : "0x2105";
     var initialChainDec = (window.GhostBridge && window.GhostBridge.getChainIdDec) ? window.GhostBridge.getChainIdDec() : "8453";
@@ -431,15 +442,14 @@
 
     async function callGhostRpc(method, params) {
         params = params || [];
+        if (window.__ghostRequireDaemon) {
+            window.__ghostRequireDaemon();
+        }
         if (window.GhostBridge && window.GhostBridge.postRpc) {
-            try {
-                var raw = window.GhostBridge.postRpc(JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: method, params: params }));
-                var parsed = JSON.parse(raw);
-                if (parsed.error) throw new Error(typeof parsed.error === "string" ? parsed.error : (parsed.error.message || JSON.stringify(parsed.error)));
-                return parsed.result;
-            } catch(e) {
-                if (e.message && e.message.indexOf("offline") === -1) throw e;
-            }
+            var raw = window.GhostBridge.postRpc(JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method: method, params: params }));
+            var parsed = JSON.parse(raw);
+            if (parsed.error) throw new Error(typeof parsed.error === "string" ? parsed.error : (parsed.error.message || JSON.stringify(parsed.error)));
+            return parsed.result;
         }
         try {
             var res = await fetch(GHOST_URL, {
@@ -517,9 +527,8 @@
         this.isOkxWallet = true;
         this.isCoinbaseWallet = true;
         this.isTrustWallet = true;
-        var initAddr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
-        this.isConnected = !!initAddr;
-        this.publicKey = initAddr ? createGhostPublicKey(initAddr) : null;
+        this.isConnected = false;
+        this.publicKey = null;
         this._events = {};
     }
 
@@ -554,6 +563,7 @@
     };
 
     GhostSolanaProvider.prototype.connect = async function(opts) {
+        if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
             try {
@@ -702,6 +712,7 @@
             }
         },
         get accounts() {
+            if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
             var addr = solProvider.publicKey ? solProvider.publicKey.toBase58() : "";
             if (!addr) {
                 addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
@@ -767,6 +778,7 @@
         if (!args) return null;
         var method = args.method;
         if (method === "tron_requestAccounts") {
+            if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
             var base58 = window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "");
             if (!base58 && window.callGhostRpc) {
                 var res = await callGhostRpc("tron_connect", [{}]);
@@ -897,6 +909,7 @@
     };
 
     GhostSuiProvider.prototype.connect = async function(options) {
+        if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
             var res = await window.callGhostRpc("sui_connect", [options || {}]);
@@ -1038,6 +1051,7 @@
             }
         },
         get accounts() {
+            if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
             var a = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
             if (!a) return [];
             var pubKeyBytes = new Uint8Array(32);
@@ -1129,6 +1143,7 @@
     };
 
     GhostAptosProvider.prototype.connect = async function() {
+        if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
             var res = await window.callGhostRpc("aptos_connect", [{}]);
@@ -1254,6 +1269,7 @@
             }
         },
         get accounts() {
+            if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
             var addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
             if (!addr) return [];
             return [{
@@ -1313,16 +1329,18 @@
     }
 
     GhostIotaProvider.prototype.isConnected = async function() {
-        return true;
+        return !!(window.__ghostIsDaemonAlive && window.__ghostIsDaemonAlive());
     };
 
     GhostIotaProvider.prototype.getAccounts = async function() {
+        if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr) return [];
         return [{ address: addr, publicKey: addr }];
     };
 
     GhostIotaProvider.prototype.connect = async function(options) {
+        if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
             var res = await window.callGhostRpc("iota_connect", [options || {}]);
@@ -1330,7 +1348,9 @@
             else if (res && res.address) addr = res.address;
         }
         if (!addr) {
-            addr = "0x" + Array.from({length: 32}, function() { return Math.floor(Math.random()*256).toString(16).padStart(2, "0"); }).join("");
+            var err = new Error("Daemon wallet belum mengembalikan alamat IOTA");
+            err.code = 4001;
+            throw err;
         }
         iotaAddr = addr;
         window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
@@ -1440,6 +1460,7 @@
             }
         },
         get accounts() {
+            if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
             var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
             if (!addr) return [];
             var pubKeyBytes = new Uint8Array(32);
