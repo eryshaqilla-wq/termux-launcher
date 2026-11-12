@@ -245,13 +245,13 @@
         ]
     },
     "iota": {
-        "name": "IOTA Native Mainnet",
+        "name": "IOTA Rebased Mainnet",
         "id": 4218,
         "symbol": "IOTA",
         "cgId": "iota",
         "defaultRpc": [
-            "https://api.stardust.iota.org",
-            "https://chrysalis-nodes.iota.org"
+            "https://api.mainnet.iota.cafe",
+            "https://rpc.ankr.com/iota_mainnet"
         ]
     }
 }

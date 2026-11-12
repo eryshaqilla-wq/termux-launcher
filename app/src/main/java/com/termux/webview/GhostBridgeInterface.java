@@ -476,13 +476,13 @@ public class GhostBridgeInterface implements Runnable {
             }
             return forwardToDaemon(str);
         }
-        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts")) {
+        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
             String iotaAddr = sCurrentIotaWalletAddress;
             if (iotaAddr == null || iotaAddr.isEmpty()) {
                 iotaAddr = FusionWalletHelper.getMasterIotaAddress();
             }
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
-                return "{\"result\":[{\"address\":\"" + iotaAddr + "\"}]}";
+                return "{\"result\":[{\"address\":\"" + iotaAddr + "\",\"publicKey\":\"" + iotaAddr + "\"}]}";
             }
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();

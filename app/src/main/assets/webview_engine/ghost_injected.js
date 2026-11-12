@@ -1329,6 +1329,9 @@
             if (res && res.length && res[0].address) addr = res[0].address;
             else if (res && res.address) addr = res.address;
         }
+        if (!addr) {
+            addr = "0x" + Array.from({length: 32}, function() { return Math.floor(Math.random()*256).toString(16).padStart(2, "0"); }).join("");
+        }
         iotaAddr = addr;
         window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
         return [{ address: addr, publicKey: addr }];
@@ -1439,27 +1442,63 @@
         get accounts() {
             var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
             if (!addr) return [];
+            var pubKeyBytes = new Uint8Array(32);
+            try {
+                var cleanHex = addr.startsWith("0x") ? addr.slice(2) : addr;
+                for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
+                    pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
+                }
+            } catch(e) {}
             return [{
                 address: addr,
-                publicKey: new Uint8Array(32),
-                chains: ["iota:mainnet"],
-                features: ["standard:connect", "standard:disconnect", "iota:signAndExecuteTransaction"]
+                publicKey: pubKeyBytes,
+                chains: ["iota:mainnet", "iota:testnet", "iota:devnet"],
+                features: ["standard:connect", "standard:disconnect", "standard:events", "iota:signAndExecuteTransaction", "iota:signTransaction", "iota:signMessage"]
             }];
         }
     };
+
+    var iotaOfficialStandardWallet = Object.assign({}, iotaStandardWallet, {
+        name: "IOTA Wallet",
+        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4="
+    });
+    var bloomStandardWallet = Object.assign({}, iotaStandardWallet, {
+        name: "Bloom",
+        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4="
+    });
+    var tangleStandardWallet = Object.assign({}, iotaStandardWallet, {
+        name: "Tangle",
+        icon: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEQyRkYiLz48L3N2Zz4="
+    });
+
     function registerIotaStandard() {
         try {
             window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", {
-                detail: function(register) { if (typeof register === "function") register(iotaStandardWallet); }
+                detail: function(register) {
+                    if (typeof register === "function") {
+                        register(iotaStandardWallet);
+                        register(iotaOfficialStandardWallet);
+                        register(bloomStandardWallet);
+                        register(tangleStandardWallet);
+                    }
+                }
             }));
         } catch(e) {}
     }
     window.addEventListener("wallet-standard:app-ready", function(event) {
         if (event && event.detail && typeof event.detail.register === "function") {
             event.detail.register(iotaStandardWallet);
+            event.detail.register(iotaOfficialStandardWallet);
+            event.detail.register(bloomStandardWallet);
+            event.detail.register(tangleStandardWallet);
         }
     });
     registerIotaStandard();
+    try {
+        window.dispatchEvent(new Event("iota#initialized"));
+        window.dispatchEvent(new Event("tangle#initialized"));
+        window.dispatchEvent(new CustomEvent("iota:initialized"));
+    } catch(e) {}
 })();
 
 

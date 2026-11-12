@@ -185,8 +185,7 @@ public class FusionWalletHelper {
             return sIotaAddresses[i];
         }
         if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
-            String hex = hashHex("iota:", sAddresses[i]);
-            sIotaAddresses[i] = "iota1q" + (hex.length() > 50 ? hex.substring(0, 50) : hex);
+            sIotaAddresses[i] = "0x" + hashHex("iota:", sAddresses[i]);
             return sIotaAddresses[i];
         }
         return "";
@@ -814,9 +813,9 @@ public class FusionWalletHelper {
             String[] nArr = new String[len];
             for (int j = 0; j < len; j++) {
                 nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Sui-" + (j + 1));
-            }
-            if (len > 0) {
-                aArr[0] = "0x" + hashHex("sui:", sAddresses[0]);
+                if (sAddresses[j] != null && !sAddresses[j].isEmpty()) {
+                    aArr[j] = "0x" + hashHex("sui:", sAddresses[j]);
+                }
             }
             sSuiNames = nArr;
             sSuiAddresses = aArr;
@@ -875,9 +874,9 @@ public class FusionWalletHelper {
             String[] nArr = new String[len];
             for (int j = 0; j < len; j++) {
                 nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Aptos-" + (j + 1));
-            }
-            if (len > 0) {
-                aArr[0] = "0x" + hashHex("aptos:", sAddresses[0]);
+                if (sAddresses[j] != null && !sAddresses[j].isEmpty()) {
+                    aArr[j] = "0x" + hashHex("aptos:", sAddresses[j]);
+                }
             }
             sAptosNames = nArr;
             sAptosAddresses = aArr;
@@ -936,10 +935,9 @@ public class FusionWalletHelper {
             String[] nArr = new String[len];
             for (int j = 0; j < len; j++) {
                 nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("IOTA-" + (j + 1));
-            }
-            if (len > 0) {
-                String hex = hashHex("iota:", sAddresses[0]);
-                aArr[0] = "iota1q" + (hex.length() > 50 ? hex.substring(0, 50) : hex);
+                if (sAddresses[j] != null && !sAddresses[j].isEmpty()) {
+                    aArr[j] = "0x" + hashHex("iota:", sAddresses[j]);
+                }
             }
             sIotaNames = nArr;
             sIotaAddresses = aArr;
