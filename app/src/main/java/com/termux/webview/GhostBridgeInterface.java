@@ -44,7 +44,7 @@ public class GhostBridgeInterface implements Runnable {
         sLastRpcCheckTime = now;
         try {
             Socket socket = new Socket();
-            socket.connect(new InetSocketAddress("127.0.0.1", 3333), 150);
+            socket.connect(new InetSocketAddress("127.0.0.1", 3333), 500);
             socket.close();
             sLastRpcCheckResult = true;
             return true;
