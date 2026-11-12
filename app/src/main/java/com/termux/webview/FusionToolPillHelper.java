@@ -168,7 +168,7 @@ public class FusionToolPillHelper {
         netWalletBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                FusionDrawerHelper.showWalletDrawer(manager.mActivity, manager);
+                FusionDrawerHelper.showWalletDrawer(manager);
             }
         });
         LinearLayout.LayoutParams nwLp = new LinearLayout.LayoutParams(-2, -2);

@@ -109,6 +109,12 @@ public class FusionWalletHelper {
         if (i < 0 || i >= sSuiAddresses.length) return sSuiAddresses[0];
         return sSuiAddresses[i];
     }
+    public static String getMasterSuiName() {
+        if (sSuiNames == null || sSuiNames.length == 0) return "Master Sui";
+        int i = sSuiMasterIndex;
+        if (i < 0 || i >= sSuiNames.length) return sSuiNames[0];
+        return sSuiNames[i];
+    }
     public static String getSuiAddress(int i) {
         if (sSuiAddresses == null || i < 0 || i >= sSuiAddresses.length) return "";
         return sSuiAddresses[i];
@@ -124,6 +130,12 @@ public class FusionWalletHelper {
         if (i < 0 || i >= sAptosAddresses.length) return sAptosAddresses[0];
         return sAptosAddresses[i];
     }
+    public static String getMasterAptosName() {
+        if (sAptosNames == null || sAptosNames.length == 0) return "Master Aptos";
+        int i = sAptosMasterIndex;
+        if (i < 0 || i >= sAptosNames.length) return sAptosNames[0];
+        return sAptosNames[i];
+    }
     public static String getAptosAddress(int i) {
         if (sAptosAddresses == null || i < 0 || i >= sAptosAddresses.length) return "";
         return sAptosAddresses[i];
@@ -138,6 +150,12 @@ public class FusionWalletHelper {
         int i = sIotaMasterIndex;
         if (i < 0 || i >= sIotaAddresses.length) return sIotaAddresses[0];
         return sIotaAddresses[i];
+    }
+    public static String getMasterIotaName() {
+        if (sIotaNames == null || sIotaNames.length == 0) return "Master IOTA";
+        int i = sIotaMasterIndex;
+        if (i < 0 || i >= sIotaNames.length) return sIotaNames[0];
+        return sIotaNames[i];
     }
     public static String getIotaAddress(int i) {
         if (sIotaAddresses == null || i < 0 || i >= sIotaAddresses.length) return "";
