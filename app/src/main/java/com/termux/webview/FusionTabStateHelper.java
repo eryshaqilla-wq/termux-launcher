@@ -116,6 +116,9 @@ public class FusionTabStateHelper {
             activeTab.mIsPillCollapsed = z;
         }
         LinearLayout linearLayout = fusionWebViewManager.mControlPill;
+        if (linearLayout != null) {
+            linearLayout.post(() -> FusionToolPillHelper.syncToolPillPosition(fusionWebViewManager));
+        }
         if (linearLayout != null && (childCount = linearLayout.getChildCount()) >= 2) {
             if (z) {
                 int i = childCount - 1;
@@ -155,6 +158,10 @@ public class FusionTabStateHelper {
         updatePillCollapseUi(fusionWebViewManager, fusionTab);
         updateDesktopMenuText(fusionWebViewManager, fusionTab);
         applyOpacity(fusionWebViewManager, fusionTab);
+        if (!fusionTab.mIsMinimized) {
+            FusionToolPillHelper.showToolPill(fusionWebViewManager);
+            FusionToolPillHelper.bringToFront();
+        }
         TextView textView = fusionWebViewManager.mMinPillBtn;
         if (textView != null) {
             if (fusionTab.mIsMinimized) {
@@ -368,6 +375,7 @@ public class FusionTabStateHelper {
         if (fusionWebViewManager == null || fusionTab == null || (linearLayout = fusionWebViewManager.mControlPill) == null || (childCount = linearLayout.getChildCount()) < 2) {
             return;
         }
+        linearLayout.post(() -> FusionToolPillHelper.syncToolPillPosition(fusionWebViewManager));
         if (fusionTab.mIsPillCollapsed) {
             int i = childCount - 1;
             for (int i2 = 0; i2 < i; i2++) {

@@ -33,14 +33,23 @@ public class GhostBridgeInterface implements Runnable {
     public static String sLastTxHash = "";
     public static String sWcUri = "";
     public static boolean sIsAutoMode = false;
+    private static long sLastRpcCheckTime = 0;
+    private static boolean sLastRpcCheckResult = false;
 
     public static boolean checkRpcAlive() {
+        long now = System.currentTimeMillis();
+        if (now - sLastRpcCheckTime < 1500) {
+            return sLastRpcCheckResult;
+        }
+        sLastRpcCheckTime = now;
         try {
             Socket socket = new Socket();
-            socket.connect(new InetSocketAddress("127.0.0.1", 3333), 200);
+            socket.connect(new InetSocketAddress("127.0.0.1", 3333), 150);
             socket.close();
+            sLastRpcCheckResult = true;
             return true;
         } catch (Exception unused) {
+            sLastRpcCheckResult = false;
             return false;
         }
     }
@@ -403,10 +412,6 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"error\":\"Empty payload\"}";
         }
         if (str.contains("sol_connect") || str.contains("solana_requestAccounts")) {
-            if (!checkRpcAlive()) {
-                notifyDaemonOffline();
-                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
-            }
             String solAddr = sCurrentSolWalletAddress;
             if (solAddr == null || solAddr.isEmpty()) {
                 solAddr = FusionWalletHelper.getMasterSolAddress();
@@ -414,13 +419,13 @@ public class GhostBridgeInterface implements Runnable {
             if (solAddr != null && !solAddr.isEmpty()) {
                 return "{\"result\":{\"publicKey\":\"" + solAddr + "\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
             String tronAddr = sCurrentTronWalletAddress;
             if (tronAddr == null || tronAddr.isEmpty()) {
                 tronAddr = FusionWalletHelper.getMasterTronAddress();
@@ -428,13 +433,13 @@ public class GhostBridgeInterface implements Runnable {
             if (tronAddr != null && !tronAddr.isEmpty()) {
                 return "{\"result\":{\"code\":200,\"message\":\"success\",\"address\":\"" + tronAddr + "\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts")) {
             String suiAddr = sCurrentSuiWalletAddress;
             if (suiAddr == null || suiAddr.isEmpty()) {
                 suiAddr = FusionWalletHelper.getMasterSuiAddress();
@@ -442,13 +447,13 @@ public class GhostBridgeInterface implements Runnable {
             if (suiAddr != null && !suiAddr.isEmpty()) {
                 return "{\"result\":[{\"address\":\"" + suiAddr + "\",\"publicKey\":\"" + suiAddr + "\"}]}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount")) {
             String aptosAddr = sCurrentAptosWalletAddress;
             if (aptosAddr == null || aptosAddr.isEmpty()) {
                 aptosAddr = FusionWalletHelper.getMasterAptosAddress();
@@ -456,13 +461,13 @@ public class GhostBridgeInterface implements Runnable {
             if (aptosAddr != null && !aptosAddr.isEmpty()) {
                 return "{\"result\":{\"address\":\"" + aptosAddr + "\",\"publicKey\":\"" + aptosAddr + "\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts")) {
             String iotaAddr = sCurrentIotaWalletAddress;
             if (iotaAddr == null || iotaAddr.isEmpty()) {
                 iotaAddr = FusionWalletHelper.getMasterIotaAddress();
@@ -470,9 +475,20 @@ public class GhostBridgeInterface implements Runnable {
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
                 return "{\"result\":[{\"address\":\"" + iotaAddr + "\"}]}";
             }
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
             return forwardToDaemon(str);
         }
         if (str.contains("eth_requestAccounts")) {
+            String ethAddr = sCurrentWalletAddress;
+            if (ethAddr == null || ethAddr.isEmpty()) {
+                ethAddr = FusionWalletHelper.getMasterAddress();
+            }
+            if (ethAddr != null && !ethAddr.isEmpty()) {
+                return "{\"result\":[\"" + ethAddr + "\"]}";
+            }
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -480,10 +496,14 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":[\"" + sCurrentWalletAddress + "\"]}";
         }
         if (str.contains("eth_accounts")) {
-            if (!checkRpcAlive()) {
-                return "{\"result\":[]}";
+            String ethAddr = sCurrentWalletAddress;
+            if (ethAddr == null || ethAddr.isEmpty()) {
+                ethAddr = FusionWalletHelper.getMasterAddress();
             }
-            return "{\"result\":[\"" + sCurrentWalletAddress + "\"]}";
+            if (ethAddr != null && !ethAddr.isEmpty()) {
+                return "{\"result\":[\"" + ethAddr + "\"]}";
+            }
+            return "{\"result\":[]}";
         }
         if (str.contains("eth_chainId")) {
             return "{\"result\":\"" + FusionChainHelper.getChainIdHex() + "\"}";
@@ -498,11 +518,7 @@ public class GhostBridgeInterface implements Runnable {
             if (!str.contains("wallet_requestPermissions")) {
                 return forwardToDaemon(str);
             }
-            if (checkRpcAlive()) {
-                return "{\"result\":[{\"caveats\":[],\"parentCapability\":\"eth_accounts\"}]}";
-            }
-            notifyDaemonOffline();
-            return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            return "{\"result\":[{\"caveats\":[],\"parentCapability\":\"eth_accounts\"}]}";
         }
         try {
             JSONArray jSONArrayOptJSONArray = new JSONObject(str).optJSONArray("params");

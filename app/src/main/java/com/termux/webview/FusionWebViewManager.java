@@ -113,6 +113,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public boolean mIsGhostMode = false;
     public boolean mIsDesktopMode = false;
     public boolean mIsAutoMode = true;
+    public boolean mViewsInitialized = false;
     public int mCurrentOpacityLevel = 0;
     public boolean mIsMinimized = false;
     public int mActiveTab = 0;
@@ -538,6 +539,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout.setVisibility(0);
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
+            FusionToolPillHelper.showToolPill(this);
             FusionToolPillHelper.bringToFront();
             FusionToolPillHelper.showToolPill(this);
             FusionToolPillHelper.bringToFront();
@@ -1058,11 +1060,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     /* JADX WARN: Type inference failed for: r0v0, types: [android.content.Context, com.termux.app.TermuxActivity] */
     /* JADX WARN: Type inference failed for: r7v1 */
     public void initViews() {
-        ViewParent parent;
+        if (this.mViewsInitialized && this.mPaneHost != null) {
+            return;
+        }
         TermuxActivity r0 = this.mActivity;
         if (r0 == null) {
             return;
         }
+        this.mViewsInitialized = true;
         FusionWalletHelper.init(r0);
         FusionChainHelper.init(r0);
         try {
@@ -2520,6 +2525,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         syncVisibility();
         updateContextUi();
+        FusionToolPillHelper.showToolPill(this);
+        FusionToolPillHelper.bringToFront();
     }
 
     public void openWorkerTab(String str) {
@@ -2963,6 +2970,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout.setVisibility(0);
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
+            FusionToolPillHelper.showToolPill(this);
             FusionToolPillHelper.bringToFront();
         }
         LinearLayout linearLayout2 = this.mMenuCard;

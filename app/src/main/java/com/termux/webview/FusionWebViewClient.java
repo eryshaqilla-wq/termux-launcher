@@ -59,6 +59,8 @@ public class FusionWebViewClient extends WebViewClient {
         if (fusionWebViewManager != null) {
             fusionWebViewManager.injectScripts(webView);
             fusionWebViewManager.onTabUrlLoaded(webView, str);
+            FusionToolPillHelper.showToolPill(fusionWebViewManager);
+            FusionToolPillHelper.bringToFront();
             FusionExtensionHelper.injectMatchingScripts(webView, str, "document_idle");
 
             // Injeksi viewport desktop jika tab aktif dalam mode desktop

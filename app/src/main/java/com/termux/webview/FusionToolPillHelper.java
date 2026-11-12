@@ -92,7 +92,11 @@ public class FusionToolPillHelper {
                 }
                 float density = act.getResources().getDisplayMetrics().density;
                 FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, 8388661);
-                lp.setMargins(0, (int) (44 * density), 10, 0);
+                int targetTop = (int) (58 * density);
+                if (manager.mControlPill != null && manager.mControlPill.getBottom() > 0) {
+                    targetTop = manager.mControlPill.getBottom() + (int) (4 * density);
+                }
+                lp.setMargins(0, targetTop, 10, 0);
                 host.addView(sToolScroll, lp);
             }
             sToolScroll.setVisibility(View.VISIBLE);
@@ -321,7 +325,7 @@ public class FusionToolPillHelper {
 
         // Add to pane host
         FrameLayout.LayoutParams pillLp = new FrameLayout.LayoutParams(-2, -2, 8388661);
-        int topMargin = (int) (44 * density);
+        int topMargin = (int) (58 * density);
         if (manager.mControlPill != null && manager.mControlPill.getBottom() > 0) {
             topMargin = manager.mControlPill.getBottom() + (int) (4 * density);
         }
@@ -401,9 +405,13 @@ public class FusionToolPillHelper {
             FrameLayout.LayoutParams flp = (FrameLayout.LayoutParams) lp;
             float density = manager.mActivity.getResources().getDisplayMetrics().density;
             int gap = (int) (4 * density);
-            int targetTop = (int) (44 * density);
-            if (manager.mControlPill != null && manager.mControlPill.getBottom() > 0) {
-                targetTop = manager.mControlPill.getBottom() + gap;
+            int targetTop = (int) (58 * density);
+            if (manager.mControlPill != null) {
+                if (manager.mControlPill.getBottom() > 0) {
+                    targetTop = manager.mControlPill.getBottom() + gap;
+                } else {
+                    manager.mControlPill.post(() -> syncToolPillPosition(manager));
+                }
             }
             if (flp.topMargin != targetTop) {
                 flp.topMargin = targetTop;
@@ -414,19 +422,24 @@ public class FusionToolPillHelper {
 
     public static void showToolPill(FusionWebViewManager manager) {
         if (manager == null) return;
-        WebView webView = manager.mActiveWebView;
-        if (webView == null || webView.getVisibility() != View.VISIBLE) {
-            hideToolPill();
-            return;
-        }
         FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
-        if (activeTab == null || activeTab.mIsMinimized) {
+        if (activeTab != null && activeTab.mIsMinimized) {
             hideToolPill();
             return;
         }
         if (sToolScroll == null) {
             initAndShowToolPill(manager);
             return;
+        }
+        if (sToolScroll.getParent() == null && manager.mPaneHost != null && manager.mActivity != null) {
+            float density = manager.mActivity.getResources().getDisplayMetrics().density;
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(-2, -2, 8388661);
+            int targetTop = (int) (58 * density);
+            if (manager.mControlPill != null && manager.mControlPill.getBottom() > 0) {
+                targetTop = manager.mControlPill.getBottom() + (int) (4 * density);
+            }
+            lp.setMargins(0, targetTop, 10, 0);
+            manager.mPaneHost.addView(sToolScroll, lp);
         }
         sToolScroll.setVisibility(View.VISIBLE);
         sToolScroll.bringToFront();

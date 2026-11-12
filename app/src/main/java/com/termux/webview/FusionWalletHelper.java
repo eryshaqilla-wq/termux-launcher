@@ -10,6 +10,7 @@ import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionWalletHelper {
+    public static boolean sLoaded = false;
     public static String sCustomWalletPath;
     public static int sMasterIndex = 0;
     public static String[] sNames = {"Master .env"};
@@ -71,7 +72,14 @@ public class FusionWalletHelper {
 
     public static String getTronAddress(int i) {
         if (sTronAddresses == null || i < 0 || i >= sTronAddresses.length) return "";
-        return sTronAddresses[i];
+        if (sTronAddresses[i] != null && !sTronAddresses[i].isEmpty()) {
+            return sTronAddresses[i];
+        }
+        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
+            sTronAddresses[i] = evmToTronAddress(sAddresses[i]);
+            return sTronAddresses[i];
+        }
+        return "";
     }
 
     public static String getTronName(int i) {
@@ -117,7 +125,14 @@ public class FusionWalletHelper {
     }
     public static String getSuiAddress(int i) {
         if (sSuiAddresses == null || i < 0 || i >= sSuiAddresses.length) return "";
-        return sSuiAddresses[i];
+        if (sSuiAddresses[i] != null && !sSuiAddresses[i].isEmpty()) {
+            return sSuiAddresses[i];
+        }
+        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
+            sSuiAddresses[i] = "0x" + hashHex("sui:", sAddresses[i]);
+            return sSuiAddresses[i];
+        }
+        return "";
     }
     public static String getSuiName(int i) {
         if (sSuiNames == null || i < 0 || i >= sSuiNames.length) return "";
@@ -138,7 +153,14 @@ public class FusionWalletHelper {
     }
     public static String getAptosAddress(int i) {
         if (sAptosAddresses == null || i < 0 || i >= sAptosAddresses.length) return "";
-        return sAptosAddresses[i];
+        if (sAptosAddresses[i] != null && !sAptosAddresses[i].isEmpty()) {
+            return sAptosAddresses[i];
+        }
+        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
+            sAptosAddresses[i] = "0x" + hashHex("aptos:", sAddresses[i]);
+            return sAptosAddresses[i];
+        }
+        return "";
     }
     public static String getAptosName(int i) {
         if (sAptosNames == null || i < 0 || i >= sAptosNames.length) return "";
@@ -159,7 +181,15 @@ public class FusionWalletHelper {
     }
     public static String getIotaAddress(int i) {
         if (sIotaAddresses == null || i < 0 || i >= sIotaAddresses.length) return "";
-        return sIotaAddresses[i];
+        if (sIotaAddresses[i] != null && !sIotaAddresses[i].isEmpty()) {
+            return sIotaAddresses[i];
+        }
+        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
+            String hex = hashHex("iota:", sAddresses[i]);
+            sIotaAddresses[i] = "iota1q" + (hex.length() > 50 ? hex.substring(0, 50) : hex);
+            return sIotaAddresses[i];
+        }
+        return "";
     }
     public static String getIotaName(int i) {
         if (sIotaNames == null || i < 0 || i >= sIotaNames.length) return "";
@@ -182,7 +212,18 @@ public class FusionWalletHelper {
 
     public static String getSolAddress(int i) {
         if (sSolAddresses == null || i < 0 || i >= sSolAddresses.length) return "";
-        return sSolAddresses[i];
+        if (sSolAddresses[i] != null && !sSolAddresses[i].isEmpty()) {
+            return sSolAddresses[i];
+        }
+        if (sAddresses != null && i < sAddresses.length && sAddresses[i] != null && !sAddresses[i].isEmpty()) {
+            try {
+                java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+                byte[] hash = md.digest(("sol:" + sAddresses[i]).getBytes("UTF-8"));
+                sSolAddresses[i] = encodeBase58(hash);
+                return sSolAddresses[i];
+            } catch (Exception ignored) {}
+        }
+        return "";
     }
 
     public static String getSolName(int i) {
@@ -402,6 +443,9 @@ public class FusionWalletHelper {
     }
 
     public static void init(Context context) {
+        if (sLoaded && sAddresses != null && sAddresses.length > 0 && !sAddresses[0].isEmpty()) {
+            return;
+        }
         reload(context);
     }
 
@@ -412,6 +456,7 @@ public class FusionWalletHelper {
         reloadSui(context);
         reloadAptos(context);
         reloadIota(context);
+        sLoaded = true;
     }
 
     public static void reloadEvm(Context context) {
@@ -552,6 +597,26 @@ public class FusionWalletHelper {
             }
         } catch (Exception ignored) {
         }
+        if (sSolAddresses == null || sSolAddresses.length == 0 || sSolAddresses[0].isEmpty()) {
+            if (sAddresses != null && sAddresses.length > 0) {
+                int len = sAddresses.length;
+                String[] solA = new String[len];
+                String[] solN = new String[len];
+                for (int j = 0; j < len; j++) {
+                    solN[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Sol-" + (j + 1));
+                }
+                if (len > 0) {
+                    try {
+                        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+                        byte[] hash = md.digest(("sol:" + sAddresses[0]).getBytes("UTF-8"));
+                        solA[0] = encodeBase58(hash);
+                    } catch (Exception ignored) {}
+                }
+                sSolNames = solN;
+                sSolAddresses = solA;
+                sSolMasterIndex = sMasterIndex;
+            }
+        }
     }
 
     public static void reloadTron(Context context) {
@@ -619,14 +684,16 @@ public class FusionWalletHelper {
             }
         }
 
-        // Auto-Derive Tron address 1:1 from EVM addresses (sAddresses)
+        // Auto-Derive Tron address 1:1 from EVM addresses (sAddresses) lazily
         if (sAddresses != null && sAddresses.length > 0) {
             int len = sAddresses.length;
             String[] tronA = new String[len];
             String[] tronN = new String[len];
             for (int j = 0; j < len; j++) {
                 tronN[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Tron-" + (j + 1));
-                tronA[j] = evmToTronAddress(sAddresses[j]);
+            }
+            if (len > 0) {
+                tronA[0] = evmToTronAddress(sAddresses[0]);
             }
             sTronNames = tronN;
             sTronAddresses = tronA;
@@ -747,7 +814,9 @@ public class FusionWalletHelper {
             String[] nArr = new String[len];
             for (int j = 0; j < len; j++) {
                 nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Sui-" + (j + 1));
-                aArr[j] = "0x" + hashHex("sui:", sAddresses[j]);
+            }
+            if (len > 0) {
+                aArr[0] = "0x" + hashHex("sui:", sAddresses[0]);
             }
             sSuiNames = nArr;
             sSuiAddresses = aArr;
@@ -806,7 +875,9 @@ public class FusionWalletHelper {
             String[] nArr = new String[len];
             for (int j = 0; j < len; j++) {
                 nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Aptos-" + (j + 1));
-                aArr[j] = "0x" + hashHex("aptos:", sAddresses[j]);
+            }
+            if (len > 0) {
+                aArr[0] = "0x" + hashHex("aptos:", sAddresses[0]);
             }
             sAptosNames = nArr;
             sAptosAddresses = aArr;
@@ -865,8 +936,10 @@ public class FusionWalletHelper {
             String[] nArr = new String[len];
             for (int j = 0; j < len; j++) {
                 nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("IOTA-" + (j + 1));
-                String hex = hashHex("iota:", sAddresses[j]);
-                aArr[j] = "iota1q" + (hex.length() > 50 ? hex.substring(0, 50) : hex);
+            }
+            if (len > 0) {
+                String hex = hashHex("iota:", sAddresses[0]);
+                aArr[0] = "iota1q" + (hex.length() > 50 ? hex.substring(0, 50) : hex);
             }
             sIotaNames = nArr;
             sIotaAddresses = aArr;
