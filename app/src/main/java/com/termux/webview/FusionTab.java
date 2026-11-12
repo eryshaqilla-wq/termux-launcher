@@ -17,6 +17,7 @@ public class FusionTab {
     public boolean mIsMinimized = false;
     public boolean mIsPillCollapsed = false;
     public boolean mIsToolPillCollapsed = true;
+    public boolean mHasFormFocus = false;
     public int mOpacityLevel = 0;
     public boolean mIsRecording = false;
     public FusionProxyHelper.ProxyItem mProxyItem = null;

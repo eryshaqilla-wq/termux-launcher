@@ -2424,6 +2424,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
                 webView.evaluateJavascript("if(window.__FUSION_SET_IOTA_ACCOUNT__){window.__FUSION_SET_IOTA_ACCOUNT__('" + iotaAddr + "');}", null);
             }
+            webView.evaluateJavascript("if(window.AgyRecorder){window.AgyRecorder.recordEvent({type:'next_wallet',timestamp:Date.now(),text:'Ganti Wallet -> " + address + "'});}", null);
         }
     }
 

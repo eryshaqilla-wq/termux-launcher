@@ -4951,7 +4951,7 @@
 
     // --- 5B. SMART WALLET ADDRESS PASTER (ADDR > BUTTON DARI WALLET JSON) ---
     window.__AGY_PASTE_WALLET__ = function(passedAddr) {
-        var wAddr = (typeof passedAddr === "string" && passedAddr.startsWith("0x")) ? passedAddr : "";
+        var wAddr = (typeof passedAddr === "string" && passedAddr.trim().length > 0) ? passedAddr.trim() : "";
         if (!wAddr) {
             var activeW = (typeof AgyDB !== "undefined" && AgyDB.getActiveWallet) ? AgyDB.getActiveWallet() : null;
             if (activeW && activeW.address) wAddr = activeW.address;
@@ -5591,6 +5591,27 @@
         };
         AgyRecorder.recordEvent(ev);
     }, true);
+
+    // --- 6B. DYNAMIC FORM FOCUS DETECTOR FOR TOOL BAR (COPY <-> PASTE) ---
+    function notifyFormFocusState() {
+        var el = document.activeElement;
+        var hasFocus = false;
+        if (el) {
+            var tag = (el.tagName || "").toUpperCase();
+            if (tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable || (el.getAttribute && el.getAttribute("contenteditable") === "true")) {
+                var type = (el.type || "").toLowerCase();
+                if (type !== "button" && type !== "submit" && type !== "reset" && type !== "checkbox" && type !== "radio" && type !== "file") {
+                    hasFocus = true;
+                }
+            }
+        }
+        if (window.GhostBridge && window.GhostBridge.onFormFocusChanged) {
+            try { window.GhostBridge.onFormFocusChanged(hasFocus); } catch(_) {}
+        }
+    }
+    document.addEventListener("focusin", function(e) { notifyFormFocusState(); }, true);
+    document.addEventListener("focusout", function(e) { setTimeout(notifyFormFocusState, 80); }, true);
+    document.addEventListener("click", function(e) { setTimeout(notifyFormFocusState, 80); }, true);
 
     // --- 7. IN-PAGE SLASH AUTOCOMPLETE PICKER (/email, /wallet, /query, /?) ---
     var SlashAutocomplete = {

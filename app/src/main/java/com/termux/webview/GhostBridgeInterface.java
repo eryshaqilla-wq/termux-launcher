@@ -257,6 +257,22 @@ public class GhostBridgeInterface implements Runnable {
         return sLastTxHash;
     }
 
+    public static boolean sHasFormFocus = false;
+
+    @JavascriptInterface
+    public void onFormFocusChanged(final boolean z) {
+        sHasFormFocus = z;
+        final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mActivity != null) {
+            mgr.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    FusionToolPillHelper.setFormFocus(mgr, z);
+                }
+            });
+        }
+    }
+
     @JavascriptInterface
     public String getWalletAddress() {
         if (!checkRpcAlive()) {

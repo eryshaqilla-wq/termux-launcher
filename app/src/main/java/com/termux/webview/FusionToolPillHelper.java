@@ -30,6 +30,18 @@ public class FusionToolPillHelper {
     // Default selalu menciut (collapsed)
     public static boolean sIsCollapsed = true;
     public static String sCurrentFpName = "S24 Ultra";
+    public static boolean sHasFormFocus = false;
+
+    public static void setFormFocus(FusionWebViewManager manager, boolean hasFocus) {
+        sHasFormFocus = hasFocus;
+        if (manager != null) {
+            FusionTab tab = FusionTabStateHelper.getActiveTab(manager);
+            if (tab != null) {
+                tab.mHasFormFocus = hasFocus;
+            }
+            updateToolPillUi(manager);
+        }
+    }
 
     public static String getShortNetworkName() {
         String key = FusionChainHelper.getCurrentChainKey();
@@ -132,8 +144,12 @@ public class FusionToolPillHelper {
         walletNextBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                manager.switchToNextWallet();
+                String nextAddr = manager.switchToNextWallet();
                 updateToolPillUi(manager);
+                WebView webView = manager.mActiveWebView;
+                if (webView != null && nextAddr != null) {
+                    webView.evaluateJavascript("if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'next_wallet', timestamp:Date.now(), text:'Ganti Wallet -> " + nextAddr + "'}); try { window.dispatchEvent(new CustomEvent('accountsChanged', {detail: ['" + nextAddr + "']})); } catch(_){}", null);
+                }
             }
         });
         LinearLayout.LayoutParams wnLp = new LinearLayout.LayoutParams(-2, -2);
@@ -159,11 +175,11 @@ public class FusionToolPillHelper {
         nwLp.setMargins(2, 0, 2, 0);
         pill.addView(netWalletBtn, nwLp);
 
-        // 3. Copy Wallet: [ COPY WALLET ]
+        // 3. Copy / Paste Dual Button: [ COPY ] or [ PASTE ]
         TextView copyWalletBtn = new TextView(act);
         manager.mToolCopyWalletBtn = copyWalletBtn;
         sCopyWalletBtn = copyWalletBtn;
-        copyWalletBtn.setText(" COPY WALLET ");
+        copyWalletBtn.setText(sHasFormFocus ? " PASTE " : " COPY ");
         FusionUiHelper.setSolidBtn(copyWalletBtn);
         copyWalletBtn.setTextSize(2, 11.0f);
         copyWalletBtn.setPadding(8, 4, 8, 4);
@@ -193,26 +209,24 @@ public class FusionToolPillHelper {
 
                 try {
                     ClipboardManager cm = (ClipboardManager) act.getSystemService(Context.CLIPBOARD_SERVICE);
-                    if (cm != null) {
+                    if (cm != null && addr != null) {
                         cm.setPrimaryClip(ClipData.newPlainText("wallet_address", addr));
                     }
                 } catch (Throwable ignored) {}
 
                 WebView wv = manager.mActiveWebView;
-                if (wv != null && addr != null) {
-                    String js = "(function() {" +
-                        "  var val = '" + addr + "';" +
-                        "  if (document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA')) {" +
-                        "    document.activeElement.value = val;" +
-                        "    document.activeElement.dispatchEvent(new Event('input', {bubbles: true}));" +
-                        "    document.activeElement.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "  }" +
-                        "})();";
-                    wv.evaluateJavascript(js, null);
+                if (sHasFormFocus) {
+                    if (wv != null && addr != null) {
+                        wv.evaluateJavascript("(function(){ if (window.__AGY_PASTE_WALLET__) return window.__AGY_PASTE_WALLET__('" + addr + "'); })()", null);
+                    }
+                    FusionToast.makeText((Context) act, (CharSequence) ("Alamat (" + getShortNetworkName() + ") ditempel ke form!"), 0).show();
+                } else {
+                    if (wv != null && addr != null) {
+                        wv.evaluateJavascript("if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'copy_wallet', timestamp:Date.now(), text:'Salin Wallet -> " + addr + "', value:'" + addr + "'});", null);
+                    }
+                    String shortAddr = (addr != null && addr.length() > 14) ? (addr.substring(0, 6) + "..." + addr.substring(addr.length() - 4)) : addr;
+                    FusionToast.makeText((Context) act, (CharSequence) ("Alamat (" + getShortNetworkName() + ") disalin: " + shortAddr), 0).show();
                 }
-
-                String shortAddr = (addr != null && addr.length() > 14) ? (addr.substring(0, 6) + "..." + addr.substring(addr.length() - 4)) : addr;
-                FusionToast.makeText((Context) act, (CharSequence) ("Alamat (" + getShortNetworkName() + ") disalin: " + shortAddr), 0).show();
             }
         });
         LinearLayout.LayoutParams cwLp = new LinearLayout.LayoutParams(-2, -2);
@@ -231,6 +245,10 @@ public class FusionToolPillHelper {
         reloadBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                WebView webView = manager.mActiveWebView;
+                if (webView != null) {
+                    webView.evaluateJavascript("if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){}", null);
+                }
                 manager.reloadActiveTab();
                 FusionToast.makeText((Context) act, (CharSequence) "Reloading...", 0).show();
             }
@@ -256,9 +274,10 @@ public class FusionToolPillHelper {
                     wv.clearCache(true);
                     wv.clearFormData();
                     try { WebStorage.getInstance().deleteAllData(); } catch(Throwable ignored) {}
-                    wv.evaluateJavascript("try { localStorage.clear(); sessionStorage.clear(); } catch(e){}", null);
+                    wv.evaluateJavascript("try { localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true'); } catch(e){}; if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'wipe_cache', timestamp:Date.now(), text:'Wipe Cache & Storage'});", null);
                 }
                 FusionProfileManager.clearAllCookiesAndStorage();
+                manager.reloadActiveTab();
                 FusionToast.makeText((Context) act, (CharSequence) "Cache & Storage Dibersihkan!", 0).show();
             }
         });
@@ -283,6 +302,10 @@ public class FusionToolPillHelper {
                     sCurrentFpName = newDev;
                 }
                 updateToolPillUi(manager);
+                WebView wv = manager.mActiveWebView;
+                if (wv != null) {
+                    wv.evaluateJavascript("(function(){ var fp = '" + sCurrentFpName + "'; if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'fingerprint', timestamp:Date.now(), text:'Fingerprint -> ' + fp, value:fp}); try { updateAgyHUD('Fingerprint Faker', 'Model HP: ' + fp, 'success'); } catch(_){}; return fp; })()", null);
+                }
             }
         });
         LinearLayout.LayoutParams fpLp = new LinearLayout.LayoutParams(-2, -2);
@@ -393,9 +416,14 @@ public class FusionToolPillHelper {
             if (netWalletBtn != null) netWalletBtn.setVisibility(View.VISIBLE);
             if (copyWalletBtn != null) copyWalletBtn.setVisibility(View.VISIBLE);
             if (reloadBtn != null) reloadBtn.setVisibility(View.VISIBLE);
-            if (wipeBtn != null) wipeBtn.setVisibility(View.GONE);
+            if (wipeBtn != null) wipeBtn.setVisibility(View.VISIBLE);
             if (fpBtn != null) fpBtn.setVisibility(View.VISIBLE);
             if (collapseBtn != null) collapseBtn.setVisibility(View.VISIBLE);
+        }
+
+        // Update Dual Copy / Paste button text
+        if (copyWalletBtn != null) {
+            copyWalletBtn.setText(sHasFormFocus ? " PASTE " : " COPY ");
         }
 
         // Update Network + Wallet Name Badge
@@ -442,6 +470,7 @@ public class FusionToolPillHelper {
 
     public static void syncTabToolState(FusionWebViewManager manager, FusionTab tab) {
         if (manager == null || tab == null) return;
+        sHasFormFocus = tab.mHasFormFocus;
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll != null) {
             if (!tab.mIsMinimized) {
