@@ -557,7 +557,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionToolPillHelper.syncToolPillPosition(this);
             FusionToolPillHelper.updateToolPillUi(this);
         }
-        }
         fusionTabCreateTabInternal.mWebView.loadUrl(str);
         updateContextUi();
     }
