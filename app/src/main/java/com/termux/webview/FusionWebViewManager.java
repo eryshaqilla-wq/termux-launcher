@@ -106,18 +106,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public TextView mWalletInfoText;
     public WebView mWorkerWebView;
     public String mCurrentProfile = "default";
-    public String mCurrentWalletName = "Master .env";
-    public String mCurrentWalletAddress = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
-    public String mCurrentSolWalletName = "Master Solana";
-    public String mCurrentSolWalletAddress = "";
-    public String mCurrentTronWalletName = "Master Tron";
-    public String mCurrentTronWalletAddress = "";
-    public String mCurrentSuiWalletName = "Master Sui";
-    public String mCurrentSuiWalletAddress = "";
-    public String mCurrentAptosWalletName = "Master Aptos";
-    public String mCurrentAptosWalletAddress = "";
-    public String mCurrentIotaWalletName = "Master IOTA";
-    public String mCurrentIotaWalletAddress = "";
+    public String mCurrentWalletName = "eso-1";
+    public String mCurrentWalletAddress = "0x79E0EE08c6516d1204821f083285Ab65660c26E4";
+    public String mCurrentSolWalletName = "eso-1";
+    public String mCurrentSolWalletAddress = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
+    public String mCurrentTronWalletName = "eso-1";
+    public String mCurrentTronWalletAddress = "TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF";
+    public String mCurrentSuiWalletName = "eso-1";
+    public String mCurrentSuiWalletAddress = "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151";
+    public String mCurrentAptosWalletName = "eso-1";
+    public String mCurrentAptosWalletAddress = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
+    public String mCurrentIotaWalletName = "eso-1";
+    public String mCurrentIotaWalletAddress = "0x1bf2ae6b747595ee8558c4d7d66ddb33f731e999aec9bc32cceb879ec810ca15";
     public String mCurrentChainKey = "base";
     public String mWcUri = "";
     public boolean mIsGhostMode = false;
@@ -1099,6 +1099,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mViewsInitialized = true;
         FusionWalletHelper.init(r0);
         FusionChainHelper.init(r0);
+        String mName = FusionWalletHelper.getMasterName();
+        String mAddr = FusionWalletHelper.getMasterAddress();
+        if (mAddr != null && !mAddr.isEmpty()) {
+            this.mCurrentWalletName = mName;
+            this.mCurrentWalletAddress = mAddr;
+            GhostBridgeInterface.setWallet(mName, mAddr);
+        }
+        String mSolName = FusionWalletHelper.getMasterSolName();
+        String mSolAddr = FusionWalletHelper.getMasterSolAddress();
+        if (mSolAddr != null && !mSolAddr.isEmpty()) {
+            this.mCurrentSolWalletName = mSolName;
+            this.mCurrentSolWalletAddress = mSolAddr;
+            GhostBridgeInterface.setSolWallet(mSolName, mSolAddr);
+        }
         try {
             StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder().permitAll().build());
             WebView.setWebContentsDebuggingEnabled(true);
@@ -3078,8 +3092,28 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionWalletHelper.reload(appCompatActivity);
             FusionChainHelper.reload(appCompatActivity);
             String strFindAddressByName = FusionWalletHelper.findAddressByName(this.mCurrentWalletName);
-            this.mCurrentWalletAddress = strFindAddressByName;
-            GhostBridgeInterface.setWallet(this.mCurrentWalletName, strFindAddressByName);
+            if (strFindAddressByName == null || strFindAddressByName.isEmpty()) {
+                this.mCurrentWalletName = FusionWalletHelper.getMasterName();
+                this.mCurrentWalletAddress = FusionWalletHelper.getMasterAddress();
+            } else {
+                this.mCurrentWalletAddress = strFindAddressByName;
+            }
+            this.mCurrentSolWalletName = FusionWalletHelper.getMasterSolName();
+            this.mCurrentSolWalletAddress = FusionWalletHelper.getMasterSolAddress();
+            this.mCurrentTronWalletName = FusionWalletHelper.getMasterTronName();
+            this.mCurrentTronWalletAddress = FusionWalletHelper.getMasterTronAddress();
+            this.mCurrentSuiWalletName = FusionWalletHelper.getMasterSuiName();
+            this.mCurrentSuiWalletAddress = FusionWalletHelper.getMasterSuiAddress();
+            this.mCurrentAptosWalletName = FusionWalletHelper.getMasterAptosName();
+            this.mCurrentAptosWalletAddress = FusionWalletHelper.getMasterAptosAddress();
+            this.mCurrentIotaWalletName = FusionWalletHelper.getMasterIotaName();
+            this.mCurrentIotaWalletAddress = FusionWalletHelper.getMasterIotaAddress();
+            GhostBridgeInterface.setWallet(this.mCurrentWalletName, this.mCurrentWalletAddress);
+            GhostBridgeInterface.setSolWallet(this.mCurrentSolWalletName, this.mCurrentSolWalletAddress);
+            GhostBridgeInterface.setTronWallet(this.mCurrentTronWalletName, this.mCurrentTronWalletAddress);
+            GhostBridgeInterface.setSuiWallet(this.mCurrentSuiWalletName, this.mCurrentSuiWalletAddress);
+            GhostBridgeInterface.setAptosWallet(this.mCurrentAptosWalletName, this.mCurrentAptosWalletAddress);
+            GhostBridgeInterface.setIotaWallet(this.mCurrentIotaWalletName, this.mCurrentIotaWalletAddress);
             updateMenuTexts();
             FusionToast.makeText((Context) appCompatActivity, (CharSequence) "Database Dompet & Jaringan Disinkronkan!", 0).show();
         }

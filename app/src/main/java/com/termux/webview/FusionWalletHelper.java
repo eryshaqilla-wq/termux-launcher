@@ -646,7 +646,7 @@ public class FusionWalletHelper {
         if (sAddresses == null || sAddresses.length == 0 || sAddresses[0] == null || sAddresses[0].isEmpty()) {
             sMasterIndex = 0;
             sNames = new String[]{"eso-1"};
-            sAddresses = new String[]{"0xd184F5Eb1F94378410BCAd0D9D33e3C03c3550d9"};
+            sAddresses = new String[]{"0x79E0EE08c6516d1204821f083285Ab65660c26E4"};
             sSolNames = new String[]{"eso-1"};
             sSolAddresses = new String[]{"8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf"};
             sTronNames = new String[]{"eso-1"};
