@@ -1,12 +1,15 @@
 package com.termux.webview;
 
 import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
@@ -83,7 +86,66 @@ public class FusionChainHelper {
         reload(context);
     }
 
+    public static boolean loadFromDatabase(File dbFile) {
+        if (dbFile == null || !dbFile.exists() || !dbFile.canRead()) return false;
+        SQLiteDatabase db = null;
+        try {
+            db = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS);
+            Cursor c = db.rawQuery("SELECT key, name, chain_id FROM chains ORDER BY rowid ASC", null);
+            if (c == null) return false;
+            List<String> keys = new ArrayList<>();
+            List<String> names = new ArrayList<>();
+            List<Integer> ids = new ArrayList<>();
+            while (c.moveToNext()) {
+                String key = c.getString(0);
+                String name = c.getString(1);
+                int chainId = c.getInt(2);
+                if (key != null && !key.trim().isEmpty()) {
+                    keys.add(key.trim());
+                    names.add(name != null ? name.trim() : key.trim());
+                    ids.add(chainId);
+                }
+            }
+            c.close();
+            int size = keys.size();
+            if (size == 0) return false;
+            String[] strArr = new String[size];
+            String[] strArr2 = new String[size];
+            String[] strArr3 = new String[size];
+            int[] iArr = new int[size];
+            for (int i = 0; i < size; i++) {
+                strArr[i] = keys.get(i);
+                strArr2[i] = names.get(i);
+                iArr[i] = ids.get(i);
+                strArr3[i] = strArr2[i] + (iArr[i] > 0 ? " (" + iArr[i] + ")" : "");
+            }
+            sChainKeys = strArr;
+            sChainNames = strArr2;
+            sChainDisplayNames = strArr3;
+            sChainIds = iArr;
+            if (sCurrentChainKey != null) {
+                setChain(sCurrentChainKey);
+            }
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        } finally {
+            if (db != null) {
+                try { db.close(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
     public static void reload(Context context) {
+        // 1. Try loading chains from central SQLite (eso.db) first (<1ms)
+        try {
+            File dbFile = FusionWalletHelper.findDatabaseFile();
+            if (dbFile != null && loadFromDatabase(dbFile)) {
+                return;
+            }
+        } catch (Exception ignored) {}
+
+        // 2. Fallback to chains_db.json
         InputStream fileInputStream = null;
         try {
             File file = new File("/data/data/com.termux/files/home/wallet/chains_db.json");
