@@ -5,6 +5,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
@@ -22,11 +23,13 @@ public class FusionRecPillHelper {
 
     // Native Standby Step-by-Step Pill
     public static LinearLayout sRecContainer;
+    public static HorizontalScrollView sStepScroll;
     public static LinearLayout sStepPill;
     public static TextView sStepCollapseBtn;
     public static boolean sStepIsCollapsed;
     public static TextView sWalletBtn;
     public static TextView sAddrBtn;
+    public static TextView sPwdBtn;
     public static TextView sEmailBtn;
     public static TextView sRefBtn;
     public static TextView sReloadBtn;
@@ -100,6 +103,10 @@ public class FusionRecPillHelper {
         if (linearLayout != null) {
             linearLayout.setVisibility(8);
         }
+        HorizontalScrollView scroll = sStepScroll;
+        if (scroll != null) {
+            scroll.setVisibility(8);
+        }
     }
 
     public static void hideRecPill(FusionWebViewManager fusionWebViewManager) {
@@ -119,14 +126,9 @@ public class FusionRecPillHelper {
                 if (parent != null) {
                     ((ViewGroup) parent).removeView(container);
                 }
-                ViewGroup.LayoutParams layoutParams = container.getLayoutParams();
-                if (layoutParams != null) {
-                    frameLayout.addView(container, layoutParams);
-                } else {
-                    FrameLayout.LayoutParams layoutParams2 = new FrameLayout.LayoutParams(-2, -2, 8388691);
-                    layoutParams2.setMargins(10, 0, 0, 10);
-                    frameLayout.addView(container, layoutParams2);
-                }
+                FrameLayout.LayoutParams layoutParams2 = new FrameLayout.LayoutParams(-2, -2, 8388691);
+                layoutParams2.setMargins(10, 0, 0, 10);
+                frameLayout.addView(container, layoutParams2);
             }
             container.setVisibility(0);
             if (sRecPill != null) {
@@ -143,20 +145,28 @@ public class FusionRecPillHelper {
         sRecContainer = recContainer;
         recContainer.setOrientation(1); // VERTICAL
 
-        // 2. Baris Atas: sStepPill (Smart Step Actions)
+        // 2. Baris Atas: HorizontalScrollView sStepScroll membungkus sStepPill (Smart Step Actions)
+        HorizontalScrollView stepScroll = new HorizontalScrollView(appCompatActivity);
+        sStepScroll = stepScroll;
+        stepScroll.setHorizontalScrollBarEnabled(false);
+        stepScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
         LinearLayout stepPill = new LinearLayout(appCompatActivity);
         sStepPill = stepPill;
         stepPill.setOrientation(0); // HORIZONTAL
         FusionUiHelper.setSolidBox(stepPill);
         stepPill.setPadding(3, 3, 3, 3);
-        LinearLayout.LayoutParams stepPillLp = new LinearLayout.LayoutParams(-2, -2);
-        stepPillLp.bottomMargin = 3;
-        recContainer.addView(stepPill, stepPillLp);
+        stepScroll.addView(stepPill, new ViewGroup.LayoutParams(-2, -2));
+
+        LinearLayout.LayoutParams stepScrollLp = new LinearLayout.LayoutParams(-2, -2);
+        stepScrollLp.bottomMargin = 3;
+        recContainer.addView(stepScroll, stepScrollLp);
 
         // Child Step Buttons:
         // [ < ] / [ > ]
         TextView stepCollapse = new TextView(appCompatActivity);
         sStepCollapseBtn = stepCollapse;
+        stepCollapse.setSingleLine(true);
         stepCollapse.setText(sStepIsCollapsed ? " > " : " < ");
         FusionUiHelper.setSolidBtn(stepCollapse);
         stepCollapse.setTextSize(2, 10.0f);
@@ -176,6 +186,7 @@ public class FusionRecPillHelper {
         // WALLET >
         TextView walletBtn = new TextView(appCompatActivity);
         sWalletBtn = walletBtn;
+        walletBtn.setSingleLine(true);
         walletBtn.setText(" WALLET > ");
         FusionUiHelper.setSolidBtn(walletBtn);
         walletBtn.setTextSize(2, 10.0f);
@@ -199,6 +210,7 @@ public class FusionRecPillHelper {
         // ADDR > (Paste Active Wallet Address from wallets_db.json into web input)
         TextView addrBtn = new TextView(appCompatActivity);
         sAddrBtn = addrBtn;
+        addrBtn.setSingleLine(true);
         addrBtn.setText(" ADDR > ");
         FusionUiHelper.setSolidBtn(addrBtn);
         addrBtn.setTextSize(2, 10.0f);
@@ -223,6 +235,8 @@ public class FusionRecPillHelper {
 
         // PWD > (Paste / Mark Password input with {{PASSWORD}} template)
         TextView pwdBtn = new TextView(appCompatActivity);
+        sPwdBtn = pwdBtn;
+        pwdBtn.setSingleLine(true);
         pwdBtn.setText(" PWD > ");
         FusionUiHelper.setSolidBtn(pwdBtn);
         pwdBtn.setTextSize(2, 10.0f);
@@ -244,6 +258,7 @@ public class FusionRecPillHelper {
         // EMAIL >
         TextView emailBtn = new TextView(appCompatActivity);
         sEmailBtn = emailBtn;
+        emailBtn.setSingleLine(true);
         emailBtn.setText(" EMAIL > ");
         FusionUiHelper.setSolidBtn(emailBtn);
         emailBtn.setTextSize(2, 10.0f);
@@ -265,6 +280,7 @@ public class FusionRecPillHelper {
         // REF
         TextView refBtn = new TextView(appCompatActivity);
         sRefBtn = refBtn;
+        refBtn.setSingleLine(true);
         refBtn.setText(" REF ");
         FusionUiHelper.setSolidBtn(refBtn);
         refBtn.setTextSize(2, 10.0f);
@@ -286,6 +302,7 @@ public class FusionRecPillHelper {
         // RELOAD
         TextView reloadBtn = new TextView(appCompatActivity);
         sReloadBtn = reloadBtn;
+        reloadBtn.setSingleLine(true);
         reloadBtn.setText(" RELOAD ");
         FusionUiHelper.setSolidBtn(reloadBtn);
         reloadBtn.setTextSize(2, 10.0f);
@@ -308,6 +325,7 @@ public class FusionRecPillHelper {
         // WIPE
         TextView wipeBtn = new TextView(appCompatActivity);
         sWipeBtn = wipeBtn;
+        wipeBtn.setSingleLine(true);
         wipeBtn.setText(" WIPE ");
         FusionUiHelper.setSolidBtn(wipeBtn);
         wipeBtn.setTextSize(2, 10.0f);
@@ -332,6 +350,7 @@ public class FusionRecPillHelper {
         // FP
         TextView fpBtn = new TextView(appCompatActivity);
         sFpBtn = fpBtn;
+        fpBtn.setSingleLine(true);
         fpBtn.setText(" FP ");
         FusionUiHelper.setSolidBtn(fpBtn);
         fpBtn.setTextSize(2, 10.0f);
@@ -353,6 +372,7 @@ public class FusionRecPillHelper {
         // STOP-IF
         TextView stopIfBtn = new TextView(appCompatActivity);
         sStopIfBtn = stopIfBtn;
+        stopIfBtn.setSingleLine(true);
         stopIfBtn.setText(" STOP-IF ");
         FusionUiHelper.setSolidAccentBtn(stopIfBtn, -29372, -13947597);
         stopIfBtn.setTextSize(2, 10.0f);
@@ -374,6 +394,7 @@ public class FusionRecPillHelper {
         // SOLVE > (AI & Regex Captcha Solver)
         TextView solveBtn = new TextView(appCompatActivity);
         sSolveBtn = solveBtn;
+        solveBtn.setSingleLine(true);
         solveBtn.setText(" SOLVE > ");
         FusionUiHelper.setSolidAccentBtn(solveBtn, -3430665, -13998792);
         solveBtn.setTextSize(2, 10.0f);
@@ -395,6 +416,7 @@ public class FusionRecPillHelper {
         // 🎁 HASIL (Smart Claim Result & Token Extractor)
         TextView rewardBtn = new TextView(appCompatActivity);
         sRewardBtn = rewardBtn;
+        rewardBtn.setSingleLine(true);
         rewardBtn.setText(" 🎁 HASIL ");
         FusionUiHelper.setSolidAccentBtn(rewardBtn, -5840223, -14733788);
         rewardBtn.setTextSize(2, 10.0f);
@@ -417,6 +439,7 @@ public class FusionRecPillHelper {
         loadAiEngineState();
         final TextView aiEngineBtn = new TextView(appCompatActivity);
         sAiEngineBtn = aiEngineBtn;
+        aiEngineBtn.setSingleLine(true);
         updateAiEngineButtonUi(aiEngineBtn);
         aiEngineBtn.setTextSize(2, 10.0f);
         aiEngineBtn.setPadding(6, 3, 6, 3);
@@ -445,6 +468,7 @@ public class FusionRecPillHelper {
 
         TextView textView = new TextView(appCompatActivity);
         sCollapseBtn = textView;
+        textView.setSingleLine(true);
         textView.setText(sIsCollapsed ? " > " : " < ");
         FusionUiHelper.setSolidBtn(textView);
         textView.setTextSize(2, 10.0f);
@@ -457,6 +481,7 @@ public class FusionRecPillHelper {
 
         TextView textView2 = new TextView(appCompatActivity);
         sRecBtn = textView2;
+        textView2.setSingleLine(true);
         FusionUiHelper.setSolidBtn(textView2);
         textView2.setTextSize(2, 10.0f);
         textView2.setPadding(6, 3, 6, 3);
@@ -468,6 +493,7 @@ public class FusionRecPillHelper {
 
         TextView textView3 = new TextView(appCompatActivity);
         sDomBtn = textView3;
+        textView3.setSingleLine(true);
         textView3.setText(" DOM ");
         FusionUiHelper.setSolidAccentBtn(textView3, -8596290, -13947597);
         textView3.setTextSize(2, 10.0f);
@@ -480,6 +506,7 @@ public class FusionRecPillHelper {
 
         TextView textView4 = new TextView(appCompatActivity);
         sSaveBtn = textView4;
+        textView4.setSingleLine(true);
         textView4.setText(" Simpan ");
         FusionUiHelper.setSolidAccentBtn(textView4, -7686920, -13947597);
         textView4.setTextSize(2, 10.0f);
@@ -492,6 +519,7 @@ public class FusionRecPillHelper {
 
         TextView textView5 = new TextView(appCompatActivity);
         sCancelBtn = textView5;
+        textView5.setSingleLine(true);
         textView5.setText(" Batal ");
         FusionUiHelper.setSolidAccentBtn(textView5, -881790, -13947597);
         textView5.setTextSize(2, 10.0f);
@@ -559,18 +587,23 @@ public class FusionRecPillHelper {
             sRecPill.setVisibility(0);
         }
 
-        // 2. Kontrol Step Pill (Baris Atas)
-        if (sStepPill != null) {
+        // 2. Kontrol Step Pill & Scroll (Baris Atas)
+        HorizontalScrollView scroll = sStepScroll;
+        if (scroll != null) {
             if (!isRec || sIsCollapsed) {
-                sStepPill.setVisibility(8);
+                scroll.setVisibility(8);
             } else {
-                sStepPill.setVisibility(0);
+                scroll.setVisibility(0);
+                if (sStepPill != null) {
+                    sStepPill.setVisibility(0);
+                }
                 if (sStepCollapseBtn != null) {
                     sStepCollapseBtn.setText(sStepIsCollapsed ? " > " : " < ");
                 }
                 int stepVisibility = sStepIsCollapsed ? 8 : 0;
                 if (sWalletBtn != null) sWalletBtn.setVisibility(stepVisibility);
                 if (sAddrBtn != null) sAddrBtn.setVisibility(stepVisibility);
+                if (sPwdBtn != null) sPwdBtn.setVisibility(stepVisibility);
                 if (sEmailBtn != null) sEmailBtn.setVisibility(stepVisibility);
                 if (sRefBtn != null) sRefBtn.setVisibility(stepVisibility);
                 if (sReloadBtn != null) sReloadBtn.setVisibility(stepVisibility);

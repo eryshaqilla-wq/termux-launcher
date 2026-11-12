@@ -100,6 +100,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public String mCurrentWalletAddress = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
     public String mCurrentSolWalletName = "Master Solana";
     public String mCurrentSolWalletAddress = "";
+    public String mCurrentTronWalletName = "Master Tron";
+    public String mCurrentTronWalletAddress = "";
+    public String mCurrentSuiWalletName = "Master Sui";
+    public String mCurrentSuiWalletAddress = "";
+    public String mCurrentAptosWalletName = "Master Aptos";
+    public String mCurrentAptosWalletAddress = "";
+    public String mCurrentIotaWalletName = "Master IOTA";
+    public String mCurrentIotaWalletAddress = "";
     public String mCurrentChainKey = "base";
     public String mWcUri = "";
     public boolean mIsGhostMode = false;
@@ -530,6 +538,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout.setVisibility(0);
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
+            FusionToolPillHelper.bringToFront();
+            FusionToolPillHelper.showToolPill(this);
+            FusionToolPillHelper.bringToFront();
         }
         fusionTabCreateTabInternal.mWebView.loadUrl(str);
         updateContextUi();
@@ -565,25 +576,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (names == null || names.length == 0) return "";
         int curIdx = FusionWalletHelper.findIndexByName(this.mCurrentWalletName);
         int nextIdx = (curIdx + 1) % names.length;
-        String nextName = names[nextIdx];
-        String nextAddr = FusionWalletHelper.getAddress(nextIdx);
+        onWalletSelected(nextIdx);
 
-        this.mCurrentWalletName = nextName;
-        this.mCurrentWalletAddress = nextAddr;
-        GhostBridgeInterface.setWallet(nextName, nextAddr);
-
-        final String fNextAddr = nextAddr;
-        final String fNextName = nextName;
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    GhostBridgeInterface.forwardToDaemon("{\"method\":\"fusion_switchWallet\",\"params\":[\"" + fNextAddr + "\",\"" + fNextName + "\"]}");
-                } catch (Throwable ignored) {}
-            }
-        }).start();
-
-        AppCompatActivity appCompatActivity = this.mActivity;
+        final String nextName = this.mCurrentWalletName;
+        final AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity != null) {
             appCompatActivity.runOnUiThread(new Runnable() {
                 @Override
@@ -693,6 +689,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         FusionDrawerHelper.closeAllDrawers(this);
         FusionRecPillHelper.hideRecPill();
+        FusionToolPillHelper.hideToolPill();
         View view2 = this.mTerminalPaneHost;
         if (view2 != null) {
             view2.setVisibility(0);
@@ -1642,6 +1639,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         updateMenuTexts();
         FusionRecPillHelper.initAndShowRecPill(this);
+        FusionToolPillHelper.initAndShowToolPill(this);
     }
 
     public void injectAssetScript(WebView webView, String str) {
@@ -1684,8 +1682,24 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 ? this.mCurrentSolWalletName : FusionWalletHelper.getMasterSolName();
         String solAddr = (this.mCurrentSolWalletAddress != null && !this.mCurrentSolWalletAddress.isEmpty())
                 ? this.mCurrentSolWalletAddress : FusionWalletHelper.getMasterSolAddress();
+        String tronName = (this.mCurrentTronWalletName != null && !this.mCurrentTronWalletName.isEmpty())
+                ? this.mCurrentTronWalletName : FusionWalletHelper.getMasterTronName();
+        String tronAddr = (this.mCurrentTronWalletAddress != null && !this.mCurrentTronWalletAddress.isEmpty())
+                ? this.mCurrentTronWalletAddress : FusionWalletHelper.getMasterTronAddress();
+        String suiName = (this.mCurrentSuiWalletName != null && !this.mCurrentSuiWalletName.isEmpty())
+                ? this.mCurrentSuiWalletName : FusionWalletHelper.getMasterSuiName();
+        String suiAddr = (this.mCurrentSuiWalletAddress != null && !this.mCurrentSuiWalletAddress.isEmpty())
+                ? this.mCurrentSuiWalletAddress : FusionWalletHelper.getMasterSuiAddress();
+        String aptosName = (this.mCurrentAptosWalletName != null && !this.mCurrentAptosWalletName.isEmpty())
+                ? this.mCurrentAptosWalletName : FusionWalletHelper.getMasterAptosName();
+        String aptosAddr = (this.mCurrentAptosWalletAddress != null && !this.mCurrentAptosWalletAddress.isEmpty())
+                ? this.mCurrentAptosWalletAddress : FusionWalletHelper.getMasterAptosAddress();
+        String iotaName = (this.mCurrentIotaWalletName != null && !this.mCurrentIotaWalletName.isEmpty())
+                ? this.mCurrentIotaWalletName : FusionWalletHelper.getMasterIotaName();
+        String iotaAddr = (this.mCurrentIotaWalletAddress != null && !this.mCurrentIotaWalletAddress.isEmpty())
+                ? this.mCurrentIotaWalletAddress : FusionWalletHelper.getMasterIotaAddress();
 
-        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + tabProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__FUSION_SOL_WALLET_NAME__ = '" + solName + "'; window.__FUSION_SOL_WALLET_ADDRESS__ = '" + solAddr + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
+        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + tabProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__FUSION_SOL_WALLET_NAME__ = '" + solName + "'; window.__FUSION_SOL_WALLET_ADDRESS__ = '" + solAddr + "'; window.__FUSION_TRON_WALLET_NAME__ = '" + tronName + "'; window.__FUSION_TRON_WALLET_ADDRESS__ = '" + tronAddr + "'; window.__FUSION_SUI_WALLET_NAME__ = '" + suiName + "'; window.__FUSION_SUI_WALLET_ADDRESS__ = '" + suiAddr + "'; window.__FUSION_APTOS_WALLET_NAME__ = '" + aptosName + "'; window.__FUSION_APTOS_WALLET_ADDRESS__ = '" + aptosAddr + "'; window.__FUSION_IOTA_WALLET_NAME__ = '" + iotaName + "'; window.__FUSION_IOTA_WALLET_ADDRESS__ = '" + iotaAddr + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "ghost_injected.js");
         FusionUserscriptHelper.injectMatchingScripts(webView, webView.getUrl());
@@ -1996,6 +2010,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     }
                     if (mControlPill != null) {
                         mControlPill.bringToFront();
+                        FusionToolPillHelper.bringToFront();
                     }
                 }
                 if (targetUrl != null && !targetUrl.trim().isEmpty() && mActiveWebView != null) {
@@ -2291,6 +2306,38 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             GhostBridgeInterface.setSolWallet(solName, solAddr);
         }
 
+        String tronName = FusionWalletHelper.getTronName(i);
+        String tronAddr = FusionWalletHelper.getTronAddress(i);
+        if (tronAddr != null && !tronAddr.isEmpty()) {
+            this.mCurrentTronWalletName = tronName;
+            this.mCurrentTronWalletAddress = tronAddr;
+            GhostBridgeInterface.setTronWallet(tronName, tronAddr);
+        }
+
+        String suiName = FusionWalletHelper.getSuiName(i);
+        String suiAddr = FusionWalletHelper.getSuiAddress(i);
+        if (suiAddr != null && !suiAddr.isEmpty()) {
+            this.mCurrentSuiWalletName = suiName;
+            this.mCurrentSuiWalletAddress = suiAddr;
+            GhostBridgeInterface.setSuiWallet(suiName, suiAddr);
+        }
+
+        String aptosName = FusionWalletHelper.getAptosName(i);
+        String aptosAddr = FusionWalletHelper.getAptosAddress(i);
+        if (aptosAddr != null && !aptosAddr.isEmpty()) {
+            this.mCurrentAptosWalletName = aptosName;
+            this.mCurrentAptosWalletAddress = aptosAddr;
+            GhostBridgeInterface.setAptosWallet(aptosName, aptosAddr);
+        }
+
+        String iotaName = FusionWalletHelper.getIotaName(i);
+        String iotaAddr = FusionWalletHelper.getIotaAddress(i);
+        if (iotaAddr != null && !iotaAddr.isEmpty()) {
+            this.mCurrentIotaWalletName = iotaName;
+            this.mCurrentIotaWalletAddress = iotaAddr;
+            GhostBridgeInterface.setIotaWallet(iotaName, iotaAddr);
+        }
+
         updateMenuTexts();
         LinearLayout linearLayout = this.mMenuCard;
         if (linearLayout != null) {
@@ -2313,6 +2360,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             webView.evaluateJavascript("if(window.ethereum){window.ethereum.selectedAddress='" + address + "';window.dispatchEvent(new CustomEvent('accountsChanged',{detail:['" + address + "']}));}", null);
             if (solAddr != null && !solAddr.isEmpty()) {
                 webView.evaluateJavascript("if(window.solana){window.__FUSION_SOL_WALLET_ADDRESS__='" + solAddr + "';if(window.solana.publicKey){window.solana.publicKey._val='" + solAddr + "';}window.solana.emit('accountChanged','" + solAddr + "');}", null);
+            }
+            if (tronAddr != null && !tronAddr.isEmpty()) {
+                webView.evaluateJavascript("if(window.tronWeb){window.__FUSION_TRON_WALLET_ADDRESS__='" + tronAddr + "';if(window.tronWeb.defaultAddress){window.tronWeb.defaultAddress.base58='" + tronAddr + "';}window.postMessage({message:{action:'setAccount',data:{address:'" + tronAddr + "'}}},'*');}", null);
+            }
+            if (suiAddr != null && !suiAddr.isEmpty()) {
+                webView.evaluateJavascript("if(window.__FUSION_SET_SUI_ACCOUNT__){window.__FUSION_SET_SUI_ACCOUNT__('" + suiAddr + "');}", null);
+            }
+            if (aptosAddr != null && !aptosAddr.isEmpty()) {
+                webView.evaluateJavascript("if(window.__FUSION_SET_APTOS_ACCOUNT__){window.__FUSION_SET_APTOS_ACCOUNT__('" + aptosAddr + "');}", null);
+            }
+            if (iotaAddr != null && !iotaAddr.isEmpty()) {
+                webView.evaluateJavascript("if(window.__FUSION_SET_IOTA_ACCOUNT__){window.__FUSION_SET_IOTA_ACCOUNT__('" + iotaAddr + "');}", null);
             }
         }
     }
@@ -2844,6 +2903,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return;
         }
         this.mActiveTab = i;
+        FusionToolPillHelper.collapse(this);
         FusionTab targetTab = (FusionTab) arrayList.get(i);
         TermuxActivity termuxActivity = this.mActivity;
         if (targetTab != null && termuxActivity != null) {
@@ -2903,6 +2963,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout.setVisibility(0);
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
+            FusionToolPillHelper.bringToFront();
         }
         LinearLayout linearLayout2 = this.mMenuCard;
         if (linearLayout2 != null && linearLayout2.getVisibility() == 0) {
@@ -2965,6 +3026,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
             if (i >= 0) {
                 this.mActiveTab = i;
+        FusionToolPillHelper.collapse(this);
                 FusionTab fusionTab2 = (FusionTab) arrayList.get(i);
                 WebView webView3 = fusionTab2.mWebView;
                 this.mActiveWebView = webView3;
@@ -2997,6 +3059,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     }
                     FusionDrawerHelper.closeAllDrawers(this);
                     FusionRecPillHelper.hideRecPill();
+                    FusionToolPillHelper.hideToolPill();
                     View view = this.mTerminalPaneHost;
                     if (view != null) {
                         view.setVisibility(0);
@@ -3053,9 +3116,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     linearLayout3.setTranslationX(0.0f);
                     linearLayout3.setTranslationY(0.0f);
                     linearLayout3.bringToFront();
+                    FusionToolPillHelper.bringToFront();
                 }
                 updateContextUi();
                 FusionRecPillHelper.showRecPill(this);
+                FusionToolPillHelper.showToolPill(this);
                 return;
             }
         }
@@ -3084,6 +3149,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         FusionDrawerHelper.closeAllDrawers(this);
         FusionRecPillHelper.hideRecPill();
+        FusionToolPillHelper.hideToolPill();
         View view4 = this.mTerminalPaneHost;
         if (view4 != null) {
             view4.setVisibility(0);
@@ -3236,6 +3302,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             } else if (i >= size) {
                 i = size - 1;
                 this.mActiveTab = i;
+        FusionToolPillHelper.collapse(this);
             }
             int i2 = i + 1;
             TextView textView3 = this.mTabBtn;
@@ -3269,24 +3336,105 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             StringBuilder sb = new StringBuilder();
             sb.append("Active: ");
             sb.append(this.mCurrentWalletName);
-            sb.append("\nEVM: ");
-            String str = this.mCurrentWalletAddress;
-            if (str == null || str.length() <= 10) {
-                sb.append(str);
-            } else {
-                sb.append(str.substring(0, 6));
-                sb.append("...");
-                sb.append(str.substring(str.length() - 4));
-            }
-            if (this.mCurrentSolWalletAddress != null && !this.mCurrentSolWalletAddress.isEmpty()) {
+            boolean isSol = FusionChainHelper.isSolana();
+            boolean isTron = FusionChainHelper.isTron();
+            boolean isSui = FusionChainHelper.isSui();
+            boolean isAptos = FusionChainHelper.isAptos();
+            boolean isIota = FusionChainHelper.isIota();
+            if (isSol) {
                 sb.append("\nSOL: ");
                 String sol = this.mCurrentSolWalletAddress;
-                if (sol.length() <= 8) {
-                    sb.append(sol);
+                if (sol == null || sol.isEmpty()) {
+                    sol = FusionWalletHelper.getMasterSolAddress();
+                }
+                if (sol != null && !sol.isEmpty()) {
+                    if (sol.length() <= 8) {
+                        sb.append(sol);
+                    } else {
+                        sb.append(sol.substring(0, 4));
+                        sb.append("...");
+                        sb.append(sol.substring(sol.length() - 4));
+                    }
                 } else {
-                    sb.append(sol.substring(0, 4));
+                    sb.append("-");
+                }
+            } else if (isTron) {
+                sb.append("\nTRX: ");
+                String tron = this.mCurrentTronWalletAddress;
+                if (tron == null || tron.isEmpty()) {
+                    tron = FusionWalletHelper.getMasterTronAddress();
+                }
+                if (tron != null && !tron.isEmpty()) {
+                    if (tron.length() <= 8) {
+                        sb.append(tron);
+                    } else {
+                        sb.append(tron.substring(0, 4));
+                        sb.append("...");
+                        sb.append(tron.substring(tron.length() - 4));
+                    }
+                } else {
+                    sb.append("-");
+                }
+            } else if (isSui) {
+                sb.append("\nSUI: ");
+                String sui = this.mCurrentSuiWalletAddress;
+                if (sui == null || sui.isEmpty()) {
+                    sui = FusionWalletHelper.getMasterSuiAddress();
+                }
+                if (sui != null && !sui.isEmpty()) {
+                    if (sui.length() <= 10) {
+                        sb.append(sui);
+                    } else {
+                        sb.append(sui.substring(0, 6));
+                        sb.append("...");
+                        sb.append(sui.substring(sui.length() - 4));
+                    }
+                } else {
+                    sb.append("-");
+                }
+            } else if (isAptos) {
+                sb.append("\nAPT: ");
+                String apt = this.mCurrentAptosWalletAddress;
+                if (apt == null || apt.isEmpty()) {
+                    apt = FusionWalletHelper.getMasterAptosAddress();
+                }
+                if (apt != null && !apt.isEmpty()) {
+                    if (apt.length() <= 10) {
+                        sb.append(apt);
+                    } else {
+                        sb.append(apt.substring(0, 6));
+                        sb.append("...");
+                        sb.append(apt.substring(apt.length() - 4));
+                    }
+                } else {
+                    sb.append("-");
+                }
+            } else if (isIota) {
+                sb.append("\nIOTA: ");
+                String iota = this.mCurrentIotaWalletAddress;
+                if (iota == null || iota.isEmpty()) {
+                    iota = FusionWalletHelper.getMasterIotaAddress();
+                }
+                if (iota != null && !iota.isEmpty()) {
+                    if (iota.length() <= 12) {
+                        sb.append(iota);
+                    } else {
+                        sb.append(iota.substring(0, 8));
+                        sb.append("...");
+                        sb.append(iota.substring(iota.length() - 4));
+                    }
+                } else {
+                    sb.append("-");
+                }
+            } else {
+                sb.append("\nAddress: ");
+                String str = this.mCurrentWalletAddress;
+                if (str == null || str.length() <= 10) {
+                    sb.append(str);
+                } else {
+                    sb.append(str.substring(0, 6));
                     sb.append("...");
-                    sb.append(sol.substring(sol.length() - 4));
+                    sb.append(str.substring(str.length() - 4));
                 }
             }
             textView4.setText(sb.toString());
@@ -3344,6 +3492,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 textView7.setBackgroundColor(-12285730);
             }
         }
+        FusionToolPillHelper.updateToolPillUi(this);
         if (this.mActivity != null) {
             this.mActivity.refreshTerminalWindowBar();
         }

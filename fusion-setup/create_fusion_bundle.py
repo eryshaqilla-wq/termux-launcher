@@ -378,15 +378,16 @@ for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
 print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS & Code Suite beserta Template Konfigurasi
 for f_cjs in [
-    "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "auto_engine.cjs", "x_native.cjs",
+    "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "wallet_multichain.cjs", "auto_engine.cjs", "x_native.cjs",
     "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs",
     "password_resolver.cjs", "claim_gift.cjs", "copy_mint.cjs", "bagent_sniper.cjs",
+    "master_bot.cjs", "mint_fountain.cjs", "sniper_akita.cjs", "agy_ganti.cjs",
     "config_telegram.json", "tele_filter_config.json", "filter_config.json",
     "query_db.json", "module_db.json", "pantau.json", "webview_profiles.json",
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
     "modules.json", "queries.json", "watchlist.json", "tg_config.json",
     "scankomen_trigger.json", "loop_state.json", "tg_cache.json", "button_query_db.json",
-    "leadloop_cards.json", "ka_agents_cards.json", "kantor_tokens.json"
+    "leadloop_cards.json", "ka_agents_cards.json", "kantor_tokens.json", "ptah_poa_cards.json"
 ]:
     for src_dir in ["/root/wallet", "/project/node2cjs"]:
         src_path = os.path.join(src_dir, f_cjs)
@@ -419,13 +420,18 @@ for rpc in glob.glob("/root/wallet/config_rpc*.json") + glob.glob("/project/node
 for g_conf in glob.glob("/project/node2cjs/gate*.json") + glob.glob("/root/wallet/gate*.json") + glob.glob("/project/node2cjs/www.gate*.json"):
     shutil.copy2(g_conf, os.path.join(BUNDLE_DIR, "wallet", os.path.basename(g_conf)))
 
-# 4. Buat Template Kosong Standar untuk Database Dompet (Steril dari data/private key pribadi)
+# 4. Buat Template Kosong Standar untuk Database Dompet & Auxiliary (Steril dari data/private key pribadi)
 dummy_wallet = {"master_index": None, "wallets": []}
-with open(os.path.join(BUNDLE_DIR, "wallet/wallets_db.json"), "w") as f:
-    json.dump(dummy_wallet, f, indent=2)
-
-with open(os.path.join(BUNDLE_DIR, "wallet/wallets_solana_db.json"), "w") as f:
-    json.dump(dummy_wallet, f, indent=2)
+for w_db in [
+    "wallets_db.json",
+    "wallets_solana_db.json",
+    "wallets_tron_db.json",
+    "wallets_sui_db.json",
+    "wallets_aptos_db.json",
+    "wallets_iota_db.json"
+]:
+    with open(os.path.join(BUNDLE_DIR, "wallet", w_db), "w") as f:
+        json.dump(dummy_wallet, f, indent=2)
 
 if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
     with open(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json"), "w") as f:
@@ -434,6 +440,19 @@ if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
 if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/passwords_db.json")):
     with open(os.path.join(BUNDLE_DIR, "wallet/passwords_db.json"), "w") as f:
         f.write("{}\n")
+
+# Template kosong untuk tuyul & auxiliary
+with open(os.path.join(BUNDLE_DIR, "wallet/tuyul_emails.json"), "w") as f:
+    json.dump({"emails": ["tuyul1@gmail.com", "tuyul2@gmail.com"], "index": 0}, f, indent=2)
+
+with open(os.path.join(BUNDLE_DIR, "wallet/tuyul_refs.json"), "w") as f:
+    json.dump({"refs": ["REF123", "ALPHA99"], "index": 0}, f, indent=2)
+
+with open(os.path.join(BUNDLE_DIR, "wallet/tuyul_fingerprints.json"), "w") as f:
+    json.dump({"fingerprints": ["Samsung Galaxy S24 Ultra", "Google Pixel 8 Pro", "Xiaomi 14 Ultra"], "index": 0}, f, indent=2)
+
+with open(os.path.join(BUNDLE_DIR, "wallet/ai_engine.json"), "w") as f:
+    json.dump({"activeEngine": "auto", "updatedAt": 0}, f, indent=2)
 
 # Copy login.template, termux.properties, dan setup.sh
 login_tmpl = "/project/termux-launcher/fusion-setup/login.template"
@@ -565,9 +584,22 @@ for target in [
     os.path.join(ASSETS_DIR, "wallet_ui.html"),
     os.path.join(ASSETS_DIR, "wallet_solana.cjs"),
     os.path.join(ASSETS_DIR, "wallet_solana.js"),
+    os.path.join(ASSETS_DIR, "wallet_multichain.cjs"),
     os.path.join(ASSETS_DIR, "auto_engine.cjs"),
+    os.path.join(ASSETS_DIR, "master_bot.cjs"),
+    os.path.join(ASSETS_DIR, "mint_fountain.cjs"),
+    os.path.join(ASSETS_DIR, "sniper_akita.cjs"),
+    os.path.join(ASSETS_DIR, "agy_ganti.cjs"),
     os.path.join(ASSETS_DIR, "wallets_solana_db.json"),
     os.path.join(ASSETS_DIR, "solana_wallets.json"),
+    os.path.join(ASSETS_DIR, "wallets_tron_db.json"),
+    os.path.join(ASSETS_DIR, "wallets_sui_db.json"),
+    os.path.join(ASSETS_DIR, "wallets_aptos_db.json"),
+    os.path.join(ASSETS_DIR, "wallets_iota_db.json"),
+    os.path.join(ASSETS_DIR, "tuyul_emails.json"),
+    os.path.join(ASSETS_DIR, "tuyul_refs.json"),
+    os.path.join(ASSETS_DIR, "tuyul_fingerprints.json"),
+    os.path.join(ASSETS_DIR, "ai_engine.json"),
     os.path.join(ASSETS_DIR, "x_webview.js"),
     os.path.join(ASSETS_DIR, "x_webview.cjs"),
     os.path.join(ASSETS_DIR, "pemantau.cjs"),

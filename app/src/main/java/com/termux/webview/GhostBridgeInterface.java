@@ -22,6 +22,14 @@ public class GhostBridgeInterface implements Runnable {
     public static String sCurrentWalletAddress = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
     public static String sCurrentSolWalletName = "default";
     public static String sCurrentSolWalletAddress = "";
+    public static String sCurrentTronWalletName = "default";
+    public static String sCurrentTronWalletAddress = "";
+    public static String sCurrentSuiWalletName = "default";
+    public static String sCurrentSuiWalletAddress = "";
+    public static String sCurrentAptosWalletName = "default";
+    public static String sCurrentAptosWalletAddress = "";
+    public static String sCurrentIotaWalletName = "default";
+    public static String sCurrentIotaWalletAddress = "";
     public static String sLastTxHash = "";
     public static String sWcUri = "";
     public static boolean sIsAutoMode = false;
@@ -125,6 +133,26 @@ public class GhostBridgeInterface implements Runnable {
     public static void setSolWallet(String str, String str2) {
         sCurrentSolWalletName = str;
         sCurrentSolWalletAddress = str2;
+    }
+
+    public static void setTronWallet(String str, String str2) {
+        sCurrentTronWalletName = str;
+        sCurrentTronWalletAddress = str2;
+    }
+
+    public static void setSuiWallet(String str, String str2) {
+        sCurrentSuiWalletName = str;
+        sCurrentSuiWalletAddress = str2;
+    }
+
+    public static void setAptosWallet(String str, String str2) {
+        sCurrentAptosWalletName = str;
+        sCurrentAptosWalletAddress = str2;
+    }
+
+    public static void setIotaWallet(String str, String str2) {
+        sCurrentIotaWalletName = str;
+        sCurrentIotaWalletAddress = str2;
     }
 
     public static void setWc(String str) {
@@ -388,6 +416,62 @@ public class GhostBridgeInterface implements Runnable {
             }
             return forwardToDaemon(str);
         }
+        if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
+            String tronAddr = sCurrentTronWalletAddress;
+            if (tronAddr == null || tronAddr.isEmpty()) {
+                tronAddr = FusionWalletHelper.getMasterTronAddress();
+            }
+            if (tronAddr != null && !tronAddr.isEmpty()) {
+                return "{\"result\":{\"code\":200,\"message\":\"success\",\"address\":\"" + tronAddr + "\"}}";
+            }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
+            String suiAddr = sCurrentSuiWalletAddress;
+            if (suiAddr == null || suiAddr.isEmpty()) {
+                suiAddr = FusionWalletHelper.getMasterSuiAddress();
+            }
+            if (suiAddr != null && !suiAddr.isEmpty()) {
+                return "{\"result\":[{\"address\":\"" + suiAddr + "\",\"publicKey\":\"" + suiAddr + "\"}]}";
+            }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
+            String aptosAddr = sCurrentAptosWalletAddress;
+            if (aptosAddr == null || aptosAddr.isEmpty()) {
+                aptosAddr = FusionWalletHelper.getMasterAptosAddress();
+            }
+            if (aptosAddr != null && !aptosAddr.isEmpty()) {
+                return "{\"result\":{\"address\":\"" + aptosAddr + "\",\"publicKey\":\"" + aptosAddr + "\"}}";
+            }
+            return forwardToDaemon(str);
+        }
+        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
+            String iotaAddr = sCurrentIotaWalletAddress;
+            if (iotaAddr == null || iotaAddr.isEmpty()) {
+                iotaAddr = FusionWalletHelper.getMasterIotaAddress();
+            }
+            if (iotaAddr != null && !iotaAddr.isEmpty()) {
+                return "{\"result\":[{\"address\":\"" + iotaAddr + "\"}]}";
+            }
+            return forwardToDaemon(str);
+        }
         if (str.contains("eth_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
@@ -463,6 +547,110 @@ public class GhostBridgeInterface implements Runnable {
     @JavascriptInterface
     public void setSolWalletDirect(String str, String str2) {
         setSolWallet(str, str2);
+    }
+
+    @JavascriptInterface
+    public String getTronWalletAddress() {
+        if (sCurrentTronWalletAddress != null && !sCurrentTronWalletAddress.isEmpty()) {
+            return sCurrentTronWalletAddress;
+        }
+        return FusionWalletHelper.getMasterTronAddress();
+    }
+
+    @JavascriptInterface
+    public String getTronWalletName() {
+        if (sCurrentTronWalletName != null && !sCurrentTronWalletName.isEmpty()) {
+            return sCurrentTronWalletName;
+        }
+        return FusionWalletHelper.getMasterTronName();
+    }
+
+    @JavascriptInterface
+    public boolean isTronActive() {
+        return FusionWalletHelper.hasTronWallets();
+    }
+
+    @JavascriptInterface
+    public void setTronWalletDirect(String str, String str2) {
+        setTronWallet(str, str2);
+    }
+
+    @JavascriptInterface
+    public String getSuiWalletAddress() {
+        if (sCurrentSuiWalletAddress != null && !sCurrentSuiWalletAddress.isEmpty()) {
+            return sCurrentSuiWalletAddress;
+        }
+        return FusionWalletHelper.getMasterSuiAddress();
+    }
+
+    @JavascriptInterface
+    public String getSuiWalletName() {
+        if (sCurrentSuiWalletName != null && !sCurrentSuiWalletName.isEmpty()) {
+            return sCurrentSuiWalletName;
+        }
+        return FusionWalletHelper.getMasterSuiName();
+    }
+
+    @JavascriptInterface
+    public boolean isSuiActive() {
+        return FusionWalletHelper.hasSuiWallets();
+    }
+
+    @JavascriptInterface
+    public void setSuiWalletDirect(String str, String str2) {
+        setSuiWallet(str, str2);
+    }
+
+    @JavascriptInterface
+    public String getAptosWalletAddress() {
+        if (sCurrentAptosWalletAddress != null && !sCurrentAptosWalletAddress.isEmpty()) {
+            return sCurrentAptosWalletAddress;
+        }
+        return FusionWalletHelper.getMasterAptosAddress();
+    }
+
+    @JavascriptInterface
+    public String getAptosWalletName() {
+        if (sCurrentAptosWalletName != null && !sCurrentAptosWalletName.isEmpty()) {
+            return sCurrentAptosWalletName;
+        }
+        return FusionWalletHelper.getMasterAptosName();
+    }
+
+    @JavascriptInterface
+    public boolean isAptosActive() {
+        return FusionWalletHelper.hasAptosWallets();
+    }
+
+    @JavascriptInterface
+    public void setAptosWalletDirect(String str, String str2) {
+        setAptosWallet(str, str2);
+    }
+
+    @JavascriptInterface
+    public String getIotaWalletAddress() {
+        if (sCurrentIotaWalletAddress != null && !sCurrentIotaWalletAddress.isEmpty()) {
+            return sCurrentIotaWalletAddress;
+        }
+        return FusionWalletHelper.getMasterIotaAddress();
+    }
+
+    @JavascriptInterface
+    public String getIotaWalletName() {
+        if (sCurrentIotaWalletName != null && !sCurrentIotaWalletName.isEmpty()) {
+            return sCurrentIotaWalletName;
+        }
+        return FusionWalletHelper.getMasterIotaName();
+    }
+
+    @JavascriptInterface
+    public boolean isIotaActive() {
+        return FusionWalletHelper.hasIotaWallets();
+    }
+
+    @JavascriptInterface
+    public void setIotaWalletDirect(String str, String str2) {
+        setIotaWallet(str, str2);
     }
 
     @Override // java.lang.Runnable

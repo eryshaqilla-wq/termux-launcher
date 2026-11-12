@@ -59,6 +59,26 @@ public class FusionChainHelper {
         return sCurrentChainName;
     }
 
+    public static boolean isSolana() {
+        return "solana".equalsIgnoreCase(sCurrentChainKey) || sCurrentChainId == 501;
+    }
+
+    public static boolean isTron() {
+        return "tron".equalsIgnoreCase(sCurrentChainKey) || sCurrentChainId == 728126428 || "trx".equalsIgnoreCase(sCurrentChainKey);
+    }
+
+    public static boolean isSui() {
+        return "sui".equalsIgnoreCase(sCurrentChainKey) || sCurrentChainId == 784;
+    }
+
+    public static boolean isAptos() {
+        return "aptos".equalsIgnoreCase(sCurrentChainKey) || "apt".equalsIgnoreCase(sCurrentChainKey) || sCurrentChainId == 637;
+    }
+
+    public static boolean isIota() {
+        return "iota".equalsIgnoreCase(sCurrentChainKey) || sCurrentChainId == 4218;
+    }
+
     public static void init(Context context) {
         reload(context);
     }
@@ -160,6 +180,16 @@ public class FusionChainHelper {
             str = "arbitrum";
         } else if ("arc".equalsIgnoreCase(str)) {
             str = "arc-mainnet";
+        } else if ("sol".equalsIgnoreCase(str)) {
+            str = "solana";
+        } else if ("trx".equalsIgnoreCase(str)) {
+            str = "tron";
+        } else if ("sui".equalsIgnoreCase(str)) {
+            str = "sui";
+        } else if ("apt".equalsIgnoreCase(str) || "aptos".equalsIgnoreCase(str)) {
+            str = "aptos";
+        } else if ("iota".equalsIgnoreCase(str)) {
+            str = "iota";
         }
         if (str.startsWith("0x") || str.startsWith("0X")) {
             setChainByHex(str);

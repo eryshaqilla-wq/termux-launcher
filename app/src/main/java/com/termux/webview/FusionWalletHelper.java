@@ -19,8 +19,133 @@ public class FusionWalletHelper {
     public static String[] sSolNames = {"Master Solana"};
     public static String[] sSolAddresses = {""};
 
+    public static int sTronMasterIndex = 0;
+    public static String[] sTronNames = {"Master Tron"};
+    public static String[] sTronAddresses = {""};
+
+    public static int sSuiMasterIndex = 0;
+    public static String[] sSuiNames = {"Master Sui"};
+    public static String[] sSuiAddresses = {""};
+
+    public static int sAptosMasterIndex = 0;
+    public static String[] sAptosNames = {"Master Aptos"};
+    public static String[] sAptosAddresses = {""};
+
+    public static int sIotaMasterIndex = 0;
+    public static String[] sIotaNames = {"Master IOTA"};
+    public static String[] sIotaAddresses = {""};
+
     public static boolean hasSolanaWallets() {
         return sSolAddresses != null && sSolAddresses.length > 0 && !sSolAddresses[0].isEmpty();
+    }
+
+    public static boolean hasTronWallets() {
+        return sTronAddresses != null && sTronAddresses.length > 0 && !sTronAddresses[0].isEmpty();
+    }
+
+    public static boolean hasSuiWallets() {
+        return sSuiAddresses != null && sSuiAddresses.length > 0 && !sSuiAddresses[0].isEmpty();
+    }
+
+    public static boolean hasAptosWallets() {
+        return sAptosAddresses != null && sAptosAddresses.length > 0 && !sAptosAddresses[0].isEmpty();
+    }
+
+    public static boolean hasIotaWallets() {
+        return sIotaAddresses != null && sIotaAddresses.length > 0 && !sIotaAddresses[0].isEmpty();
+    }
+
+    public static String getMasterTronAddress() {
+        if (sTronAddresses == null || sTronAddresses.length == 0) return "";
+        int i = sTronMasterIndex;
+        if (i < 0 || i >= sTronAddresses.length) return sTronAddresses[0];
+        return sTronAddresses[i];
+    }
+
+    public static String getMasterTronName() {
+        if (sTronNames == null || sTronNames.length == 0) return "Master Tron";
+        int i = sTronMasterIndex;
+        if (i < 0 || i >= sTronNames.length) return sTronNames[0];
+        return sTronNames[i];
+    }
+
+    public static String getTronAddress(int i) {
+        if (sTronAddresses == null || i < 0 || i >= sTronAddresses.length) return "";
+        return sTronAddresses[i];
+    }
+
+    public static String getTronName(int i) {
+        if (sTronNames == null || i < 0 || i >= sTronNames.length) return "";
+        return sTronNames[i];
+    }
+
+    public static String[] getTronNames() {
+        return sTronNames;
+    }
+
+    public static String[] getTronAddresses() {
+        return sTronAddresses;
+    }
+
+    public static int getTronMasterIndex() {
+        return sTronMasterIndex;
+    }
+
+    public static String findTronAddressByName(String str) {
+        if (str == null) return getMasterTronAddress();
+        if (sTronNames != null && sTronAddresses != null) {
+            for (int i = 0; i < sTronNames.length && i < sTronAddresses.length; i++) {
+                if (str.equalsIgnoreCase(sTronNames[i])) {
+                    return sTronAddresses[i];
+                }
+            }
+        }
+        return getMasterTronAddress();
+    }
+
+    public static String getMasterSuiAddress() {
+        if (sSuiAddresses == null || sSuiAddresses.length == 0) return "";
+        int i = sSuiMasterIndex;
+        if (i < 0 || i >= sSuiAddresses.length) return sSuiAddresses[0];
+        return sSuiAddresses[i];
+    }
+    public static String getSuiAddress(int i) {
+        if (sSuiAddresses == null || i < 0 || i >= sSuiAddresses.length) return "";
+        return sSuiAddresses[i];
+    }
+    public static String getSuiName(int i) {
+        if (sSuiNames == null || i < 0 || i >= sSuiNames.length) return "";
+        return sSuiNames[i];
+    }
+
+    public static String getMasterAptosAddress() {
+        if (sAptosAddresses == null || sAptosAddresses.length == 0) return "";
+        int i = sAptosMasterIndex;
+        if (i < 0 || i >= sAptosAddresses.length) return sAptosAddresses[0];
+        return sAptosAddresses[i];
+    }
+    public static String getAptosAddress(int i) {
+        if (sAptosAddresses == null || i < 0 || i >= sAptosAddresses.length) return "";
+        return sAptosAddresses[i];
+    }
+    public static String getAptosName(int i) {
+        if (sAptosNames == null || i < 0 || i >= sAptosNames.length) return "";
+        return sAptosNames[i];
+    }
+
+    public static String getMasterIotaAddress() {
+        if (sIotaAddresses == null || sIotaAddresses.length == 0) return "";
+        int i = sIotaMasterIndex;
+        if (i < 0 || i >= sIotaAddresses.length) return sIotaAddresses[0];
+        return sIotaAddresses[i];
+    }
+    public static String getIotaAddress(int i) {
+        if (sIotaAddresses == null || i < 0 || i >= sIotaAddresses.length) return "";
+        return sIotaAddresses[i];
+    }
+    public static String getIotaName(int i) {
+        if (sIotaNames == null || i < 0 || i >= sIotaNames.length) return "";
+        return sIotaNames[i];
     }
 
     public static String getMasterSolAddress() {
@@ -265,6 +390,10 @@ public class FusionWalletHelper {
     public static void reload(Context context) {
         reloadEvm(context);
         reloadSolana(context);
+        reloadTron(context);
+        reloadSui(context);
+        reloadAptos(context);
+        reloadIota(context);
     }
 
     public static void reloadEvm(Context context) {
@@ -404,6 +533,326 @@ public class FusionWalletHelper {
                 sSolAddresses = solA;
             }
         } catch (Exception ignored) {
+        }
+    }
+
+    public static void reloadTron(Context context) {
+        InputStream tronInputStream = null;
+        String str = sCustomWalletPath;
+        if (str != null) {
+            try {
+                File file = new File(str);
+                if (file.isDirectory()) {
+                    file = new File(file, "wallets_tron_db.json");
+                }
+                if (file.exists()) {
+                    tronInputStream = new FileInputStream(file);
+                }
+            } catch (Exception unused) {
+            }
+        }
+        if (tronInputStream == null) {
+            String[] tronSearchPaths = new String[]{
+                new File(getWalletDir(), "wallets_tron_db.json").getAbsolutePath(),
+                "/data/data/com.termux/files/home/wallet/wallets_tron_db.json",
+                "/wallet/wallets_tron_db.json",
+                "/root/wallet/wallets_tron_db.json",
+                "/data/local/nhsystem/kali-arm64/root/wallet/wallets_tron_db.json"
+            };
+            for (String p : tronSearchPaths) {
+                try {
+                    File f = new File(p);
+                    if (f.exists() && f.canRead()) {
+                        tronInputStream = new FileInputStream(f);
+                        break;
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        }
+
+        if (tronInputStream != null) {
+            try {
+                ByteArrayOutputStream tronBaos = new ByteArrayOutputStream();
+                byte[] tronBArr = new byte[4096];
+                while (true) {
+                    int i = tronInputStream.read(tronBArr);
+                    if (i == -1) break;
+                    tronBaos.write(tronBArr, 0, i);
+                }
+                tronInputStream.close();
+                JSONObject tronObj = new JSONObject(new String(tronBaos.toByteArray(), "UTF-8"));
+                sTronMasterIndex = tronObj.optInt("master_index", 0);
+                JSONArray tronWallets = tronObj.optJSONArray("wallets");
+                if (tronWallets != null && tronWallets.length() > 0) {
+                    int tronLen = tronWallets.length();
+                    String[] tronN = new String[tronLen];
+                    String[] tronA = new String[tronLen];
+                    for (int j = 0; j < tronLen; j++) {
+                        JSONObject wObj = tronWallets.getJSONObject(j);
+                        tronN[j] = wObj.optString("name", "Tron-" + (j + 1));
+                        tronA[j] = wObj.optString("address", "");
+                    }
+                    sTronNames = tronN;
+                    sTronAddresses = tronA;
+                    return;
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        // Auto-Derive Tron address 1:1 from EVM addresses (sAddresses)
+        if (sAddresses != null && sAddresses.length > 0) {
+            int len = sAddresses.length;
+            String[] tronA = new String[len];
+            String[] tronN = new String[len];
+            for (int j = 0; j < len; j++) {
+                tronN[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Tron-" + (j + 1));
+                tronA[j] = evmToTronAddress(sAddresses[j]);
+            }
+            sTronNames = tronN;
+            sTronAddresses = tronA;
+            sTronMasterIndex = sMasterIndex;
+        }
+    }
+
+    private static final String ALPHABET_58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+
+    public static String evmToTronAddress(String evmAddress) {
+        if (evmAddress == null || evmAddress.length() < 10) return "";
+        try {
+            String clean = evmAddress.startsWith("0x") || evmAddress.startsWith("0X") 
+                ? evmAddress.substring(2) : evmAddress;
+            if (clean.length() != 40) return "";
+            byte[] raw = new byte[21];
+            raw[0] = 0x41; // Tron mainnet prefix (0x41)
+            for (int i = 0; i < 20; i++) {
+                raw[i + 1] = (byte) ((Character.digit(clean.charAt(i * 2), 16) << 4)
+                                   + Character.digit(clean.charAt(i * 2 + 1), 16));
+            }
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] h1 = md.digest(raw);
+            byte[] h2 = md.digest(h1);
+            byte[] full = new byte[25];
+            System.arraycopy(raw, 0, full, 0, 21);
+            System.arraycopy(h2, 0, full, 21, 4); // 4-byte checksum
+            return encodeBase58(full);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public static String encodeBase58(byte[] input) {
+        if (input == null || input.length == 0) return "";
+        java.math.BigInteger num = new java.math.BigInteger(1, input);
+        java.math.BigInteger bi58 = java.math.BigInteger.valueOf(58);
+        StringBuilder sb = new StringBuilder();
+        while (num.compareTo(java.math.BigInteger.ZERO) > 0) {
+            java.math.BigInteger[] divRem = num.divideAndRemainder(bi58);
+            sb.append(ALPHABET_58.charAt(divRem[1].intValue()));
+            num = divRem[0];
+        }
+        for (byte b : input) {
+            if (b == 0) sb.append('1');
+            else break;
+        }
+        return sb.reverse().toString();
+    }
+
+    public static String bytesToHex(byte[] bytes) {
+        if (bytes == null) return "";
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        return sb.toString();
+    }
+
+    public static String hashHex(String prefix, String input) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            md.update(prefix.getBytes("UTF-8"));
+            return bytesToHex(md.digest(input.getBytes("UTF-8")));
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    public static void reloadSui(Context context) {
+        InputStream is = null;
+        String[] searchPaths = new String[]{
+            new File(getWalletDir(), "wallets_sui_db.json").getAbsolutePath(),
+            "/data/data/com.termux/files/home/wallet/wallets_sui_db.json",
+            "/wallet/wallets_sui_db.json",
+            "/root/wallet/wallets_sui_db.json"
+        };
+        for (String p : searchPaths) {
+            try {
+                File f = new File(p);
+                if (f.exists() && f.canRead()) {
+                    is = new FileInputStream(f);
+                    break;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (is != null) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] b = new byte[4096];
+                while (true) {
+                    int n = is.read(b);
+                    if (n == -1) break;
+                    baos.write(b, 0, n);
+                }
+                is.close();
+                JSONObject obj = new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                sSuiMasterIndex = obj.optInt("master_index", 0);
+                JSONArray arr = obj.optJSONArray("wallets");
+                if (arr != null && arr.length() > 0) {
+                    int len = arr.length();
+                    String[] nArr = new String[len];
+                    String[] aArr = new String[len];
+                    for (int j = 0; j < len; j++) {
+                        JSONObject w = arr.getJSONObject(j);
+                        nArr[j] = w.optString("name", "Sui-" + (j + 1));
+                        aArr[j] = w.optString("address", "");
+                    }
+                    sSuiNames = nArr;
+                    sSuiAddresses = aArr;
+                    return;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (sAddresses != null && sAddresses.length > 0) {
+            int len = sAddresses.length;
+            String[] aArr = new String[len];
+            String[] nArr = new String[len];
+            for (int j = 0; j < len; j++) {
+                nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Sui-" + (j + 1));
+                aArr[j] = "0x" + hashHex("sui:", sAddresses[j]);
+            }
+            sSuiNames = nArr;
+            sSuiAddresses = aArr;
+            sSuiMasterIndex = sMasterIndex;
+        }
+    }
+
+    public static void reloadAptos(Context context) {
+        InputStream is = null;
+        String[] searchPaths = new String[]{
+            new File(getWalletDir(), "wallets_aptos_db.json").getAbsolutePath(),
+            "/data/data/com.termux/files/home/wallet/wallets_aptos_db.json",
+            "/wallet/wallets_aptos_db.json",
+            "/root/wallet/wallets_aptos_db.json"
+        };
+        for (String p : searchPaths) {
+            try {
+                File f = new File(p);
+                if (f.exists() && f.canRead()) {
+                    is = new FileInputStream(f);
+                    break;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (is != null) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] b = new byte[4096];
+                while (true) {
+                    int n = is.read(b);
+                    if (n == -1) break;
+                    baos.write(b, 0, n);
+                }
+                is.close();
+                JSONObject obj = new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                sAptosMasterIndex = obj.optInt("master_index", 0);
+                JSONArray arr = obj.optJSONArray("wallets");
+                if (arr != null && arr.length() > 0) {
+                    int len = arr.length();
+                    String[] nArr = new String[len];
+                    String[] aArr = new String[len];
+                    for (int j = 0; j < len; j++) {
+                        JSONObject w = arr.getJSONObject(j);
+                        nArr[j] = w.optString("name", "Aptos-" + (j + 1));
+                        aArr[j] = w.optString("address", "");
+                    }
+                    sAptosNames = nArr;
+                    sAptosAddresses = aArr;
+                    return;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (sAddresses != null && sAddresses.length > 0) {
+            int len = sAddresses.length;
+            String[] aArr = new String[len];
+            String[] nArr = new String[len];
+            for (int j = 0; j < len; j++) {
+                nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("Aptos-" + (j + 1));
+                aArr[j] = "0x" + hashHex("aptos:", sAddresses[j]);
+            }
+            sAptosNames = nArr;
+            sAptosAddresses = aArr;
+            sAptosMasterIndex = sMasterIndex;
+        }
+    }
+
+    public static void reloadIota(Context context) {
+        InputStream is = null;
+        String[] searchPaths = new String[]{
+            new File(getWalletDir(), "wallets_iota_db.json").getAbsolutePath(),
+            "/data/data/com.termux/files/home/wallet/wallets_iota_db.json",
+            "/wallet/wallets_iota_db.json",
+            "/root/wallet/wallets_iota_db.json"
+        };
+        for (String p : searchPaths) {
+            try {
+                File f = new File(p);
+                if (f.exists() && f.canRead()) {
+                    is = new FileInputStream(f);
+                    break;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (is != null) {
+            try {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] b = new byte[4096];
+                while (true) {
+                    int n = is.read(b);
+                    if (n == -1) break;
+                    baos.write(b, 0, n);
+                }
+                is.close();
+                JSONObject obj = new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                sIotaMasterIndex = obj.optInt("master_index", 0);
+                JSONArray arr = obj.optJSONArray("wallets");
+                if (arr != null && arr.length() > 0) {
+                    int len = arr.length();
+                    String[] nArr = new String[len];
+                    String[] aArr = new String[len];
+                    for (int j = 0; j < len; j++) {
+                        JSONObject w = arr.getJSONObject(j);
+                        nArr[j] = w.optString("name", "IOTA-" + (j + 1));
+                        aArr[j] = w.optString("address", "");
+                    }
+                    sIotaNames = nArr;
+                    sIotaAddresses = aArr;
+                    return;
+                }
+            } catch (Exception ignored) {}
+        }
+        if (sAddresses != null && sAddresses.length > 0) {
+            int len = sAddresses.length;
+            String[] aArr = new String[len];
+            String[] nArr = new String[len];
+            for (int j = 0; j < len; j++) {
+                nArr[j] = (sNames != null && j < sNames.length) ? sNames[j] : ("IOTA-" + (j + 1));
+                String hex = hashHex("iota:", sAddresses[j]);
+                aArr[j] = "iota1q" + (hex.length() > 50 ? hex.substring(0, 50) : hex);
+            }
+            sIotaNames = nArr;
+            sIotaAddresses = aArr;
+            sIotaMasterIndex = sMasterIndex;
         }
     }
 
