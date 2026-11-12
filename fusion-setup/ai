@@ -23,6 +23,11 @@ const WALLETS_DB_FILE = path.join(WALLET_DIR, 'wallets_db.json');
 const CHAINS_DB_FILE = path.join(WALLET_DIR, 'chains_db.json');
 const LOG_FILE = '/tmp/auto_engine.log';
 
+let esoDb = null;
+try {
+    esoDb = require('./eso_db.cjs');
+} catch (_) {}
+
 // --- UTILITIES ---
 function log(msg) {
     const line = `[${new Date().toISOString()}] ${msg}`;
@@ -308,14 +313,21 @@ function getLatestTelegramAlphas(limit = 5) {
 function getWalletInfo() {
     let master = null;
     let totalWallets = 0;
-    try {
-        if (fs.existsSync(WALLETS_DB_FILE)) {
-            const w = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
-            totalWallets = w.wallets ? w.wallets.length : 0;
-            const idx = w.master_index || 0;
-            master = w.wallets && w.wallets[idx] ? { name: w.wallets[idx].name, address: w.wallets[idx].address } : null;
-        }
-    } catch (_) {}
+
+    if (esoDb && esoDb.isDbAvailable()) {
+        totalWallets = esoDb.getTotalWallets('evm');
+        const m = esoDb.getMasterWallet('evm');
+        if (m) master = { name: m.name, address: m.address };
+    } else {
+        try {
+            if (fs.existsSync(WALLETS_DB_FILE)) {
+                const w = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
+                totalWallets = w.wallets ? w.wallets.length : 0;
+                const idx = w.master_index || 0;
+                master = w.wallets && w.wallets[idx] ? { name: w.wallets[idx].name, address: w.wallets[idx].address } : null;
+            }
+        } catch (_) {}
+    }
 
     // Check daemon port 3333
     const isDaemonAlive = runCmd('curl -s http://127.0.0.1:3333/status 2>/dev/null || echo "DEAD"').includes('OK') || 
@@ -562,14 +574,18 @@ Output strictly ONLY the JSON string without markdown or explanation.`;
     console.log(`└─ AI Engine    : [${aiRes.engine || 'DeepSeek'}]`);
     console.log(`=============================================================\n`);
 
-    // 2. Ambil Wallet Burner dari Database (wallets_db.json), BUKAN BAW (Air-Gapped Security)
+    // 2. Ambil Wallet Burner dari Database (eso.db / wallets_db.json), BUKAN BAW (Air-Gapped Security)
     let dbWallets = [];
-    try {
-        if (fs.existsSync(WALLETS_DB_FILE)) {
-            const raw = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
-            if (raw && Array.isArray(raw.wallets)) dbWallets = raw.wallets;
-        }
-    } catch (_) {}
+    if (esoDb && esoDb.isDbAvailable()) {
+        dbWallets = esoDb.getWallets('evm', 500);
+    } else {
+        try {
+            if (fs.existsSync(WALLETS_DB_FILE)) {
+                const raw = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
+                if (raw && Array.isArray(raw.wallets)) dbWallets = raw.wallets;
+            }
+        } catch (_) {}
+    }
 
     const profileMap = {
         'shaqilla': {
@@ -800,6 +816,23 @@ const UI_PORT = 20135;
 const UI_INDEX_FILE = path.join(WALLET_DIR, 'gemini_ui', 'index.html');
 
 function getAllWallets() {
+    if (esoDb && esoDb.isDbAvailable()) {
+        const rows = esoDb.getWallets('evm');
+        let masterIdx = 0;
+        const list = rows.map((w, idx) => {
+            if (w.is_master) masterIdx = idx;
+            return {
+                index: idx,
+                name: w.name || `Wallet ${idx + 1}`,
+                address: w.address,
+                is_master: Boolean(w.is_master)
+            };
+        });
+        return {
+            master_index: masterIdx,
+            wallets: list
+        };
+    }
     try {
         if (fs.existsSync(WALLETS_DB_FILE)) {
             const data = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));
@@ -819,6 +852,13 @@ function getAllWallets() {
 }
 
 function switchMasterWallet(index) {
+    if (esoDb && esoDb.isDbAvailable()) {
+        const ok = esoDb.setMasterWallet(parseInt(index, 10), 'evm');
+        if (ok) {
+            log(`[Wallet] Master wallet switched to index ${index} via eso.db`);
+            return true;
+        }
+    }
     try {
         if (fs.existsSync(WALLETS_DB_FILE)) {
             const data = JSON.parse(fs.readFileSync(WALLETS_DB_FILE, 'utf8'));

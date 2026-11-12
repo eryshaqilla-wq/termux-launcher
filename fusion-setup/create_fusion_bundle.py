@@ -379,9 +379,7 @@ print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS & Code Suite beserta Template Konfigurasi
 for f_cjs in [
     "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "wallet_multichain.cjs", "auto_engine.cjs", "x_native.cjs",
-    "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "wallet_binding.cjs",
-    "password_resolver.cjs", "claim_gift.cjs", "copy_mint.cjs", "bagent_sniper.cjs",
-    "master_bot.cjs", "mint_fountain.cjs", "sniper_akita.cjs", "agy_ganti.cjs",
+    "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "agy_ganti.cjs", "eso_db.cjs",
     "config_telegram.json", "tele_filter_config.json", "filter_config.json",
     "query_db.json", "module_db.json", "pantau.json", "webview_profiles.json",
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
@@ -407,7 +405,7 @@ for w_dir in ["/root/wallet/web", "/project/node2cjs/web"]:
         break
 
 # 2. Salin Regular JS/Python Suite & Public Chain DB
-for f_js in ["wallet.js", "wallet_solana.js", "x_webview.js", "pemantautelegram.py", "package.json", "chains_db.json"]:
+for f_js in ["wallet.js", "wallet_solana.js", "x_webview.js", "package.json", "chains_db.json"]:
     for src_candidate in [os.path.join("/root/wallet", f_js), os.path.join("/project/node2cjs", f_js)]:
         if os.path.exists(src_candidate):
             shutil.copy2(src_candidate, os.path.join(BUNDLE_DIR, "wallet", f_js))
@@ -440,6 +438,34 @@ if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/recipes_db.json")):
 if not os.path.exists(os.path.join(BUNDLE_DIR, "wallet/passwords_db.json")):
     with open(os.path.join(BUNDLE_DIR, "wallet/passwords_db.json"), "w") as f:
         f.write("{}\n")
+
+# 4b. Buat Template Steril untuk eso.db (SQLite)
+template_db_path = os.path.join(BUNDLE_DIR, "wallet", "eso.db")
+if os.path.exists("/root/wallet/eso.db"):
+    try:
+        import sqlite3
+        if os.path.exists(template_db_path):
+            os.remove(template_db_path)
+        s_conn = sqlite3.connect("/root/wallet/eso.db")
+        d_conn = sqlite3.connect(template_db_path)
+        for sql in s_conn.execute("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL"):
+            try:
+                d_conn.execute(sql[0])
+            except Exception:
+                pass
+        for t_name in ['chains', 'configs', 'queries', 'blacklists', 'modules', 'android_metadata']:
+            cur = s_conn.execute(f"SELECT * FROM {t_name}")
+            rows = cur.fetchall()
+            if rows:
+                qmarks = ','.join(['?'] * len(rows[0]))
+                d_conn.executemany(f"INSERT INTO {t_name} VALUES ({qmarks})", rows)
+        d_conn.commit()
+        d_conn.execute("VACUUM;")
+        d_conn.close()
+        s_conn.close()
+        print("✓ Created sterilized eso.db template for bundle")
+    except Exception as e:
+        print(f"Warning: gagal membuat template eso.db: {e}")
 
 # Template kosong untuk tuyul & auxiliary
 with open(os.path.join(BUNDLE_DIR, "wallet/tuyul_emails.json"), "w") as f:
@@ -586,6 +612,8 @@ for target in [
     os.path.join(ASSETS_DIR, "wallet_solana.js"),
     os.path.join(ASSETS_DIR, "wallet_multichain.cjs"),
     os.path.join(ASSETS_DIR, "auto_engine.cjs"),
+    os.path.join(ASSETS_DIR, "eso_db.cjs"),
+    os.path.join(ASSETS_DIR, "eso.db"),
     os.path.join(ASSETS_DIR, "master_bot.cjs"),
     os.path.join(ASSETS_DIR, "mint_fountain.cjs"),
     os.path.join(ASSETS_DIR, "sniper_akita.cjs"),

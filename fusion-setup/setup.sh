@@ -1669,16 +1669,20 @@ fi
 
 mkdir -p "$HOME/wallet"
 if [ -d "$FUSION_HOME/wallet" ]; then
+    [ -f "$HOME/wallet/eso.db" ] && cp -f "$HOME/wallet/eso.db" "$HOME/wallet/eso.db.preserve" 2>/dev/null || true
     cp -rf "$FUSION_HOME/wallet/"* "$HOME/wallet/"
+    [ -f "$HOME/wallet/eso.db.preserve" ] && mv -f "$HOME/wallet/eso.db.preserve" "$HOME/wallet/eso.db" 2>/dev/null || true
 fi
 if [ -d "$SCRIPT_DIR/wallet" ]; then
+    [ -f "$HOME/wallet/eso.db" ] && cp -f "$HOME/wallet/eso.db" "$HOME/wallet/eso.db.preserve" 2>/dev/null || true
     cp -rf "$SCRIPT_DIR/wallet/"* "$HOME/wallet/"
+    [ -f "$HOME/wallet/eso.db.preserve" ] && mv -f "$HOME/wallet/eso.db.preserve" "$HOME/wallet/eso.db" 2>/dev/null || true
 fi
 
 # Fallback ekstraksi aset wallet dari APK jika belum lengkap
 BASE_APK=$(pm path com.termux 2>/dev/null | sed 's/package://' | head -n1 || echo "")
 if [ -n "$BASE_APK" ] && [ -f "$BASE_APK" ] && command -v unzip >/dev/null 2>&1; then
-    for w_asset in 9router.cjs wallet.cjs x_webview.cjs pemantau.cjs wallet.js x_webview.js pemantautelegram.py wallets_db.json chains_db.json package.json recipes_db.json; do
+    for w_asset in 9router.cjs wallet.cjs eso_db.cjs x_webview.cjs pemantau.cjs telegram.cjs wallet.js x_webview.js wallets_db.json chains_db.json package.json recipes_db.json; do
         unzip -j -o "$BASE_APK" "assets/fusion/$w_asset" -d "$HOME/wallet/" 2>/dev/null || true
     done
 fi
@@ -1693,8 +1697,10 @@ fi
 [ ! -f "$HOME/wallet/wallets_db.json" ] && echo '{"master_index": null, "wallets": []}' > "$HOME/wallet/wallets_db.json"
 [ ! -f "$HOME/wallet/chains_db.json" ] && echo '{}' > "$HOME/wallet/chains_db.json"
 [ ! -f "$HOME/wallet/recipes_db.json" ] && echo '{}' > "$HOME/wallet/recipes_db.json"
+[ ! -f "$HOME/wallet/eso.db" ] && [ -f "$FUSION_HOME/wallet/eso.db" ] && cp -f "$FUSION_HOME/wallet/eso.db" "$HOME/wallet/eso.db" 2>/dev/null || true
 
 chmod 755 "$HOME/wallet/"*.cjs "$HOME/wallet/"*.js "$HOME/wallet/"*.py 2>/dev/null || true
+chmod 644 "$HOME/wallet/"*.db 2>/dev/null || true
 
 if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CONTAINER_ROOTFS" ]; then
     su -c "mkdir -p '$TARGET_WALLET_DIR'" 2>/dev/null || true
