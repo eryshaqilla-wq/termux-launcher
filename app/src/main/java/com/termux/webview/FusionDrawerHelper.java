@@ -902,7 +902,8 @@ public class FusionDrawerHelper {
         linearLayout4.setOrientation(1);
         String[] names = FusionWalletHelper.getNames();
         if (names != null) {
-            for (int i = 0; i < names.length; i++) {
+            int maxShow = Math.min(names.length, 50);
+            for (int i = 0; i < maxShow; i++) {
                 String str = names[i];
                 TextView textView4 = new TextView(appCompatActivity);
                 if (i == FusionWalletHelper.sMasterIndex) {
@@ -919,6 +920,14 @@ public class FusionDrawerHelper {
                 LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
                 layoutParams.setMargins(0, 3, 0, 3);
                 linearLayout4.addView(textView4, layoutParams);
+            }
+            if (names.length > maxShow) {
+                TextView textViewMore = new TextView(appCompatActivity);
+                textViewMore.setText("... dan " + (names.length - maxShow) + " dompet lainnya (Ketik via CLI / Search)");
+                textViewMore.setTextColor(-6577749);
+                textViewMore.setTextSize(2, 11.0f);
+                textViewMore.setPadding(12, 8, 12, 8);
+                linearLayout4.addView(textViewMore);
             }
         }
         scrollView.addView(linearLayout4);

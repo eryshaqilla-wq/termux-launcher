@@ -19,7 +19,7 @@ public class FusionWalletPathSelectClick implements DialogInterface.OnClickListe
         if (fusionWebViewManager == null) {
             return;
         }
-        String str = "/root/wallet/wallets_db.json";
+        String str = new java.io.File("/root/wallet/wallets_db.json").exists() ? "/root/wallet/wallets_db.json" : "/data/local/nhsystem/kali-arm64/root/wallet/wallets_db.json";
         if (i != 0) {
             str = i == 1 ? "/data/data/com.termux/files/home/wallet/wallets_db.json" : "/sdcard/Download/wallets_db.json";
         }
