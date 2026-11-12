@@ -453,7 +453,8 @@ if os.path.exists("/root/wallet/eso.db"):
                 d_conn.execute(sql[0])
             except Exception:
                 pass
-        for t_name in ['chains', 'configs', 'queries', 'blacklists', 'modules', 'android_metadata']:
+        # Salin hanya chains publik dan metadata, semua tabel lain (wallets, configs, queries, modules, dll) 100% KOSONG
+        for t_name in ['chains', 'android_metadata']:
             cur = s_conn.execute(f"SELECT * FROM {t_name}")
             rows = cur.fetchall()
             if rows:
