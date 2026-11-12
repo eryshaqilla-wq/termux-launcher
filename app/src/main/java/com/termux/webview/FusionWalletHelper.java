@@ -1,6 +1,8 @@
 package com.termux.webview;
 
 import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -445,7 +447,141 @@ public class FusionWalletHelper {
 
     private static volatile boolean sIsReloading = false;
 
+    public static File findDatabaseFile() {
+        String custom = sCustomWalletPath;
+        if (custom != null) {
+            try {
+                File cf = new File(custom);
+                if (cf.isDirectory()) {
+                    cf = new File(cf, "eso.db");
+                }
+                if (cf.exists() && cf.canRead()) {
+                    return cf;
+                }
+            } catch (Exception ignored) {}
+        }
+        String[] searchPaths = new String[]{
+            new File(getWalletDir(), "eso.db").getAbsolutePath(),
+            "/data/data/com.termux/files/home/wallet/eso.db",
+            "/wallet/eso.db",
+            "/root/wallet/eso.db",
+            "/data/local/nhsystem/kali-arm64/root/wallet/eso.db"
+        };
+        for (String p : searchPaths) {
+            try {
+                File f = new File(p);
+                if (f.exists() && f.canRead()) {
+                    return f;
+                }
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    public static boolean loadFromDatabase(File dbFile) {
+        if (dbFile == null || !dbFile.exists()) return false;
+        SQLiteDatabase db = null;
+        try {
+            db = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY | SQLiteDatabase.NO_LOCALIZED_COLLATORS);
+            boolean hasChainCol = false;
+            Cursor pragma = db.rawQuery("PRAGMA table_info(wallets)", null);
+            if (pragma != null) {
+                while (pragma.moveToNext()) {
+                    String col = pragma.getString(1);
+                    if ("chain".equalsIgnoreCase(col)) {
+                        hasChainCol = true;
+                        break;
+                    }
+                }
+                pragma.close();
+            }
+
+            // 1. EVM Wallets
+            String evmQuery = hasChainCol
+                ? "SELECT name, address, is_master FROM wallets WHERE chain='evm' OR chain IS NULL ORDER BY is_master DESC, id ASC"
+                : "SELECT name, address, is_master FROM wallets ORDER BY is_master DESC, id ASC";
+            loadChainFromCursor(db, evmQuery, "evm");
+
+            // 2. Multichain Wallets
+            if (hasChainCol) {
+                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='solana' ORDER BY is_master DESC, id ASC", "solana");
+                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='tron' ORDER BY is_master DESC, id ASC", "tron");
+                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='sui' ORDER BY is_master DESC, id ASC", "sui");
+                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='aptos' ORDER BY is_master DESC, id ASC", "aptos");
+                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='iota' ORDER BY is_master DESC, id ASC", "iota");
+            }
+            sLoaded = true;
+            return true;
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (db != null) {
+                try { db.close(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    private static void loadChainFromCursor(SQLiteDatabase db, String query, String chain) {
+        Cursor cursor = null;
+        try {
+            cursor = db.rawQuery(query, null);
+            if (cursor != null && cursor.getCount() > 0) {
+                int count = cursor.getCount();
+                String[] names = new String[count];
+                String[] addresses = new String[count];
+                int masterIdx = 0;
+                int idx = 0;
+                while (cursor.moveToNext()) {
+                    names[idx] = cursor.getString(0);
+                    addresses[idx] = cursor.getString(1);
+                    int isMaster = cursor.getInt(2);
+                    if (isMaster == 1 && masterIdx == 0) {
+                        masterIdx = idx;
+                    }
+                    idx++;
+                }
+                if ("evm".equals(chain)) {
+                    sNames = names;
+                    sAddresses = addresses;
+                    sMasterIndex = masterIdx;
+                } else if ("solana".equals(chain)) {
+                    sSolNames = names;
+                    sSolAddresses = addresses;
+                    sSolMasterIndex = masterIdx;
+                } else if ("tron".equals(chain)) {
+                    sTronNames = names;
+                    sTronAddresses = addresses;
+                    sTronMasterIndex = masterIdx;
+                } else if ("sui".equals(chain)) {
+                    sSuiNames = names;
+                    sSuiAddresses = addresses;
+                    sSuiMasterIndex = masterIdx;
+                } else if ("aptos".equals(chain)) {
+                    sAptosNames = names;
+                    sAptosAddresses = addresses;
+                    sAptosMasterIndex = masterIdx;
+                } else if ("iota".equals(chain)) {
+                    sIotaNames = names;
+                    sIotaAddresses = addresses;
+                    sIotaMasterIndex = masterIdx;
+                }
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (cursor != null) {
+                try { cursor.close(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
     public static void init(Context context) {
+        if (sLoaded) {
+            return;
+        }
+        File dbFile = findDatabaseFile();
+        if (dbFile != null && loadFromDatabase(dbFile)) {
+            return;
+        }
         if (sAddresses == null || sAddresses.length == 0 || sAddresses[0] == null || sAddresses[0].isEmpty()) {
             sMasterIndex = 0;
             sNames = new String[]{"eso-1"};
@@ -455,14 +591,11 @@ public class FusionWalletHelper {
             sTronNames = new String[]{"eso-1"};
             sTronAddresses = new String[]{"TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF"};
             sSuiNames = new String[]{"eso-1"};
-            sSuiAddresses = new String[]{"0x" + hashHex("sui:", sAddresses[0])};
+            sSuiAddresses = new String[]{"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151"};
             sAptosNames = new String[]{"eso-1"};
-            sAptosAddresses = new String[]{"0x" + hashHex("aptos:", sAddresses[0])};
+            sAptosAddresses = new String[]{"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae"};
             sIotaNames = new String[]{"eso-1"};
-            sIotaAddresses = new String[]{"0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6"};
-        }
-        if (sLoaded) {
-            return;
+            sIotaAddresses = new String[]{"0x1bf2ae6b747595ee8558c4d7d66ddb33f731e999aec9bc32cceb879ec810ca15"};
         }
         if (!sIsReloading) {
             sIsReloading = true;
@@ -478,6 +611,11 @@ public class FusionWalletHelper {
     }
 
     public static void reload(Context context) {
+        File dbFile = findDatabaseFile();
+        if (dbFile != null && loadFromDatabase(dbFile)) {
+            sLoaded = true;
+            return;
+        }
         reloadEvm(context);
         reloadSolana(context);
         reloadTron(context);
