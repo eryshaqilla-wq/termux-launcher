@@ -15397,8 +15397,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // and goes — on the home place, a grid re-cut around every widget for nothing.
         // Absorbed remainder lands the dock on a whole terminal row without a sub-line gap.
         // Kept consistent across all wall pages so swiping between canvases has zero dock resize jump.
+        // When status bar stands on the bottom edge, suspend terminal flush dock padding so the bottom
+        // status bar and its icons remain perfectly static without shifting/jumping when dock toggles.
         int terminalFlushPaddingPx = state.keyboardShown || !state.toolbarShown
             || visiblePaneCount() > 1 || activePaneFloating || isImeVisible()
+            || mStatusBarEdge == PlaceLayout.Edge.BOTTOM
             ? 0
             : resolveTerminalFlushDockPaddingPx(accessoryContentHeightPx, accessoryBottomMarginPx);
         mAppliedTerminalFlushPaddingPx = terminalFlushPaddingPx;
@@ -15406,7 +15409,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             dockContentHeightPx, terminalFlushPaddingPx, state.keyboardHeight);
         // Split the absorbed remainder around the dock rows so they stay visually centered in the
         // taller glass instead of hugging its bottom edge.
-        int flushBottomInsetPx = terminalFlushPaddingPx / 2;
+        int flushBottomInsetPx = (mStatusBarEdge == PlaceLayout.Edge.BOTTOM) ? 0 : (terminalFlushPaddingPx / 2);
         boolean flushInsetChanged = accessoryStackContainer.getPaddingBottom() != flushBottomInsetPx;
         if (flushInsetChanged) {
             accessoryStackContainer.setPadding(
@@ -20967,7 +20970,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
     private int keyboardDownFlushPaddingPx() {
         boolean toolbarShown = buildChromeSpec().toolbarShown;
         if (!toolbarShown || visiblePaneCount() > 1 || isImeVisible()
-            || (mPaneController != null && mPaneController.isActivePaneFloating()))
+            || (mPaneController != null && mPaneController.isActivePaneFloating())
+            || mStatusBarEdge == PlaceLayout.Edge.BOTTOM)
             return 0;
         return Math.max(0, resolveTerminalFlushDockPaddingPx(
             computeAccessoryStackHeight(mAppliedDockContentHeightPx, 0, 0),
