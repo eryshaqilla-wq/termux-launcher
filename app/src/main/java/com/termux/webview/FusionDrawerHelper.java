@@ -1,10 +1,14 @@
 package com.termux.webview;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.WebView;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -32,6 +36,8 @@ public class FusionDrawerHelper {
     public static LinearLayout sTabDrawer;
     public static LinearLayout sWalletDrawer;
     public static TextView sWalletPathBtn;
+    public static int sWalletPage = -1;
+    public static String sWalletFilterQuery = "";
 
     public static void closeAllDrawers(FusionWebViewManager fusionWebViewManager) {
         if (fusionWebViewManager == null) {
@@ -51,6 +57,14 @@ public class FusionDrawerHelper {
         }
         LinearLayout linearLayout4 = sWalletDrawer;
         if (linearLayout4 != null) {
+            try {
+                if (fusionWebViewManager.mActivity != null) {
+                    InputMethodManager imm = (InputMethodManager) fusionWebViewManager.mActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(linearLayout4.getWindowToken(), 0);
+                    }
+                }
+            } catch (Exception ignored) {}
             linearLayout4.setVisibility(8);
         }
         LinearLayout linearLayout5 = sChainDrawer;
@@ -73,6 +87,8 @@ public class FusionDrawerHelper {
         if (view != null) {
             view.setVisibility(8);
         }
+        sWalletPage = -1;
+        sWalletFilterQuery = "";
         View view2 = sDrawerBackdrop;
         if (view2 != null) {
             view2.setVisibility(8);
@@ -115,6 +131,14 @@ public class FusionDrawerHelper {
         }
         LinearLayout linearLayout4 = sWalletDrawer;
         if (linearLayout4 != null) {
+            try {
+                if (fusionWebViewManager.mActivity != null) {
+                    InputMethodManager imm = (InputMethodManager) fusionWebViewManager.mActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(linearLayout4.getWindowToken(), 0);
+                    }
+                }
+            } catch (Exception ignored) {}
             linearLayout4.setVisibility(8);
         }
         LinearLayout linearLayout5 = sChainDrawer;
@@ -137,6 +161,8 @@ public class FusionDrawerHelper {
         if (view != null) {
             view.setVisibility(8);
         }
+        sWalletPage = -1;
+        sWalletFilterQuery = "";
         View view2 = sDrawerBackdrop;
         if (view2 != null) {
             view2.setVisibility(8);
@@ -857,8 +883,8 @@ public class FusionDrawerHelper {
         prepareDrawer(fusionWebViewManager, linearLayout2);
     }
 
-    public static void showWalletDrawer(FusionWebViewManager fusionWebViewManager) {
-        AppCompatActivity appCompatActivity;
+    public static void showWalletDrawer(final FusionWebViewManager fusionWebViewManager) {
+        final AppCompatActivity appCompatActivity;
         ViewParent parent;
         if (fusionWebViewManager == null || (appCompatActivity = fusionWebViewManager.mActivity) == null) {
             return;
@@ -890,48 +916,343 @@ public class FusionDrawerHelper {
         textView2.setOnClickListener(new FusionDrawerCloseClick(fusionWebViewManager));
         linearLayout3.addView(textView2);
         linearLayout2.addView(linearLayout3);
-        TextView textView3 = new TextView(appCompatActivity);
+        final TextView textView3 = new TextView(appCompatActivity);
         textView3.setText("Ganti akun dompet aktif seketika");
         textView3.setTextColor(-6577749);
         textView3.setTextSize(2, 11.0f);
-        textView3.setPadding(0, 2, 0, 10);
+        textView3.setPadding(0, 2, 0, 8);
         linearLayout2.addView(textView3);
-        ScrollView scrollView = new ScrollView(appCompatActivity);
+
+        // Search Input Box + Clear Button
+        LinearLayout searchRow = new LinearLayout(appCompatActivity);
+        searchRow.setOrientation(0);
+        searchRow.setPadding(0, 0, 0, 8);
+        searchRow.setGravity(16);
+
+        final EditText searchInput = new EditText(appCompatActivity);
+        searchInput.setHint("🔍 Cari nama, nomor, atau alamat...");
+        searchInput.setHintTextColor(-7829368);
+        searchInput.setTextColor(-1);
+        searchInput.setTextSize(2, 12.0f);
+        searchInput.setSingleLine(true);
+        FusionUiHelper.setSolidBox(searchInput);
+        searchInput.setPadding(10, 8, 10, 8);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, -2, 1.0f);
+        searchLp.rightMargin = 6;
+        searchRow.addView(searchInput, searchLp);
+
+        final TextView clearBtn = new TextView(appCompatActivity);
+        clearBtn.setText(" ✕ ");
+        clearBtn.setTextSize(2, 12.0f);
+        clearBtn.setPadding(8, 8, 8, 8);
+        clearBtn.setGravity(17);
+        FusionUiHelper.setSolidBtn(clearBtn);
+        clearBtn.setClickable(true);
+        clearBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                searchInput.setText("");
+            }
+        });
+        searchRow.addView(clearBtn);
+        linearLayout2.addView(searchRow);
+
+        final ScrollView scrollView = new ScrollView(appCompatActivity);
         scrollView.setLayoutParams(new LinearLayout.LayoutParams(-1, 0, 1.0f));
-        LinearLayout linearLayout4 = new LinearLayout(appCompatActivity);
+        final LinearLayout linearLayout4 = new LinearLayout(appCompatActivity);
         linearLayout4.setOrientation(1);
-        String[] names = FusionWalletHelper.getNames();
-        if (names != null) {
-            int maxShow = Math.min(names.length, 50);
-            for (int i = 0; i < maxShow; i++) {
-                String str = names[i];
-                TextView textView4 = new TextView(appCompatActivity);
-                if (i == FusionWalletHelper.sMasterIndex) {
-                    textView4.setText("* " + str);
-                    FusionUiHelper.setSolidAccentBtn(textView4, -7686920, -13947597);
-                } else {
-                    textView4.setText(str);
-                    FusionUiHelper.setSolidBtn(textView4);
-                }
-                textView4.setTextSize(2, 13.0f);
-                textView4.setPadding(12, 10, 12, 10);
-                textView4.setClickable(true);
-                textView4.setOnClickListener(new FusionWalletItemClick(fusionWebViewManager, i));
-                LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
-                layoutParams.setMargins(0, 3, 0, 3);
-                linearLayout4.addView(textView4, layoutParams);
-            }
-            if (names.length > maxShow) {
-                TextView textViewMore = new TextView(appCompatActivity);
-                textViewMore.setText("... dan " + (names.length - maxShow) + " dompet lainnya (Ketik via CLI / Search)");
-                textViewMore.setTextColor(-6577749);
-                textViewMore.setTextSize(2, 11.0f);
-                textViewMore.setPadding(12, 8, 12, 8);
-                linearLayout4.addView(textViewMore);
-            }
-        }
         scrollView.addView(linearLayout4);
         linearLayout2.addView(scrollView);
+
+        final LinearLayout pagingContainer = new LinearLayout(appCompatActivity);
+        pagingContainer.setOrientation(0);
+        pagingContainer.setGravity(17);
+        LinearLayout.LayoutParams pagingLp = new LinearLayout.LayoutParams(-1, -2);
+        pagingLp.setMargins(0, 8, 0, 4);
+        pagingContainer.setLayoutParams(pagingLp);
+        linearLayout2.addView(pagingContainer);
+
+        final String[] names = FusionWalletHelper.getNames();
+        if (names == null || names.length == 0) {
+            searchRow.setVisibility(View.GONE);
+            pagingContainer.setVisibility(View.GONE);
+            TextView emptyTv = new TextView(appCompatActivity);
+            emptyTv.setText("Tidak ada dompet ditemukan di database");
+            emptyTv.setTextColor(-6577749);
+            emptyTv.setTextSize(2, 12.0f);
+            emptyTv.setPadding(12, 20, 12, 20);
+            linearLayout4.addView(emptyTv);
+        } else {
+            final int pageSize = 50;
+            final int total = names.length;
+
+            if (sWalletPage < 0) {
+                int masterIdx = FusionWalletHelper.sMasterIndex;
+                sWalletPage = (masterIdx >= 0 && masterIdx < total) ? (masterIdx / pageSize) : 0;
+            }
+
+            final Runnable[] refreshRef = new Runnable[1];
+            refreshRef[0] = new Runnable() {
+                @Override
+                public void run() {
+                    linearLayout4.removeAllViews();
+                    pagingContainer.removeAllViews();
+
+                    String q = sWalletFilterQuery != null ? sWalletFilterQuery.trim().toLowerCase() : "";
+                    List<Integer> matchedIndices = new ArrayList<>();
+
+                    if (q.isEmpty()) {
+                        for (int i = 0; i < total; i++) {
+                            matchedIndices.add(i);
+                        }
+                    } else {
+                        boolean isPureDigits = q.matches("\\d+");
+                        int searchNum = -1;
+                        if (isPureDigits) {
+                            try {
+                                searchNum = Integer.parseInt(q);
+                            } catch (Exception ignored) {}
+                        }
+
+                        for (int i = 0; i < total; i++) {
+                            String name = names[i];
+                            if (name != null && name.toLowerCase().contains(q)) {
+                                matchedIndices.add(i);
+                                continue;
+                            }
+                            if (isPureDigits) {
+                                if (searchNum == i || searchNum == (i + 1)) {
+                                    matchedIndices.add(i);
+                                    continue;
+                                }
+                            }
+                            String evmAddr = FusionWalletHelper.getAddress(i);
+                            if (evmAddr != null && evmAddr.toLowerCase().contains(q)) {
+                                matchedIndices.add(i);
+                                continue;
+                            }
+                            String solAddr = FusionWalletHelper.getSolAddress(i);
+                            if (solAddr != null && solAddr.toLowerCase().contains(q)) {
+                                matchedIndices.add(i);
+                                continue;
+                            }
+                        }
+                    }
+
+                    int totalMatched = matchedIndices.size();
+                    if (totalMatched == 0) {
+                        textView3.setText("Tidak ada dompet yang cocok (\"" + q + "\")");
+                        TextView emptyTv = new TextView(appCompatActivity);
+                        emptyTv.setText("Tidak ada dompet cocok dengan pencarian.");
+                        emptyTv.setTextColor(-6577749);
+                        emptyTv.setTextSize(2, 12.0f);
+                        emptyTv.setPadding(12, 20, 12, 20);
+                        linearLayout4.addView(emptyTv);
+                        pagingContainer.setVisibility(View.GONE);
+                        return;
+                    }
+
+                    int totalPages = (totalMatched + pageSize - 1) / pageSize;
+                    if (sWalletPage >= totalPages) {
+                        sWalletPage = totalPages - 1;
+                    }
+                    if (sWalletPage < 0) {
+                        sWalletPage = 0;
+                    }
+
+                    int startIdx = sWalletPage * pageSize;
+                    int endIdx = Math.min(totalMatched, startIdx + pageSize);
+
+                    if (q.isEmpty()) {
+                        textView3.setText("Dompet " + (startIdx + 1) + " - " + endIdx + " dari " + totalMatched + " (Hal " + (sWalletPage + 1) + "/" + totalPages + ")");
+                    } else {
+                        textView3.setText("Hasil: " + (startIdx + 1) + " - " + endIdx + " dari " + totalMatched + " dompet (Hal " + (sWalletPage + 1) + "/" + totalPages + ")");
+                    }
+
+                    for (int k = startIdx; k < endIdx; k++) {
+                        final int realIdx = matchedIndices.get(k);
+                        String str = names[realIdx];
+                        String evmAddr = FusionWalletHelper.getAddress(realIdx);
+                        String solAddr = FusionWalletHelper.getSolAddress(realIdx);
+                        StringBuilder sbItem = new StringBuilder();
+                        if (realIdx == FusionWalletHelper.sMasterIndex) {
+                            sbItem.append("* ");
+                        }
+                        sbItem.append(str);
+                        if (evmAddr != null && evmAddr.length() >= 10) {
+                            sbItem.append(" (").append(evmAddr.substring(0, 6)).append("...").append(evmAddr.substring(evmAddr.length() - 4)).append(")");
+                        }
+                        if (solAddr != null && !solAddr.isEmpty()) {
+                            sbItem.append(" [SOL: ").append(solAddr.length() > 8 ? solAddr.substring(0, 4) + "..." + solAddr.substring(solAddr.length() - 4) : solAddr).append("]");
+                        }
+                        TextView textView4 = new TextView(appCompatActivity);
+                        textView4.setText(sbItem.toString());
+                        if (realIdx == FusionWalletHelper.sMasterIndex) {
+                            FusionUiHelper.setSolidAccentBtn(textView4, -7686920, -13947597);
+                        } else {
+                            FusionUiHelper.setSolidBtn(textView4);
+                        }
+                        textView4.setTextSize(2, 12.0f);
+                        textView4.setPadding(12, 10, 12, 10);
+                        textView4.setClickable(true);
+                        textView4.setOnClickListener(new FusionWalletItemClick(fusionWebViewManager, realIdx));
+                        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(-1, -2);
+                        layoutParams.setMargins(0, 3, 0, 3);
+                        linearLayout4.addView(textView4, layoutParams);
+                    }
+
+                    if (totalPages > 1) {
+                        pagingContainer.setVisibility(View.VISIBLE);
+
+                        if (totalPages > 10) {
+                            TextView jumpPrevBtn = new TextView(appCompatActivity);
+                            jumpPrevBtn.setText(" -10 ");
+                            jumpPrevBtn.setTextSize(2, 11.0f);
+                            jumpPrevBtn.setPadding(8, 6, 8, 6);
+                            jumpPrevBtn.setGravity(17);
+                            if (sWalletPage > 0) {
+                                FusionUiHelper.setSolidBtn(jumpPrevBtn);
+                                jumpPrevBtn.setClickable(true);
+                                jumpPrevBtn.setOnClickListener(new View.OnClickListener() {
+                                    @Override
+                                    public void onClick(View v) {
+                                        sWalletPage = Math.max(0, sWalletPage - 10);
+                                        if (refreshRef[0] != null) {
+                                            refreshRef[0].run();
+                                        }
+                                        scrollView.scrollTo(0, 0);
+                                    }
+                                });
+                            } else {
+                                jumpPrevBtn.setBackground(FusionUiHelper.createRounded(-15263977, -13947597, 3.0f));
+                                jumpPrevBtn.setTextColor(-8421505);
+                                jumpPrevBtn.setClickable(false);
+                            }
+                            LinearLayout.LayoutParams jLp = new LinearLayout.LayoutParams(-2, -2);
+                            jLp.setMargins(0, 0, 4, 0);
+                            pagingContainer.addView(jumpPrevBtn, jLp);
+                        }
+
+                        TextView prevBtn = new TextView(appCompatActivity);
+                        prevBtn.setText(" « PREV ");
+                        prevBtn.setTextSize(2, 11.0f);
+                        prevBtn.setPadding(12, 6, 12, 6);
+                        prevBtn.setGravity(17);
+                        if (sWalletPage > 0) {
+                            FusionUiHelper.setSolidBtn(prevBtn);
+                            prevBtn.setClickable(true);
+                            prevBtn.setOnClickListener(new View.OnClickListener() {
+                                @Override
+                                public void onClick(View v) {
+                                    sWalletPage--;
+                                    if (refreshRef[0] != null) {
+                                        refreshRef[0].run();
+                                    }
+                                    scrollView.scrollTo(0, 0);
+                                }
+                            });
+                        } else {
+                            prevBtn.setBackground(FusionUiHelper.createRounded(-15263977, -13947597, 3.0f));
+                            prevBtn.setTextColor(-8421505);
+                            prevBtn.setClickable(false);
+                        }
+                        pagingContainer.addView(prevBtn, new LinearLayout.LayoutParams(-2, -2));
+
+                        TextView pageIndicator = new TextView(appCompatActivity);
+                        pageIndicator.setText(" " + (sWalletPage + 1) + " / " + totalPages + " ");
+                        pageIndicator.setTextColor(-328965);
+                        pageIndicator.setTextSize(2, 11.0f);
+                        pageIndicator.setTypeface(null, 1);
+                        pageIndicator.setGravity(17);
+                        LinearLayout.LayoutParams indLp = new LinearLayout.LayoutParams(0, -2, 1.0f);
+                        pagingContainer.addView(pageIndicator, indLp);
+
+                        TextView nextBtn = new TextView(appCompatActivity);
+                        nextBtn.setText(" NEXT » ");
+                        nextBtn.setTextSize(2, 11.0f);
+                        nextBtn.setPadding(12, 6, 12, 6);
+                        nextBtn.setGravity(17);
+                        if (sWalletPage < totalPages - 1) {
+                            FusionUiHelper.setSolidBtn(nextBtn);
+                            nextBtn.setClickable(true);
+                            nextBtn.setOnClickListener(new View.OnClickListener() {
+                                @Override
+                                public void onClick(View v) {
+                                    sWalletPage++;
+                                    if (refreshRef[0] != null) {
+                                        refreshRef[0].run();
+                                    }
+                                    scrollView.scrollTo(0, 0);
+                                }
+                            });
+                        } else {
+                            nextBtn.setBackground(FusionUiHelper.createRounded(-15263977, -13947597, 3.0f));
+                            nextBtn.setTextColor(-8421505);
+                            nextBtn.setClickable(false);
+                        }
+                        pagingContainer.addView(nextBtn, new LinearLayout.LayoutParams(-2, -2));
+
+                        if (totalPages > 10) {
+                            TextView jumpNextBtn = new TextView(appCompatActivity);
+                            jumpNextBtn.setText(" +10 ");
+                            jumpNextBtn.setTextSize(2, 11.0f);
+                            jumpNextBtn.setPadding(8, 6, 8, 6);
+                            jumpNextBtn.setGravity(17);
+                            if (sWalletPage < totalPages - 1) {
+                                FusionUiHelper.setSolidBtn(jumpNextBtn);
+                                jumpNextBtn.setClickable(true);
+                                jumpNextBtn.setOnClickListener(new View.OnClickListener() {
+                                    @Override
+                                    public void onClick(View v) {
+                                        sWalletPage = Math.min(totalPages - 1, sWalletPage + 10);
+                                        if (refreshRef[0] != null) {
+                                            refreshRef[0].run();
+                                        }
+                                        scrollView.scrollTo(0, 0);
+                                    }
+                                });
+                            } else {
+                                jumpNextBtn.setBackground(FusionUiHelper.createRounded(-15263977, -13947597, 3.0f));
+                                jumpNextBtn.setTextColor(-8421505);
+                                jumpNextBtn.setClickable(false);
+                            }
+                            LinearLayout.LayoutParams jLp = new LinearLayout.LayoutParams(-2, -2);
+                            jLp.setMargins(4, 0, 0, 0);
+                            pagingContainer.addView(jumpNextBtn, jLp);
+                        }
+                    } else {
+                        pagingContainer.setVisibility(View.GONE);
+                    }
+                }
+            };
+
+            searchInput.addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    String newQ = s != null ? s.toString() : "";
+                    if (!newQ.equals(sWalletFilterQuery)) {
+                        sWalletFilterQuery = newQ;
+                        sWalletPage = 0;
+                        if (refreshRef[0] != null) {
+                            refreshRef[0].run();
+                        }
+                    }
+                }
+
+                @Override
+                public void afterTextChanged(Editable s) {}
+            });
+
+            if (sWalletFilterQuery != null && !sWalletFilterQuery.isEmpty()) {
+                searchInput.setText(sWalletFilterQuery);
+                searchInput.setSelection(searchInput.getText().length());
+            } else {
+                refreshRef[0].run();
+            }
+        }
         TextView textView5 = new TextView(appCompatActivity);
         textView5.setText("TUTUP");
         FusionUiHelper.setDrawerCloseBtn(textView5);

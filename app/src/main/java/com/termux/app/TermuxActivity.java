@@ -1748,6 +1748,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     /** The rotation geometry pass waiting for the new layout, or null when none is pending. */
     @Nullable private OneShotPreDrawListener mPendingOrientationGeometryPass;
+    /** The accessory stack toggle pass waiting for the new layout, or null when none is pending. */
+    @Nullable private OneShotPreDrawListener mPendingAccessoryTogglePreDraw;
 
     /**
      * Set when accessory geometry was suppressed because the app drawer plane owns the stack's
@@ -8756,7 +8758,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         refreshOffDockGlass();
         syncDockGlassInks(state.barAlpha);
 
-        configureAccessoryTopEdgeFx(true, state.barAlpha);
+        boolean hasDockRows = state.appsRowEnabled || state.azRowEnabled || state.extraKeysRowEnabled;
+        configureAccessoryTopEdgeFx(hasDockRows, state.barAlpha);
         applyDecorNavBarSurfaceState(state);
         applyInAppKeyboardSurfaceState(state);
         // Wallpaper passthrough feeds every glass surface from the shared pre-blurred wallpaper, so
@@ -9802,6 +9805,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         // with the Activity rather than outlive it.
         com.termux.app.terminal.TerminalKeyInspector.close();
         mChrome.onDestroy();
+        if (mPendingAccessoryTogglePreDraw != null) {
+            mPendingAccessoryTogglePreDraw.removeListener();
+            mPendingAccessoryTogglePreDraw = null;
+        }
         unregisterPreferredHomeChangeReceiver();
         cancelVoiceInput();
         if (mIsInvalidState)
@@ -13818,8 +13825,24 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             com.termux.app.haptics.Haptics.tick(accessoryContainer, android.view.HapticFeedbackConstants.CLOCK_TICK);
         }
 
-        applyChromeSpec(buildChromeSpec());
         setTerminalToolbarHeight();
+        applyChromeSpec(buildChromeSpec());
+
+        View root = findViewById(R.id.activity_termux_root_view);
+        if (root != null) {
+            mChrome.ledger().markDirty(SurfaceDirtyLedger.Backdrop.ACCESSORY);
+            mChrome.ledger().invalidateRect(SurfaceDirtyLedger.Backdrop.ACCESSORY);
+            if (mPendingAccessoryTogglePreDraw != null) {
+                mPendingAccessoryTogglePreDraw.removeListener();
+                mPendingAccessoryTogglePreDraw = null;
+            }
+            mPendingAccessoryTogglePreDraw = OneShotPreDrawListener.add(root, () -> {
+                mPendingAccessoryTogglePreDraw = null;
+                ChromeSpec settledSpec = buildChromeSpec();
+                mChrome.applySettled(settledSpec);
+                refreshTerminalWindowBar();
+            });
+        }
         mChrome.requestSync(ChromeRenderer.SCOPE_ACCESSORY_RENDER);
         if (mTerminalView != null) {
             mTerminalView.post(mTerminalView::updateSize);

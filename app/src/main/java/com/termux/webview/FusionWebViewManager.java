@@ -3269,7 +3269,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             StringBuilder sb = new StringBuilder();
             sb.append("Active: ");
             sb.append(this.mCurrentWalletName);
-            sb.append("\nAddress: ");
+            sb.append("\nEVM: ");
             String str = this.mCurrentWalletAddress;
             if (str == null || str.length() <= 10) {
                 sb.append(str);
@@ -3277,6 +3277,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 sb.append(str.substring(0, 6));
                 sb.append("...");
                 sb.append(str.substring(str.length() - 4));
+            }
+            if (this.mCurrentSolWalletAddress != null && !this.mCurrentSolWalletAddress.isEmpty()) {
+                sb.append("\nSOL: ");
+                String sol = this.mCurrentSolWalletAddress;
+                if (sol.length() <= 8) {
+                    sb.append(sol);
+                } else {
+                    sb.append(sol.substring(0, 4));
+                    sb.append("...");
+                    sb.append(sol.substring(sol.length() - 4));
+                }
             }
             textView4.setText(sb.toString());
         }
