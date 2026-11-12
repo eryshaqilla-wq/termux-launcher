@@ -33,8 +33,50 @@ public class GhostBridgeInterface implements Runnable {
     public static String sLastTxHash = "";
     public static String sWcUri = "";
     public static boolean sIsAutoMode = false;
+    public static String sLastDetectedDappChainKey = "";
+    public static int sLastDetectedDappChainId = 0;
     private static long sLastRpcCheckTime = 0;
     private static boolean sLastRpcCheckResult = false;
+
+    public static String getLastDetectedDappChainKey() {
+        return sLastDetectedDappChainKey;
+    }
+
+    public static int getLastDetectedDappChainId() {
+        return sLastDetectedDappChainId;
+    }
+
+    public static void handleDappChainDetected(String chainKey, int chainId) {
+        if (chainKey == null || chainKey.trim().isEmpty()) {
+            return;
+        }
+        final String key = chainKey.trim().toLowerCase();
+        final int id = chainId;
+        sLastDetectedDappChainKey = key;
+        sLastDetectedDappChainId = id;
+
+        if (id > 0) {
+            FusionChainHelper.setChainById(id);
+        } else {
+            FusionChainHelper.setChain(key);
+        }
+
+        final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mActivity != null) {
+            mgr.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mgr.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
+                    mgr.updateMenuTexts();
+                }
+            });
+        }
+    }
+
+    @JavascriptInterface
+    public void reportDappChain(String chainKey, int chainId) {
+        handleDappChainDetected(chainKey, chainId);
+    }
 
     public static boolean checkRpcAlive() {
         long now = System.currentTimeMillis();
@@ -431,6 +473,7 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"error\":\"Empty payload\"}";
         }
         if (str.contains("sol_connect") || str.contains("solana_requestAccounts") || str.contains("sol_accounts") || str.contains("sol_getAccounts") || str.contains("solana_accounts")) {
+            handleDappChainDetected("solana", 501);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -445,6 +488,7 @@ public class GhostBridgeInterface implements Runnable {
             return forwardToDaemon(str);
         }
         if (str.contains("sol_signIn")) {
+            handleDappChainDetected("solana", 501);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -458,6 +502,7 @@ public class GhostBridgeInterface implements Runnable {
             }
         }
         if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
+            handleDappChainDetected("tron", 728126428);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -472,6 +517,7 @@ public class GhostBridgeInterface implements Runnable {
             return forwardToDaemon(str);
         }
         if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts") || str.contains("sui_accounts")) {
+            handleDappChainDetected("sui", 784);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -486,6 +532,7 @@ public class GhostBridgeInterface implements Runnable {
             return forwardToDaemon(str);
         }
         if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
+            handleDappChainDetected("aptos", 637);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -500,6 +547,7 @@ public class GhostBridgeInterface implements Runnable {
             return forwardToDaemon(str);
         }
         if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
+            handleDappChainDetected("iota", 8822);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -723,6 +771,7 @@ public class GhostBridgeInterface implements Runnable {
     public void run() {
         FusionWebViewManager fusionWebViewManager = FusionWebViewManager.getInstance();
         if (fusionWebViewManager != null) {
+            fusionWebViewManager.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
             fusionWebViewManager.updateMenuTexts();
         }
     }
@@ -773,6 +822,8 @@ public class GhostBridgeInterface implements Runnable {
             return;
         }
         FusionChainHelper.setChainByHex(str);
+        sLastDetectedDappChainKey = FusionChainHelper.getCurrentChainKey();
+        sLastDetectedDappChainId = FusionChainHelper.getCurrentChainId();
         FusionWebViewManager fusionWebViewManager = FusionWebViewManager.getInstance();
         if (fusionWebViewManager == null || (termuxActivity = fusionWebViewManager.mActivity) == null) {
             return;

@@ -47,10 +47,6 @@ public class FusionWebViewClient extends WebViewClient {
         this.mCurrentUrl = url;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
-            String autoChain = FusionChainHelper.detectChainFromUrl(url);
-            if (autoChain != null && !autoChain.isEmpty() && !autoChain.equalsIgnoreCase(fusionWebViewManager.mCurrentChainKey)) {
-                fusionWebViewManager.switchChain(autoChain);
-            }
             fusionWebViewManager.injectScripts(webView);
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
         }
@@ -63,6 +59,9 @@ public class FusionWebViewClient extends WebViewClient {
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
             fusionWebViewManager.injectScripts(webView);
+            if (webView != null) {
+                webView.evaluateJavascript("if(window.__fusionScanDappChain)try{window.__fusionScanDappChain();}catch(_){}", null);
+            }
             fusionWebViewManager.onTabUrlLoaded(webView, str);
             FusionToolPillHelper.showToolPill(fusionWebViewManager);
             FusionToolPillHelper.bringToFront();

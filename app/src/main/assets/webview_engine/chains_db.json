@@ -252,6 +252,19 @@
         "defaultRpc": [
             "https://api.mainnet.iota.cafe",
             "https://rpc.ankr.com/iota_mainnet"
-        ]
+        ],
+        "evmId": 8822
+    },
+    "iotaevm": {
+        "name": "IOTA EVM Mainnet",
+        "id": 8822,
+        "symbol": "IOTA",
+        "cgId": "iota",
+        "defaultRpc": [
+            "https://json-rpc.evm.iotaledger.net",
+            "https://iota-evm.rpc.publicnode.com"
+        ],
+        "weth": "0x6e47f8d4F72450517149944051E1E59F753A95de",
+        "usdc": "0x89791D1eE889A1b731d163e791Ac564Ac23c8332"
     }
 }

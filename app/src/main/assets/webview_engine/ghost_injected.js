@@ -173,6 +173,159 @@
         } catch(_) {}
     })();
 
+    // --- SMART CHAIN AUTO-DETECTION FROM LIVE WEB DATA ---
+    function mapChainIdToKey(chainId) {
+        var id = (typeof chainId === "string" && chainId.indexOf("0x") === 0) ? parseInt(chainId, 16) : parseInt(chainId, 10);
+        if (isNaN(id)) return null;
+        switch (id) {
+            case 8453: return "base";
+            case 56: return "bsc";
+            case 42161: return "arbitrum";
+            case 137: return "polygon";
+            case 2818: return "morph";
+            case 5042: return "arc-mainnet";
+            case 1: return "eth";
+            case 501: return "solana";
+            case 784: return "sui";
+            case 101:
+            case 637: return "aptos";
+            case 4218:
+            case 8822: return "iota";
+            case 728126428: return "tron";
+            default: return null;
+        }
+    }
+
+    function reportDappChainToBridge(chainKey, chainId) {
+        if (!chainKey) return;
+        try {
+            if (window.GhostBridge && window.GhostBridge.reportDappChain) {
+                window.GhostBridge.reportDappChain(String(chainKey), Number(chainId || 0));
+            }
+        } catch(_) {}
+    }
+
+    function scanDappChainFromWebData() {
+        try {
+            // 1. Wagmi / Web3Modal / AppKit store in localStorage
+            if (window.localStorage) {
+                var wagmiStore = localStorage.getItem("wagmi.store");
+                if (wagmiStore) {
+                    try {
+                        var parsed = JSON.parse(wagmiStore);
+                        var state = parsed.state || parsed;
+                        var cId = state.chainId || state.current;
+                        if (cId) {
+                            var cKey = mapChainIdToKey(cId);
+                            if (cKey) {
+                                reportDappChainToBridge(cKey, cId);
+                                return;
+                            }
+                        }
+                    } catch(_) {}
+                }
+                var directCid = localStorage.getItem("@w3m/chain_id") || 
+                                localStorage.getItem("appkit_chain_id") || 
+                                localStorage.getItem("connected_chain_id");
+                if (directCid) {
+                    var cidNum = parseInt(directCid, 10);
+                    if (!isNaN(cidNum) && cidNum > 0) {
+                        var cKey = mapChainIdToKey(cidNum);
+                        if (cKey) {
+                            reportDappChainToBridge(cKey, cidNum);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // 2. Global JS configuration (Wagmi, Next.js, Web3 clients)
+            if (window.wagmiConfig && window.wagmiConfig.state && window.wagmiConfig.state.chainId) {
+                var cId = window.wagmiConfig.state.chainId;
+                var cKey = mapChainIdToKey(cId);
+                if (cKey) {
+                    reportDappChainToBridge(cKey, cId);
+                    return;
+                }
+            }
+            if (window.__wagmi && window.__wagmi.state && window.__wagmi.state.chainId) {
+                var cId = window.__wagmi.state.chainId;
+                var cKey = mapChainIdToKey(cId);
+                if (cKey) {
+                    reportDappChainToBridge(cKey, cId);
+                    return;
+                }
+            }
+
+            // 3. Next.js pageProps data
+            if (window.__NEXT_DATA__ && window.__NEXT_DATA__.props && window.__NEXT_DATA__.props.pageProps) {
+                var pp = window.__NEXT_DATA__.props.pageProps;
+                var cId = pp.chainId || pp.initialChainId || pp.defaultChainId || (pp.initialState && pp.initialState.chainId);
+                if (cId) {
+                    var cKey = mapChainIdToKey(cId);
+                    if (cKey) {
+                        reportDappChainToBridge(cKey, cId);
+                        return;
+                    }
+                }
+            }
+
+            // 4. Multi-chain SDK globals
+            if (window.solanaWeb3 || window.__SOLANA_WEB3__) {
+                reportDappChainToBridge("solana", 501);
+                return;
+            }
+            if (window.IotaClient || window.__IOTA__) {
+                reportDappChainToBridge("iota", 8822);
+                return;
+            }
+            if (window.SuiClient || window.__SUI__) {
+                reportDappChainToBridge("sui", 784);
+                return;
+            }
+            if (window.AptosClient) {
+                reportDappChainToBridge("aptos", 637);
+                return;
+            }
+            if (window.TronWeb) {
+                reportDappChainToBridge("tron", 728126428);
+                return;
+            }
+
+            // 5. Meta tags in DOM
+            var metaChain = document.querySelector('meta[name="chain-id"]') || 
+                            document.querySelector('meta[name="chain"]') || 
+                            document.querySelector('meta[name="network"]');
+            if (metaChain && metaChain.content) {
+                var val = metaChain.content.trim().toLowerCase();
+                var cId = parseInt(val, 10);
+                if (!isNaN(cId) && cId > 0) {
+                    var cKey = mapChainIdToKey(cId);
+                    if (cKey) {
+                        reportDappChainToBridge(cKey, cId);
+                        return;
+                    }
+                } else if (val.length > 0) {
+                    reportDappChainToBridge(val, 0);
+                    return;
+                }
+            }
+        } catch(_) {}
+    }
+    window.__fusionScanDappChain = scanDappChainFromWebData;
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", function() {
+            scanDappChainFromWebData();
+            setTimeout(scanDappChainFromWebData, 600);
+            setTimeout(scanDappChainFromWebData, 1800);
+        }, { once: true });
+    } else {
+        scanDappChainFromWebData();
+        setTimeout(scanDappChainFromWebData, 600);
+        setTimeout(scanDappChainFromWebData, 1800);
+    }
+
     window.__ghostIsDaemonAlive = function() {
         if (window.GhostBridge && window.GhostBridge.isDaemonAlive) {
             try { return window.GhostBridge.isDaemonAlive(); } catch(e) {}
@@ -235,6 +388,7 @@
 
         // Fast-path immediate responses
         if (method === 'eth_requestAccounts' || method === 'eth_accounts') {
+            scanDappChainFromWebData();
             var alive = isDaemon();
             if (!alive) {
                 if (method === 'eth_requestAccounts') {
@@ -281,6 +435,10 @@
                 try {
                     var dec = (targetHex.indexOf("0x") === 0) ? parseInt(targetHex, 16) : parseInt(targetHex, 10);
                     fakeProvider.networkVersion = String(dec);
+                    var k = mapChainIdToKey(dec);
+                    if (k) {
+                        reportDappChainToBridge(k, dec);
+                    }
                 } catch(e) {}
                 if (window.GhostBridge && window.GhostBridge.switchChainByHex) {
                     try { window.GhostBridge.switchChainByHex(targetHex); } catch(e) {}
@@ -563,6 +721,7 @@
     };
 
     GhostSolanaProvider.prototype.connect = async function(opts) {
+        reportDappChainToBridge("solana", 501);
         if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
@@ -685,6 +844,7 @@
             icon: icon,
             chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
             get accounts() {
+                reportDappChainToBridge("solana", 501);
                 if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
                 var addr = solProvider.publicKey ? solProvider.publicKey.toBase58() : "";
                 if (!addr) {
@@ -789,6 +949,7 @@
         if (!args) return null;
         var method = args.method;
         if (method === "tron_requestAccounts") {
+            reportDappChainToBridge("tron", 728126428);
             if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
             var base58 = window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "");
             if (!base58 && window.callGhostRpc) {
@@ -920,6 +1081,7 @@
     };
 
     GhostSuiProvider.prototype.connect = async function(options) {
+        reportDappChainToBridge("sui", 784);
         if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
@@ -1062,6 +1224,7 @@
             }
         },
         get accounts() {
+            reportDappChainToBridge("sui", 784);
             if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
             var a = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
             if (!a) return [];
@@ -1157,6 +1320,7 @@
     };
 
     GhostAptosProvider.prototype.connect = async function() {
+        reportDappChainToBridge("aptos", 637);
         if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
@@ -1283,6 +1447,7 @@
             }
         },
         get accounts() {
+            reportDappChainToBridge("aptos", 637);
             if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
             var addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
             if (!addr) return [];
@@ -1357,6 +1522,7 @@
     };
 
     GhostIotaProvider.prototype.getAccounts = async function() {
+        reportDappChainToBridge("iota", 8822);
         if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr) return [];
@@ -1364,6 +1530,7 @@
     };
 
     GhostIotaProvider.prototype.connect = async function(options) {
+        reportDappChainToBridge("iota", 8822);
         if (window.__ghostRequireDaemon) window.__ghostRequireDaemon();
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
@@ -1458,6 +1625,7 @@
             "standard:connect": {
                 version: "1.0.0",
                 connect: async function() {
+                    reportDappChainToBridge("iota", 8822);
                     await nightlyIota.connect();
                     return { accounts: iotaStandardWallet.accounts };
                 }
@@ -1484,6 +1652,7 @@
             }
         },
         get accounts() {
+            reportDappChainToBridge("iota", 8822);
             if (!window.__ghostIsDaemonAlive || !window.__ghostIsDaemonAlive()) return [];
             var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
             if (!addr) return [];
