@@ -995,6 +995,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (linearLayout != null) {
             linearLayout.setVisibility(8);
         }
+        if (this.mToolScroll != null) {
+            this.mToolScroll.setVisibility(8);
+        }
+        FusionToolPillHelper.hideToolPill(this);
         LinearLayout linearLayout2 = this.mMenuCard;
         if (linearLayout2 != null) {
             linearLayout2.setVisibility(8);
@@ -2858,6 +2862,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (this.mTabList == null || this.mTabList.isEmpty()) {
             return false;
         }
+        if (this.mPaneHost != null && this.mPaneHost.getVisibility() == View.VISIBLE) {
+            return true;
+        }
         if (this.mControlPill != null && this.mControlPill.getVisibility() == View.VISIBLE) {
             return true;
         }
@@ -3113,12 +3120,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             linearLayout.setElevation(160.0f);
             linearLayout.bringToFront();
         }
+        if (this.mToolScroll == null) {
+            FusionToolPillHelper.initToolPill(this);
+        }
         if (this.mToolScroll != null) {
             if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
                 float density = this.mActivity.getResources().getDisplayMetrics().density;
                 FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
                 layoutParams.setMargins(0, (int) (58 * density), 10, 0);
                 this.mPaneHost.addView(this.mToolScroll, layoutParams);
+            }
+            if (this.mToolPill != null) {
+                this.mToolPill.setVisibility(View.VISIBLE);
             }
             this.mToolScroll.setVisibility(0);
             this.mToolScroll.setElevation(160.0f);
@@ -3274,12 +3287,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         linearLayout2.bringToFront();
                     }
                     // RULE SAMA DENGAN mControlPill (floating kanan atas): mToolScroll TETAP AKTIF & VISIBLE!
+                    if (this.mToolScroll == null) {
+                        FusionToolPillHelper.initToolPill(this);
+                    }
                     if (this.mToolScroll != null) {
                         if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
                             float density = this.mActivity.getResources().getDisplayMetrics().density;
                             FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
                             layoutParams.setMargins(0, (int) (58 * density), 10, 0);
                             this.mPaneHost.addView(this.mToolScroll, layoutParams);
+                        }
+                        if (this.mToolPill != null) {
+                            this.mToolPill.setVisibility(View.VISIBLE);
                         }
                         this.mToolScroll.setVisibility(0);
                         this.mToolScroll.setElevation(160.0f);
@@ -3324,12 +3343,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     linearLayout3.setTranslationY(0.0f);
                     linearLayout3.bringToFront();
                 }
+                if (this.mToolScroll == null) {
+                    FusionToolPillHelper.initToolPill(this);
+                }
                 if (this.mToolScroll != null) {
                     if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
                         float density = this.mActivity.getResources().getDisplayMetrics().density;
                         FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
                         layoutParams.setMargins(0, (int) (58 * density), 10, 0);
                         this.mPaneHost.addView(this.mToolScroll, layoutParams);
+                    }
+                    if (this.mToolPill != null) {
+                        this.mToolPill.setVisibility(View.VISIBLE);
                     }
                     this.mToolScroll.setVisibility(0);
                     this.mToolScroll.setElevation(160.0f);

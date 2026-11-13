@@ -866,45 +866,73 @@
 
     // Solana Wallet Standard Register & Event Handling
     function createStandardSolWallet(name, icon) {
+        var _connected = false;
+        var _listeners = [];
+
+        function getCurrentAccount() {
+            reportDappChainToBridge("solana", 501);
+            var addr = solProvider.publicKey ? solProvider.publicKey.toBase58() : "";
+            if (!addr) {
+                addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
+            }
+            if (!addr) addr = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
+            return {
+                address: addr,
+                publicKey: decodeBase58(addr),
+                chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
+                features: ["solana:signAndSendTransaction", "solana:signTransaction", "solana:signMessage", "solana:signIn"]
+            };
+        }
+
         var walletObj = {
             version: "1.0.0",
             name: name,
             icon: icon,
             chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
             get accounts() {
-                reportDappChainToBridge("solana", 501);
-                var addr = solProvider.publicKey ? solProvider.publicKey.toBase58() : "";
-                if (!addr) {
-                    addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
-                }
-                if (!addr) addr = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
-                return [{
-                    address: addr,
-                    publicKey: decodeBase58(addr),
-                    chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
-                    features: ["standard:connect", "standard:events", "standard:disconnect", "solana:signAndSendTransaction", "solana:signTransaction", "solana:signMessage", "solana:signIn"]
-                }];
+                if (!_connected && !solProvider.isConnected) return [];
+                return [getCurrentAccount()];
             }
         };
         walletObj.features = {
             "standard:connect": {
                 version: "1.0.0",
-                connect: async function() {
-                    await solProvider.connect();
-                    var accs = walletObj.accounts;
-                    solProvider.emit("change", { accounts: accs });
+                connect: async function(input) {
+                    try { await solProvider.connect(input); } catch(_) {}
+                    _connected = true;
+                    var acc = getCurrentAccount();
+                    var accs = [acc];
+                    try { solProvider.emit("change", { accounts: accs }); } catch(_) {}
+                    for (var i = 0; i < _listeners.length; i++) {
+                        try { _listeners[i]({ accounts: accs }); } catch(_) {}
+                    }
                     return { accounts: accs };
                 }
             },
             "standard:events": {
                 version: "1.0.0",
-                on: function(event, listener) { solProvider.on(event, listener); return function() { solProvider.off(event, listener); }; }
+                on: function(event, listener) {
+                    if (event === "change" && typeof listener === "function") {
+                        _listeners.push(listener);
+                    }
+                    solProvider.on(event, listener);
+                    return function() {
+                        var idx = _listeners.indexOf(listener);
+                        if (idx !== -1) _listeners.splice(idx, 1);
+                        solProvider.off(event, listener);
+                    };
+                }
             },
             "standard:disconnect": {
                 version: "1.0.0",
                 disconnect: async function() {
-                    await solProvider.disconnect();
-                    solProvider.emit("change", { accounts: [] });
+                    try { await solProvider.disconnect(); } catch(_) {}
+                    _connected = false;
+                    try { solProvider.emit("change", { accounts: [] }); } catch(_) {}
+                    for (var i = 0; i < _listeners.length; i++) {
+                        try { _listeners[i]({ accounts: [] }); } catch(_) {}
+                    }
+                    return {};
                 }
             },
             "solana:signAndSendTransaction": {
@@ -927,12 +955,20 @@
         return walletObj;
     }
 
+    var ghostWalletSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48cGF0aCBkPSJNOSAxMmwyIDIgNC00IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==";
     var solStandardWallet = createStandardSolWallet("Phantom", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0QjAwODIiLz48L3N2Zz4=");
     var solflareStandardWallet = createStandardSolWallet("Solflare", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNGRjU1MDAiLz48L3N2Zz4=");
     var backpackStandardWallet = createStandardSolWallet("Backpack", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNFMzExMmMiLz48L3N2Zz4=");
     var okxSolStandardWallet = createStandardSolWallet("OKX Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMDAwMDAiLz48L3N2Zz4=");
 
-    var solWalletsList = [solStandardWallet, solflareStandardWallet, backpackStandardWallet, okxSolStandardWallet];
+    var solWalletsList = [
+        createStandardSolWallet("GhostWallet", ghostWalletSvg),
+        createStandardSolWallet("Ghost Wallet", ghostWalletSvg),
+        solStandardWallet,
+        solflareStandardWallet,
+        backpackStandardWallet,
+        okxSolStandardWallet
+    ];
 
     function registerSolanaStandard() {
         try {
@@ -1220,60 +1256,94 @@
     // Factory for standard Sui wallets compliant with @wallet-standard and @mysten/dapp-kit
     function createStandardSuiWallet(name, icon, provider) {
         provider = provider || suiWallet;
+        var _connected = false;
+        var _listeners = [];
+
+        function getCurrentAccount() {
+            reportDappChainToBridge("sui", 784);
+            var a = suiAddr;
+            if (!a && window.GhostBridge && window.GhostBridge.getSuiWalletAddress) {
+                try { a = window.GhostBridge.getSuiWalletAddress(); } catch(e) {}
+            }
+            if (!a && window.__FUSION_SUI_WALLET_ADDRESS__) {
+                a = window.__FUSION_SUI_WALLET_ADDRESS__;
+            }
+            if (!a) a = "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151";
+            suiAddr = a;
+            window.__FUSION_SUI_WALLET_ADDRESS__ = a;
+
+            var pubKeyBytes = new Uint8Array(32);
+            try {
+                var cleanHex = a.startsWith("0x") ? a.slice(2) : a;
+                for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
+                    pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
+                }
+            } catch(e) {}
+
+            return {
+                address: a,
+                publicKey: pubKeyBytes,
+                chains: ["sui:mainnet", "sui:testnet", "sui:devnet", "sui:localnet", "sui:unknown"],
+                features: [
+                    "sui:signAndExecuteTransactionBlock",
+                    "sui:signAndExecuteTransaction",
+                    "sui:signTransactionBlock",
+                    "sui:signTransaction",
+                    "sui:signMessage",
+                    "sui:signPersonalMessage"
+                ]
+            };
+        }
+
         var walletObj = {
             version: "1.0.0",
             name: name,
             icon: icon,
-            chains: ["sui:mainnet", "sui:testnet", "sui:devnet"],
+            chains: ["sui:mainnet", "sui:testnet", "sui:devnet", "sui:localnet", "sui:unknown"],
             get accounts() {
-                reportDappChainToBridge("sui", 784);
-                var a = suiAddr;
-                if (!a && window.GhostBridge && window.GhostBridge.getSuiWalletAddress) {
-                    try { a = window.GhostBridge.getSuiWalletAddress(); } catch(e) {}
-                }
-                if (!a) a = "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151";
-                suiAddr = a;
-                var pubKeyBytes = new Uint8Array(32);
-                try {
-                    var cleanHex = a.startsWith("0x") ? a.slice(2) : a;
-                    for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
-                        pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
-                    }
-                } catch(e) {}
-                return [{
-                    address: a,
-                    publicKey: pubKeyBytes,
-                    chains: ["sui:mainnet", "sui:testnet", "sui:devnet"],
-                    features: [
-                        "standard:connect",
-                        "standard:disconnect",
-                        "standard:events",
-                        "sui:signAndExecuteTransactionBlock",
-                        "sui:signAndExecuteTransaction",
-                        "sui:signTransactionBlock",
-                        "sui:signTransaction",
-                        "sui:signMessage",
-                        "sui:signPersonalMessage"
-                    ]
-                }];
+                if (!_connected) return [];
+                return [getCurrentAccount()];
             },
             features: {
                 "standard:connect": {
                     version: "1.0.0",
                     connect: async function(input) {
-                        await provider.connect(input);
-                        return { accounts: walletObj.accounts };
+                        reportDappChainToBridge("sui", 784);
+                        try { await provider.connect(input); } catch(_) {}
+                        _connected = true;
+                        var acc = getCurrentAccount();
+                        var accs = [acc];
+                        try { provider.emit("change", { accounts: accs }); } catch(_) {}
+                        for (var i = 0; i < _listeners.length; i++) {
+                            try { _listeners[i]({ accounts: accs }); } catch(_) {}
+                        }
+                        return { accounts: accs };
                     }
                 },
                 "standard:disconnect": {
                     version: "1.0.0",
-                    disconnect: async function() { return await provider.disconnect(); }
+                    disconnect: async function() {
+                        try { await provider.disconnect(); } catch(_) {}
+                        _connected = false;
+                        try { provider.emit("change", { accounts: [] }); } catch(_) {}
+                        for (var i = 0; i < _listeners.length; i++) {
+                            try { _listeners[i]({ accounts: [] }); } catch(_) {}
+                        }
+                        return {};
+                    }
                 },
                 "standard:events": {
                     version: "1.0.0",
                     on: function(event, listener) {
+                        if (event === "change" && typeof listener === "function") {
+                            _listeners.push(listener);
+                        }
                         provider.on(event, listener);
-                        return function() { provider.off(event, listener); };
+                        return function() {
+                            var idx = _listeners.indexOf(listener);
+                            if (idx !== -1) _listeners.splice(idx, 1);
+                            provider.off(event, listener);
+                        };
                     }
                 },
                 "sui:signAndExecuteTransactionBlock": {
@@ -1310,6 +1380,8 @@
     }
 
     var suiWalletsList = [
+        createStandardSuiWallet("GhostWallet", ghostWalletSvg, suiWallet),
+        createStandardSuiWallet("Ghost Wallet", ghostWalletSvg, suiWallet),
         createStandardSuiWallet("Sui Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0QkEwRkYiLz48L3N2Zz4=", suiWallet),
         createStandardSuiWallet("Slush Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4=", slushWallet),
         createStandardSuiWallet("Suiet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", suietWallet),
@@ -1481,84 +1553,124 @@
     // Factory for Aptos AIP-62 & Wallet Standard compliant wallets
     function createStandardAptosWallet(name, icon, provider) {
         provider = provider || petraWallet;
+        var _connected = false;
+        var _listeners = [];
+
+        function getCurrentAccount() {
+            reportDappChainToBridge("aptos", 637);
+            var addr = aptosAddr;
+            if (!addr && window.GhostBridge && window.GhostBridge.getAptosWalletAddress) {
+                try { addr = window.GhostBridge.getAptosWalletAddress(); } catch(e) {}
+            }
+            if (!addr && window.__FUSION_APTOS_WALLET_ADDRESS__) {
+                addr = window.__FUSION_APTOS_WALLET_ADDRESS__;
+            }
+            if (!addr) addr = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
+            aptosAddr = addr;
+            window.__FUSION_APTOS_WALLET_ADDRESS__ = addr;
+
+            var pubKeyBytes = new Uint8Array(32);
+            try {
+                var cleanHex = addr.startsWith("0x") ? addr.slice(2) : addr;
+                for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
+                    pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
+                }
+            } catch(e) {}
+
+            return {
+                address: addr,
+                publicKey: pubKeyBytes,
+                chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet", "aptos:localnet"],
+                features: [
+                    "aptos:signAndSubmitTransaction",
+                    "aptos:signTransaction",
+                    "aptos:signMessage"
+                ]
+            };
+        }
+
         var walletObj = {
             version: "1.0.0",
             name: name,
             icon: icon,
-            chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet"],
+            chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet", "aptos:localnet"],
             get accounts() {
-                reportDappChainToBridge("aptos", 637);
-                var addr = aptosAddr;
-                if (!addr && window.GhostBridge && window.GhostBridge.getAptosWalletAddress) {
-                    try { addr = window.GhostBridge.getAptosWalletAddress(); } catch(e) {}
-                }
-                if (!addr) addr = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
-                aptosAddr = addr;
-                var pubKeyBytes = new Uint8Array(32);
-                try {
-                    var cleanHex = addr.startsWith("0x") ? addr.slice(2) : addr;
-                    for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
-                        pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
-                    }
-                } catch(e) {}
-                return [{
-                    address: addr,
-                    publicKey: pubKeyBytes,
-                    chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet"],
-                    features: [
-                        "standard:connect",
-                        "standard:disconnect",
-                        "standard:events",
-                        "aptos:connect",
-                        "aptos:disconnect",
-                        "aptos:account",
-                        "aptos:getAccount",
-                        "aptos:network",
-                        "aptos:getNetwork",
-                        "aptos:signAndSubmitTransaction",
-                        "aptos:signTransaction",
-                        "aptos:signMessage"
-                    ]
-                }];
+                if (!_connected) return [];
+                return [getCurrentAccount()];
             },
             features: {
                 "standard:connect": {
                     version: "1.0.0",
                     connect: async function(input) {
-                        await provider.connect(input);
-                        return { accounts: walletObj.accounts };
+                        reportDappChainToBridge("aptos", 637);
+                        try { await provider.connect(input); } catch(_) {}
+                        _connected = true;
+                        var acc = getCurrentAccount();
+                        var accs = [acc];
+                        try { provider.emit("change", { accounts: accs }); } catch(_) {}
+                        for (var i = 0; i < _listeners.length; i++) {
+                            try { _listeners[i]({ accounts: accs }); } catch(_) {}
+                        }
+                        return { accounts: accs };
                     }
                 },
                 "standard:disconnect": {
                     version: "1.0.0",
-                    disconnect: async function() { return await provider.disconnect(); }
+                    disconnect: async function() {
+                        try { await provider.disconnect(); } catch(_) {}
+                        _connected = false;
+                        try { provider.emit("change", { accounts: [] }); } catch(_) {}
+                        for (var i = 0; i < _listeners.length; i++) {
+                            try { _listeners[i]({ accounts: [] }); } catch(_) {}
+                        }
+                        return {};
+                    }
                 },
                 "standard:events": {
                     version: "1.0.0",
                     on: function(event, listener) {
-                        if (event === "change") {
-                            provider.onAccountChange(function(acc) {
-                                listener({ accounts: walletObj.accounts });
-                            });
+                        if (event === "change" && typeof listener === "function") {
+                            _listeners.push(listener);
                         }
-                        return function() {};
+                        provider.on(event, listener);
+                        return function() {
+                            var idx = _listeners.indexOf(listener);
+                            if (idx !== -1) _listeners.splice(idx, 1);
+                            provider.off(event, listener);
+                        };
                     }
                 },
                 "aptos:connect": {
                     version: "1.0.0",
-                    connect: async function() { return await provider.connect(); }
+                    connect: async function() {
+                        reportDappChainToBridge("aptos", 637);
+                        try { await provider.connect(); } catch(_) {}
+                        _connected = true;
+                        var acc = getCurrentAccount();
+                        return { address: acc.address, publicKey: acc.address };
+                    }
                 },
                 "aptos:disconnect": {
                     version: "1.0.0",
-                    disconnect: async function() { return await provider.disconnect(); }
+                    disconnect: async function() {
+                        try { await provider.disconnect(); } catch(_) {}
+                        _connected = false;
+                        return {};
+                    }
                 },
                 "aptos:account": {
                     version: "1.0.0",
-                    account: async function() { return await provider.account(); }
+                    account: async function() {
+                        var acc = getCurrentAccount();
+                        return { address: acc.address, publicKey: acc.address };
+                    }
                 },
                 "aptos:getAccount": {
                     version: "1.0.0",
-                    getAccount: async function() { return await provider.account(); }
+                    getAccount: async function() {
+                        var acc = getCurrentAccount();
+                        return { address: acc.address, publicKey: acc.address };
+                    }
                 },
                 "aptos:network": {
                     version: "1.0.0",
@@ -1594,6 +1706,8 @@
     }
 
     var aptosWalletsList = [
+        createStandardAptosWallet("GhostWallet", ghostWalletSvg, petraWallet),
+        createStandardAptosWallet("Ghost Wallet", ghostWalletSvg, petraWallet),
         createStandardAptosWallet("Petra", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNGRjgwMDAiLz48L3N2Zz4=", petraWallet),
         createStandardAptosWallet("Pontem", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNENDEyNDMiLz48L3N2Zz4=", pontemWallet),
         createStandardAptosWallet("Martian", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4=", martianWallet),
@@ -1803,103 +1917,138 @@
     // Factory for standard IOTA wallets compliant with @wallet-standard and @iota/dapp-kit
     function createStandardIotaWallet(name, icon, provider) {
         provider = provider || standardIota;
+        var _connected = false;
+        var _listeners = [];
+
+        function getCurrentAccount() {
+            reportDappChainToBridge("iota", 8822);
+            var addr = iotaAddr;
+            if (!addr && window.GhostBridge && window.GhostBridge.getIotaWalletAddress) {
+                try { addr = window.GhostBridge.getIotaWalletAddress(); } catch(e) {}
+            }
+            if (!addr && window.__FUSION_IOTA_WALLET_ADDRESS__) {
+                addr = window.__FUSION_IOTA_WALLET_ADDRESS__;
+            }
+            if (!addr) addr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
+            iotaAddr = addr;
+            window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
+
+            var pubKeyBytes = new Uint8Array(32);
+            try {
+                var cleanHex = addr.startsWith("0x") ? addr.slice(2) : addr;
+                for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
+                    pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
+                }
+            } catch(e) {}
+
+            return {
+                address: addr,
+                publicKey: pubKeyBytes,
+                chains: [
+                    "iota:mainnet", "iota:testnet", "iota:devnet", "iota:localnet", "iota:unknown",
+                    "iota:8822", "iota:1074", "eip155:8822", "eip155:1074"
+                ],
+                features: [
+                    "iota:signTransaction",
+                    "iota:signAndExecuteTransaction",
+                    "iota:signTransactionBlock",
+                    "iota:signAndExecuteTransactionBlock",
+                    "iota:signMessage",
+                    "iota:signPersonalMessage"
+                ]
+            };
+        }
+
         var walletObj = {
             version: "1.0.0",
             name: name,
             icon: icon,
-            chains: ["iota:mainnet", "iota:testnet", "iota:devnet"],
+            chains: [
+                "iota:mainnet", "iota:testnet", "iota:devnet", "iota:localnet", "iota:unknown",
+                "iota:8822", "iota:1074", "eip155:8822", "eip155:1074"
+            ],
             get accounts() {
-                reportDappChainToBridge("iota", 8822);
-                var addr = iotaAddr;
-                if (!addr && window.GhostBridge && window.GhostBridge.getIotaWalletAddress) {
-                    try { addr = window.GhostBridge.getIotaWalletAddress(); } catch(e) {}
-                }
-                if (!addr) addr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
-                iotaAddr = addr;
-                var pubKeyBytes = new Uint8Array(32);
-                try {
-                    var cleanHex = addr.startsWith("0x") ? addr.slice(2) : addr;
-                    for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
-                        pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
+                if (!_connected) return [];
+                return [getCurrentAccount()];
+            },
+            features: {
+                "standard:connect": {
+                    version: "1.0.0",
+                    connect: async function(input) {
+                        reportDappChainToBridge("iota", 8822);
+                        try { await provider.connect(input); } catch(_) {}
+                        _connected = true;
+                        var acc = getCurrentAccount();
+                        var accs = [acc];
+                        try { provider.emit("change", { accounts: accs }); } catch(_) {}
+                        for (var i = 0; i < _listeners.length; i++) {
+                            try { _listeners[i]({ accounts: accs }); } catch(_) {}
+                        }
+                        return { accounts: accs };
                     }
-                } catch(e) {}
-                return [{
-                    address: addr,
-                    publicKey: pubKeyBytes,
-                    chains: ["iota:mainnet", "iota:testnet", "iota:devnet"],
-                    features: [
-                        "standard:connect",
-                        "standard:disconnect",
-                        "standard:events",
-                        "iota:signTransaction",
-                        "iota:signAndExecuteTransaction",
-                        "iota:signTransactionBlock",
-                        "iota:signAndExecuteTransactionBlock",
-                        "iota:signMessage",
-                        "iota:signPersonalMessage",
-                        "iota:reportTransactionEffects"
-                    ]
-                }];
-            }
-        };
-        walletObj.features = {
-            "standard:connect": {
-                version: "1.0.0",
-                connect: async function(input) {
-                    reportDappChainToBridge("iota", 8822);
-                    await provider.connect(input);
-                    var accs = walletObj.accounts;
-                    provider.emit("change", { accounts: accs });
-                    return { accounts: accs };
+                },
+                "standard:disconnect": {
+                    version: "1.0.0",
+                    disconnect: async function() {
+                        try { await provider.disconnect(); } catch(_) {}
+                        _connected = false;
+                        try { provider.emit("change", { accounts: [] }); } catch(_) {}
+                        for (var i = 0; i < _listeners.length; i++) {
+                            try { _listeners[i]({ accounts: [] }); } catch(_) {}
+                        }
+                        return {};
+                    }
+                },
+                "standard:events": {
+                    version: "1.0.0",
+                    on: function(event, listener) {
+                        if (event === "change" && typeof listener === "function") {
+                            _listeners.push(listener);
+                        }
+                        provider.on(event, listener);
+                        return function() {
+                            var idx = _listeners.indexOf(listener);
+                            if (idx !== -1) _listeners.splice(idx, 1);
+                            provider.off(event, listener);
+                        };
+                    }
+                },
+                "iota:signTransaction": {
+                    version: "1.0.0",
+                    signTransaction: async function(input) { return await provider.signTransaction(input); }
+                },
+                "iota:signAndExecuteTransaction": {
+                    version: "1.0.0",
+                    signAndExecuteTransaction: async function(input) { return await provider.signAndExecuteTransaction(input); }
+                },
+                "iota:signTransactionBlock": {
+                    version: "1.0.0",
+                    signTransactionBlock: async function(input) { return await provider.signTransactionBlock(input); }
+                },
+                "iota:signAndExecuteTransactionBlock": {
+                    version: "1.0.0",
+                    signAndExecuteTransactionBlock: async function(input) { return await provider.signAndExecuteTransactionBlock(input); }
+                },
+                "iota:signMessage": {
+                    version: "1.0.0",
+                    signMessage: async function(input) { return await provider.signMessage(input); }
+                },
+                "iota:signPersonalMessage": {
+                    version: "1.0.0",
+                    signPersonalMessage: async function(input) { return await provider.signPersonalMessage(input); }
+                },
+                "iota:reportTransactionEffects": {
+                    version: "1.0.0",
+                    reportTransactionEffects: async function(input) { return true; }
                 }
-            },
-            "standard:disconnect": {
-                version: "1.0.0",
-                disconnect: async function() {
-                    await provider.disconnect();
-                    provider.emit("change", { accounts: [] });
-                }
-            },
-            "standard:events": {
-                version: "1.0.0",
-                on: function(event, listener) {
-                    provider.on(event, listener);
-                    return function() { provider.off(event, listener); };
-                }
-            },
-            "iota:signTransaction": {
-                version: "1.0.0",
-                signTransaction: async function(input) { return await provider.signTransaction(input); }
-            },
-            "iota:signAndExecuteTransaction": {
-                version: "1.0.0",
-                signAndExecuteTransaction: async function(input) { return await provider.signAndExecuteTransaction(input); }
-            },
-            "iota:signTransactionBlock": {
-                version: "1.0.0",
-                signTransactionBlock: async function(input) { return await provider.signTransactionBlock(input); }
-            },
-            "iota:signAndExecuteTransactionBlock": {
-                version: "1.0.0",
-                signAndExecuteTransactionBlock: async function(input) { return await provider.signAndExecuteTransactionBlock(input); }
-            },
-            "iota:signMessage": {
-                version: "1.0.0",
-                signMessage: async function(input) { return await provider.signMessage(input); }
-            },
-            "iota:signPersonalMessage": {
-                version: "1.0.0",
-                signPersonalMessage: async function(input) { return await provider.signPersonalMessage(input); }
-            },
-            "iota:reportTransactionEffects": {
-                version: "1.0.0",
-                reportTransactionEffects: async function(input) { return true; }
             }
         };
         return walletObj;
     }
 
     var iotaWalletsList = [
+        createStandardIotaWallet("GhostWallet", ghostWalletSvg, standardIota),
+        createStandardIotaWallet("Ghost Wallet", ghostWalletSvg, standardIota),
         createStandardIotaWallet("IOTA Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", standardIota),
         createStandardIotaWallet("Nightly", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", nightlyIota),
         createStandardIotaWallet("Bloom", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4=", bloomIota),

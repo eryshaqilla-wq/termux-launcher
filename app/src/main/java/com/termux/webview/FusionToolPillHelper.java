@@ -393,6 +393,13 @@ public class FusionToolPillHelper {
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll == null) return;
 
+        if (manager.mToolPill != null) {
+            manager.mToolPill.setVisibility(View.VISIBLE);
+        }
+        if (sToolPill != null) {
+            sToolPill.setVisibility(View.VISIBLE);
+        }
+
         FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
         boolean isCollapsed = activeTab != null ? activeTab.mIsToolPillCollapsed : sIsCollapsed;
 
@@ -483,6 +490,12 @@ public class FusionToolPillHelper {
             return;
         }
         sHasFormFocus = tab.mHasFormFocus;
+        if (manager.mToolPill != null) {
+            manager.mToolPill.setVisibility(View.VISIBLE);
+        }
+        if (sToolPill != null) {
+            sToolPill.setVisibility(View.VISIBLE);
+        }
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll != null) {
             scroll.setVisibility(View.VISIBLE);
@@ -515,6 +528,12 @@ public class FusionToolPillHelper {
             lp.setMargins(0, targetTop, 10, 0);
             manager.mPaneHost.addView(scroll, lp);
         }
+        if (manager.mToolPill != null) {
+            manager.mToolPill.setVisibility(View.VISIBLE);
+        }
+        if (sToolPill != null) {
+            sToolPill.setVisibility(View.VISIBLE);
+        }
         scroll.setVisibility(View.VISIBLE);
         scroll.setElevation(160.0f);
         scroll.bringToFront();
@@ -528,18 +547,6 @@ public class FusionToolPillHelper {
         }
         if (sToolScroll != null) {
             sToolScroll.setVisibility(View.GONE);
-        }
-        if (manager != null && manager.mToolPill != null) {
-            manager.mToolPill.setVisibility(View.GONE);
-        }
-        if (sToolPill != null) {
-            sToolPill.setVisibility(View.GONE);
-        }
-        if (manager != null && manager.mToolToggleBtn != null) {
-            manager.mToolToggleBtn.setVisibility(View.GONE);
-        }
-        if (sToggleBtn != null) {
-            sToggleBtn.setVisibility(View.GONE);
         }
     }
 
