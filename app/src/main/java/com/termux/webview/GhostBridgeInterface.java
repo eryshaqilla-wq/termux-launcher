@@ -583,9 +583,10 @@ public class GhostBridgeInterface implements Runnable {
                 suiAddr = FusionWalletHelper.getMasterSuiAddress();
             }
             if (suiAddr != null && !suiAddr.isEmpty()) {
-                return "{\"result\":[{\"address\":\"" + suiAddr + "\",\"publicKey\":\"" + suiAddr + "\"}]}";
+                String pk = "0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0";
+                return "{\"result\":[{\"address\":\"" + suiAddr + "\",\"publicKey\":\"" + pk + "\"}]}";
             }
-            return "{\"result\":[{\"address\":\"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151\",\"publicKey\":\"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151\"}]}";
+            return "{\"result\":[{\"address\":\"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151\",\"publicKey\":\"0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0\"}]}";
         }
         if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
             handleDappChainDetected("aptos", 637);
@@ -634,9 +635,10 @@ public class GhostBridgeInterface implements Runnable {
                 iotaAddr = FusionWalletHelper.getMasterIotaAddress();
             }
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
-                return "{\"result\":[{\"address\":\"" + iotaAddr + "\",\"publicKey\":\"" + iotaAddr + "\"}]}";
+                String pk = "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6";
+                return "{\"result\":[{\"address\":\"" + iotaAddr + "\",\"publicKey\":\"" + pk + "\"}]}";
             }
-            return "{\"result\":[{\"address\":\"0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd\",\"publicKey\":\"0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd\"}]}";
+            return "{\"result\":[{\"address\":\"0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a\",\"publicKey\":\"0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6\"}]}";
         }
         if (str.contains("eth_requestAccounts")) {
             if (checkRpcAlive()) {
@@ -801,6 +803,11 @@ public class GhostBridgeInterface implements Runnable {
     }
 
     @JavascriptInterface
+    public String getSuiPublicKey() {
+        return "0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0";
+    }
+
+    @JavascriptInterface
     public void setSuiWalletDirect(String str, String str2) {
         setSuiWallet(str, str2);
     }
@@ -850,6 +857,11 @@ public class GhostBridgeInterface implements Runnable {
     @JavascriptInterface
     public boolean isIotaActive() {
         return FusionWalletHelper.hasIotaWallets();
+    }
+
+    @JavascriptInterface
+    public String getIotaPublicKey() {
+        return "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6";
     }
 
     @JavascriptInterface

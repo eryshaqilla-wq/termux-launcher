@@ -118,7 +118,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public String mCurrentAptosWalletName = "eso-1";
     public String mCurrentAptosWalletAddress = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
     public String mCurrentIotaWalletName = "eso-1";
-    public String mCurrentIotaWalletAddress = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
+    public String mCurrentIotaWalletAddress = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
     public String mCurrentChainKey = "base";
     public String mWcUri = "";
     public boolean mIsGhostMode = false;

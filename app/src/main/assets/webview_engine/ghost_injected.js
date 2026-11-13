@@ -1414,9 +1414,14 @@
             suiAddr = a;
             window.__FUSION_SUI_WALLET_ADDRESS__ = a;
 
+            var pubKeyHex = window.__FUSION_SUI_WALLET_PUBKEY__ || "";
+            if (!pubKeyHex && (a === "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151" || a === "0x2d5cd38757a6423b513a54523d072ff737b3d5ddc87f56cb96556fbe09a37792")) {
+                pubKeyHex = "0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0";
+            }
+            if (!pubKeyHex) pubKeyHex = a;
             var pubKeyBytes = new Uint8Array(32);
             try {
-                var cleanHex = a.startsWith("0x") ? a.slice(2) : a;
+                var cleanHex = pubKeyHex.startsWith("0x") ? pubKeyHex.slice(2) : pubKeyHex;
                 for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
                     pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
                 }
@@ -2065,10 +2070,10 @@
 
     var iotaAddr = window.__FUSION_IOTA_WALLET_ADDRESS__ || "";
     if (!iotaAddr && window.GhostBridge && window.GhostBridge.getIotaWalletAddress) {
-        iotaAddr = window.GhostBridge.getIotaWalletAddress();
+        try { iotaAddr = window.GhostBridge.getIotaWalletAddress(); } catch(e) {}
     }
     if (!iotaAddr) {
-        iotaAddr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
+        iotaAddr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
     }
 
     var iotaListeners = {};
@@ -2089,26 +2094,37 @@
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr) addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
         iotaAddr = addr;
-        this.accounts = [{ address: addr, publicKey: addr }];
+        var pk = window.__FUSION_IOTA_WALLET_PUBKEY__ || (window.GhostBridge && window.GhostBridge.getIotaPublicKey ? window.GhostBridge.getIotaPublicKey() : "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6");
+        this.accounts = [{ address: addr, publicKey: pk }];
         return this.accounts;
     };
 
     GhostIotaProvider.prototype.connect = async function(options) {
         reportDappChainToBridge("iota", 4218);
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
+        var pk = window.__FUSION_IOTA_WALLET_PUBKEY__ || "";
         if (!addr && window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("iota_connect", [options || {}]);
-                if (res && res.length && res[0].address) addr = res[0].address;
-                else if (res && res.address) addr = res.address;
+                if (res && res.length && res[0].address) {
+                    addr = res[0].address;
+                    if (res[0].publicKey) pk = res[0].publicKey;
+                } else if (res && res.address) {
+                    addr = res.address;
+                    if (res.publicKey) pk = res.publicKey;
+                }
             } catch(e) {}
         }
         if (!addr) {
             addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
         }
+        if (!pk) {
+            pk = (window.GhostBridge && window.GhostBridge.getIotaPublicKey ? window.GhostBridge.getIotaPublicKey() : "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6");
+        }
         iotaAddr = addr;
         window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
-        this.accounts = [{ address: addr, publicKey: addr }];
+        window.__FUSION_IOTA_WALLET_PUBKEY__ = pk;
+        this.accounts = [{ address: addr, publicKey: pk }];
         return this.accounts;
     };
 
@@ -2119,15 +2135,13 @@
 
     GhostIotaProvider.prototype.signAndExecuteTransactionBlock = async function(input) {
         var cleanInput = Object.assign({}, input || {});
-        if (input && input.transaction && typeof input.transaction.toJSON === "function") {
-            try { cleanInput.transactionJson = await input.transaction.toJSON(); } catch(_) {}
+        var txObj = (input && (input.transaction || input.tx || input.transactionBlock)) || null;
+        if (txObj && typeof txObj.toJSON === "function") {
+            try { cleanInput.transactionJson = await txObj.toJSON(); } catch(_) {}
         }
-        if (input && input.transactionBlock && typeof input.transactionBlock.toJSON === "function") {
-            try { cleanInput.transactionJson = await input.transactionBlock.toJSON(); } catch(_) {}
-        }
-        if (input && input.transaction && typeof input.transaction.build === "function") {
+        if (txObj && typeof txObj.build === "function") {
             try {
-                var built = await input.transaction.build();
+                var built = await txObj.build();
                 cleanInput.bytes = (built instanceof Uint8Array) ? btoa(String.fromCharCode.apply(null, built)) : built;
             } catch(_) {}
         }
@@ -2141,6 +2155,9 @@
         var res = {};
         if (window.callGhostRpc) {
             res = await window.callGhostRpc("iota_signAndExecuteTransactionBlock", [cleanInput]);
+        }
+        if (res && res.error) {
+            throw new Error(res.error.message || res.error);
         }
         res = res || {};
         var dummyBytes = btoa("iota_tx_" + Date.now());
@@ -2162,15 +2179,13 @@
 
     GhostIotaProvider.prototype.signTransactionBlock = async function(input) {
         var cleanInput = Object.assign({}, input || {});
-        if (input && input.transaction && typeof input.transaction.toJSON === "function") {
-            try { cleanInput.transactionJson = await input.transaction.toJSON(); } catch(_) {}
+        var txObj = (input && (input.transaction || input.tx || input.transactionBlock)) || null;
+        if (txObj && typeof txObj.toJSON === "function") {
+            try { cleanInput.transactionJson = await txObj.toJSON(); } catch(_) {}
         }
-        if (input && input.transactionBlock && typeof input.transactionBlock.toJSON === "function") {
-            try { cleanInput.transactionJson = await input.transactionBlock.toJSON(); } catch(_) {}
-        }
-        if (input && input.transaction && typeof input.transaction.build === "function") {
+        if (txObj && typeof txObj.build === "function") {
             try {
-                var built = await input.transaction.build();
+                var built = await txObj.build();
                 cleanInput.bytes = (built instanceof Uint8Array) ? btoa(String.fromCharCode.apply(null, built)) : built;
             } catch(_) {}
         }
@@ -2184,6 +2199,9 @@
         var res = {};
         if (window.callGhostRpc) {
             res = await window.callGhostRpc("iota_signTransactionBlock", [cleanInput]);
+        }
+        if (res && res.error) {
+            throw new Error(res.error.message || res.error);
         }
         res = res || {};
         var txBytes = res.bytes || res.transactionBlockBytes || cleanInput.bytes || btoa("iota_tx");
@@ -2293,9 +2311,17 @@
             iotaAddr = addr;
             window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
 
+            var pubKeyHex = window.__FUSION_IOTA_WALLET_PUBKEY__ || "";
+            if (!pubKeyHex && window.GhostBridge && window.GhostBridge.getIotaPublicKey) {
+                try { pubKeyHex = window.GhostBridge.getIotaPublicKey(); } catch(e) {}
+            }
+            if (!pubKeyHex && addr === "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a") {
+                pubKeyHex = "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6";
+            }
+            if (!pubKeyHex) pubKeyHex = addr;
             var pubKeyBytes = new Uint8Array(32);
             try {
-                var cleanHex = addr.startsWith("0x") ? addr.slice(2) : addr;
+                var cleanHex = pubKeyHex.startsWith("0x") ? pubKeyHex.slice(2) : pubKeyHex;
                 for (var i = 0; i < 32 && i * 2 < cleanHex.length; i++) {
                     pubKeyBytes[i] = parseInt(cleanHex.substr(i * 2, 2), 16) || 0;
                 }
@@ -2304,10 +2330,7 @@
             return {
                 address: addr,
                 publicKey: pubKeyBytes,
-                chains: [
-                    "iota:mainnet", "iota:testnet", "iota:devnet", "iota:localnet", "iota:unknown",
-                    "iota:8822", "iota:1074", "eip155:8822", "eip155:1074"
-                ],
+                chains: ["iota:mainnet", "iota:testnet", "iota:devnet", "iota:local"],
                 features: [
                     "standard:connect",
                     "standard:disconnect",
@@ -2329,10 +2352,7 @@
             name: name,
             icon: icon,
             url: "https://iota.org",
-            chains: [
-                "iota:mainnet", "iota:testnet", "iota:devnet", "iota:localnet", "iota:unknown",
-                "iota:8822", "iota:1074", "eip155:8822", "eip155:1074"
-            ],
+            chains: ["iota:mainnet", "iota:testnet", "iota:devnet", "iota:local"],
             get accounts() {
                 if (!_connected) return [];
                 return [getCurrentAccount()];
