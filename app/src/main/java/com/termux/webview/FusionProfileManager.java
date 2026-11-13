@@ -279,7 +279,7 @@ public class FusionProfileManager {
      */
     public static String getEffectiveUserAgent(DeviceProfile device, boolean isDesktop) {
         if (isDesktop) {
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Phantom/24.1.0/";
         }
         String ua = (device != null && device.userAgent != null && !device.userAgent.isEmpty())
                 ? device.userAgent

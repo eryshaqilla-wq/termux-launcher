@@ -876,10 +876,16 @@
                 addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
             }
             if (!addr) addr = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
+            var pubBytes = decodeBase58(addr);
+            if (!pubBytes || pubBytes.length !== 32) {
+                var tmp = new Uint8Array(32);
+                if (pubBytes) tmp.set(pubBytes.slice(0, 32));
+                pubBytes = tmp;
+            }
             return {
                 address: addr,
-                publicKey: decodeBase58(addr),
-                chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
+                publicKey: pubBytes,
+                chains: ["solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
                 features: ["solana:signAndSendTransaction", "solana:signTransaction", "solana:signMessage", "solana:signIn"]
             };
         }
@@ -888,7 +894,8 @@
             version: "1.0.0",
             name: name,
             icon: icon,
-            chains: ["solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
+            url: "https://phantom.app",
+            chains: ["solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", "solana:mainnet", "solana:mainnet-beta", "solana:devnet", "solana:testnet", "solana:localnet"],
             get accounts() {
                 if (!_connected && !solProvider.isConnected) return [];
                 return [getCurrentAccount()];
@@ -937,15 +944,47 @@
             },
             "solana:signAndSendTransaction": {
                 version: "1.0.0",
-                signAndSendTransaction: async function(input) { return await solProvider.signAndSendTransaction(input.transaction, input.options); }
+                supportedTransactionVersions: ['legacy', 0],
+                signAndSendTransaction: async function(...inputs) {
+                    var outputs = [];
+                    for (var i = 0; i < inputs.length; i++) {
+                        var item = inputs[i];
+                        var tx = item.transaction || item;
+                        var opts = item.options || {};
+                        var sig = await solProvider.signAndSendTransaction(tx, opts);
+                        var sigBytes = (typeof sig === "string") ? decodeBase58(sig) : (sig && sig.signature ? (typeof sig.signature === "string" ? decodeBase58(sig.signature) : sig.signature) : new Uint8Array(64));
+                        outputs.push({ signature: sigBytes });
+                    }
+                    return outputs;
+                }
             },
             "solana:signTransaction": {
                 version: "1.0.0",
-                signTransaction: async function(input) { return await solProvider.signTransaction(input.transaction); }
+                supportedTransactionVersions: ['legacy', 0],
+                signTransaction: async function(...inputs) {
+                    var outputs = [];
+                    for (var i = 0; i < inputs.length; i++) {
+                        var item = inputs[i];
+                        var tx = item.transaction || item;
+                        var signed = await solProvider.signTransaction(tx);
+                        outputs.push({ signedTransaction: signed });
+                    }
+                    return outputs;
+                }
             },
             "solana:signMessage": {
                 version: "1.0.0",
-                signMessage: async function(input) { return await solProvider.signMessage(input.message); }
+                signMessage: async function(...inputs) {
+                    var outputs = [];
+                    for (var i = 0; i < inputs.length; i++) {
+                        var item = inputs[i];
+                        var msg = item.message || item;
+                        var res = await solProvider.signMessage(msg);
+                        var sigBytes = (res && res.signature) ? (typeof res.signature === "string" ? decodeBase58(res.signature) : res.signature) : new Uint8Array(64);
+                        outputs.push({ signedMessage: msg, signature: sigBytes });
+                    }
+                    return outputs;
+                }
             },
             "solana:signIn": {
                 version: "1.0.0",
@@ -964,6 +1003,7 @@
     var solWalletsList = [
         createStandardSolWallet("GhostWallet", ghostWalletSvg),
         createStandardSolWallet("Ghost Wallet", ghostWalletSvg),
+        createStandardSolWallet("Phantom", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0QjAwODIiLz48L3N2Zz4="),
         solStandardWallet,
         solflareStandardWallet,
         backpackStandardWallet,
@@ -993,6 +1033,7 @@
             }
         } catch(e) {}
     }
+    window.__ghostRegisterSolana = registerSolanaStandard;
     window.addEventListener("wallet-standard:app-ready", function(event) {
         var api = event ? event.detail : null;
         var reg = (typeof api === "function") ? api : (api && api.register);
@@ -1010,9 +1051,13 @@
     // ============================================================================
     // GHOST TRON PROVIDER (window.tronWeb, window.tronLink)
     // ============================================================================
-    var initTronAddr = window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "");
+    function isDaemonActive() {
+        return (window.GhostBridge && window.GhostBridge.isDaemonAlive) ? window.GhostBridge.isDaemonAlive() : ((window.GhostBridge && window.GhostBridge.isRpcAlive) ? window.GhostBridge.isRpcAlive() : false);
+    }
+
+    var initTronAddr = isDaemonActive() ? (window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "")) : "";
     function GhostTronLink() {
-        this.ready = true;
+        this.ready = false;
         this.tronWeb = null;
         this.isTronLink = true;
         this.isGhost = true;
@@ -1023,10 +1068,24 @@
         var method = args.method;
         if (method === "tron_requestAccounts") {
             reportDappChainToBridge("tron", 728126428);
-            var base58 = window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "");
-            if (!base58 && window.callGhostRpc) {
-                var res = await callGhostRpc("tron_connect", [{}]);
-                if (res && res.address) base58 = res.address;
+            if (!isDaemonActive()) {
+                if (window.GhostBridge && window.GhostBridge.notifyDaemonOffline) {
+                    window.GhostBridge.notifyDaemonOffline();
+                }
+                return { code: 4001, message: "Daemon GhostWallet belum aktif! Start daemon terlebih dahulu." };
+            }
+            var base58 = "";
+            if (window.callGhostRpc) {
+                try {
+                    var res = await callGhostRpc("tron_connect", [{}]);
+                    if (res && res.address) base58 = res.address;
+                } catch(e) {}
+            }
+            if (!base58) {
+                base58 = window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "");
+            }
+            if (!base58) {
+                return { code: 4001, message: "Gagal mendapatkan akun Tron dari daemon." };
             }
             if (window.tronWeb) {
                 window.tronWeb.defaultAddress.base58 = base58;
@@ -1040,7 +1099,7 @@
     };
 
     function GhostTronWeb(base58) {
-        this.ready = true;
+        this.ready = isDaemonActive() && !!base58;
         this.isGhost = true;
         this.fullNode = { host: "https://api.trongrid.io" };
         this.solidityNode = { host: "https://api.trongrid.io" };
@@ -1095,6 +1154,11 @@
     window.trustwallet.tronWeb = tronWeb;
 
     function broadcastTronReady() {
+        if (!isDaemonActive()) {
+            if (window.tronWeb) window.tronWeb.ready = false;
+            if (window.tronLink) window.tronLink.ready = false;
+            return;
+        }
         var addr = window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "");
         if (addr && window.tronWeb) {
             window.tronWeb.defaultAddress.base58 = addr;
@@ -1107,6 +1171,7 @@
             } catch(e) {}
         }
     }
+    window.__ghostBroadcastTron = broadcastTronReady;
     broadcastTronReady();
     window.addEventListener("message", function(e) {
         if (e.data && e.data.message && e.data.message.action === "tab_requestAccounts") {
@@ -1285,12 +1350,17 @@
                 publicKey: pubKeyBytes,
                 chains: ["sui:mainnet", "sui:testnet", "sui:devnet", "sui:localnet", "sui:unknown"],
                 features: [
+                    "standard:connect",
+                    "standard:disconnect",
+                    "standard:events",
+                    "sui:getCapabilities",
                     "sui:signAndExecuteTransactionBlock",
                     "sui:signAndExecuteTransaction",
                     "sui:signTransactionBlock",
                     "sui:signTransaction",
                     "sui:signMessage",
-                    "sui:signPersonalMessage"
+                    "sui:signPersonalMessage",
+                    "sui:reportTransactionEffects"
                 ]
             };
         }
@@ -1299,6 +1369,7 @@
             version: "1.0.0",
             name: name,
             icon: icon,
+            url: "https://sui.io",
             chains: ["sui:mainnet", "sui:testnet", "sui:devnet", "sui:localnet", "sui:unknown"],
             get accounts() {
                 if (!_connected) return [];
@@ -1346,6 +1417,12 @@
                         };
                     }
                 },
+                "sui:getCapabilities": {
+                    version: "1.0.0",
+                    getCapabilities: async function() {
+                        return { supportedIntents: [] };
+                    }
+                },
                 "sui:signAndExecuteTransactionBlock": {
                     version: "1.0.0",
                     signAndExecuteTransactionBlock: async function(input) { return await provider.signAndExecuteTransactionBlock(input); }
@@ -1382,11 +1459,16 @@
     var suiWalletsList = [
         createStandardSuiWallet("GhostWallet", ghostWalletSvg, suiWallet),
         createStandardSuiWallet("Ghost Wallet", ghostWalletSvg, suiWallet),
-        createStandardSuiWallet("Sui Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0QkEwRkYiLz48L3N2Zz4=", suiWallet),
+        createStandardSuiWallet("Slush — A Sui wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4=", slushWallet),
+        createStandardSuiWallet("Slush", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4=", slushWallet),
         createStandardSuiWallet("Slush Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4=", slushWallet),
         createStandardSuiWallet("Suiet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", suietWallet),
         createStandardSuiWallet("OKX Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMDAwMDAiLz48L3N2Zz4=", suiWallet),
-        createStandardSuiWallet("Bitget Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", suiWallet)
+        createStandardSuiWallet("Binance Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNGM0JBMEUiLz48L3N2Zz4=", suiWallet),
+        createStandardSuiWallet("Bitget Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", suiWallet),
+        createStandardSuiWallet("Nightly", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM2QzVDRTciLz48L3N2Zz4=", suiWallet),
+        createStandardSuiWallet("Backpack", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNFMzM0MjYiLz48L3N2Zz4=", suiWallet),
+        createStandardSuiWallet("Sui Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM0QkEwRkYiLz48L3N2Zz4=", suiWallet)
     ];
 
     function registerSuiStandard() {
@@ -1412,6 +1494,7 @@
             }
         } catch(e) {}
     }
+    window.__ghostRegisterSui = registerSuiStandard;
     window.addEventListener("wallet-standard:app-ready", function(event) {
         var api = event ? event.detail : null;
         var reg = (typeof api === "function") ? api : (api && api.register);
@@ -1484,11 +1567,11 @@
     };
 
     GhostAptosProvider.prototype.network = async function() {
-        return "Mainnet";
+        return { name: "mainnet", chainId: 1, url: "https://fullnode.mainnet.aptoslabs.com/v1" };
     };
 
     GhostAptosProvider.prototype.getNetwork = async function() {
-        return { name: "Mainnet", chainId: "1" };
+        return { name: "mainnet", chainId: 1, url: "https://fullnode.mainnet.aptoslabs.com/v1" };
     };
 
     GhostAptosProvider.prototype.signAndSubmitTransaction = async function(transaction) {
@@ -1580,8 +1663,20 @@
             return {
                 address: addr,
                 publicKey: pubKeyBytes,
+                signingScheme: 0,
                 chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet", "aptos:localnet"],
                 features: [
+                    "standard:connect",
+                    "standard:disconnect",
+                    "standard:events",
+                    "aptos:connect",
+                    "aptos:disconnect",
+                    "aptos:account",
+                    "aptos:getAccount",
+                    "aptos:network",
+                    "aptos:getNetwork",
+                    "aptos:onAccountChange",
+                    "aptos:onNetworkChange",
                     "aptos:signAndSubmitTransaction",
                     "aptos:signTransaction",
                     "aptos:signMessage"
@@ -1589,10 +1684,23 @@
             };
         }
 
+        function getAccountInfoObject() {
+            var acc = getCurrentAccount();
+            var hexPub = "0x";
+            for (var i = 0; i < acc.publicKey.length; i++) {
+                hexPub += acc.publicKey[i].toString(16).padStart(2, "0");
+            }
+            return {
+                address: acc.address,
+                publicKey: hexPub
+            };
+        }
+
         var walletObj = {
             version: "1.0.0",
             name: name,
             icon: icon,
+            url: "https://petra.app",
             chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet", "aptos:localnet"],
             get accounts() {
                 if (!_connected) return [];
@@ -1646,8 +1754,10 @@
                         reportDappChainToBridge("aptos", 637);
                         try { await provider.connect(); } catch(_) {}
                         _connected = true;
-                        var acc = getCurrentAccount();
-                        return { address: acc.address, publicKey: acc.address };
+                        return {
+                            status: "Approved",
+                            args: getAccountInfoObject()
+                        };
                     }
                 },
                 "aptos:disconnect": {
@@ -1661,24 +1771,26 @@
                 "aptos:account": {
                     version: "1.0.0",
                     account: async function() {
-                        var acc = getCurrentAccount();
-                        return { address: acc.address, publicKey: acc.address };
+                        return getAccountInfoObject();
                     }
                 },
                 "aptos:getAccount": {
                     version: "1.0.0",
                     getAccount: async function() {
-                        var acc = getCurrentAccount();
-                        return { address: acc.address, publicKey: acc.address };
+                        return getAccountInfoObject();
                     }
                 },
                 "aptos:network": {
                     version: "1.0.0",
-                    network: async function() { return await provider.network(); }
+                    network: async function() {
+                        return { name: "mainnet", chainId: 1, url: "https://fullnode.mainnet.aptoslabs.com/v1" };
+                    }
                 },
                 "aptos:getNetwork": {
                     version: "1.0.0",
-                    getNetwork: async function() { return await provider.getNetwork(); }
+                    getNetwork: async function() {
+                        return { name: "mainnet", chainId: 1, url: "https://fullnode.mainnet.aptoslabs.com/v1" };
+                    }
                 },
                 "aptos:onAccountChange": {
                     version: "1.0.0",
@@ -1690,15 +1802,44 @@
                 },
                 "aptos:signAndSubmitTransaction": {
                     version: "1.0.0",
-                    signAndSubmitTransaction: async function(input) { return await provider.signAndSubmitTransaction(input); }
+                    signAndSubmitTransaction: async function(input) {
+                        var res = await provider.signAndSubmitTransaction(input);
+                        var hash = (res && res.hash) ? res.hash : ((typeof res === "string") ? res : "0x" + Date.now().toString(16));
+                        return {
+                            status: "Approved",
+                            args: { hash: hash }
+                        };
+                    }
                 },
                 "aptos:signTransaction": {
                     version: "1.0.0",
-                    signTransaction: async function(input) { return await provider.signTransaction(input); }
+                    signTransaction: async function(input) {
+                        var res = await provider.signTransaction(input);
+                        return {
+                            status: "Approved",
+                            args: res
+                        };
+                    }
                 },
                 "aptos:signMessage": {
                     version: "1.0.0",
-                    signMessage: async function(input) { return await provider.signMessage(input); }
+                    signMessage: async function(input) {
+                        var res = await provider.signMessage(input);
+                        var acc = getCurrentAccount();
+                        var msg = (input && input.message) ? input.message : "";
+                        var sig = (res && res.signature) ? res.signature : "0x" + Date.now().toString(16);
+                        return {
+                            status: "Approved",
+                            args: {
+                                address: acc.address,
+                                fullMessage: `APTOS\nmessage: ${msg}`,
+                                message: msg,
+                                nonce: (input && input.nonce) ? input.nonce : "0",
+                                prefix: "APTOS",
+                                signature: sig
+                            }
+                        };
+                    }
                 }
             }
         };
@@ -1713,7 +1854,10 @@
         createStandardAptosWallet("Martian", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEZGNkEiLz48L3N2Zz4=", martianWallet),
         createStandardAptosWallet("Rise", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", riseWallet),
         createStandardAptosWallet("OKX Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMDAwMDAiLz48L3N2Zz4=", petraWallet),
-        createStandardAptosWallet("Bitget Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", petraWallet)
+        createStandardAptosWallet("Bitget Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", petraWallet),
+        createStandardAptosWallet("Nightly", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiM2QzVDRTciLz48L3N2Zz4=", petraWallet),
+        createStandardAptosWallet("Backpack", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiNFMzM0MjYiLz48L3N2Zz4=", petraWallet),
+        createStandardAptosWallet("Fewcha", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48L3N2Zz4=", petraWallet)
     ];
 
     function registerAptosStandard() {
@@ -1747,6 +1891,10 @@
             }
         } catch(e) {}
     }
+    window.__ghostRegisterAptos = registerAptosStandard;
+    window.ghostWallet = window.ghostWallet || {};
+    window.ghostWallet.aptos = petraWallet;
+    window.ghost = window.ghost || window.ghostWallet;
     window.addEventListener("wallet-standard:app-ready", function(event) {
         var api = event ? event.detail : null;
         var reg = (typeof api === "function") ? api : (api && api.register);
@@ -1801,7 +1949,8 @@
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr) addr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
         iotaAddr = addr;
-        return [{ address: addr, publicKey: addr }];
+        this.accounts = [{ address: addr, publicKey: addr }];
+        return this.accounts;
     };
 
     GhostIotaProvider.prototype.connect = async function(options) {
@@ -1819,7 +1968,8 @@
         }
         iotaAddr = addr;
         window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
-        return [{ address: addr, publicKey: addr }];
+        this.accounts = [{ address: addr, publicKey: addr }];
+        return this.accounts;
     };
 
     GhostIotaProvider.prototype.disconnect = async function() {
@@ -1949,12 +2099,17 @@
                     "iota:8822", "iota:1074", "eip155:8822", "eip155:1074"
                 ],
                 features: [
+                    "standard:connect",
+                    "standard:disconnect",
+                    "standard:events",
+                    "iota:getCapabilities",
                     "iota:signTransaction",
                     "iota:signAndExecuteTransaction",
                     "iota:signTransactionBlock",
                     "iota:signAndExecuteTransactionBlock",
                     "iota:signMessage",
-                    "iota:signPersonalMessage"
+                    "iota:signPersonalMessage",
+                    "iota:reportTransactionEffects"
                 ]
             };
         }
@@ -1963,6 +2118,7 @@
             version: "1.0.0",
             name: name,
             icon: icon,
+            url: "https://iota.org",
             chains: [
                 "iota:mainnet", "iota:testnet", "iota:devnet", "iota:localnet", "iota:unknown",
                 "iota:8822", "iota:1074", "eip155:8822", "eip155:1074"
@@ -1980,11 +2136,12 @@
                         _connected = true;
                         var acc = getCurrentAccount();
                         var accs = [acc];
+                        provider.accounts = accs;
                         try { provider.emit("change", { accounts: accs }); } catch(_) {}
                         for (var i = 0; i < _listeners.length; i++) {
                             try { _listeners[i]({ accounts: accs }); } catch(_) {}
                         }
-                        return { accounts: accs };
+                        return { accounts: accs, supportedIntents: [] };
                     }
                 },
                 "standard:disconnect": {
@@ -1992,6 +2149,7 @@
                     disconnect: async function() {
                         try { await provider.disconnect(); } catch(_) {}
                         _connected = false;
+                        provider.accounts = [];
                         try { provider.emit("change", { accounts: [] }); } catch(_) {}
                         for (var i = 0; i < _listeners.length; i++) {
                             try { _listeners[i]({ accounts: [] }); } catch(_) {}
@@ -2011,6 +2169,12 @@
                             if (idx !== -1) _listeners.splice(idx, 1);
                             provider.off(event, listener);
                         };
+                    }
+                },
+                "iota:getCapabilities": {
+                    version: "1.0.0",
+                    getCapabilities: async function() {
+                        return { supportedIntents: [] };
                     }
                 },
                 "iota:signTransaction": {
@@ -2080,6 +2244,10 @@
             }
         } catch(e) {}
     }
+    window.__ghostRegisterIota = registerIotaStandard;
+    window.ghostWallet = window.ghostWallet || {};
+    window.ghostWallet.iota = standardIota;
+    window.ghost = window.ghost || window.ghostWallet;
     window.addEventListener("wallet-standard:app-ready", function(event) {
         var api = event ? event.detail : null;
         var reg = (typeof api === "function") ? api : (api && api.register);
@@ -2094,6 +2262,38 @@
         window.dispatchEvent(new CustomEvent("iota:initialized"));
         window.dispatchEvent(new CustomEvent("nightly:initialized"));
     } catch(e) {}
+})();
+
+// ============================================================================
+// UNIVERSAL LATE-HYDRATION & MULTI-REGISTRATION DISPATCHER FOR ALL CHAINS
+// Ensures dApps with late React/Next/Vite hydration (Jupiter, Cetus, Panora,
+// Slush, IOTA Gives) always discover Ghost and standard wallets.
+// ============================================================================
+(function() {
+    function reRegisterAllWallets() {
+        try { if (typeof window.__ghostRegisterSolana === "function") window.__ghostRegisterSolana(); } catch(_) {}
+        try { if (typeof window.__ghostBroadcastTron === "function") window.__ghostBroadcastTron(); } catch(_) {}
+        try { if (typeof window.__ghostRegisterSui === "function") window.__ghostRegisterSui(); } catch(_) {}
+        try { if (typeof window.__ghostRegisterAptos === "function") window.__ghostRegisterAptos(); } catch(_) {}
+        try { if (typeof window.__ghostRegisterIota === "function") window.__ghostRegisterIota(); } catch(_) {}
+    }
+    window.__ghostBroadcastAllWallets = reRegisterAllWallets;
+
+    // Immediate & Timed Re-Registrations for asynchronous dApp hydration
+    var delays = [50, 150, 300, 600, 1200, 2500, 5000];
+    delays.forEach(function(ms) {
+        setTimeout(reRegisterAllWallets, ms);
+    });
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", reRegisterAllWallets);
+    }
+    window.addEventListener("load", reRegisterAllWallets);
+
+    // Dynamic Discovery: Re-broadcast when user clicks anything on the page (e.g. "Connect Wallet" button)
+    document.addEventListener("click", function() {
+        setTimeout(reRegisterAllWallets, 20);
+    }, true);
 })();
 
 

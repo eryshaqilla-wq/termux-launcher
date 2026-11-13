@@ -367,6 +367,11 @@ public class GhostBridgeInterface implements Runnable {
     }
 
     @JavascriptInterface
+    public boolean isRpcAlive() {
+        return checkRpcAlive();
+    }
+
+    @JavascriptInterface
     public String listDatabaseFiles(String str) {
         String[] list;
         if (str == null) {
@@ -471,6 +476,21 @@ public class GhostBridgeInterface implements Runnable {
         }
         if (str.contains("sol_connect") || str.contains("solana_requestAccounts") || str.contains("sol_accounts") || str.contains("sol_getAccounts") || str.contains("solana_accounts")) {
             handleDappChainDetected("solana", 501);
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline();
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
+            String daemonResp = forwardToDaemon(str);
+            if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                try {
+                    JSONObject jo = new JSONObject(daemonResp);
+                    JSONObject resObj = jo.optJSONObject("result");
+                    if (resObj != null && resObj.has("publicKey")) {
+                        sCurrentSolWalletAddress = resObj.getString("publicKey");
+                    }
+                } catch (Exception ignored) {}
+                return daemonResp;
+            }
             String solAddr = sCurrentSolWalletAddress;
             if (solAddr == null || solAddr.isEmpty()) {
                 solAddr = FusionWalletHelper.getMasterSolAddress();
@@ -478,14 +498,18 @@ public class GhostBridgeInterface implements Runnable {
             if (solAddr != null && !solAddr.isEmpty()) {
                 return "{\"result\":{\"publicKey\":\"" + solAddr + "\"}}";
             }
+            return daemonResp;
+        }
+        if (str.contains("sol_signIn")) {
+            handleDappChainDetected("solana", 501);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("sol_signIn")) {
-            handleDappChainDetected("solana", 501);
+            String daemonResp = forwardToDaemon(str);
+            if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                return daemonResp;
+            }
             String solAddr = sCurrentSolWalletAddress;
             if (solAddr == null || solAddr.isEmpty()) {
                 solAddr = FusionWalletHelper.getMasterSolAddress();
@@ -493,14 +517,25 @@ public class GhostBridgeInterface implements Runnable {
             if (solAddr != null && !solAddr.isEmpty()) {
                 return "{\"result\":{\"account\":{\"address\":\"" + solAddr + "\"}}}";
             }
+            return daemonResp;
+        }
+        if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
+            handleDappChainDetected("tron", 728126428);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("tron_connect") || str.contains("tron_requestAccounts")) {
-            handleDappChainDetected("tron", 728126428);
+            String daemonResp = forwardToDaemon(str);
+            if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                try {
+                    JSONObject jo = new JSONObject(daemonResp);
+                    JSONObject resObj = jo.optJSONObject("result");
+                    if (resObj != null && resObj.has("address")) {
+                        sCurrentTronWalletAddress = resObj.getString("address");
+                    }
+                } catch (Exception ignored) {}
+                return daemonResp;
+            }
             String tronAddr = sCurrentTronWalletAddress;
             if (tronAddr == null || tronAddr.isEmpty()) {
                 tronAddr = FusionWalletHelper.getMasterTronAddress();
@@ -508,14 +543,28 @@ public class GhostBridgeInterface implements Runnable {
             if (tronAddr != null && !tronAddr.isEmpty()) {
                 return "{\"result\":{\"code\":200,\"message\":\"success\",\"address\":\"" + tronAddr + "\"}}";
             }
+            return daemonResp;
+        }
+        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts") || str.contains("sui_accounts")) {
+            handleDappChainDetected("sui", 784);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts") || str.contains("sui_accounts")) {
-            handleDappChainDetected("sui", 784);
+            String daemonResp = forwardToDaemon(str);
+            if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                try {
+                    JSONObject jo = new JSONObject(daemonResp);
+                    JSONArray arr = jo.optJSONArray("result");
+                    if (arr != null && arr.length() > 0) {
+                        JSONObject first = arr.optJSONObject(0);
+                        if (first != null && first.has("address")) {
+                            sCurrentSuiWalletAddress = first.getString("address");
+                        }
+                    }
+                } catch (Exception ignored) {}
+                return daemonResp;
+            }
             String suiAddr = sCurrentSuiWalletAddress;
             if (suiAddr == null || suiAddr.isEmpty()) {
                 suiAddr = FusionWalletHelper.getMasterSuiAddress();
@@ -523,14 +572,25 @@ public class GhostBridgeInterface implements Runnable {
             if (suiAddr != null && !suiAddr.isEmpty()) {
                 return "{\"result\":[{\"address\":\"" + suiAddr + "\",\"publicKey\":\"" + suiAddr + "\"}]}";
             }
+            return daemonResp;
+        }
+        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
+            handleDappChainDetected("aptos", 637);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
-            handleDappChainDetected("aptos", 637);
+            String daemonResp = forwardToDaemon(str);
+            if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                try {
+                    JSONObject jo = new JSONObject(daemonResp);
+                    JSONObject resObj = jo.optJSONObject("result");
+                    if (resObj != null && resObj.has("address")) {
+                        sCurrentAptosWalletAddress = resObj.getString("address");
+                    }
+                } catch (Exception ignored) {}
+                return daemonResp;
+            }
             String aptosAddr = sCurrentAptosWalletAddress;
             if (aptosAddr == null || aptosAddr.isEmpty()) {
                 aptosAddr = FusionWalletHelper.getMasterAptosAddress();
@@ -538,14 +598,28 @@ public class GhostBridgeInterface implements Runnable {
             if (aptosAddr != null && !aptosAddr.isEmpty()) {
                 return "{\"result\":{\"address\":\"" + aptosAddr + "\",\"publicKey\":\"" + aptosAddr + "\"}}";
             }
+            return daemonResp;
+        }
+        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
+            handleDappChainDetected("iota", 8822);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
-            handleDappChainDetected("iota", 8822);
+            String daemonResp = forwardToDaemon(str);
+            if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                try {
+                    JSONObject jo = new JSONObject(daemonResp);
+                    JSONArray arr = jo.optJSONArray("result");
+                    if (arr != null && arr.length() > 0) {
+                        JSONObject first = arr.optJSONObject(0);
+                        if (first != null && first.has("address")) {
+                            sCurrentIotaWalletAddress = first.getString("address");
+                        }
+                    }
+                } catch (Exception ignored) {}
+                return daemonResp;
+            }
             String iotaAddr = sCurrentIotaWalletAddress;
             if (iotaAddr == null || iotaAddr.isEmpty()) {
                 iotaAddr = FusionWalletHelper.getMasterIotaAddress();
@@ -553,13 +627,24 @@ public class GhostBridgeInterface implements Runnable {
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
                 return "{\"result\":[{\"address\":\"" + iotaAddr + "\",\"publicKey\":\"" + iotaAddr + "\"}]}";
             }
+            return daemonResp;
+        }
+        if (str.contains("eth_requestAccounts")) {
             if (!checkRpcAlive()) {
                 notifyDaemonOffline();
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
             }
-            return forwardToDaemon(str);
-        }
-        if (str.contains("eth_requestAccounts")) {
+            String daemonResp = forwardToDaemon(str);
+            if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                try {
+                    JSONObject jo = new JSONObject(daemonResp);
+                    JSONArray arr = jo.optJSONArray("result");
+                    if (arr != null && arr.length() > 0) {
+                        sCurrentWalletAddress = arr.getString(0);
+                    }
+                } catch (Exception ignored) {}
+                return daemonResp;
+            }
             String ethAddr = sCurrentWalletAddress;
             if (ethAddr == null || ethAddr.isEmpty()) {
                 FusionWebViewManager mgr = FusionWebViewManager.getInstance();
@@ -573,11 +658,7 @@ public class GhostBridgeInterface implements Runnable {
             if (ethAddr != null && !ethAddr.isEmpty()) {
                 return "{\"result\":[\"" + ethAddr + "\"]}";
             }
-            if (!checkRpcAlive()) {
-                notifyDaemonOffline();
-                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
-            }
-            return forwardToDaemon(str);
+            return daemonResp;
         }
         if (str.contains("eth_accounts")) {
             String ethAddr = sCurrentWalletAddress;
