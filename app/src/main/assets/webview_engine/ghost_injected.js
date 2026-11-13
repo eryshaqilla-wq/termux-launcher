@@ -2087,7 +2087,7 @@
     GhostIotaProvider.prototype.getAccounts = async function() {
         reportDappChainToBridge("iota", 4218);
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
-        if (!addr) addr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
+        if (!addr) addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
         iotaAddr = addr;
         this.accounts = [{ address: addr, publicKey: addr }];
         return this.accounts;
@@ -2104,7 +2104,7 @@
             } catch(e) {}
         }
         if (!addr) {
-            addr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
+            addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
         }
         iotaAddr = addr;
         window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
@@ -2117,33 +2117,103 @@
         return true;
     };
 
-    GhostIotaProvider.prototype.signAndExecuteTransaction = async function(input) {
-        if (window.callGhostRpc) {
-            return await window.callGhostRpc("iota_signAndExecuteTransaction", [input]);
-        }
-        return { digest: "0x" + Date.now().toString(16) };
-    };
-
-    GhostIotaProvider.prototype.signTransaction = async function(input) {
-        if (window.callGhostRpc) {
-            return await window.callGhostRpc("iota_signTransaction", [input]);
-        }
-        return new Uint8Array(64);
-    };
-
     GhostIotaProvider.prototype.signAndExecuteTransactionBlock = async function(input) {
-        return await this.signAndExecuteTransaction(input);
+        var cleanInput = Object.assign({}, input || {});
+        if (input && input.transaction && typeof input.transaction.toJSON === "function") {
+            try { cleanInput.transactionJson = await input.transaction.toJSON(); } catch(_) {}
+        }
+        if (input && input.transactionBlock && typeof input.transactionBlock.toJSON === "function") {
+            try { cleanInput.transactionJson = await input.transactionBlock.toJSON(); } catch(_) {}
+        }
+        if (input && input.transaction && typeof input.transaction.build === "function") {
+            try {
+                var built = await input.transaction.build();
+                cleanInput.bytes = (built instanceof Uint8Array) ? btoa(String.fromCharCode.apply(null, built)) : built;
+            } catch(_) {}
+        }
+        if (input && input.bytes && input.bytes instanceof Uint8Array) {
+            cleanInput.bytes = btoa(String.fromCharCode.apply(null, input.bytes));
+        }
+        if (input && input.transactionBlockBytes && input.transactionBlockBytes instanceof Uint8Array) {
+            cleanInput.bytes = btoa(String.fromCharCode.apply(null, input.transactionBlockBytes));
+        }
+
+        var res = {};
+        if (window.callGhostRpc) {
+            res = await window.callGhostRpc("iota_signAndExecuteTransactionBlock", [cleanInput]);
+        }
+        res = res || {};
+        var dummyBytes = btoa("iota_tx_" + Date.now());
+        var dummyEffects = btoa(JSON.stringify({ status: { status: "success" } }));
+        return {
+            digest: res.digest || ("0x" + Date.now().toString(16)),
+            signature: res.signature || "",
+            bytes: res.bytes || res.transactionBlockBytes || cleanInput.bytes || dummyBytes,
+            transactionBlockBytes: res.bytes || res.transactionBlockBytes || cleanInput.bytes || dummyBytes,
+            effects: (typeof res.effects === "string") ? res.effects : dummyEffects,
+            rawEffects: res.rawEffects || [],
+            effectsJson: res.effectsJson || res.effects || { status: { status: "success" } }
+        };
+    };
+
+    GhostIotaProvider.prototype.signAndExecuteTransaction = async function(input) {
+        return await this.signAndExecuteTransactionBlock(input);
     };
 
     GhostIotaProvider.prototype.signTransactionBlock = async function(input) {
-        return await this.signTransaction(input);
+        var cleanInput = Object.assign({}, input || {});
+        if (input && input.transaction && typeof input.transaction.toJSON === "function") {
+            try { cleanInput.transactionJson = await input.transaction.toJSON(); } catch(_) {}
+        }
+        if (input && input.transactionBlock && typeof input.transactionBlock.toJSON === "function") {
+            try { cleanInput.transactionJson = await input.transactionBlock.toJSON(); } catch(_) {}
+        }
+        if (input && input.transaction && typeof input.transaction.build === "function") {
+            try {
+                var built = await input.transaction.build();
+                cleanInput.bytes = (built instanceof Uint8Array) ? btoa(String.fromCharCode.apply(null, built)) : built;
+            } catch(_) {}
+        }
+        if (input && input.bytes && input.bytes instanceof Uint8Array) {
+            cleanInput.bytes = btoa(String.fromCharCode.apply(null, input.bytes));
+        }
+        if (input && input.transactionBlockBytes && input.transactionBlockBytes instanceof Uint8Array) {
+            cleanInput.bytes = btoa(String.fromCharCode.apply(null, input.transactionBlockBytes));
+        }
+
+        var res = {};
+        if (window.callGhostRpc) {
+            res = await window.callGhostRpc("iota_signTransactionBlock", [cleanInput]);
+        }
+        res = res || {};
+        var txBytes = res.bytes || res.transactionBlockBytes || cleanInput.bytes || btoa("iota_tx");
+        return {
+            bytes: txBytes,
+            transactionBlockBytes: txBytes,
+            signature: res.signature || ""
+        };
+    };
+
+    GhostIotaProvider.prototype.signTransaction = async function(input) {
+        return await this.signTransactionBlock(input);
     };
 
     GhostIotaProvider.prototype.signMessage = async function(message) {
-        if (window.callGhostRpc) {
-            return await window.callGhostRpc("iota_signMessage", [message]);
+        var cleanMsg = message;
+        if (message && message.message) {
+            if (message.message instanceof Uint8Array) {
+                cleanMsg = btoa(String.fromCharCode.apply(null, message.message));
+            } else if (typeof message.message === "string") {
+                cleanMsg = message.message;
+            }
+        } else if (message instanceof Uint8Array) {
+            cleanMsg = btoa(String.fromCharCode.apply(null, message));
         }
-        return { signature: "0x" + Date.now().toString(16) };
+        if (window.callGhostRpc) {
+            var res = await window.callGhostRpc("iota_signPersonalMessage", [{ message: cleanMsg }]);
+            return res || { bytes: cleanMsg, signature: "" };
+        }
+        return { bytes: cleanMsg, signature: "0x" + Date.now().toString(16) };
     };
 
     GhostIotaProvider.prototype.signPersonalMessage = async function(message) {
@@ -2219,7 +2289,7 @@
             if (!addr && window.__FUSION_IOTA_WALLET_ADDRESS__) {
                 addr = window.__FUSION_IOTA_WALLET_ADDRESS__;
             }
-            if (!addr) addr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
+            if (!addr) addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
             iotaAddr = addr;
             window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
 
@@ -2318,19 +2388,19 @@
                     }
                 },
                 "iota:signTransaction": {
-                    version: "1.0.0",
+                    version: "2.0.0",
                     signTransaction: async function(input) { return await provider.signTransaction(input); }
                 },
                 "iota:signAndExecuteTransaction": {
-                    version: "1.0.0",
+                    version: "2.0.0",
                     signAndExecuteTransaction: async function(input) { return await provider.signAndExecuteTransaction(input); }
                 },
                 "iota:signTransactionBlock": {
-                    version: "1.0.0",
+                    version: "2.0.0",
                     signTransactionBlock: async function(input) { return await provider.signTransactionBlock(input); }
                 },
                 "iota:signAndExecuteTransactionBlock": {
-                    version: "1.0.0",
+                    version: "2.0.0",
                     signAndExecuteTransactionBlock: async function(input) { return await provider.signAndExecuteTransactionBlock(input); }
                 },
                 "iota:signMessage": {
