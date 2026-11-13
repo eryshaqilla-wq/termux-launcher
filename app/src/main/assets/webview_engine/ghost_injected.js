@@ -2,6 +2,9 @@
     if (window.__FUSION_GHOST_INJECTED__) return;
     window.__FUSION_GHOST_INJECTED__ = true;
 
+    var GHOST_WALLET_SVG = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48cGF0aCBkPSJNOSAxMmwyIDIgNC00IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==";
+    window.__GHOST_WALLET_SVG__ = GHOST_WALLET_SVG;
+
     // --- ACCESSIBILITY SKIP-LINK & SCROLL TRAP SHIELD ---
     try {
         var shieldCss = ".skip-link, a[href='#main'], .skip-to-content, [class*='skip-link'], [class*='skipToContent'] { display: none !important; opacity: 0 !important; pointer-events: none !important; visibility: hidden !important; height: 0 !important; width: 0 !important; }";
@@ -1048,9 +1051,18 @@
         window.dispatchEvent(new CustomEvent("solana:initialized"));
     } catch(e) {}
 
-    // ============================================================================
-    // GHOST TRON PROVIDER (window.tronWeb, window.tronLink)
-    // ============================================================================
+    window.ghostWallet = window.ghostWallet || {};
+    window.ghostWallet.solana = solProvider;
+    window.ghost = window.ghost || window.ghostWallet;
+})();
+
+// ============================================================================
+// GHOST TRON PROVIDER (window.tronWeb, window.tronLink)
+// ============================================================================
+(function() {
+    if (window.__GHOST_TRON_INITIALIZED__) return;
+    window.__GHOST_TRON_INITIALIZED__ = true;
+
     function isDaemonActive() {
         return (window.GhostBridge && window.GhostBridge.isDaemonAlive) ? window.GhostBridge.isDaemonAlive() : ((window.GhostBridge && window.GhostBridge.isRpcAlive) ? window.GhostBridge.isRpcAlive() : false);
     }
@@ -1168,6 +1180,11 @@
             broadcastTronReady();
         }
     });
+
+    window.ghostWallet = window.ghostWallet || {};
+    window.ghostWallet.tron = tronWeb;
+    window.ghostWallet.tronLink = tronLink;
+    window.ghost = window.ghost || window.ghostWallet;
 })();
 
 // ============================================================================
@@ -1176,6 +1193,8 @@
 (function() {
     if (window.__GHOST_SUI_INITIALIZED__) return;
     window.__GHOST_SUI_INITIALIZED__ = true;
+
+    var ghostWalletSvg = window.__GHOST_WALLET_SVG__ || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48cGF0aCBkPSJNOSAxMmwyIDIgNC00IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==";
 
     var suiAddr = window.__FUSION_SUI_WALLET_ADDRESS__ || "";
     if (!suiAddr && window.GhostBridge && window.GhostBridge.getSuiWalletAddress) {
@@ -1493,6 +1512,9 @@
         }
     });
     registerSuiStandard();
+    window.ghostWallet = window.ghostWallet || {};
+    window.ghostWallet.sui = suiWallet;
+    window.ghost = window.ghost || window.ghostWallet;
 })();
 
 // ============================================================================
@@ -1501,6 +1523,8 @@
 (function() {
     if (window.__GHOST_APTOS_INITIALIZED__) return;
     window.__GHOST_APTOS_INITIALIZED__ = true;
+
+    var ghostWalletSvg = window.__GHOST_WALLET_SVG__ || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48cGF0aCBkPSJNOSAxMmwyIDIgNC00IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==";
 
     var aptosAddr = window.__FUSION_APTOS_WALLET_ADDRESS__ || "";
     if (!aptosAddr && window.GhostBridge && window.GhostBridge.getAptosWalletAddress) {
@@ -1912,6 +1936,8 @@
 (function() {
     if (window.__GHOST_IOTA_INITIALIZED__) return;
     window.__GHOST_IOTA_INITIALIZED__ = true;
+
+    var ghostWalletSvg = window.__GHOST_WALLET_SVG__ || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMTAiIGZpbGw9IiMwMEU1RkYiLz48cGF0aCBkPSJNOSAxMmwyIDIgNC00IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIgZmlsbD0ibm9uZSIvPjwvc3ZnPg==";
 
     var iotaAddr = window.__FUSION_IOTA_WALLET_ADDRESS__ || "";
     if (!iotaAddr && window.GhostBridge && window.GhostBridge.getIotaWalletAddress) {
