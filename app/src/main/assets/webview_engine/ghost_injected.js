@@ -1282,10 +1282,34 @@
     };
 
     GhostSuiProvider.prototype.signAndExecuteTransactionBlock = async function(input) {
-        if (window.callGhostRpc) {
-            return await window.callGhostRpc("sui_signAndExecuteTransactionBlock", [input]);
+        var cleanInput = Object.assign({}, input || {});
+        if (input && input.transaction && typeof input.transaction.toJSON === "function") {
+            try { cleanInput.transaction = await input.transaction.toJSON(); } catch(_) {}
         }
-        return { digest: "0x" + Date.now().toString(16) };
+        if (input && input.transactionBlock && typeof input.transactionBlock.toJSON === "function") {
+            try { cleanInput.transactionBlock = await input.transactionBlock.toJSON(); } catch(_) {}
+        }
+        if (input && input.transaction && typeof input.transaction.build === "function") {
+            try {
+                var built = await input.transaction.build();
+                cleanInput.bytes = (built instanceof Uint8Array) ? btoa(String.fromCharCode.apply(null, built)) : built;
+            } catch(_) {}
+        }
+        var res = {};
+        if (window.callGhostRpc) {
+            res = await window.callGhostRpc("sui_signAndExecuteTransactionBlock", [cleanInput]);
+        }
+        res = res || {};
+        var dummyBytes = btoa("sui_tx_" + Date.now());
+        var dummyEffects = btoa(JSON.stringify({ status: { status: "success" } }));
+        return {
+            digest: res.digest || ("0x" + Date.now().toString(16)),
+            signature: res.signature || "",
+            bytes: res.bytes || res.transactionBlockBytes || cleanInput.bytes || dummyBytes,
+            effects: (typeof res.effects === "string") ? res.effects : dummyEffects,
+            rawEffects: res.rawEffects || [],
+            effectsJson: res.effectsJson || res.effects || { status: { status: "success" } }
+        };
     };
 
     GhostSuiProvider.prototype.signAndExecuteTransaction = async function(input) {
@@ -1293,10 +1317,24 @@
     };
 
     GhostSuiProvider.prototype.signTransactionBlock = async function(input) {
-        if (window.callGhostRpc) {
-            return await window.callGhostRpc("sui_signTransactionBlock", [input]);
+        var cleanInput = Object.assign({}, input || {});
+        if (input && input.transaction && typeof input.transaction.toJSON === "function") {
+            try { cleanInput.transaction = await input.transaction.toJSON(); } catch(_) {}
         }
-        return { transactionBlockBytes: "" };
+        if (input && input.transactionBlock && typeof input.transactionBlock.toJSON === "function") {
+            try { cleanInput.transactionBlock = await input.transactionBlock.toJSON(); } catch(_) {}
+        }
+        var res = {};
+        if (window.callGhostRpc) {
+            res = await window.callGhostRpc("sui_signTransactionBlock", [cleanInput]);
+        }
+        res = res || {};
+        var txBytes = res.transactionBlockBytes || res.bytes || cleanInput.bytes || btoa("sui_tx");
+        return {
+            transactionBlockBytes: txBytes,
+            bytes: txBytes,
+            signature: res.signature || ""
+        };
     };
 
     GhostSuiProvider.prototype.signTransaction = async function(input) {
@@ -1495,16 +1533,34 @@
         return walletObj;
     }
 
+    var slushWalletSvg = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNENBMkZGIi8+CjxwYXRoIGQ9Ik0xMi4zNDczIDM0LjcyNTRDMTMuNTU1MyAzOS4yMzM2IDE4LjA2NzMgNDMuMzE0OCAyNy40MDI1IDQwLjgxMzRDMzYuMzA5NyAzOC40MjY3IDQxLjg5MjEgMzEuMDk5MyA0MC40NDQ2IDI1LjY5NzJDMzkuOTQ0NyAyMy44MzE3IDM4LjQzOTEgMjIuNTY4OSAzNi4xMTc4IDIyLjc3NDRMMTUuMzYxNSAyNC41MDM4QzE0LjA1NDQgMjQuNjA0MSAxMy40NTUgMjQuMzg5OCAxMy4xMDkyIDIzLjU2NjFDMTIuNzczOCAyMi43ODEyIDEyLjk2NDkgMjEuOTM4NSAxNC41NDM3IDIxLjE0MDZMMzAuMzM5NiAxMy4wMzQyQzMxLjU1MDMgMTIuNDE4MiAzMi4zNTY3IDEyLjE2MDUgMzMuMDkzNiAxMi40MjEzQzMzLjU1NTUgMTIuNTg5MSAzMy44NTk2IDEzLjI1NzQgMzMuNTgwMyAxNC4wODJMMzIuNTU2MSAxNy4xMDU2QzMxLjI5OTIgMjAuODE2NCAzMy45ODk5IDIxLjY3ODQgMzUuNTA2OCAyMS4yNzE5QzM3LjgwMTcgMjAuNjU3IDM4LjM0MTYgMTguNDcxMiAzNy42MDIzIDE1LjcxMTlDMzUuNzI3OCA4LjcxNjI5IDI4LjMwNTkgNy42MjI1NCAyMS41NzY4IDkuNDI1NTlDMTQuNzMxMSAxMS4yNTk5IDguNzk2ODEgMTYuODA3MiAxMC42MDg4IDIzLjU2OTZDMTEuMDM1OCAyNS4xNjMgMTIuNTAyNSAyNi40MzYyIDE0LjIwMTQgMjYuMzk3NUwxNi43OTUgMjYuMzkxMkMxNy4zMjg0IDI2LjM3ODggMTcuMTM2MyAyNi40MjI3IDE4LjE2NTMgMjYuMzM3NEMxOS4xOTQ0IDI2LjI1MjIgMjEuOTQyNSAyNS45MTQgMjEuOTQyNSAyNS45MTRMMzUuNDI3NSAyNC4zODhMMzUuNzc1IDI0LjMzNzVDMzYuNTYzNyAyNC4yMDMgMzcuMTU5NyAyNC40MDc5IDM3LjY2MzYgMjUuMjc2QzM4LjQxNzcgMjYuNTc1IDM3LjI2NzIgMjcuNTU0NiAzNS44ODk5IDI4LjcyNzJDMzUuODUzIDI4Ljc1ODYgMzUuODE2IDI4Ljc5MDEgMzUuNzc4OSAyOC44MjE4TDIzLjkyNSAzOS4wMzc3QzIxLjg5MzMgNDAuNzkwMSAyMC40NjYgNDAuMTMxMSAxOS45NjYyIDM4LjI2NTZMMTguMTk1OCAzMS42NTg3QzE3Ljc1ODUgMzAuMDI2NCAxNi4xNjQ2IDI4Ljc0NTYgMTQuMjk3NiAyOS4yNDU5QzExLjk2MzggMjkuODcxMiAxMS43NzQ2IDMyLjU4NzggMTIuMzQ3MyAzNC43MjU0WiIgZmlsbD0iIzA2MEQxNCIvPgo8L3N2Zz4K";
+    var suietWalletSvg = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iMTYiIGZpbGw9InVybCgjcGFpbnQwX2xpbmVhcl8xNzA4XzI4Mjk3KSIvPjxnIGZpbHRlcj0idXJsKCNmaWx0ZXIwX2RfMTcwOF8yODI5NykiIGZpbGw9IiNmZmYiPjxwYXRoIGQ9Ik0yMi44IDIwYy0xLjQgMC0yLjctMS40LTMuMy0yLjMtLjcuOS0yIDIuMy0zLjQgMi4zcy0yLjctMS40LTMuNC0yLjNjLS42LjktMS45IDIuMy0zLjMgMi4zLS4zIDAtLjUtLjItLjUtLjVzLjItLjUuNS0uNWMxLjEgMCAyLjYtMS45IDIuOS0yLjVsLjUtLjJjLjIgMCAuMyAwIC40LjIuNC42IDEuOCAyLjUgMi45IDIuNSAxLjEgMCAyLjUtMS45IDIuOS0yLjVsLjQtLjJjLjIgMCAuNCAwIC41LjIuNC42IDEuOCAyLjUgMi45IDIuNS4yIDAgLjUuMi41LjVzLS4yLjUtLjUuNXoiLz48cGF0aCBkPSJNMjIuOCAyMy4zYy0xLjQgMC0yLjctMS4zLTMuMy0yLjMtLjcgMS0yIDIuMy0zLjQgMi4zUzEzLjQgMjIgMTIuNyAyMWMtLjYgMS0xLjkgMi4zLTMuMyAyLjMtLjMgMC0uNS0uMy0uNS0uNSAwLS4zLjItLjYuNS0uNiAxLjEgMCAyLjYtMS44IDIuOS0yLjRsLjUtLjIuNC4yYy40LjYgMS44IDIuNCAyLjkgMi40IDEuMSAwIDIuNS0xLjggMi45LTIuNGwuNC0uMi41LjJjLjQuNiAxLjggMi40IDIuOSAyLjQuMiAwIC41LjMuNS42IDAgLjItLjIuNS0uNS41ek05LjggMTYuN2MtLjMgMC0uNS0uMi0uNS0uNEw5LjEgMTVjMC0zLjkgMy4yLTcgNy03IDMuOSAwIDcgMy4xIDcgN2wtLjEgMS4yYzAgLjMtLjMuNS0uNi41LS40LS4xLS41LS4zLS40LS43di0xYzAtMy4zLTIuNi02LTUuOS02LTMuMiAwLTUuOSAyLjctNS45IDZsLjEgMWMuMS40LS4xLjctLjQuN2gtLjF6Ii8+PC9nPjxkZWZzPjxmaWx0ZXIgaWQ9ImZpbHRlcjBfZF8xNzA4XzI4Mjk3IiB4PSI0LjkiIHk9IjYiIHdpZHRoPSIyMi40MzciIGhlaWdodD0iMjMuMzE5IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+PGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz48ZmVDb2xvck1hdHJpeCBpbj0iU291cmNlQWxwaGEiIHZhbHVlcz0iMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMTI3IDAiIHJlc3VsdD0iaGFyZEFscGhhIi8+PGZlT2Zmc2V0IGR5PSIyIi8+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMiIvPjxmZUNvbXBvc2l0ZSBpbjI9ImhhcmRBbHBoYSIgb3BlcmF0b3I9Im91dCIvPjxmZUNvbG9yTWF0cml4IHZhbHVlcz0iMCAwIDAgMCAwLjE3NTY5NCAwIDAgMCAwIDAuNTc0MTQyIDAgMCAwIDAgMC45MTY2NjcgMCAwIDAgMSAwIi8+PGZlQmxlbmQgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0iZWZmZWN0MV9kcm9wU2hhZG93XzE3MDhfMjgyOTciLz48ZmVCbGVuZCBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJlZmZlY3QxX2Ryb3BTaGFkb3dfMTcwOF8yODI5NyIgcmVzdWx0PSJzaGFwZSIvPjwvZmlsdGVyPjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQwX2xpbmVhcl8xNzA4XzI4Mjk3IiB5MT0iNCIgeDI9IjI4Ljg4OSIgeTI9IjMyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agc3RvcC1jb2xvcj0iIzNFQTJGOCIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzY3QzhGRiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==";
+    var okxWalletSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyOCAyOCI+PHBhdGggZmlsbD0iIzAwMCIgZD0iTTAgMGgyOHYyOEgweiIvPjxwYXRoIGZpbGw9IiNmZmYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTEwLjgxOSA1LjU1Nkg1LjkzYS4zNzYuMzc2IDAgMCAwLS4zNzUuMzc1djQuODg4YzAgLjIwNy4xNjguMzc1LjM3NS4zNzVoNC44ODhhLjM3Ni4zNzYgMCAwIDAgLjM3NS0uMzc2VjUuOTMyYS4zNzYuMzc2IDAgMCAwLS4zNzYtLjM3NVptNS42NCA1LjYzOGgtNC44ODZhLjM3Ni4zNzYgMCAwIDAtLjM3Ni4zNzZ2NC44ODdjMCAuMjA4LjE2OC4zNzYuMzc2LjM3Nmg0Ljg4N2EuMzc2LjM3NiAwIDAgMCAuMzc2LS4zNzVWMTEuNTdhLjM3Ni4zNzYgMCAwIDAtLjM3Ni0uMzc3Wm0uNzUtNS42MzhoNC44ODdjLjIwOCAwIC4zNzYuMTY4LjM3Ni4zNzV2NC44ODhhLjM3Ni4zNzYgMCAwIDEtLjM3Ni4zNzVIMTcuMjFhLjM3Ni4zNzYgMCAwIDEtLjM3Ni0uMzc2VjUuOTMzYzAtLjIwOC4xNjktLjM3Ni4zNzYtLjM3NlptLTYuMzkgMTEuMjc3SDUuOTNhLjM3Ni4zNzYgMCAwIDAtLjM3NS4zNzZ2NC44ODdjMCAuMjA4LjE2OC4zNzYuMzc1LjM3Nmg0Ljg4OGEuMzc2LjM3NiAwIDAgMCAuMzc1LS4zNzZWMTcuMjFhLjM3Ni4zNzYgMCAwIDAtLjM3Ni0uMzc2Wm02LjM5IDBoNC44ODdjLjIwOCAwIC4zNzYuMTY5LjM3Ni4zNzZ2NC44ODdhLjM3Ni4zNzYgMCAwIDEtLjM3Ni4zNzZIMTcuMjFhLjM3Ni4zNzYgMCAwIDEtLjM3Ni0uMzc2VjE3LjIxYzAtLjIwNy4xNjktLjM3Ni4zNzYtLjM3NloiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPjwvc3ZnPg==";
+    var binanceWalletSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMzAiIGhlaWdodD0iMTMwIiBmaWxsPSJub25lIj48cGF0aCBmaWxsPSIjMDAwIiBkPSJNMCAwaDEzMHYxMzBIMHoiLz48cGF0aCBmaWxsPSIjRjNCQTJGIiBkPSJNNDUuNTg3IDU3LjAyIDY1LjAxIDM3LjYwNmwxOS40MyAxOS40MyAxMS4yOTUtMTEuMzAzTDY1LjAxIDE1IDM0LjI4NCA0NS43MjV6TTE1IDY1LjAwNGwxMS4yOTktMTEuMjk5IDExLjI5OCAxMS4yOTlMMjYuMyA3Ni4zMDJ6TTQ1LjU4NyA3Mi45ODMgNjUuMDEgOTIuNDA2bDE5LjQzLTE5LjQzIDExLjMwMyAxMS4yODctLjAwOC4wMDctMzAuNzI1IDMwLjczNC0zMC43MjUtMzAuNzE4LS4wMTYtLjAxNnpNOTIuNDAzIDY1LjAwNiAxMDMuNyA1My43MDggMTE1IDY1LjAwNmwtMTEuMjk5IDExLjI5OXoiLz48cGF0aCBmaWxsPSIjRjNCQTJGIiBkPSJtNzYuNDcxIDY0Ljk5OC0xMS40Ni0xMS40NjktOC40NzYgOC40NzUtLjk4Ljk3Mi0yLjAwNSAyLjAwNi0uMDE2LjAxNi4wMTYuMDI0IDExLjQ2IDExLjQ1MyAxMS40NjEtMTEuNDcuMDA4LS4wMDd6Ii8+PC9zdmc+";
+    var bitgetWalletSvg = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiBmaWxsPSIjMDAxRjI5Ii8+CjxwYXRoIGQ9Ik0yMTkuOTQ4IDk1LjcwMjJDMjAxLjYyMyA5NS42OTI5IDE4My4zMyA5NS42ODM1IDE2NC45NDEgOTUuNzExNkMxNTMuODIyIDk1LjcxMTYgMTQ5LjY1MSAxMDkuNjcxIDE1Ny45MjEgMTE3LjkzOUwyODMuMDk4IDI0My4xMTdDMjg3LjAwNCAyNDYuNjkgMjg5LjQ0MSAyNTAuNTc0IDI4OS41MyAyNTUuNjkzQzI4OS40NDEgMjYwLjgxMiAyODcuMDA0IDI2NC42OTYgMjgzLjA5OCAyNjguMjY5TDE1Ny45MjEgMzkzLjQ0NkMxNDkuNjUxIDQwMS43MTUgMTUzLjgyMiA0MTUuNjc0IDE2NC45NDEgNDE1LjY3NEMxODMuMzMgNDE1LjcwMiAyMDEuNjIzIDQxNS42OTMgMjE5Ljk0OCA0MTUuNjgzQzIyOS4xMjIgNDE1LjY3OSAyMzguMzA1IDQxNS42NzQgMjQ3LjUxMSA0MTUuNjc0QzI1OS41NTUgNDE1LjY3NCAyNjYuNzIgNDA5LjI0IDI3My4xNTQgNDAyLjgwNUwzODYuMDQ3IDI4OS45MTJDMzk1LjA1NyAyODAuOTAyIDQwMy4xMTkgMjY4LjkzOSA0MDMuMDA5IDI1NS42OTNDNDAzLjExOSAyNDIuNDQ3IDM5NS4wNTcgMjMwLjQ4NCAzODYuMDQ3IDIyMS40NzRMMjczLjE1NCAxMDguNThDMjY2LjcyIDEwMi4xNDYgMjU5LjU1NSA5NS43MTE2IDI0Ny41MTEgOTUuNzExNkMyMzguMzA1IDk1LjcxMTYgMjI5LjEyMiA5NS43MDY5IDIxOS45NDggOTUuNzAyMloiIGZpbGw9IiMwMEYwRkYiLz4KPC9zdmc+Cg==";
+    var nightlyWalletSvg = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOTYiIGhlaWdodD0iOTYiIHZpZXdCb3g9IjAgMCA5NiA5NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQ4IDk2Qzc0LjUwOTcgOTYgOTYgNzQuNTA5NyA5NiA0OEM5NiAyMS40OTAzIDc0LjUwOTcgMCA0OCAwQzIxLjQ5MDMgMCAwIDIxLjQ5MDMgMCA0OEMwIDc0LjUwOTcgMjEuNDkwMyA5NiA0OCA5NloiIGZpbGw9IiM2RDczRjgiLz4KPHBhdGggZD0iTTQ4IDg1LjYzNTZDNDggODUuNjM1NiA1Mi40NTMzIDg1LjYzNTYgNTUuNDQgODIuNTg2N0M1OC45MTU1IDc5LjI4MDEgNTcuMzUxMSA3NS40MzEyIDYyLjI3NTUgNzEuNDMxMkM2Ni45ODY2IDY3LjY0NDUgNzIuOTI0NCA3MC4zMzc5IDcyLjkyNDQgNzAuMzM3OUM3Ny4wMjIyIDYyLjEyNDUgNzQuNzkxMSA1Mi41NjkgNzQuNzkxMSA1Mi41NjlDODEuNzY4OCAzNC4yNTc5IDc1Ljk2NDQgMjEuMTU1NyA3NC40NDQ0IDE3LjM2MDFDNjkuNDQ4OCAyNC4zMzc5IDYzLjE5MTEgMjkuMTczNCA1NS43OTU1IDMyLjQwOUM1My4yMjY2IDMxLjcwNjggNTAuNTk1NSAzMS4zMzM0IDQ4IDMxLjM2MDFDNDUuNDEzMyAzMS4zMzM0IDQyLjc3MzMgMzEuNzA2OCA0MC4yMDQ0IDMyLjQwOUMzMi44MTc3IDI5LjE2NDUgMjYuNTUxMSAyNC4zMzc5IDIxLjU1NTUgMTcuMzYwMUMyMC4wMzU1IDIxLjE1NTcgMTQuMjMxMSAzNC4yNTc5IDIxLjIwODkgNTIuNTY5QzIxLjIwODkgNTIuNTY5IDE4Ljk3NzggNjIuMTI0NSAyMy4wNzU1IDcwLjMzNzlDMjMuMDc1NSA3MC4zMzc5IDI5LjAxMzMgNjcuNjQ0NSAzMy43MjQ0IDcxLjQzMTJDMzguNjU3NyA3NS40MzEyIDM3LjA4NDQgNzkuMjgwMSA0MC41NiA4Mi41ODY3QzQzLjU0NjYgODUuNjM1NiA0OCA4NS42MzU2IDQ4IDg1LjYzNTZaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNNDIuNDc5OSA2NS4yOThDNDIuMjkzMyA1OS4yMTggMzYuMzAyMSA1Ny4yNjI0IDMyLjIxMzMgNTkuODIyNEMzMi4yMTMzIDU5LjgyMjQgMzIuODUzMyA2Mi40MzU4IDM1LjgzOTkgNjMuNzUxM0MzOC4yNzU1IDY0LjgyNjkgMzkuMzI0NCA2My4zODY5IDQyLjQ3OTkgNjUuMjk4WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNMjIuNDk3NyAyMy4wOTM1QzIwLjA4ODggMzEuNTQ2OCAyMS4xMjg4IDQyLjI0MDIgMjQuOTMzMyA1MC4wMjY5QzI4LjgyNjYgNDcuMjcxMyAzMi45MTU1IDQzLjAxMzUgMzUuMDkzMyAzOC41MDY5QzI5Ljk2NDQgMzQuNzExMyAyNS42NjIyIDMxLjEwMjQgMjIuNDk3NyAyMy4wOTM1WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNNTMuNTE5OSA2NS4yOThDNTMuNzA2NiA1OS4yMTggNTkuNjk3NyA1Ny4yNjI0IDYzLjc4NjYgNTkuODIyNEM2My43ODY2IDU5LjgyMjQgNjMuMTQ2NiA2Mi40MzU4IDYwLjE1OTkgNjMuNzUxM0M1Ny43MjQzIDY0LjgyNjkgNTYuNjc1NSA2My4zODY5IDUzLjUxOTkgNjUuMjk4WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNNzMuNTAyMiAyMy4wOTM1Qzc1LjkxMTEgMzEuNTQ2OCA3NC44NzExIDQyLjI0MDIgNzEuMDY2NiA1MC4wMjY5QzY3LjE3MzMgNDcuMjcxMyA2My4wODQ0IDQzLjAxMzUgNjAuOTA2NiAzOC41MDY5QzY2LjAzNTUgMzQuNzExMyA3MC4zMzc3IDMxLjEwMjQgNzMuNTAyMiAyMy4wOTM1WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNNDcuOTk5OSA4NS4zMDY5QzUwLjE0MDQgODUuMzA2OSA1MS44NzU1IDgzLjc3ODcgNTEuODc1NSA4MS44OTM2QzUxLjg3NTUgODAuMDA4NCA1MC4xNDA0IDc4LjQ4MDIgNDcuOTk5OSA3OC40ODAyQzQ1Ljg1OTUgNzguNDgwMiA0NC4xMjQ0IDgwLjAwODQgNDQuMTI0NCA4MS44OTM2QzQ0LjEyNDQgODMuNzc4NyA0NS44NTk1IDg1LjMwNjkgNDcuOTk5OSA4NS4zMDY5WiIgZmlsbD0iIzdCODFGOSIvPgo8L3N2Zz4K";
+    var backpackWalletSvg = "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNDAgMjQwIj4KICA8cmVjdCB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgc3R5bGU9ImZpbGw6IHJnYigyNTUsIDI1NSwgMjU1KTsiLz4KICA8cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xMjguOTA1IDYyLjc1YzQuOTY5IDAgOS42MzEuNjY3IDEzLjk0NyAxLjkwMkMxMzguNjI2IDU0LjgwNCAxMjkuODUzIDUyIDEyMC4wODkgNTJjLTkuNzgzIDAtMTguNTcyIDIuODE1LTIyLjc4OCAxMi43MSA0LjI4NS0xLjI3OSA4LjkyNi0xLjk2IDEzLjg3OS0xLjk2aDE3LjcyNVptLTE4Ljg2MiA5Ljg4NkM4Ni40NDUgNzIuNjM2IDczIDkxLjIgNzMgMTE0LjF2MjMuNTI0YzAgMi4yOSAxLjkxMyA0LjEwMSA0LjI3MyA0LjEwMWg4NS40NTRjMi4zNiAwIDQuMjczLTEuODExIDQuMjczLTQuMTAxVjExNC4xYzAtMjIuOS0xNS42MzUtNDEuNDY0LTM5LjIzMi00MS40NjRoLTE3LjcyNVptOS45MjQgNDEuNjdjOC4yNTkgMCAxNC45NTQtNi42OTYgMTQuOTU0LTE0Ljk1NXMtNi42OTUtMTQuOTU0LTE0Ljk1NC0xNC45NTQtMTQuOTU1IDYuNjk1LTE0Ljk1NSAxNC45NTQgNi42OTYgMTQuOTU1IDE0Ljk1NSAxNC45NTVaTTczIDE1NS41NTVjMC0yLjI5IDEuOTEzLTQuMTQ3IDQuMjczLTQuMTQ3aDg1LjQ1NGMyLjM2IDAgNC4yNzMgMS44NTcgNC4yNzMgNC4xNDd2MjQuODc4YzAgNC41OC0zLjgyNiA4LjI5My04LjU0NSA4LjI5M2gtNzYuOTFjLTQuNzIgMC04LjU0NS0zLjcxMy04LjU0NS04LjI5M3YtMjQuODc4WiIgY2xpcC1ydWxlPSJldmVub2RkIiBzdHlsZT0iZmlsbDogcmdiKDIyNywgNjIsIDYzKTsiLz4KPC9zdmc+";
+    var suiWalletSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzJBODJFRCIvPjxwYXRoIGQ9Ik0xNiA0LjVDMTYgNC41IDkuNSAxNC41IDkuNSAxOS41QzkuNSAyMy4wOSAxMi40MSAyNiAxNiAyNkMxOS41OSAyNiAyMi41IDIzLjA5IDIyLjUgMTkuNUMyMi41IDE0LjUgMTYgNC41IDE2IDQuNVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTE2IDExLjVDMTYgMTEuNSAxMi41IDE2LjUgMTIuNSAxOS41QzEyLjUgMjEuNDMgMTQuMDcgMjMgMTYgMjNDMTcuOTMgMjMgMTkuNSAyMS40MyAxOS41IDE5LjVDMTkuNSAxNi41IDE2IDExLjUgMTYgMTEuNVoiIGZpbGw9IiMyQTgyRUQiLz48L3N2Zz4=";
+
     var suiWalletsList = [
-        createStandardSuiWallet("GhostWallet", ghostWalletSvg, suiWallet),
-        createStandardSuiWallet("Slush Wallet", "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA1MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjNENBMkZGIi8+CjxwYXRoIGQ9Ik0xMi4zNDczIDM0LjcyNTRDMTMuNTU1MyAzOS4yMzM2IDE4LjA2NzMgNDMuMzE0OCAyNy40MDI1IDQwLjgxMzRDMzYuMzA5NyAzOC40MjY3IDQxLjg5MjEgMzEuMDk5MyA0MC40NDQ2IDI1LjY5NzJDMzkuOTQ0NyAyMy44MzE3IDM4LjQzOTEgMjIuNTY4OSAzNi4xMTc4IDIyLjc3NDRMMTUuMzYxNSAyNC41MDM4QzE0LjA1NDQgMjQuNjA0MSAxMy40NTUgMjQuMzg5OCAxMy4xMDkyIDIzLjU2NjFDMTIuNzczOCAyMi43ODEyIDEyLjk2NDkgMjEuOTM4NSAxNC41NDM3IDIxLjE0MDZMMzAuMzM5NiAxMy4wMzQyQzMxLjU1MDMgMTIuNDE4MiAzMi4zNTY3IDEyLjE2MDUgMzMuMDkzNiAxMi40MjEzQzMzLjU1NTUgMTIuNTg5MSAzMy44NTk2IDEzLjI1NzQgMzMuNTgwMyAxNC4wODJMMzIuNTU2MSAxNy4xMDU2QzMxLjI5OTIgMjAuODE2NCAzMy45ODk5IDIxLjY3ODQgMzUuNTA2OCAyMS4yNzE5QzM3LjgwMTcgMjAuNjU3IDM4LjM0MTYgMTguNDcxMiAzNy42MDIzIDE1LjcxMTlDMzUuNzI3OCA4LjcxNjI5IDI4LjMwNTkgNy42MjI1NCAyMS41NzY4IDkuNDI1NTlDMTQuNzMxMSAxMS4yNTk5IDguNzk2ODEgMTYuODA3MiAxMC42MDg4IDIzLjU2OTZDMTEuMDM1OCAyNS4xNjMgMTIuNTAyNSAyNi40MzYyIDE0LjIwMTQgMjYuMzk3NUwxNi43OTUgMjYuMzkxMkMxNy4zMjg0IDI2LjM3ODggMTcuMTM2MyAyNi40MjI3IDE4LjE2NTMgMjYuMzM3NEMxOS4xOTQ0IDI2LjI1MjIgMjEuOTQyNSAyNS45MTQgMjEuOTQyNSAyNS45MTRMMzUuNDI3NSAyNC4zODhMMzUuNzc1IDI0LjMzNzVDMzYuNTYzNyAyNC4yMDMgMzcuMTU5NyAyNC40MDc5IDM3LjY2MzYgMjUuMjc2QzM4LjQxNzcgMjYuNTc1IDM3LjI2NzIgMjcuNTU0NiAzNS44ODk5IDI4LjcyNzJDMzUuODUzIDI4Ljc1ODYgMzUuODE2IDI4Ljc5MDEgMzUuNzc4OSAyOC44MjE4TDIzLjkyNSAzOS4wMzc3QzIxLjg5MzMgNDAuNzkwMSAyMC40NjYgNDAuMTMxMSAxOS45NjYyIDM4LjI2NTZMMTguMTk1OCAzMS42NTg3QzE3Ljc1ODUgMzAuMDI2NCAxNi4xNjQ2IDI4Ljc0NTYgMTQuMjk3NiAyOS4yNDU5QzExLjk2MzggMjkuODcxMiAxMS43NzQ2IDMyLjU4NzggMTIuMzQ3MyAzNC43MjU0WiIgZmlsbD0iIzA2MEQxNCIvPgo8L3N2Zz4K", slushWallet),
-        createStandardSuiWallet("Suiet", "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iMTYiIGZpbGw9InVybCgjcGFpbnQwX2xpbmVhcl8xNzA4XzI4Mjk3KSIvPjxnIGZpbHRlcj0idXJsKCNmaWx0ZXIwX2RfMTcwOF8yODI5NykiIGZpbGw9IiNmZmYiPjxwYXRoIGQ9Ik0yMi44IDIwYy0xLjQgMC0yLjctMS40LTMuMy0yLjMtLjcuOS0yIDIuMy0zLjQgMi4zcy0yLjctMS40LTMuNC0yLjNjLS42LjktMS45IDIuMy0zLjMgMi4zLS4zIDAtLjUtLjItLjUtLjVzLjItLjUuNS0uNWMxLjEgMCAyLjYtMS45IDIuOS0yLjVsLjUtLjJjLjIgMCAuMyAwIC40LjIuNC42IDEuOCAyLjUgMi45IDIuNSAxLjEgMCAyLjUtMS45IDIuOS0yLjVsLjQtLjJjLjIgMCAuNCAwIC41LjIuNC42IDEuOCAyLjUgMi45IDIuNS4yIDAgLjUuMi41LjVzLS4yLjUtLjUuNXoiLz48cGF0aCBkPSJNMjIuOCAyMy4zYy0xLjQgMC0yLjctMS4zLTMuMy0yLjMtLjcgMS0yIDIuMy0zLjQgMi4zUzEzLjQgMjIgMTIuNyAyMWMtLjYgMS0xLjkgMi4zLTMuMyAyLjMtLjMgMC0uNS0uMy0uNS0uNSAwLS4zLjItLjYuNS0uNiAxLjEgMCAyLjYtMS44IDIuOS0yLjRsLjUtLjIuNC4yYy40LjYgMS44IDIuNCAyLjkgMi40IDEuMSAwIDIuNS0xLjggMi45LTIuNGwuNC0uMi41LjJjLjQuNiAxLjggMi40IDIuOSAyLjQuMiAwIC41LjMuNS42IDAgLjItLjIuNS0uNS41ek05LjggMTYuN2MtLjMgMC0uNS0uMi0uNS0uNEw5LjEgMTVjMC0zLjkgMy4yLTcgNy03IDMuOSAwIDcgMy4xIDcgN2wtLjEgMS4yYzAgLjMtLjMuNS0uNi41LS40LS4xLS41LS4zLS40LS43di0xYzAtMy4zLTIuNi02LTUuOS02LTMuMiAwLTUuOSAyLjctNS45IDZsLjEgMWMuMS40LS4xLjctLjQuN2gtLjF6Ii8+PC9nPjxkZWZzPjxmaWx0ZXIgaWQ9ImZpbHRlcjBfZF8xNzA4XzI4Mjk3IiB4PSI0LjkiIHk9IjYiIHdpZHRoPSIyMi40MzciIGhlaWdodD0iMjMuMzE5IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiI+PGZlRmxvb2QgZmxvb2Qtb3BhY2l0eT0iMCIgcmVzdWx0PSJCYWNrZ3JvdW5kSW1hZ2VGaXgiLz48ZmVDb2xvck1hdHJpeCBpbj0iU291cmNlQWxwaGEiIHZhbHVlcz0iMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMCAwIDAgMTI3IDAiIHJlc3VsdD0iaGFyZEFscGhhIi8+PGZlT2Zmc2V0IGR5PSIyIi8+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMiIvPjxmZUNvbXBvc2l0ZSBpbjI9ImhhcmRBbHBoYSIgb3BlcmF0b3I9Im91dCIvPjxmZUNvbG9yTWF0cml4IHZhbHVlcz0iMCAwIDAgMCAwLjE3NTY5NCAwIDAgMCAwIDAuNTc0MTQyIDAgMCAwIDAgMC45MTY2NjcgMCAwIDAgMSAwIi8+PGZlQmxlbmQgaW4yPSJCYWNrZ3JvdW5kSW1hZ2VGaXgiIHJlc3VsdD0iZWZmZWN0MV9kcm9wU2hhZG93XzE3MDhfMjgyOTciLz48ZmVCbGVuZCBpbj0iU291cmNlR3JhcGhpYyIgaW4yPSJlZmZlY3QxX2Ryb3BTaGFkb3dfMTcwOF8yODI5NyIgcmVzdWx0PSJzaGFwZSIvPjwvZmlsdGVyPjxsaW5lYXJHcmFkaWVudCBpZD0icGFpbnQwX2xpbmVhcl8xNzA4XzI4Mjk3IiB5MT0iNCIgeDI9IjI4Ljg4OSIgeTI9IjMyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHN0b3Agc3RvcC1jb2xvcj0iIzNFQTJGOCIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzY3QzhGRiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwvc3ZnPg==", suietWallet),
-        createStandardSuiWallet("OKX Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyOCAyOCI+PHBhdGggZmlsbD0iIzAwMCIgZD0iTTAgMGgyOHYyOEgweiIvPjxwYXRoIGZpbGw9IiNmZmYiIGZpbGwtcnVsZT0iZXZlbm9kZCIgZD0iTTEwLjgxOSA1LjU1Nkg1LjkzYS4zNzYuMzc2IDAgMCAwLS4zNzUuMzc1djQuODg4YzAgLjIwNy4xNjguMzc1LjM3NS4zNzVoNC44ODhhLjM3Ni4zNzYgMCAwIDAgLjM3NS0uMzc2VjUuOTMyYS4zNzYuMzc2IDAgMCAwLS4zNzYtLjM3NVptNS42NCA1LjYzOGgtNC44ODZhLjM3Ni4zNzYgMCAwIDAtLjM3Ni4zNzZ2NC44ODdjMCAuMjA4LjE2OC4zNzYuMzc2LjM3Nmg0Ljg4N2EuMzc2LjM3NiAwIDAgMCAuMzc2LS4zNzVWMTEuNTdhLjM3Ni4zNzYgMCAwIDAtLjM3Ni0uMzc3Wm0uNzUtNS42MzhoNC44ODdjLjIwOCAwIC4zNzYuMTY4LjM3Ni4zNzV2NC44ODhhLjM3Ni4zNzYgMCAwIDEtLjM3Ni4zNzVIMTcuMjFhLjM3Ni4zNzYgMCAwIDEtLjM3Ni0uMzc2VjUuOTMzYzAtLjIwOC4xNjktLjM3Ni4zNzYtLjM3NlptLTYuMzkgMTEuMjc3SDUuOTNhLjM3Ni4zNzYgMCAwIDAtLjM3NS4zNzZ2NC44ODdjMCAuMjA4LjE2OC4zNzYuMzc1LjM3Nmg0Ljg4OGEuMzc2LjM3NiAwIDAgMCAuMzc1LS4zNzZWMTcuMjFhLjM3Ni4zNzYgMCAwIDAtLjM3Ni0uMzc2Wm02LjM5IDBoNC44ODdjLjIwOCAwIC4zNzYuMTY5LjM3Ni4zNzZ2NC44ODdhLjM3Ni4zNzYgMCAwIDEtLjM3Ni4zNzZIMTcuMjFhLjM3Ni4zNzYgMCAwIDEtLjM3Ni0uMzc2VjE3LjIxYzAtLjIwNy4xNjktLjM3Ni4zNzYtLjM3NloiIGNsaXAtcnVsZT0iZXZlbm9kZCIvPjwvc3ZnPg==", suiWallet),
-        createStandardSuiWallet("Binance Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMzAiIGhlaWdodD0iMTMwIiBmaWxsPSJub25lIj48cGF0aCBmaWxsPSIjMDAwIiBkPSJNMCAwaDEzMHYxMzBIMHoiLz48cGF0aCBmaWxsPSIjRjNCQTJGIiBkPSJNNDUuNTg3IDU3LjAyIDY1LjAxIDM3LjYwNmwxOS40MyAxOS40MyAxMS4yOTUtMTEuMzAzTDY1LjAxIDE1IDM0LjI4NCA0NS43MjV6TTE1IDY1LjAwNGwxMS4yOTktMTEuMjk5IDExLjI5OCAxMS4yOTlMMjYuMyA3Ni4zMDJ6TTQ1LjU4NyA3Mi45ODMgNjUuMDEgOTIuNDA2bDE5LjQzLTE5LjQzIDExLjMwMyAxMS4yODctLjAwOC4wMDctMzAuNzI1IDMwLjczNC0zMC43MjUtMzAuNzE4LS4wMTYtLjAxNnpNOTIuNDAzIDY1LjAwNiAxMDMuNyA1My43MDggMTE1IDY1LjAwNmwtMTEuMjk5IDExLjI5OXoiLz48cGF0aCBmaWxsPSIjRjNCQTJGIiBkPSJtNzYuNDcxIDY0Ljk5OC0xMS40Ni0xMS40NjktOC40NzYgOC40NzUtLjk4Ljk3Mi0yLjAwNSAyLjAwNi0uMDE2LjAxNi4wMTYuMDI0IDExLjQ2IDExLjQ1MyAxMS40NjEtMTEuNDcuMDA4LS4wMDd6Ii8+PC9zdmc+", suiWallet),
-        createStandardSuiWallet("Bitget Wallet", "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgdmlld0JveD0iMCAwIDUxMiA1MTIiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiBmaWxsPSIjMDAxRjI5Ii8+CjxwYXRoIGQ9Ik0yMTkuOTQ4IDk1LjcwMjJDMjAxLjYyMyA5NS42OTI5IDE4My4zMyA5NS42ODM1IDE2NC45NDEgOTUuNzExNkMxNTMuODIyIDk1LjcxMTYgMTQ5LjY1MSAxMDkuNjcxIDE1Ny45MjEgMTE3LjkzOUwyODMuMDk4IDI0My4xMTdDMjg3LjAwNCAyNDYuNjkgMjg5LjQ0MSAyNTAuNTc0IDI4OS41MyAyNTUuNjkzQzI4OS40NDEgMjYwLjgxMiAyODcuMDA0IDI2NC42OTYgMjgzLjA5OCAyNjguMjY5TDE1Ny45MjEgMzkzLjQ0NkMxNDkuNjUxIDQwMS43MTUgMTUzLjgyMiA0MTUuNjc0IDE2NC45NDEgNDE1LjY3NEMxODMuMzMgNDE1LjcwMiAyMDEuNjIzIDQxNS42OTMgMjE5Ljk0OCA0MTUuNjgzQzIyOS4xMjIgNDE1LjY3OSAyMzguMzA1IDQxNS42NzQgMjQ3LjUxMSA0MTUuNjc0QzI1OS41NTUgNDE1LjY3NCAyNjYuNzIgNDA5LjI0IDI3My4xNTQgNDAyLjgwNUwzODYuMDQ3IDI4OS45MTJDMzk1LjA1NyAyODAuOTAyIDQwMy4xMTkgMjY4LjkzOSA0MDMuMDA5IDI1NS42OTNDNDAzLjExOSAyNDIuNDQ3IDM5NS4wNTcgMjMwLjQ4NCAzODYuMDQ3IDIyMS40NzRMMjczLjE1NCAxMDguNThDMjY2LjcyIDEwMi4xNDYgMjU5LjU1NSA5NS43MTE2IDI0Ny41MTEgOTUuNzExNkMyMzguMzA1IDk1LjcxMTYgMjI5LjEyMiA5NS43MDY5IDIxOS45NDggOTUuNzAyMloiIGZpbGw9IiMwMEYwRkYiLz4KPC9zdmc+Cg==", suiWallet),
-        createStandardSuiWallet("Nightly", "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iOTYiIGhlaWdodD0iOTYiIHZpZXdCb3g9IjAgMCA5NiA5NiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQ4IDk2Qzc0LjUwOTcgOTYgOTYgNzQuNTA5NyA5NiA0OEM5NiAyMS40OTAzIDc0LjUwOTcgMCA0OCAwQzIxLjQ5MDMgMCAwIDIxLjQ5MDMgMCA0OEMwIDc0LjUwOTcgMjEuNDkwMyA5NiA0OCA5NloiIGZpbGw9IiM2RDczRjgiLz4KPHBhdGggZD0iTTQ4IDg1LjYzNTZDNDggODUuNjM1NiA1Mi40NTMzIDg1LjYzNTYgNTUuNDQgODIuNTg2N0M1OC45MTU1IDc5LjI4MDEgNTcuMzUxMSA3NS40MzEyIDYyLjI3NTUgNzEuNDMxMkM2Ni45ODY2IDY3LjY0NDUgNzIuOTI0NCA3MC4zMzc5IDcyLjkyNDQgNzAuMzM3OUM3Ny4wMjIyIDYyLjEyNDUgNzQuNzkxMSA1Mi41NjkgNzQuNzkxMSA1Mi41NjlDODEuNzY4OCAzNC4yNTc5IDc1Ljk2NDQgMjEuMTU1NyA3NC40NDQ0IDE3LjM2MDFDNjkuNDQ4OCAyNC4zMzc5IDYzLjE5MTEgMjkuMTczNCA1NS43OTU1IDMyLjQwOUM1My4yMjY2IDMxLjcwNjggNTAuNTk1NSAzMS4zMzM0IDQ4IDMxLjM2MDFDNDUuNDEzMyAzMS4zMzM0IDQyLjc3MzMgMzEuNzA2OCA0MC4yMDQ0IDMyLjQwOUMzMi44MTc3IDI5LjE2NDUgMjYuNTUxMSAyNC4zMzc5IDIxLjU1NTUgMTcuMzYwMUMyMC4wMzU1IDIxLjE1NTcgMTQuMjMxMSAzNC4yNTc5IDIxLjIwODkgNTIuNTY5QzIxLjIwODkgNTIuNTY5IDE4Ljk3NzggNjIuMTI0NSAyMy4wNzU1IDcwLjMzNzlDMjMuMDc1NSA3MC4zMzc5IDI5LjAxMzMgNjcuNjQ0NSAzMy43MjQ0IDcxLjQzMTJDMzguNjU3NyA3NS40MzEyIDM3LjA4NDQgNzkuMjgwMSA0MC41NiA4Mi41ODY3QzQzLjU0NjYgODUuNjM1NiA0OCA4NS42MzU2IDQ4IDg1LjYzNTZaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNNDIuNDc5OSA2NS4yOThDNDIuMjkzMyA1OS4yMTggMzYuMzAyMSA1Ny4yNjI0IDMyLjIxMzMgNTkuODIyNEMzMi4yMTMzIDU5LjgyMjQgMzIuODUzMyA2Mi40MzU4IDM1LjgzOTkgNjMuNzUxM0MzOC4yNzU1IDY0LjgyNjkgMzkuMzI0NCA2My4zODY5IDQyLjQ3OTkgNjUuMjk4WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNMjIuNDk3NyAyMy4wOTM1QzIwLjA4ODggMzEuNTQ2OCAyMS4xMjg4IDQyLjI0MDIgMjQuOTMzMyA1MC4wMjY5QzI4LjgyNjYgNDcuMjcxMyAzMi45MTU1IDQzLjAxMzUgMzUuMDkzMyAzOC41MDY5QzI5Ljk2NDQgMzQuNzExMyAyNS42NjIyIDMxLjEwMjQgMjIuNDk3NyAyMy4wOTM1WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNNTMuNTE5OSA2NS4yOThDNTMuNzA2NiA1OS4yMTggNTkuNjk3NyA1Ny4yNjI0IDYzLjc4NjYgNTkuODIyNEM2My43ODY2IDU5LjgyMjQgNjMuMTQ2NiA2Mi40MzU4IDYwLjE1OTkgNjMuNzUxM0M1Ny43MjQzIDY0LjgyNjkgNTYuNjc1NSA2My4zODY5IDUzLjUxOTkgNjUuMjk4WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNNzMuNTAyMiAyMy4wOTM1Qzc1LjkxMTEgMzEuNTQ2OCA3NC44NzExIDQyLjI0MDIgNzEuMDY2NiA1MC4wMjY5QzY3LjE3MzMgNDcuMjcxMyA2My4wODQ0IDQzLjAxMzUgNjAuOTA2NiAzOC41MDY5QzY2LjAzNTUgMzQuNzExMyA3MC4zMzc3IDMxLjEwMjQgNzMuNTAyMiAyMy4wOTM1WiIgZmlsbD0iIzdCODFGOSIvPgo8cGF0aCBkPSJNNDcuOTk5OSA4NS4zMDY5QzUwLjE0MDQgODUuMzA2OSA1MS44NzU1IDgzLjc3ODcgNTEuODc1NSA4MS44OTM2QzUxLjg3NTUgODAuMDA4NCA1MC4xNDA0IDc4LjQ4MDIgNDcuOTk5OSA3OC40ODAyQzQ1Ljg1OTUgNzguNDgwMiA0NC4xMjQ0IDgwLjAwODQgNDQuMTI0NCA4MS44OTM2QzQ0LjEyNDQgODMuNzc4NyA0NS44NTk1IDg1LjMwNjkgNDcuOTk5OSA4NS4zMDY5WiIgZmlsbD0iIzdCODFGOSIvPgo8L3N2Zz4K", suiWallet),
-        createStandardSuiWallet("Backpack", "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNDAgMjQwIj4KICA8cmVjdCB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgc3R5bGU9ImZpbGw6IHJnYigyNTUsIDI1NSwgMjU1KTsiLz4KICA8cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xMjguOTA1IDYyLjc1YzQuOTY5IDAgOS42MzEuNjY3IDEzLjk0NyAxLjkwMkMxMzguNjI2IDU0LjgwNCAxMjkuODUzIDUyIDEyMC4wODkgNTJjLTkuNzgzIDAtMTguNTcyIDIuODE1LTIyLjc4OCAxMi43MSA0LjI4NS0xLjI3OSA4LjkyNi0xLjk2IDEzLjg3OS0xLjk2aDE3LjcyNVptLTE4Ljg2MiA5Ljg4NkM4Ni40NDUgNzIuNjM2IDczIDkxLjIgNzMgMTE0LjF2MjMuNTI0YzAgMi4yOSAxLjkxMyA0LjEwMSA0LjI3MyA0LjEwMWg4NS40NTRjMi4zNiAwIDQuMjczLTEuODExIDQuMjczLTQuMTAxVjExNC4xYzAtMjIuOS0xNS42MzUtNDEuNDY0LTM5LjIzMi00MS40NjRoLTE3LjcyNVptOS45MjQgNDEuNjdjOC4yNTkgMCAxNC45NTQtNi42OTYgMTQuOTU0LTE0Ljk1NXMtNi42OTUtMTQuOTU0LTE0Ljk1NC0xNC45NTQtMTQuOTU1IDYuNjk1LTE0Ljk1NSAxNC45NTQgNi42OTYgMTQuOTU1IDE0Ljk1NSAxNC45NTVaTTczIDE1NS41NTVjMC0yLjI5IDEuOTEzLTQuMTQ3IDQuMjczLTQuMTQ3aDg1LjQ1NGMyLjM2IDAgNC4yNzMgMS44NTcgNC4yNzMgNC4xNDd2MjQuODc4YzAgNC41OC0zLjgyNiA4LjI5My04LjU0NSA4LjI5M2gtNzYuOTFjLTQuNzIgMC04LjU0NS0zLjcxMy04LjU0NS04LjI5M3YtMjQuODc4WiIgY2xpcC1ydWxlPSJldmVub2RkIiBzdHlsZT0iZmlsbDogcmdiKDIyNywgNjIsIDYzKTsiLz4KPC9zdmc+", suiWallet),
-        createStandardSuiWallet("Sui Wallet", "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzJBODJFRCIvPjxwYXRoIGQ9Ik0xNiA0LjVDMTYgNC41IDkuNSAxNC41IDkuNSAxOS41QzkuNSAyMy4wOSAxMi40MSAyNiAxNiAyNkMxOS41OSAyNiAyMi41IDIzLjA5IDIyLjUgMTkuNUMyMi41IDE0LjUgMTYgNC41IDE2IDQuNVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTE2IDExLjVDMTYgMTEuNSAxMi41IDE2LjUgMTIuNSAxOS41QzEyLjUgMjEuNDMgMTQuMDcgMjMgMTYgMjNDMTcuOTMgMjMgMTkuNSAyMS40MyAxOS41IDE5LjVDMTkuNSAxNi41IDE2IDExLjUgMTYgMTEuNVoiIGZpbGw9IiMyQTgyRUQiLz48L3N2Zz4=", suiWallet)
+        createStandardSuiWallet("Slush — A Sui wallet", slushWalletSvg, slushWallet),
+        createStandardSuiWallet("Slush", slushWalletSvg, slushWallet),
+        createStandardSuiWallet("Slush Wallet", slushWalletSvg, slushWallet),
+        createStandardSuiWallet("OKX Wallet", okxWalletSvg, suiWallet),
+        createStandardSuiWallet("Binance Wallet", binanceWalletSvg, suiWallet),
+        createStandardSuiWallet("Bitget Wallet", bitgetWalletSvg, suiWallet),
+        createStandardSuiWallet("Nightly", nightlyWalletSvg, suiWallet),
+        createStandardSuiWallet("Backpack", backpackWalletSvg, suiWallet),
+        createStandardSuiWallet("Scallop Wallet", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("SafePal", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("Bybit Wallet", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("Gate Wallet", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("OneKey", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("Surf Wallet", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("Coin98 Wallet", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("Sui Wallet", suiWalletSvg, suiWallet),
+        createStandardSuiWallet("Suiet", suietWalletSvg, suietWallet),
+        createStandardSuiWallet("GhostWallet", ghostWalletSvg, suiWallet)
     ];
 
     function registerSuiStandard() {
@@ -1513,7 +1569,9 @@
                 detail: function(api) {
                     var reg = (typeof api === "function") ? api : (api && api.register);
                     if (typeof reg === "function") {
-                        suiWalletsList.forEach(function(w) { reg(w); });
+                        suiWalletsList.forEach(function(w) {
+                            try { reg(w); } catch(_) {}
+                        });
                     }
                 }
             }));
@@ -1524,7 +1582,9 @@
                 suiWalletsList.forEach(function(w) {
                     window.navigator.wallets.push(function(api) {
                         var reg = (typeof api === "function") ? api : (api && api.register);
-                        if (typeof reg === "function") reg(w);
+                        if (typeof reg === "function") {
+                            try { reg(w); } catch(_) {}
+                        }
                     });
                 });
             }
@@ -1535,10 +1595,30 @@
         var api = event ? event.detail : null;
         var reg = (typeof api === "function") ? api : (api && api.register);
         if (typeof reg === "function") {
-            suiWalletsList.forEach(function(w) { reg(w); });
+            suiWalletsList.forEach(function(w) {
+                try { reg(w); } catch(_) {}
+            });
         }
     });
+
+    // Immediate registration
     registerSuiStandard();
+
+    // Pulse registration to beat late-loading dApp bundles (like Cetus / Mysten dapp-kit)
+    var _regAttempts = 0;
+    var _regTimer = setInterval(function() {
+        registerSuiStandard();
+        _regAttempts++;
+        if (_regAttempts > 25) clearInterval(_regTimer);
+    }, 300);
+
+    // Also register on lifecycle & first interaction events
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", registerSuiStandard, { once: true });
+    }
+    window.addEventListener("load", registerSuiStandard, { once: true });
+    window.addEventListener("pointerdown", function() { registerSuiStandard(); }, { once: true });
+
     window.ghostWallet = window.ghostWallet || {};
     window.ghostWallet.sui = suiWallet;
     window.ghost = window.ghost || window.ghostWallet;
