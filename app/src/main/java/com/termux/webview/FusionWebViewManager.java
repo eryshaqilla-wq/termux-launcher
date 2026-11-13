@@ -2569,10 +2569,52 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mCurrentWalletName = str3;
         String strFindAddressByName = FusionWalletHelper.findAddressByName(str3);
         if (strFindAddressByName == null || strFindAddressByName.length() == 0) {
-            strFindAddressByName = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
+            strFindAddressByName = FusionWalletHelper.getMasterAddress();
         }
         this.mCurrentWalletAddress = strFindAddressByName;
         GhostBridgeInterface.setWallet(str3, strFindAddressByName);
+
+        int wIdx = FusionWalletHelper.findIndexByName(str3);
+        String solName = FusionWalletHelper.getSolName(wIdx);
+        String solAddr = FusionWalletHelper.getSolAddress(wIdx);
+        this.mCurrentSolWalletName = solName;
+        this.mCurrentSolWalletAddress = solAddr;
+        GhostBridgeInterface.setSolWallet(solName, solAddr);
+
+        String tronName = FusionWalletHelper.getTronName(wIdx);
+        String tronAddr = FusionWalletHelper.getTronAddress(wIdx);
+        this.mCurrentTronWalletName = tronName;
+        this.mCurrentTronWalletAddress = tronAddr;
+        GhostBridgeInterface.setTronWallet(tronName, tronAddr);
+
+        String suiName = FusionWalletHelper.getSuiName(wIdx);
+        String suiAddr = FusionWalletHelper.getSuiAddress(wIdx);
+        this.mCurrentSuiWalletName = suiName;
+        this.mCurrentSuiWalletAddress = suiAddr;
+        GhostBridgeInterface.setSuiWallet(suiName, suiAddr);
+
+        String aptosName = FusionWalletHelper.getAptosName(wIdx);
+        String aptosAddr = FusionWalletHelper.getAptosAddress(wIdx);
+        this.mCurrentAptosWalletName = aptosName;
+        this.mCurrentAptosWalletAddress = aptosAddr;
+        GhostBridgeInterface.setAptosWallet(aptosName, aptosAddr);
+
+        String iotaName = FusionWalletHelper.getIotaName(wIdx);
+        String iotaAddr = FusionWalletHelper.getIotaAddress(wIdx);
+        this.mCurrentIotaWalletName = iotaName;
+        this.mCurrentIotaWalletAddress = iotaAddr;
+        GhostBridgeInterface.setIotaWallet(iotaName, iotaAddr);
+
+        final String finalAddr = strFindAddressByName;
+        final String finalName = str3;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    GhostBridgeInterface.forwardToDaemon("{\"method\":\"fusion_switchWallet\",\"params\":[\"" + finalAddr + "\",\"" + finalName + "\"]}");
+                } catch (Throwable ignored) {}
+            }
+        }).start();
         GhostBridgeInterface.setAuto(z3);
         GhostBridgeInterface.setWc(str5);
         TermuxActivity termuxActivity = this.mActivity;
