@@ -93,6 +93,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public TextView mOpacityBtn;
     public FrameLayout mPaneHost;
     public TextView mQuickBackBtn;
+    public TextView mReloadPillBtn;
     public TextView mProxyBtn;
     public TextView mRandomFpBtn;
     public TextView mRecBtn;
@@ -1233,6 +1234,31 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             LinearLayout.LayoutParams layoutParams2 = new LinearLayout.LayoutParams(-2, -2);
             layoutParams2.setMargins(2, 0, 2, 0);
             this.mControlPill.addView(textView, layoutParams2);
+            TextView reloadPillBtn = new TextView(this.mActivity);
+            this.mReloadPillBtn = reloadPillBtn;
+            reloadPillBtn.setText(" RELOAD ");
+            FusionUiHelper.setSolidBtn(reloadPillBtn);
+            reloadPillBtn.setTextSize(2, 11.0f);
+            reloadPillBtn.setPadding(8, 4, 8, 4);
+            reloadPillBtn.setClickable(true);
+            reloadPillBtn.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    WebView webView = FusionWebViewManager.this.mActiveWebView;
+                    if (webView != null) {
+                        if (FusionWebViewManager.this.mIsRecording) {
+                            webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) { window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){} }", null);
+                        } else {
+                            webView.evaluateJavascript("try{sessionStorage.removeItem('__agy_rec_active__'); sessionStorage.removeItem('__fusion_rec_active__');}catch(_){}", null);
+                        }
+                    }
+                    FusionWebViewManager.this.reloadActiveTab();
+                    FusionToast.makeText(FusionWebViewManager.this.mActivity, "Reloading...", 0).show();
+                }
+            });
+            LinearLayout.LayoutParams layoutParamsReload = new LinearLayout.LayoutParams(-2, -2);
+            layoutParamsReload.setMargins(2, 0, 2, 0);
+            this.mControlPill.addView(reloadPillBtn, layoutParamsReload);
             TextView textView2 = new TextView(this.mActivity);
             this.mTabBtn = textView2;
             textView2.setText(" TAB 1 ");
