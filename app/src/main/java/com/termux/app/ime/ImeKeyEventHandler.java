@@ -1,5 +1,7 @@
 package com.termux.app.ime;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.os.SystemClock;
@@ -116,7 +118,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                     ic.performContextMenuAction(android.R.id.copy);
                     return;
                 case 'v':
-                    ic.performContextMenuAction(android.R.id.paste);
+                    handlePaste(ic);
                     return;
                 case 'x':
                     ic.performContextMenuAction(android.R.id.cut);
@@ -205,7 +207,7 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
                 break;
             case PASTE:
             case PASTE_PLAIN:
-                ic.performContextMenuAction(android.R.id.paste);
+                handlePaste(ic);
                 break;
             case CUT:
                 ic.performContextMenuAction(android.R.id.cut);
@@ -234,6 +236,28 @@ public final class ImeKeyEventHandler implements Config.IKeyEventHandler {
             default:
                 break;
         }
+    }
+
+    private void handlePaste(InputConnection ic) {
+        if (ic == null) return;
+        try {
+            ClipboardManager cm = (ClipboardManager) mService.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null && cm.hasPrimaryClip()) {
+                ClipData clip = cm.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0) {
+                    ClipData.Item item = clip.getItemAt(0);
+                    CharSequence text = item.getText();
+                    if (text == null && item.getUri() != null) {
+                        text = item.coerceToText(mService);
+                    }
+                    if (text != null && text.length() > 0) {
+                        ic.commitText(text, 1);
+                        return;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        ic.performContextMenuAction(android.R.id.paste);
     }
 
     private boolean hasActiveSelection(InputConnection ic) {

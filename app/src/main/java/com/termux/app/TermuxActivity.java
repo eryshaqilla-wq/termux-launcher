@@ -13511,6 +13511,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         @Override
         public void paste() {
+            com.termux.webview.FusionWebViewManager webViewMgr = com.termux.webview.FusionWebViewManager.getInstance();
+            if (webViewMgr != null && webViewMgr.isWebViewVisible()) {
+                webViewMgr.pasteClipboardIntoActiveWebView();
+                return;
+            }
             if (mTermuxTerminalSessionActivityClient == null)
                 return;
             com.termux.app.terminal.inappkeyboard.RecentScreenshot.Shot screenshot =
@@ -13523,6 +13528,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
         @Override
         public void pasteClipboard() {
+            com.termux.webview.FusionWebViewManager webViewMgr = com.termux.webview.FusionWebViewManager.getInstance();
+            if (webViewMgr != null && webViewMgr.isWebViewVisible()) {
+                webViewMgr.pasteClipboardIntoActiveWebView();
+                return;
+            }
             if (mTermuxTerminalSessionActivityClient != null)
                 mTermuxTerminalSessionActivityClient.onPasteTextFromClipboard(getCurrentSession());
         }
@@ -24166,6 +24176,11 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 // overlay takes it exactly as it takes the paste key. Pasting is not copying:
                 // the history is left as it stands.
                 ShareUtils.copyTextToClipboard(TermuxActivity.this, text);
+                com.termux.webview.FusionWebViewManager webViewMgr = com.termux.webview.FusionWebViewManager.getInstance();
+                if (webViewMgr != null && webViewMgr.isWebViewVisible()) {
+                    webViewMgr.pasteTextIntoActiveWebView(text);
+                    return;
+                }
                 if (mInAppKeyboard != null && mInAppKeyboard.pasteThroughKeyboard()) return;
                 if (mTermuxTerminalSessionActivityClient != null)
                     mTermuxTerminalSessionActivityClient.onPasteTextFromClipboard(getCurrentSession());

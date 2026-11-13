@@ -495,6 +495,11 @@ public class TermuxTerminalSessionActivityClient extends TermuxTerminalSessionCl
     public void onPasteTextFromClipboard(@Nullable TerminalSession session) {
         if (!mHost.isVisible())
             return;
+        com.termux.webview.FusionWebViewManager webViewMgr = com.termux.webview.FusionWebViewManager.getInstance();
+        if (webViewMgr != null && webViewMgr.isWebViewVisible()) {
+            webViewMgr.pasteClipboardIntoActiveWebView();
+            return;
+        }
         com.termux.view.TerminalView view = mHost.focusedView();
         if (view != null && view.mEmulator != null)
             mClipboard.paste(view.mEmulator);

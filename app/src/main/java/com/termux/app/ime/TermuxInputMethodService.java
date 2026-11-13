@@ -1,5 +1,7 @@
 package com.termux.app.ime;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -559,7 +561,17 @@ public class TermuxInputMethodService extends InputMethodService {
 
                 @Override
                 public void pasteFromHistory(@NonNull String text) {
-                    commitVoiceTranscript(text);
+                    if (text == null || text.isEmpty()) return;
+                    try {
+                        ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                        if (cm != null) {
+                            cm.setPrimaryClip(ClipData.newPlainText(null, text));
+                        }
+                    } catch (Throwable ignored) {}
+                    InputConnection ic = getCurrentInputConnection();
+                    if (ic != null) {
+                        ic.commitText(text, 1);
+                    }
                 }
 
                 @Override

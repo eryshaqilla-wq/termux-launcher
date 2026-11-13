@@ -88,8 +88,8 @@ public final class ClipboardPanelController {
             mHost.isCard(), new ClipboardPanelView.Listener() {
                 @Override public void onPasteRequested(@NonNull String text) {
                     // One tap: the item is pasted and the keys are back for what comes next.
-                    hide();
                     mHost.pasteFromHistory(text);
+                    hide();
                 }
 
                 @Override public void onCloseRequested() {

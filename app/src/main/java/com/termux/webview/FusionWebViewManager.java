@@ -751,6 +751,62 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
+    public void pasteClipboardIntoActiveWebView() {
+        TermuxActivity r0 = this.mActivity;
+        if (r0 == null) return;
+        try {
+            ClipboardManager cm = (ClipboardManager) r0.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null && cm.hasPrimaryClip()) {
+                ClipData clip = cm.getPrimaryClip();
+                if (clip != null && clip.getItemCount() > 0) {
+                    ClipData.Item item = clip.getItemAt(0);
+                    CharSequence text = item.getText();
+                    if (text == null && item.getUri() != null) {
+                        text = item.coerceToText(r0);
+                    }
+                    if (text != null) {
+                        pasteTextIntoActiveWebView(text.toString());
+                        return;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    public void pasteTextIntoActiveWebView(final String text) {
+        if (text == null || this.mActivity == null) return;
+        final WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
+        if (webView == null) return;
+        this.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                String escaped = JSONObject.quote(text);
+                String js = "(function(){" +
+                    "  var el = document.activeElement;" +
+                    "  if (!el) { try { document.execCommand('insertText', false, " + escaped + "); } catch(_) {} return; }" +
+                    "  var tag = (el.tagName || '').toUpperCase();" +
+                    "  if (tag === 'INPUT' || tag === 'TEXTAREA') {" +
+                    "    var s = (typeof el.selectionStart === 'number') ? el.selectionStart : (el.value ? el.value.length : 0);" +
+                    "    var e = (typeof el.selectionEnd === 'number') ? el.selectionEnd : s;" +
+                    "    var v = el.value || '';" +
+                    "    var ins = " + escaped + ";" +
+                    "    var setter = (tag === 'INPUT' ? Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value') : Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value'));" +
+                    "    var nextVal = v.slice(0, s) + ins + v.slice(e);" +
+                    "    if (setter && setter.set) { setter.set.call(el, nextVal); } else { el.value = nextVal; }" +
+                    "    try { el.selectionStart = el.selectionEnd = s + ins.length; } catch(_) {}" +
+                    "    el.dispatchEvent(new Event('input', { bubbles: true }));" +
+                    "    el.dispatchEvent(new Event('change', { bubbles: true }));" +
+                    "  } else if (el.isContentEditable || (el.getAttribute && el.getAttribute('contenteditable') === 'true')) {" +
+                    "    try { document.execCommand('insertText', false, " + escaped + "); } catch(_) {}" +
+                    "  } else {" +
+                    "    try { document.execCommand('insertText', false, " + escaped + "); } catch(_) {}" +
+                    "  }" +
+                    "})()";
+                webView.evaluateJavascript(js, null);
+            }
+        });
+    }
+
     public WebView createNewConfiguredWebView(String profileName, boolean isDesktop) {
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity == null) {
