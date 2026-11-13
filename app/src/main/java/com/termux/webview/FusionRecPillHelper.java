@@ -198,7 +198,10 @@ public class FusionRecPillHelper {
                 String nextAddr = fusionWebViewManager.switchToNextWallet();
                 WebView webView = fusionWebViewManager.mActiveWebView;
                 if (webView != null) {
-                    webView.evaluateJavascript("if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'next_wallet', timestamp:Date.now(), text:'Ganti Wallet -> " + nextAddr + "'}); try { window.dispatchEvent(new CustomEvent('accountsChanged', {detail: ['" + nextAddr + "']})); } catch(_){}", null);
+                    if (fusionWebViewManager.mIsRecording) {
+                        webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_wallet', timestamp:Date.now(), text:'Ganti Wallet -> " + nextAddr + "'});", null);
+                    }
+                    webView.evaluateJavascript("try { window.dispatchEvent(new CustomEvent('accountsChanged', {detail: ['" + nextAddr + "']})); } catch(_){}", null);
                 }
                 fusionWebViewManager.updateMenuTexts();
             }
@@ -269,7 +272,11 @@ public class FusionRecPillHelper {
             public void onClick(View v) {
                 WebView webView = fusionWebViewManager.mActiveWebView;
                 if (webView != null) {
-                    webView.evaluateJavascript("(function(){ var ne = (typeof AgyDB !== 'undefined' && AgyDB.nextEmail) ? AgyDB.nextEmail() : 'tuyul@gmail.com'; if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'next_email', timestamp:Date.now(), text:'Ganti Email -> ' + ne, value:ne}); updateAgyHUD('Smart Email', 'Aktif: ' + ne, 'success'); return ne; })()", null);
+                    if (fusionWebViewManager.mIsRecording) {
+                        webView.evaluateJavascript("(function(){ var ne = (typeof AgyDB !== 'undefined' && AgyDB.nextEmail) ? AgyDB.nextEmail() : 'tuyul@gmail.com'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_email', timestamp:Date.now(), text:'Ganti Email -> ' + ne, value:ne}); updateAgyHUD('Smart Email', 'Aktif: ' + ne, 'success'); return ne; })()", null);
+                    } else {
+                        webView.evaluateJavascript("(function(){ var ne = (typeof AgyDB !== 'undefined' && AgyDB.nextEmail) ? AgyDB.nextEmail() : 'tuyul@gmail.com'; return ne; })()", null);
+                    }
                 }
             }
         });
@@ -291,7 +298,11 @@ public class FusionRecPillHelper {
             public void onClick(View v) {
                 WebView webView = fusionWebViewManager.mActiveWebView;
                 if (webView != null) {
-                    webView.evaluateJavascript("(function(){ var nr = (typeof AgyDB !== 'undefined' && AgyDB.nextRef) ? AgyDB.nextRef() : 'REF123'; if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'ref', timestamp:Date.now(), text:'Ref Code -> ' + nr, value:nr}); updateAgyHUD('Referral Code', 'Aktif: ' + nr, 'success'); return nr; })()", null);
+                    if (fusionWebViewManager.mIsRecording) {
+                        webView.evaluateJavascript("(function(){ var nr = (typeof AgyDB !== 'undefined' && AgyDB.nextRef) ? AgyDB.nextRef() : 'REF123'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'ref', timestamp:Date.now(), text:'Ref Code -> ' + nr, value:nr}); updateAgyHUD('Referral Code', 'Aktif: ' + nr, 'success'); return nr; })()", null);
+                    } else {
+                        webView.evaluateJavascript("(function(){ var nr = (typeof AgyDB !== 'undefined' && AgyDB.nextRef) ? AgyDB.nextRef() : 'REF123'; return nr; })()", null);
+                    }
                 }
             }
         });
@@ -313,7 +324,11 @@ public class FusionRecPillHelper {
             public void onClick(View v) {
                 WebView webView = fusionWebViewManager.mActiveWebView;
                 if (webView != null) {
-                    webView.evaluateJavascript("if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){}", null);
+                    if (fusionWebViewManager.mIsRecording) {
+                        webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) { window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){} }", null);
+                    } else {
+                        webView.evaluateJavascript("try{sessionStorage.removeItem('__agy_rec_active__'); sessionStorage.removeItem('__fusion_rec_active__');}catch(_){}", null);
+                    }
                     webView.reload();
                 }
             }
@@ -339,7 +354,11 @@ public class FusionRecPillHelper {
                     webView.clearCache(true);
                     webView.clearFormData();
                     try { android.webkit.WebStorage.getInstance().deleteAllData(); } catch(Throwable unused) {}
-                    webView.evaluateJavascript("try{localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){}; if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'wipe_cache', timestamp:Date.now(), text:'Wipe Cache & Storage'});", null);
+                    if (fusionWebViewManager.mIsRecording) {
+                        webView.evaluateJavascript("try{localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){}; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'wipe_cache', timestamp:Date.now(), text:'Wipe Cache & Storage'});", null);
+                    } else {
+                        webView.evaluateJavascript("try{localStorage.clear(); sessionStorage.clear();}catch(_){};", null);
+                    }
                 }
             }
         });
@@ -360,8 +379,8 @@ public class FusionRecPillHelper {
             @Override
             public void onClick(View v) {
                 WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    webView.evaluateJavascript("(function(){ var fp = (window.GhostBridge && window.GhostBridge.nextFingerprint) ? window.GhostBridge.nextFingerprint() : 'Acak'; if (window.AgyRecorder) window.AgyRecorder.recordEvent({type:'fingerprint', timestamp:Date.now(), text:'Fingerprint -> ' + fp, value:fp}); updateAgyHUD('Fingerprint Faker', 'Model HP: ' + fp, 'success'); return fp; })()", null);
+                if (webView != null && fusionWebViewManager.mIsRecording) {
+                    webView.evaluateJavascript("(function(){ var fp = (window.GhostBridge && window.GhostBridge.nextFingerprint) ? window.GhostBridge.nextFingerprint() : 'Acak'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'fingerprint', timestamp:Date.now(), text:'Fingerprint -> ' + fp, value:fp}); updateAgyHUD('Fingerprint Faker', 'Model HP: ' + fp, 'success'); return fp; })()", null);
                 }
             }
         });
