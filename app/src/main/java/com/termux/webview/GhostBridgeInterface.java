@@ -18,17 +18,17 @@ import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class GhostBridgeInterface implements Runnable {
-    public static String sCurrentWalletName = "eso-1";
-    public static String sCurrentWalletAddress = "";
-    public static String sCurrentSolWalletName = "eso-1";
+    public static String sCurrentWalletName = "default";
+    public static String sCurrentWalletAddress = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
+    public static String sCurrentSolWalletName = "default";
     public static String sCurrentSolWalletAddress = "";
-    public static String sCurrentTronWalletName = "eso-1";
+    public static String sCurrentTronWalletName = "default";
     public static String sCurrentTronWalletAddress = "";
-    public static String sCurrentSuiWalletName = "eso-1";
+    public static String sCurrentSuiWalletName = "default";
     public static String sCurrentSuiWalletAddress = "";
-    public static String sCurrentAptosWalletName = "eso-1";
+    public static String sCurrentAptosWalletName = "default";
     public static String sCurrentAptosWalletAddress = "";
-    public static String sCurrentIotaWalletName = "eso-1";
+    public static String sCurrentIotaWalletName = "default";
     public static String sCurrentIotaWalletAddress = "";
     public static String sLastTxHash = "";
     public static String sWcUri = "";
@@ -317,11 +317,11 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getWalletAddress() {
-        if (sCurrentWalletAddress != null && !sCurrentWalletAddress.isEmpty() && !"0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359".equals(sCurrentWalletAddress)) {
+        if (sCurrentWalletAddress != null && !sCurrentWalletAddress.isEmpty()) {
             return sCurrentWalletAddress;
         }
         FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-        if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty() && !"0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359".equals(mgr.mCurrentWalletAddress)) {
+        if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty()) {
             return mgr.mCurrentWalletAddress;
         }
         return FusionWalletHelper.getMasterAddress();
@@ -329,23 +329,13 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getWalletName() {
-        if (sCurrentWalletName != null && !sCurrentWalletName.isEmpty() && !"default".equals(sCurrentWalletName)) {
+        if (sCurrentWalletName != null && !sCurrentWalletName.isEmpty()) {
             return sCurrentWalletName;
         }
         FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-        if (mgr != null && mgr.mCurrentWalletName != null && !mgr.mCurrentWalletName.isEmpty() && !"default".equals(mgr.mCurrentWalletName)) {
+        if (mgr != null && mgr.mCurrentWalletName != null && !mgr.mCurrentWalletName.isEmpty()) {
             return mgr.mCurrentWalletName;
         }
-        return FusionWalletHelper.getMasterName();
-    }
-
-    @JavascriptInterface
-    public String getMasterAddress() {
-        return FusionWalletHelper.getMasterAddress();
-    }
-
-    @JavascriptInterface
-    public String getMasterName() {
         return FusionWalletHelper.getMasterName();
     }
 
@@ -678,27 +668,14 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":[\"0x79E0EE08c6516d1204821f083285Ab65660c26E4\"]}";
         }
         if (str.contains("eth_accounts")) {
-            if (checkRpcAlive()) {
-                String daemonResp = forwardToDaemon(str);
-                if (daemonResp != null && !daemonResp.contains("\"error\"")) {
-                    try {
-                        JSONObject jo = new JSONObject(daemonResp);
-                        JSONArray arr = jo.optJSONArray("result");
-                        if (arr != null && arr.length() > 0) {
-                            sCurrentWalletAddress = arr.getString(0);
-                        }
-                    } catch (Exception ignored) {}
-                    return daemonResp;
-                }
-            }
             String ethAddr = sCurrentWalletAddress;
-            if (ethAddr == null || ethAddr.isEmpty() || "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359".equals(ethAddr)) {
+            if (ethAddr == null || ethAddr.isEmpty()) {
                 FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-                if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty() && !"0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359".equals(mgr.mCurrentWalletAddress)) {
+                if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty()) {
                     ethAddr = mgr.mCurrentWalletAddress;
                 }
             }
-            if (ethAddr == null || ethAddr.isEmpty() || "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359".equals(ethAddr)) {
+            if (ethAddr == null || ethAddr.isEmpty()) {
                 ethAddr = FusionWalletHelper.getMasterAddress();
             }
             if (ethAddr != null && !ethAddr.isEmpty()) {

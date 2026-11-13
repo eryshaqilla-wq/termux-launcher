@@ -418,27 +418,13 @@
         // Fast-path immediate responses
         if (method === 'eth_requestAccounts' || method === 'eth_accounts') {
             scanDappChainFromWebData();
-            var alive = isDaemon();
-            if (alive && window.callGhostRpc) {
-                try {
-                    var rpcRes = await callGhostRpc("eth_accounts", []);
-                    if (Array.isArray(rpcRes) && rpcRes.length > 0 && rpcRes[0]) {
-                        var daemonAddr = rpcRes[0];
-                        walletAddress = daemonAddr;
-                        fakeProvider.selectedAddress = daemonAddr;
-                        if (window.GhostBridge && window.GhostBridge.setWalletDirect) {
-                            try { window.GhostBridge.setWalletDirect("Active", daemonAddr); } catch(_) {}
-                        }
-                        return [daemonAddr];
-                    }
-                } catch(e) {}
-            }
             var activeAddr = (window.GhostBridge && window.GhostBridge.getWalletAddress) ? window.GhostBridge.getWalletAddress() : walletAddress;
             if (activeAddr) {
                 walletAddress = activeAddr;
                 fakeProvider.selectedAddress = activeAddr;
                 return [activeAddr];
             }
+            var alive = isDaemon();
             if (!alive) {
                 if (method === 'eth_requestAccounts') {
                     if (window.GhostBridge && window.GhostBridge.notifyDaemonOffline) {
@@ -777,15 +763,12 @@
 
     GhostSolanaProvider.prototype.connect = async function(opts) {
         reportDappChainToBridge("solana", 501);
-        var addr = "";
-        if (window.callGhostRpc && isDaemon()) {
+        var addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
+        if (!addr && window.callGhostRpc) {
             try {
                 var res = await callGhostRpc("sol_connect", [opts || {}]);
                 if (res && res.publicKey) addr = res.publicKey;
             } catch(e) {}
-        }
-        if (!addr) {
-            addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
         }
         if (!addr) addr = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
         this.publicKey = createGhostPublicKey(addr);
@@ -1271,16 +1254,16 @@
 
     GhostSuiProvider.prototype.connect = async function(options) {
         reportDappChainToBridge("sui", 784);
-        var addr = "";
-        if (window.callGhostRpc && isDaemon()) {
+        var addr = suiAddr;
+        if (!addr && window.GhostBridge && window.GhostBridge.getSuiWalletAddress) {
+            try { addr = window.GhostBridge.getSuiWalletAddress(); } catch(e) {}
+        }
+        if (!addr && window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("sui_connect", [options || {}]);
                 if (res && res.length && res[0].address) addr = res[0].address;
                 else if (res && res.address) addr = res.address;
             } catch(e) {}
-        }
-        if (!addr) {
-            addr = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
         }
         if (!addr) addr = "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151";
         suiAddr = addr;
@@ -1606,15 +1589,15 @@
 
     GhostAptosProvider.prototype.connect = async function() {
         reportDappChainToBridge("aptos", 637);
-        var addr = "";
-        if (window.callGhostRpc && isDaemon()) {
+        var addr = aptosAddr;
+        if (!addr && window.GhostBridge && window.GhostBridge.getAptosWalletAddress) {
+            try { addr = window.GhostBridge.getAptosWalletAddress(); } catch(e) {}
+        }
+        if (!addr && window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("aptos_connect", [{}]);
                 if (res && res.address) addr = res.address;
             } catch(e) {}
-        }
-        if (!addr) {
-            addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
         }
         if (!addr) addr = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
         aptosAddr = addr;
@@ -2028,17 +2011,11 @@
 
     GhostIotaProvider.prototype.connect = async function(options) {
         reportDappChainToBridge("iota", 8822);
-        var addr = "";
-        if (window.callGhostRpc && isDaemon()) {
+        var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
+        if (!addr && window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("iota_connect", [options || {}]);
                 if (res && res.length && res[0].address) addr = res[0].address;
-                else if (res && res.address) addr = res.address;
-            } catch(e) {}
-        }
-        if (!addr) {
-            addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
-        }
                 else if (res && res.address) addr = res.address;
             } catch(e) {}
         }
@@ -2724,10 +2701,10 @@
                 }
             } catch(_) {}
             if (list.length === 0) {
-                var mAddr = (window.GhostBridge && window.GhostBridge.getMasterAddress) ? window.GhostBridge.getMasterAddress() : "0x79E0EE08c6516d1204821f083285Ab65660c26E4";
-                var mName = (window.GhostBridge && window.GhostBridge.getMasterName) ? window.GhostBridge.getMasterName() : "eso-1";
                 list = [
-                    { name: mName, address: mAddr }
+                    { name: "Master .env", address: "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359" },
+                    { name: "tuyul-2", address: "0xCBF711D2668b03b4cF485626ff261Dcc80705Ab3" },
+                    { name: "tuyul-3", address: "0x7a5bD0C7C686334b1d031C298a8417BFb3F1F4Da" }
                 ];
             }
             return list;
@@ -3041,13 +3018,6 @@
                 if (!isInfinite && currentIdxInQueue >= queue.length) {
                     self.isRunning = false;
                     try {
-                        var masterAddr = (window.GhostBridge && window.GhostBridge.getMasterAddress) ? window.GhostBridge.getMasterAddress() : "";
-                        var masterName = (window.GhostBridge && window.GhostBridge.getMasterName) ? window.GhostBridge.getMasterName() : "eso-1";
-                        if (masterAddr) {
-                            AgyDB.setActiveWallet(masterName, masterAddr);
-                        }
-                    } catch(_) {}
-                    try {
                         if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
                             window.GhostBridge.releaseWakeLock();
                         }
@@ -3135,13 +3105,6 @@
                     var hasMore = isInfinite || (currentIdxInQueue < queue.length);
                     if (!hasMore) {
                         self.isRunning = false;
-                        try {
-                            var masterAddr = (window.GhostBridge && window.GhostBridge.getMasterAddress) ? window.GhostBridge.getMasterAddress() : "";
-                            var masterName = (window.GhostBridge && window.GhostBridge.getMasterName) ? window.GhostBridge.getMasterName() : "eso-1";
-                            if (masterAddr) {
-                                AgyDB.setActiveWallet(masterName, masterAddr);
-                            }
-                        } catch(_) {}
                         try {
                             if (window.GhostBridge && window.GhostBridge.releaseWakeLock) {
                                 window.GhostBridge.releaseWakeLock();
