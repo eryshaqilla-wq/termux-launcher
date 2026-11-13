@@ -192,8 +192,8 @@
             case 784: return "sui";
             case 101:
             case 637: return "aptos";
-            case 4218:
-            case 8822: return "iota";
+            case 4218: return "iota";
+            case 8822: return "iotaevm";
             case 728126428: return "tron";
             default: return null;
         }
@@ -218,8 +218,12 @@
                     reportDappChainToBridge("solana", 501);
                     return;
                 }
-                if (loc.indexOf("iota.org") !== -1 || loc.indexOf("iota.cafe") !== -1 || loc.indexOf("magicsea.finance") !== -1 || loc.indexOf("tangle.tools") !== -1 || loc.indexOf("iotabee.com") !== -1 || loc.indexOf("iota") !== -1) {
-                    reportDappChainToBridge("iota", 8822);
+                if (loc.indexOf("magicsea.finance") !== -1 || loc.indexOf("tangle.tools") !== -1 || loc.indexOf("iotabee.com") !== -1) {
+                    reportDappChainToBridge("iotaevm", 8822);
+                    return;
+                }
+                if (loc.indexOf("iota.org") !== -1 || loc.indexOf("iota.cafe") !== -1 || loc.indexOf("iota") !== -1) {
+                    reportDappChainToBridge("iota", 4218);
                     return;
                 }
                 if (loc.indexOf("tronlink.org") !== -1 || loc.indexOf("sunpump.meme") !== -1 || loc.indexOf("sunswap.com") !== -1 || loc.indexOf("tronscan.org") !== -1) {
@@ -305,7 +309,7 @@
                 return;
             }
             if (window.IotaClient || window.__IOTA__) {
-                reportDappChainToBridge("iota", 8822);
+                reportDappChainToBridge("iota", 4218);
                 return;
             }
             if (window.SuiClient || window.__SUI__) {
@@ -2001,7 +2005,7 @@
     };
 
     GhostIotaProvider.prototype.getAccounts = async function() {
-        reportDappChainToBridge("iota", 8822);
+        reportDappChainToBridge("iota", 4218);
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr) addr = "0xdcc1545d60471021e3aca3f8de472083eec2ca8cc6db9e5109ed8f5d6a6c55fd";
         iotaAddr = addr;
@@ -2010,7 +2014,7 @@
     };
 
     GhostIotaProvider.prototype.connect = async function(options) {
-        reportDappChainToBridge("iota", 8822);
+        reportDappChainToBridge("iota", 4218);
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr && window.callGhostRpc) {
             try {
@@ -2127,7 +2131,7 @@
         var _listeners = [];
 
         function getCurrentAccount() {
-            reportDappChainToBridge("iota", 8822);
+            reportDappChainToBridge("iota", 4218);
             var addr = iotaAddr;
             if (!addr && window.GhostBridge && window.GhostBridge.getIotaWalletAddress) {
                 try { addr = window.GhostBridge.getIotaWalletAddress(); } catch(e) {}
@@ -2187,7 +2191,7 @@
                 "standard:connect": {
                     version: "1.0.0",
                     connect: async function(input) {
-                        reportDappChainToBridge("iota", 8822);
+                        reportDappChainToBridge("iota", 4218);
                         try { await provider.connect(input); } catch(_) {}
                         _connected = true;
                         var acc = getCurrentAccount();

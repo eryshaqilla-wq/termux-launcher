@@ -304,8 +304,10 @@ public class FusionChainHelper {
             str = "sui";
         } else if ("apt".equalsIgnoreCase(str) || "aptos".equalsIgnoreCase(str)) {
             str = "aptos";
-        } else if ("iota".equalsIgnoreCase(str) || "iotaevm".equalsIgnoreCase(str)) {
+        } else if ("iota".equalsIgnoreCase(str)) {
             str = "iota";
+        } else if ("iotaevm".equalsIgnoreCase(str)) {
+            str = "iotaevm";
         }
         if (str.startsWith("0x") || str.startsWith("0X")) {
             setChainByHex(str);
@@ -399,9 +401,12 @@ public class FusionChainHelper {
                 sCurrentChainName = "Aptos Mainnet";
                 break;
             case 4218:
-            case 8822:
                 sCurrentChainKey = "iota";
                 sCurrentChainName = "IOTA Rebased Mainnet";
+                break;
+            case 8822:
+                sCurrentChainKey = "iotaevm";
+                sCurrentChainName = "IOTA EVM Mainnet";
                 break;
             default:
                 sCurrentChainKey = "chain-" + i;

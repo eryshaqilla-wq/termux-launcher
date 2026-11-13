@@ -252,8 +252,7 @@
         "defaultRpc": [
             "https://api.mainnet.iota.cafe",
             "https://rpc.ankr.com/iota_mainnet"
-        ],
-        "evmId": 8822
+        ]
     },
     "iotaevm": {
         "name": "IOTA EVM Mainnet",

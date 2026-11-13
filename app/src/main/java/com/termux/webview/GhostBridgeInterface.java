@@ -612,7 +612,7 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":{\"address\":\"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae\",\"publicKey\":\"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae\"}}";
         }
         if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
-            handleDappChainDetected("iota", 8822);
+            handleDappChainDetected("iota", 4218);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
