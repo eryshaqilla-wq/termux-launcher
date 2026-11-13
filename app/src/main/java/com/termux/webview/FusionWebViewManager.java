@@ -693,6 +693,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (frameLayout != null) {
                 frameLayout.removeView(webView);
             }
+            webView.setWebViewClient(null);
+            webView.setWebChromeClient(null);
             webView.stopLoading();
             webView.destroy();
             this.mActiveWebView = null;
@@ -704,6 +706,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (frameLayout2 != null) {
                 frameLayout2.removeView(webView2);
             }
+            webView2.setWebViewClient(null);
+            webView2.setWebChromeClient(null);
             webView2.stopLoading();
             webView2.destroy();
             this.mWorkerWebView = null;
@@ -720,6 +724,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionDrawerHelper.closeAllDrawers(this);
         FusionRecPillHelper.hideRecPill();
         FusionToolPillHelper.hideToolPill(this);
+        if (this.mPaneHost != null) {
+            this.mPaneHost.setVisibility(View.GONE);
+        }
         View view2 = this.mTerminalPaneHost;
         if (view2 != null) {
             view2.setVisibility(0);
@@ -1846,6 +1853,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (frameLayout != null) {
                 frameLayout.removeView(webView);
             }
+            webView.setWebViewClient(null);
+            webView.setWebChromeClient(null);
             webView.stopLoading();
             webView.destroy();
         }
@@ -2845,6 +2854,16 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             || (this.mMenuCard != null && this.mMenuCard.getVisibility() == View.VISIBLE);
     }
 
+    public boolean isWebViewOpen() {
+        if (this.mTabList == null || this.mTabList.isEmpty()) {
+            return false;
+        }
+        if (this.mControlPill != null && this.mControlPill.getVisibility() == View.VISIBLE) {
+            return true;
+        }
+        return isWebViewVisible();
+    }
+
     public void promptNewTabUrl() {
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity == null) {
@@ -3352,6 +3371,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionDrawerHelper.closeAllDrawers(this);
         FusionRecPillHelper.hideRecPill();
         FusionToolPillHelper.hideToolPill(this);
+        if (this.mPaneHost != null) {
+            this.mPaneHost.setVisibility(View.GONE);
+        }
         View view4 = this.mTerminalPaneHost;
         if (view4 != null) {
             view4.setVisibility(0);

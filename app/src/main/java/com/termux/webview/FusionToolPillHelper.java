@@ -386,6 +386,10 @@ public class FusionToolPillHelper {
 
     public static void updateToolPillUi(FusionWebViewManager manager) {
         if (manager == null) return;
+        if (!manager.isWebViewOpen()) {
+            hideToolPill(manager);
+            return;
+        }
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll == null) return;
 
@@ -445,6 +449,10 @@ public class FusionToolPillHelper {
 
     public static void syncToolPillPosition(FusionWebViewManager manager) {
         if (manager == null || manager.mActivity == null) return;
+        if (!manager.isWebViewOpen()) {
+            hideToolPill(manager);
+            return;
+        }
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll == null) return;
 
@@ -454,7 +462,7 @@ public class FusionToolPillHelper {
             float density = manager.mActivity.getResources().getDisplayMetrics().density;
             int gap = (int) (4 * density);
             int targetTop = (int) (58 * density);
-            if (manager.mControlPill != null) {
+            if (manager.mControlPill != null && manager.mControlPill.getVisibility() == View.VISIBLE) {
                 if (manager.mControlPill.getBottom() > 0) {
                     targetTop = manager.mControlPill.getBottom() + gap;
                 } else {
@@ -470,6 +478,10 @@ public class FusionToolPillHelper {
 
     public static void syncTabToolState(FusionWebViewManager manager, FusionTab tab) {
         if (manager == null || tab == null) return;
+        if (!manager.isWebViewOpen()) {
+            hideToolPill(manager);
+            return;
+        }
         sHasFormFocus = tab.mHasFormFocus;
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll != null) {
@@ -483,6 +495,10 @@ public class FusionToolPillHelper {
 
     public static void showToolPill(FusionWebViewManager manager) {
         if (manager == null) return;
+        if (!manager.isWebViewOpen()) {
+            hideToolPill(manager);
+            return;
+        }
         HorizontalScrollView scroll = manager.mToolScroll != null ? manager.mToolScroll : sToolScroll;
         if (scroll == null) {
             initToolPill(manager);
@@ -512,6 +528,18 @@ public class FusionToolPillHelper {
         }
         if (sToolScroll != null) {
             sToolScroll.setVisibility(View.GONE);
+        }
+        if (manager != null && manager.mToolPill != null) {
+            manager.mToolPill.setVisibility(View.GONE);
+        }
+        if (sToolPill != null) {
+            sToolPill.setVisibility(View.GONE);
+        }
+        if (manager != null && manager.mToolToggleBtn != null) {
+            manager.mToolToggleBtn.setVisibility(View.GONE);
+        }
+        if (sToggleBtn != null) {
+            sToggleBtn.setVisibility(View.GONE);
         }
     }
 

@@ -47,6 +47,9 @@ public class FusionWebViewClient extends WebViewClient {
         this.mCurrentUrl = url;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
+            if (!fusionWebViewManager.isWebViewOpen() || fusionWebViewManager.mActiveWebView != webView) {
+                return;
+            }
             fusionWebViewManager.injectScripts(webView);
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
         }
@@ -58,6 +61,9 @@ public class FusionWebViewClient extends WebViewClient {
         this.mCurrentUrl = str;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
+            if (!fusionWebViewManager.isWebViewOpen() || fusionWebViewManager.mActiveWebView != webView) {
+                return;
+            }
             fusionWebViewManager.injectScripts(webView);
             if (webView != null) {
                 webView.evaluateJavascript("if(window.__fusionScanDappChain)try{window.__fusionScanDappChain();}catch(_){}", null);

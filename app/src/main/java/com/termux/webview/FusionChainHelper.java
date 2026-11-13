@@ -83,7 +83,56 @@ public class FusionChainHelper {
     }
 
     public static String detectChainFromUrl(String url) {
-        // Obsolete: Detection is now driven 100% by live Web3/dApp web data, provider calls, and in-page state
+        if (url == null || url.isEmpty()) {
+            return null;
+        }
+        String lower = url.toLowerCase();
+        if (lower.contains("jup.ag") || lower.contains("raydium") || lower.contains("pump.fun") || 
+            lower.contains("solana") || lower.contains("magiceden") || lower.contains("tensor.trade") || 
+            lower.contains("orca.so") || lower.contains("birdeye.so") || lower.contains("phantom.app") || 
+            lower.contains("solscan") || lower.contains("solflare")) {
+            return "solana";
+        }
+        if (lower.contains("iota.org") || lower.contains("iota.cafe") || lower.contains("magicsea") || 
+            lower.contains("iotabee") || lower.contains("tangle") || lower.contains("iota")) {
+            return "iota";
+        }
+        if (lower.contains("sui.io") || lower.contains("suiscan") || lower.contains("cetus.zone") || 
+            lower.contains("turbos") || lower.contains("navi.protocol") || lower.contains("scallop") || 
+            lower.contains("aftermath") || lower.contains("bluefin") || lower.contains("sui")) {
+            return "sui";
+        }
+        if (lower.contains("aptoslabs") || lower.contains("aptoscan") || lower.contains("panora") || 
+            lower.contains("thalas") || lower.contains("liquidswap") || lower.contains("amnis") || 
+            lower.contains("aptos")) {
+            return "aptos";
+        }
+        if (lower.contains("tronscan") || lower.contains("sunpump") || lower.contains("sun.io") || 
+            lower.contains("justlend") || lower.contains("trondao") || lower.contains("tron")) {
+            return "tron";
+        }
+        if (lower.contains("pancakeswap") || lower.contains("bscscan") || lower.contains("four.meme") || 
+            lower.contains("binance") || lower.contains("bnbchain") || lower.contains("bsc")) {
+            return "bsc";
+        }
+        if (lower.contains("arbiscan") || lower.contains("arbitrum") || lower.contains("gmx.io") || 
+            lower.contains("camelot")) {
+            return "arbitrum";
+        }
+        if (lower.contains("polygonscan") || lower.contains("polygon") || lower.contains("quickswap")) {
+            return "polygon";
+        }
+        if (lower.contains("morphl2") || lower.contains("morphscan") || lower.contains("bulbaswap")) {
+            return "morph";
+        }
+        if (lower.contains("etherscan") || lower.contains("uniswap") || lower.contains("curve.fi") || 
+            lower.contains("lido.fi") || lower.contains("opensea")) {
+            return "eth";
+        }
+        if (lower.contains("base.org") || lower.contains("basescan") || lower.contains("aerodrome") || 
+            lower.contains("virtuals.io") || lower.contains("clanker")) {
+            return "base";
+        }
         return null;
     }
 
