@@ -28,11 +28,11 @@ public class FusionWalletHelper {
 
     public static int sSuiMasterIndex = 0;
     public static String[] sSuiNames = {"eso-1"};
-    public static String[] sSuiAddresses = {"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151"};
+    public static String[] sSuiAddresses = {"0x2d5cd38757a6423b513a54523d072ff737b3d5ddc87f56cb96556fbe09a37792"};
 
     public static int sAptosMasterIndex = 0;
     public static String[] sAptosNames = {"eso-1"};
-    public static String[] sAptosAddresses = {"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae"};
+    public static String[] sAptosAddresses = {"0xf796fcce529ac9bbda4864320e80f8a016cc0b020ea745f9acde68db5ad63500"};
 
     public static int sIotaMasterIndex = 0;
     public static String[] sIotaNames = {"eso-1"};
@@ -689,9 +689,9 @@ public class FusionWalletHelper {
             sTronNames = new String[]{"eso-1"};
             sTronAddresses = new String[]{"TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF"};
             sSuiNames = new String[]{"eso-1"};
-            sSuiAddresses = new String[]{"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151"};
+            sSuiAddresses = new String[]{"0x2d5cd38757a6423b513a54523d072ff737b3d5ddc87f56cb96556fbe09a37792"};
             sAptosNames = new String[]{"eso-1"};
-            sAptosAddresses = new String[]{"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae"};
+            sAptosAddresses = new String[]{"0xf796fcce529ac9bbda4864320e80f8a016cc0b020ea745f9acde68db5ad63500"};
             sIotaNames = new String[]{"eso-1"};
             sIotaAddresses = new String[]{"0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a"};
         }

@@ -1598,9 +1598,10 @@
             } catch (_) {}
         }
         var addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
+        var pk = (window.GhostBridge && window.GhostBridge.getAptosPublicKey) ? window.GhostBridge.getAptosPublicKey() : addr;
         return {
             address: addr,
-            publicKey: addr
+            publicKey: pk
         };
     };
 
@@ -1625,9 +1626,10 @@
         }
         aptosAddr = addr;
         window.__FUSION_APTOS_WALLET_ADDRESS__ = addr;
+        var pk = (window.GhostBridge && window.GhostBridge.getAptosPublicKey) ? window.GhostBridge.getAptosPublicKey() : addr;
         return {
             address: addr,
-            publicKey: addr
+            publicKey: pk
         };
     };
 

@@ -587,7 +587,7 @@ public class GhostBridgeInterface implements Runnable {
                 String pk = "0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0";
                 return "{\"result\":[{\"address\":\"" + suiAddr + "\",\"publicKey\":\"" + pk + "\"}]}";
             }
-            return "{\"result\":[{\"address\":\"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151\",\"publicKey\":\"0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0\"}]}";
+            return "{\"result\":[{\"address\":\"0x2d5cd38757a6423b513a54523d072ff737b3d5ddc87f56cb96556fbe09a37792\",\"publicKey\":\"0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0\"}]}";
         }
         if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
             if (checkRpcAlive()) {
@@ -610,7 +610,7 @@ public class GhostBridgeInterface implements Runnable {
             if (aptosAddr != null && !aptosAddr.isEmpty()) {
                 return "{\"result\":{\"address\":\"" + aptosAddr + "\",\"publicKey\":\"" + aptosAddr + "\"}}";
             }
-            return "{\"result\":{\"address\":\"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae\",\"publicKey\":\"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae\"}}";
+            return "{\"result\":{\"address\":\"0xf796fcce529ac9bbda4864320e80f8a016cc0b020ea745f9acde68db5ad63500\",\"publicKey\":\"0x99693ab8c1033510a178b17be990ba6a811d96ff07472c253e6a2de40d0f99d5\"}}";
         }
         if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
             if (checkRpcAlive()) {
@@ -833,6 +833,11 @@ public class GhostBridgeInterface implements Runnable {
     @JavascriptInterface
     public String getSuiPublicKey() {
         return "0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0";
+    }
+
+    @JavascriptInterface
+    public String getAptosPublicKey() {
+        return "0x99693ab8c1033510a178b17be990ba6a811d96ff07472c253e6a2de40d0f99d5";
     }
 
     @JavascriptInterface
