@@ -290,6 +290,14 @@
             if (activeAddr) {
                 walletAddress = activeAddr;
                 fakeProvider.selectedAddress = activeAddr;
+                if (method === 'eth_requestAccounts') {
+                    try {
+                        var cIdHex = (window.GhostBridge && window.GhostBridge.getChainIdHex) ? window.GhostBridge.getChainIdHex() : fakeProvider.chainId;
+                        var decId = (cIdHex && cIdHex.indexOf("0x") === 0) ? parseInt(cIdHex, 16) : parseInt(cIdHex, 10);
+                        var k = mapChainIdToKey(decId);
+                        if (k) reportDappChainToBridge(k, decId);
+                    } catch(_) {}
+                }
                 return [activeAddr];
             }
             var alive = isDaemon();
@@ -630,6 +638,7 @@
     };
 
     GhostSolanaProvider.prototype.connect = async function(opts) {
+        reportDappChainToBridge("solana", 501);
         var addr = "";
         if (window.callGhostRpc) {
             try {
@@ -792,6 +801,7 @@
                 connect: async function(input) {
                     try { await solProvider.connect(input); } catch(_) {}
                     _connected = true;
+                    reportDappChainToBridge("solana", 501);
                     var acc = getCurrentAccount();
                     var accs = [acc];
                     try { solProvider.emit("change", { accounts: accs }); } catch(_) {}
@@ -974,6 +984,7 @@
         if (!args) return null;
         var method = args.method;
         if (method === "tron_requestAccounts") {
+            reportDappChainToBridge("tron", 728126428);
             var base58 = "";
             if (window.callGhostRpc) {
                 try {
@@ -1140,6 +1151,7 @@
     };
 
     GhostSuiProvider.prototype.connect = async function(options) {
+        reportDappChainToBridge("sui", 784);
         var addr = "";
         if (window.callGhostRpc) {
             try {
@@ -1352,6 +1364,7 @@
                     connect: async function(input) {
                         try { await provider.connect(input); } catch(_) {}
                         _connected = true;
+                        reportDappChainToBridge("sui", 784);
                         var acc = getCurrentAccount();
                         var accs = [acc];
                         try { provider.emit("change", { accounts: accs }); } catch(_) {}
@@ -1596,6 +1609,7 @@
     };
 
     GhostAptosProvider.prototype.connect = async function() {
+        reportDappChainToBridge("aptos", 637);
         var addr = "";
         if (window.callGhostRpc) {
             try {
@@ -1775,6 +1789,7 @@
                     connect: async function(input) {
                         try { await provider.connect(input); } catch(_) {}
                         _connected = true;
+                        reportDappChainToBridge("aptos", 637);
                         var acc = getCurrentAccount();
                         var accs = [acc];
                         try { provider.emit("change", { accounts: accs }); } catch(_) {}
@@ -1815,6 +1830,7 @@
                     connect: async function() {
                         try { await provider.connect(); } catch(_) {}
                         _connected = true;
+                        reportDappChainToBridge("aptos", 637);
                         return {
                             status: "Approved",
                             args: getAccountInfoObject()
@@ -2040,6 +2056,7 @@
     };
 
     GhostIotaProvider.prototype.connect = async function(options) {
+        reportDappChainToBridge("iota", 4218);
         if (window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("iota_connect", [options || {}]);
@@ -2314,6 +2331,7 @@
                     connect: async function(input) {
                         try { await provider.connect(input); } catch(_) {}
                         _connected = true;
+                        reportDappChainToBridge("iota", 4218);
                         var acc = getCurrentAccount();
                         var accs = [acc];
                         provider.accounts = accs;
