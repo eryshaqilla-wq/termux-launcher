@@ -493,6 +493,26 @@ public class FusionWalletHelper {
         return "CJS"; // Default suite baru
     }
 
+    public static void writeActiveWalletMarker(String name, String address) {
+        String val = (name != null && !name.isEmpty()) ? name : address;
+        if (val == null || val.isEmpty()) return;
+        String[] paths = new String[]{
+            "/root/wallet/.active_wallet",
+            "/wallet/.active_wallet",
+            "/data/data/com.termux/files/home/wallet/.active_wallet"
+        };
+        for (String p : paths) {
+            try {
+                File f = new File(p);
+                if (f.getParentFile() != null && f.getParentFile().exists()) {
+                    java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+                    fos.write(val.getBytes("UTF-8"));
+                    fos.close();
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
     public static String getStartWalletDaemonCommand() {
         return getStartWalletDaemonCommand(null);
     }
@@ -506,12 +526,19 @@ public class FusionWalletHelper {
             net = "base";
         }
         String netFlag = (net != null && !net.isEmpty()) ? ("--" + net + " ") : "";
+        String wFlag = "";
+        try {
+            FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if (mgr != null && mgr.mCurrentWalletName != null && !mgr.mCurrentWalletName.isEmpty()) {
+                wFlag = "--wallet " + mgr.mCurrentWalletName + " ";
+            }
+        } catch (Throwable ignored) {}
         return "if command -v wallet >/dev/null 2>&1; then " +
-               "wallet " + netFlag + "--auto --ghostwallet 3333; " +
+               "wallet " + netFlag + wFlag + "--auto --ghostwallet 3333; " +
                "else " +
                "for d in \"$FUSION_WALLET_DIR\" \"$HOME/wallet\" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do " +
                "if [ -n \"$d\" ] && [ -d \"$d\" ]; then " +
-               "cd \"$d\" && { if [ -f wallet.cjs ]; then node wallet.cjs " + netFlag + "--auto --ghostwallet 3333; elif [ -f wallet.js ]; then node wallet.js " + netFlag + "--auto --ghostwallet 3333; fi; } && break; " +
+               "cd \"$d\" && { if [ -f wallet.cjs ]; then node wallet.cjs " + netFlag + wFlag + "--auto --ghostwallet 3333; elif [ -f wallet.js ]; then node wallet.js " + netFlag + wFlag + "--auto --ghostwallet 3333; fi; } && break; " +
                "fi; done; " +
                "fi";
     }

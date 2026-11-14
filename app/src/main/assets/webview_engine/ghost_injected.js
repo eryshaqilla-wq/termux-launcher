@@ -767,12 +767,18 @@
 
     GhostSolanaProvider.prototype.connect = async function(opts) {
         reportDappChainToBridge("solana", 501);
-        var addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
-        if (!addr && window.callGhostRpc) {
+        var addr = "";
+        if (window.callGhostRpc) {
             try {
                 var res = await callGhostRpc("sol_connect", [opts || {}]);
-                if (res && res.publicKey) addr = res.publicKey;
+                if (res && res.publicKey) {
+                    addr = res.publicKey;
+                    window.__FUSION_SOL_WALLET_ADDRESS__ = addr;
+                }
             } catch(e) {}
+        }
+        if (!addr) {
+            addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
         }
         if (!addr) addr = "8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf";
         this.publicKey = createGhostPublicKey(addr);
@@ -1251,6 +1257,16 @@
     };
 
     GhostSuiProvider.prototype.getAccounts = async function() {
+        if (window.callGhostRpc) {
+            try {
+                var res = await window.callGhostRpc("sui_getAccounts", []);
+                if (res && res.length && res[0].address) {
+                    suiAddr = res[0].address;
+                    window.__FUSION_SUI_WALLET_ADDRESS__ = suiAddr;
+                    return [suiAddr];
+                }
+            } catch (_) {}
+        }
         var addr = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
         if (!addr) return [];
         return [addr];
@@ -1258,16 +1274,16 @@
 
     GhostSuiProvider.prototype.connect = async function(options) {
         reportDappChainToBridge("sui", 784);
-        var addr = suiAddr;
-        if (!addr && window.GhostBridge && window.GhostBridge.getSuiWalletAddress) {
-            try { addr = window.GhostBridge.getSuiWalletAddress(); } catch(e) {}
-        }
-        if (!addr && window.callGhostRpc) {
+        var addr = "";
+        if (window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("sui_connect", [options || {}]);
                 if (res && res.length && res[0].address) addr = res[0].address;
                 else if (res && res.address) addr = res.address;
             } catch(e) {}
+        }
+        if (!addr) {
+            addr = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
         }
         if (!addr) addr = "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151";
         suiAddr = addr;
@@ -1366,6 +1382,11 @@
     window.__FUSION_SET_SUI_ACCOUNT__ = function(newAddr) {
         suiAddr = newAddr;
         window.__FUSION_SUI_WALLET_ADDRESS__ = newAddr;
+        try {
+            if (window.GhostBridge && window.GhostBridge.writeWalletFile) {
+                window.GhostBridge.writeWalletFile(".active_wallet", newAddr);
+            }
+        } catch(_) {}
         if (suiListeners["accountChange"]) {
             suiListeners["accountChange"].forEach(function(cb) {
                 try { cb({ accounts: [{ address: newAddr, publicKey: newAddr }] }); } catch(e){}
@@ -1665,6 +1686,16 @@
     };
 
     GhostAptosProvider.prototype.account = async function() {
+        if (window.callGhostRpc) {
+            try {
+                var res = await window.callGhostRpc("aptos_account", []);
+                if (res && res.address) {
+                    aptosAddr = res.address;
+                    window.__FUSION_APTOS_WALLET_ADDRESS__ = aptosAddr;
+                    return { address: res.address, publicKey: res.publicKey || res.address };
+                }
+            } catch (_) {}
+        }
         var addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
         return {
             address: addr,
@@ -1678,15 +1709,15 @@
 
     GhostAptosProvider.prototype.connect = async function() {
         reportDappChainToBridge("aptos", 637);
-        var addr = aptosAddr;
-        if (!addr && window.GhostBridge && window.GhostBridge.getAptosWalletAddress) {
-            try { addr = window.GhostBridge.getAptosWalletAddress(); } catch(e) {}
-        }
-        if (!addr && window.callGhostRpc) {
+        var addr = "";
+        if (window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("aptos_connect", [{}]);
                 if (res && res.address) addr = res.address;
             } catch(e) {}
+        }
+        if (!addr) {
+            addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
         }
         if (!addr) addr = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
         aptosAddr = addr;
@@ -1743,6 +1774,11 @@
     window.__FUSION_SET_APTOS_ACCOUNT__ = function(newAddr) {
         aptosAddr = newAddr;
         window.__FUSION_APTOS_WALLET_ADDRESS__ = newAddr;
+        try {
+            if (window.GhostBridge && window.GhostBridge.writeWalletFile) {
+                window.GhostBridge.writeWalletFile(".active_wallet", newAddr);
+            }
+        } catch(_) {}
         if (aptosListeners["accountChange"]) {
             aptosListeners["accountChange"].forEach(function(cb) {
                 try { cb({ address: newAddr, publicKey: newAddr }); } catch(e){}
@@ -2091,6 +2127,18 @@
 
     GhostIotaProvider.prototype.getAccounts = async function() {
         reportDappChainToBridge("iota", 4218);
+        if (window.callGhostRpc) {
+            try {
+                var res = await window.callGhostRpc("iota_getAccounts", []);
+                if (res && res.length && res[0].address) {
+                    iotaAddr = res[0].address;
+                    window.__FUSION_IOTA_WALLET_ADDRESS__ = iotaAddr;
+                    if (res[0].publicKey) window.__FUSION_IOTA_WALLET_PUBKEY__ = res[0].publicKey;
+                    this.accounts = res;
+                    return this.accounts;
+                }
+            } catch (_) {}
+        }
         var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
         if (!addr) addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
         iotaAddr = addr;
@@ -2101,20 +2149,26 @@
 
     GhostIotaProvider.prototype.connect = async function(options) {
         reportDappChainToBridge("iota", 4218);
-        var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
-        var pk = window.__FUSION_IOTA_WALLET_PUBKEY__ || "";
-        if (!addr && window.callGhostRpc) {
+        if (window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("iota_connect", [options || {}]);
                 if (res && res.length && res[0].address) {
-                    addr = res[0].address;
-                    if (res[0].publicKey) pk = res[0].publicKey;
+                    iotaAddr = res[0].address;
+                    window.__FUSION_IOTA_WALLET_ADDRESS__ = iotaAddr;
+                    if (res[0].publicKey) window.__FUSION_IOTA_WALLET_PUBKEY__ = res[0].publicKey;
+                    this.accounts = res;
+                    return this.accounts;
                 } else if (res && res.address) {
-                    addr = res.address;
-                    if (res.publicKey) pk = res.publicKey;
+                    iotaAddr = res.address;
+                    window.__FUSION_IOTA_WALLET_ADDRESS__ = iotaAddr;
+                    if (res.publicKey) window.__FUSION_IOTA_WALLET_PUBKEY__ = res.publicKey;
+                    this.accounts = [{ address: res.address, publicKey: res.publicKey || "" }];
+                    return this.accounts;
                 }
             } catch(e) {}
         }
+        var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
+        var pk = window.__FUSION_IOTA_WALLET_PUBKEY__ || "";
         if (!addr) {
             addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
         }
@@ -2260,6 +2314,11 @@
     window.__FUSION_SET_IOTA_ACCOUNT__ = function(newAddr) {
         iotaAddr = newAddr;
         window.__FUSION_IOTA_WALLET_ADDRESS__ = newAddr;
+        try {
+            if (window.GhostBridge && window.GhostBridge.writeWalletFile) {
+                window.GhostBridge.writeWalletFile(".active_wallet", newAddr);
+            }
+        } catch(_) {}
         if (iotaListeners["accountChange"]) {
             iotaListeners["accountChange"].forEach(function(cb) {
                 try { cb([{ address: newAddr }]); } catch(e){}

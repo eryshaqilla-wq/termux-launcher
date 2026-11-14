@@ -734,6 +734,10 @@ public class GhostBridgeInterface implements Runnable {
         if (sCurrentSolWalletAddress != null && !sCurrentSolWalletAddress.isEmpty()) {
             return sCurrentSolWalletAddress;
         }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentSolWalletAddress != null && !mgr.mCurrentSolWalletAddress.isEmpty()) {
+            return mgr.mCurrentSolWalletAddress;
+        }
         return FusionWalletHelper.getMasterSolAddress();
     }
 
@@ -741,6 +745,10 @@ public class GhostBridgeInterface implements Runnable {
     public String getSolWalletName() {
         if (sCurrentSolWalletName != null && !sCurrentSolWalletName.isEmpty()) {
             return sCurrentSolWalletName;
+        }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentSolWalletName != null && !mgr.mCurrentSolWalletName.isEmpty()) {
+            return mgr.mCurrentSolWalletName;
         }
         return FusionWalletHelper.getMasterSolName();
     }
@@ -760,6 +768,10 @@ public class GhostBridgeInterface implements Runnable {
         if (sCurrentTronWalletAddress != null && !sCurrentTronWalletAddress.isEmpty()) {
             return sCurrentTronWalletAddress;
         }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentTronWalletAddress != null && !mgr.mCurrentTronWalletAddress.isEmpty()) {
+            return mgr.mCurrentTronWalletAddress;
+        }
         return FusionWalletHelper.getMasterTronAddress();
     }
 
@@ -767,6 +779,10 @@ public class GhostBridgeInterface implements Runnable {
     public String getTronWalletName() {
         if (sCurrentTronWalletName != null && !sCurrentTronWalletName.isEmpty()) {
             return sCurrentTronWalletName;
+        }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentTronWalletName != null && !mgr.mCurrentTronWalletName.isEmpty()) {
+            return mgr.mCurrentTronWalletName;
         }
         return FusionWalletHelper.getMasterTronName();
     }
@@ -786,6 +802,10 @@ public class GhostBridgeInterface implements Runnable {
         if (sCurrentSuiWalletAddress != null && !sCurrentSuiWalletAddress.isEmpty()) {
             return sCurrentSuiWalletAddress;
         }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentSuiWalletAddress != null && !mgr.mCurrentSuiWalletAddress.isEmpty()) {
+            return mgr.mCurrentSuiWalletAddress;
+        }
         return FusionWalletHelper.getMasterSuiAddress();
     }
 
@@ -793,6 +813,10 @@ public class GhostBridgeInterface implements Runnable {
     public String getSuiWalletName() {
         if (sCurrentSuiWalletName != null && !sCurrentSuiWalletName.isEmpty()) {
             return sCurrentSuiWalletName;
+        }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentSuiWalletName != null && !mgr.mCurrentSuiWalletName.isEmpty()) {
+            return mgr.mCurrentSuiWalletName;
         }
         return FusionWalletHelper.getMasterSuiName();
     }
@@ -817,6 +841,10 @@ public class GhostBridgeInterface implements Runnable {
         if (sCurrentAptosWalletAddress != null && !sCurrentAptosWalletAddress.isEmpty()) {
             return sCurrentAptosWalletAddress;
         }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentAptosWalletAddress != null && !mgr.mCurrentAptosWalletAddress.isEmpty()) {
+            return mgr.mCurrentAptosWalletAddress;
+        }
         return FusionWalletHelper.getMasterAptosAddress();
     }
 
@@ -824,6 +852,10 @@ public class GhostBridgeInterface implements Runnable {
     public String getAptosWalletName() {
         if (sCurrentAptosWalletName != null && !sCurrentAptosWalletName.isEmpty()) {
             return sCurrentAptosWalletName;
+        }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentAptosWalletName != null && !mgr.mCurrentAptosWalletName.isEmpty()) {
+            return mgr.mCurrentAptosWalletName;
         }
         return FusionWalletHelper.getMasterAptosName();
     }
@@ -843,6 +875,10 @@ public class GhostBridgeInterface implements Runnable {
         if (sCurrentIotaWalletAddress != null && !sCurrentIotaWalletAddress.isEmpty()) {
             return sCurrentIotaWalletAddress;
         }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentIotaWalletAddress != null && !mgr.mCurrentIotaWalletAddress.isEmpty()) {
+            return mgr.mCurrentIotaWalletAddress;
+        }
         return FusionWalletHelper.getMasterIotaAddress();
     }
 
@@ -850,6 +886,10 @@ public class GhostBridgeInterface implements Runnable {
     public String getIotaWalletName() {
         if (sCurrentIotaWalletName != null && !sCurrentIotaWalletName.isEmpty()) {
             return sCurrentIotaWalletName;
+        }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mCurrentIotaWalletName != null && !mgr.mCurrentIotaWalletName.isEmpty()) {
+            return mgr.mCurrentIotaWalletName;
         }
         return FusionWalletHelper.getMasterIotaName();
     }

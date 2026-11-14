@@ -438,8 +438,7 @@ public class FusionToolPillHelper {
             if (collapseBtn != null) collapseBtn.setVisibility(View.GONE);
         } else {
             if (toggleBtn != null) {
-                toggleBtn.setVisibility(View.VISIBLE);
-                toggleBtn.setText(" > ");
+                toggleBtn.setVisibility(View.GONE);
             }
             if (walletNextBtn != null) walletNextBtn.setVisibility(View.VISIBLE);
             if (netWalletBtn != null) netWalletBtn.setVisibility(View.VISIBLE);

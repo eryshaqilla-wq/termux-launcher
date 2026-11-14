@@ -2564,6 +2564,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
         final String finalAddr = address;
         final String finalName = name;
+        FusionWalletHelper.writeActiveWalletMarker(finalName, finalAddr);
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -3243,16 +3244,30 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             } else {
                 this.mCurrentWalletAddress = strFindAddressByName;
             }
-            this.mCurrentSolWalletName = FusionWalletHelper.getMasterSolName();
-            this.mCurrentSolWalletAddress = FusionWalletHelper.getMasterSolAddress();
-            this.mCurrentTronWalletName = FusionWalletHelper.getMasterTronName();
-            this.mCurrentTronWalletAddress = FusionWalletHelper.getMasterTronAddress();
-            this.mCurrentSuiWalletName = FusionWalletHelper.getMasterSuiName();
-            this.mCurrentSuiWalletAddress = FusionWalletHelper.getMasterSuiAddress();
-            this.mCurrentAptosWalletName = FusionWalletHelper.getMasterAptosName();
-            this.mCurrentAptosWalletAddress = FusionWalletHelper.getMasterAptosAddress();
-            this.mCurrentIotaWalletName = FusionWalletHelper.getMasterIotaName();
-            this.mCurrentIotaWalletAddress = FusionWalletHelper.getMasterIotaAddress();
+            int curIdx = FusionWalletHelper.findIndexByName(this.mCurrentWalletName);
+            if (curIdx >= 0) {
+                this.mCurrentSolWalletName = FusionWalletHelper.getSolName(curIdx);
+                this.mCurrentSolWalletAddress = FusionWalletHelper.getSolAddress(curIdx);
+                this.mCurrentTronWalletName = FusionWalletHelper.getTronName(curIdx);
+                this.mCurrentTronWalletAddress = FusionWalletHelper.getTronAddress(curIdx);
+                this.mCurrentSuiWalletName = FusionWalletHelper.getSuiName(curIdx);
+                this.mCurrentSuiWalletAddress = FusionWalletHelper.getSuiAddress(curIdx);
+                this.mCurrentAptosWalletName = FusionWalletHelper.getAptosName(curIdx);
+                this.mCurrentAptosWalletAddress = FusionWalletHelper.getAptosAddress(curIdx);
+                this.mCurrentIotaWalletName = FusionWalletHelper.getIotaName(curIdx);
+                this.mCurrentIotaWalletAddress = FusionWalletHelper.getIotaAddress(curIdx);
+            } else {
+                this.mCurrentSolWalletName = FusionWalletHelper.getMasterSolName();
+                this.mCurrentSolWalletAddress = FusionWalletHelper.getMasterSolAddress();
+                this.mCurrentTronWalletName = FusionWalletHelper.getMasterTronName();
+                this.mCurrentTronWalletAddress = FusionWalletHelper.getMasterTronAddress();
+                this.mCurrentSuiWalletName = FusionWalletHelper.getMasterSuiName();
+                this.mCurrentSuiWalletAddress = FusionWalletHelper.getMasterSuiAddress();
+                this.mCurrentAptosWalletName = FusionWalletHelper.getMasterAptosName();
+                this.mCurrentAptosWalletAddress = FusionWalletHelper.getMasterAptosAddress();
+                this.mCurrentIotaWalletName = FusionWalletHelper.getMasterIotaName();
+                this.mCurrentIotaWalletAddress = FusionWalletHelper.getMasterIotaAddress();
+            }
             GhostBridgeInterface.setWallet(this.mCurrentWalletName, this.mCurrentWalletAddress);
             GhostBridgeInterface.setSolWallet(this.mCurrentSolWalletName, this.mCurrentSolWalletAddress);
             GhostBridgeInterface.setTronWallet(this.mCurrentTronWalletName, this.mCurrentTronWalletAddress);
