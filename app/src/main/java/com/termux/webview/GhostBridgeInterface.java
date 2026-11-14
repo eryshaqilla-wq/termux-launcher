@@ -499,7 +499,6 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"error\":\"Empty payload\"}";
         }
         if (str.contains("sol_connect") || str.contains("solana_requestAccounts") || str.contains("sol_accounts") || str.contains("sol_getAccounts") || str.contains("solana_accounts")) {
-            handleDappChainDetected("solana", 501);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -523,7 +522,6 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":{\"publicKey\":\"8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf\"}}";
         }
         if (str.contains("sol_signIn")) {
-            handleDappChainDetected("solana", 501);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline("⚡ [GhostWallet] Sign-In Solana butuh daemon aktif! Jalankan 'wallet' di terminal.");
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -542,7 +540,6 @@ public class GhostBridgeInterface implements Runnable {
             return daemonResp;
         }
         if (str.contains("tron_connect") || str.contains("tron_requestAccounts") || str.contains("tron_accounts")) {
-            handleDappChainDetected("tron", 728126428);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -566,7 +563,6 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":{\"code\":200,\"message\":\"success\",\"address\":\"TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF\"}}";
         }
         if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts") || str.contains("sui_accounts")) {
-            handleDappChainDetected("sui", 784);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -594,7 +590,6 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":[{\"address\":\"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151\",\"publicKey\":\"0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0\"}]}";
         }
         if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
-            handleDappChainDetected("aptos", 637);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -618,7 +613,6 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":{\"address\":\"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae\",\"publicKey\":\"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae\"}}";
         }
         if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
-            handleDappChainDetected("iota", 4218);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {

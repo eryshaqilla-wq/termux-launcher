@@ -65,9 +65,6 @@ public class FusionWebViewClient extends WebViewClient {
                 return;
             }
             fusionWebViewManager.injectScripts(webView);
-            if (webView != null) {
-                webView.evaluateJavascript("if(window.__fusionScanDappChain)try{window.__fusionScanDappChain();}catch(_){}", null);
-            }
             fusionWebViewManager.onTabUrlLoaded(webView, str);
             FusionToolPillHelper.showToolPill(fusionWebViewManager);
             FusionToolPillHelper.bringToFront();

@@ -219,154 +219,9 @@
     window.reportDappChainToBridge = reportDappChainToBridge;
 
     function scanDappChainFromWebData() {
-        try {
-            // 0. Direct URL / Hostname detection for fast switching
-            try {
-                var loc = (window.location && window.location.href) ? window.location.href.toLowerCase() : "";
-                if (loc.indexOf("jup.ag") !== -1 || loc.indexOf("raydium.io") !== -1 || loc.indexOf("pump.fun") !== -1 || loc.indexOf("orca.so") !== -1 || loc.indexOf("solflare.com") !== -1 || loc.indexOf("phantom.app") !== -1) {
-                    reportDappChainToBridge("solana", 501);
-                    return;
-                }
-                if (loc.indexOf("magicsea.finance") !== -1 || loc.indexOf("tangle.tools") !== -1 || loc.indexOf("iotabee.com") !== -1) {
-                    reportDappChainToBridge("iotaevm", 8822);
-                    return;
-                }
-                if (loc.indexOf("iota.org") !== -1 || loc.indexOf("iota.cafe") !== -1 || loc.indexOf("iota") !== -1) {
-                    reportDappChainToBridge("iota", 4218);
-                    return;
-                }
-                if (loc.indexOf("tronlink.org") !== -1 || loc.indexOf("sunpump.meme") !== -1 || loc.indexOf("sunswap.com") !== -1 || loc.indexOf("tronscan.org") !== -1) {
-                    reportDappChainToBridge("tron", 728126428);
-                    return;
-                }
-                if (loc.indexOf("suins.io") !== -1 || loc.indexOf("cetus.zone") !== -1 || loc.indexOf("turbos.finance") !== -1 || loc.indexOf("navi.protocol") !== -1 || loc.indexOf("sui") !== -1) {
-                    reportDappChainToBridge("sui", 784);
-                    return;
-                }
-                if (loc.indexOf("liquidswap.com") !== -1 || loc.indexOf("thalaswap") !== -1 || loc.indexOf("aptoslabs.com") !== -1 || loc.indexOf("amnis.finance") !== -1 || loc.indexOf("aptos") !== -1) {
-                    reportDappChainToBridge("aptos", 637);
-                    return;
-                }
-            } catch(_) {}
-
-            // 1. Wagmi / Web3Modal / AppKit store in localStorage
-            if (window.localStorage) {
-                var wagmiStore = localStorage.getItem("wagmi.store");
-                if (wagmiStore) {
-                    try {
-                        var parsed = JSON.parse(wagmiStore);
-                        var state = parsed.state || parsed;
-                        var cId = state.chainId || state.current;
-                        if (cId) {
-                            var cKey = mapChainIdToKey(cId);
-                            if (cKey) {
-                                reportDappChainToBridge(cKey, cId);
-                                return;
-                            }
-                        }
-                    } catch(_) {}
-                }
-                var directCid = localStorage.getItem("@w3m/chain_id") || 
-                                localStorage.getItem("appkit_chain_id") || 
-                                localStorage.getItem("connected_chain_id");
-                if (directCid) {
-                    var cidNum = parseInt(directCid, 10);
-                    if (!isNaN(cidNum) && cidNum > 0) {
-                        var cKey = mapChainIdToKey(cidNum);
-                        if (cKey) {
-                            reportDappChainToBridge(cKey, cidNum);
-                            return;
-                        }
-                    }
-                }
-            }
-
-            // 2. Global JS configuration (Wagmi, Next.js, Web3 clients)
-            if (window.wagmiConfig && window.wagmiConfig.state && window.wagmiConfig.state.chainId) {
-                var cId = window.wagmiConfig.state.chainId;
-                var cKey = mapChainIdToKey(cId);
-                if (cKey) {
-                    reportDappChainToBridge(cKey, cId);
-                    return;
-                }
-            }
-            if (window.__wagmi && window.__wagmi.state && window.__wagmi.state.chainId) {
-                var cId = window.__wagmi.state.chainId;
-                var cKey = mapChainIdToKey(cId);
-                if (cKey) {
-                    reportDappChainToBridge(cKey, cId);
-                    return;
-                }
-            }
-
-            // 3. Next.js pageProps data
-            if (window.__NEXT_DATA__ && window.__NEXT_DATA__.props && window.__NEXT_DATA__.props.pageProps) {
-                var pp = window.__NEXT_DATA__.props.pageProps;
-                var cId = pp.chainId || pp.initialChainId || pp.defaultChainId || (pp.initialState && pp.initialState.chainId);
-                if (cId) {
-                    var cKey = mapChainIdToKey(cId);
-                    if (cKey) {
-                        reportDappChainToBridge(cKey, cId);
-                        return;
-                    }
-                }
-            }
-
-            // 4. Multi-chain SDK globals
-            if (window.solanaWeb3 || window.__SOLANA_WEB3__) {
-                reportDappChainToBridge("solana", 501);
-                return;
-            }
-            if (window.IotaClient || window.__IOTA__) {
-                reportDappChainToBridge("iota", 4218);
-                return;
-            }
-            if (window.SuiClient || window.__SUI__) {
-                reportDappChainToBridge("sui", 784);
-                return;
-            }
-            if (window.AptosClient) {
-                reportDappChainToBridge("aptos", 637);
-                return;
-            }
-            if (window.TronWeb) {
-                reportDappChainToBridge("tron", 728126428);
-                return;
-            }
-
-            // 5. Meta tags in DOM
-            var metaChain = document.querySelector('meta[name="chain-id"]') || 
-                            document.querySelector('meta[name="chain"]') || 
-                            document.querySelector('meta[name="network"]');
-            if (metaChain && metaChain.content) {
-                var val = metaChain.content.trim().toLowerCase();
-                var cId = parseInt(val, 10);
-                if (!isNaN(cId) && cId > 0) {
-                    var cKey = mapChainIdToKey(cId);
-                    if (cKey) {
-                        reportDappChainToBridge(cKey, cId);
-                        return;
-                    }
-                } else if (val.length > 0) {
-                    reportDappChainToBridge(val, 0);
-                    return;
-                }
-            }
-        } catch(_) {}
+        // Disabled: Follow EVM way - network never switches automatically from web scraping or timers
     }
     window.__fusionScanDappChain = scanDappChainFromWebData;
-
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", function() {
-            scanDappChainFromWebData();
-            setTimeout(scanDappChainFromWebData, 600);
-            setTimeout(scanDappChainFromWebData, 1800);
-        }, { once: true });
-    } else {
-        scanDappChainFromWebData();
-        setTimeout(scanDappChainFromWebData, 600);
-        setTimeout(scanDappChainFromWebData, 1800);
-    }
 
     window.__ghostIsDaemonAlive = function() {
         if (window.GhostBridge && window.GhostBridge.isDaemonAlive) {
@@ -775,7 +630,6 @@
     };
 
     GhostSolanaProvider.prototype.connect = async function(opts) {
-        reportDappChainToBridge("solana", 501);
         var addr = "";
         if (window.callGhostRpc) {
             try {
@@ -902,7 +756,6 @@
         var _listeners = [];
 
         function getCurrentAccount() {
-            reportDappChainToBridge("solana", 501);
             var addr = solProvider.publicKey ? solProvider.publicKey.toBase58() : "";
             if (!addr) {
                 addr = window.__FUSION_SOL_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getSolWalletAddress ? window.GhostBridge.getSolWalletAddress() : "");
@@ -1121,7 +974,6 @@
         if (!args) return null;
         var method = args.method;
         if (method === "tron_requestAccounts") {
-            reportDappChainToBridge("tron", 728126428);
             var base58 = "";
             if (window.callGhostRpc) {
                 try {
@@ -1288,7 +1140,6 @@
     };
 
     GhostSuiProvider.prototype.connect = async function(options) {
-        reportDappChainToBridge("sui", 784);
         var addr = "";
         if (window.callGhostRpc) {
             try {
@@ -1440,7 +1291,6 @@
         var _listeners = [];
 
         function getCurrentAccount() {
-            reportDappChainToBridge("sui", 784);
             var a = suiAddr;
             if (!a && window.GhostBridge) {
                 try {
@@ -1492,6 +1342,7 @@
             url: "https://sui.io",
             chains: ["sui:mainnet", "sui:testnet", "sui:devnet", "sui:localnet", "sui:unknown"],
             get accounts() {
+                if (!_connected) return [];
                 var acc = getCurrentAccount();
                 return (acc && acc.address) ? [acc] : [];
             },
@@ -1499,7 +1350,6 @@
                 "standard:connect": {
                     version: "1.0.0",
                     connect: async function(input) {
-                        reportDappChainToBridge("sui", 784);
                         try { await provider.connect(input); } catch(_) {}
                         _connected = true;
                         var acc = getCurrentAccount();
@@ -1746,7 +1596,6 @@
     };
 
     GhostAptosProvider.prototype.connect = async function() {
-        reportDappChainToBridge("aptos", 637);
         var addr = "";
         if (window.callGhostRpc) {
             try {
@@ -1851,7 +1700,6 @@
         var _listeners = [];
 
         function getCurrentAccount() {
-            reportDappChainToBridge("aptos", 637);
             var addr = aptosAddr;
             if (!addr && window.GhostBridge) {
                 try {
@@ -1917,6 +1765,7 @@
             url: "https://petra.app",
             chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet", "aptos:localnet"],
             get accounts() {
+                if (!_connected) return [];
                 var acc = getCurrentAccount();
                 return (acc && acc.address) ? [acc] : [];
             },
@@ -1924,7 +1773,6 @@
                 "standard:connect": {
                     version: "1.0.0",
                     connect: async function(input) {
-                        reportDappChainToBridge("aptos", 637);
                         try { await provider.connect(input); } catch(_) {}
                         _connected = true;
                         var acc = getCurrentAccount();
@@ -1965,7 +1813,6 @@
                 "aptos:connect": {
                     version: "1.0.0",
                     connect: async function() {
-                        reportDappChainToBridge("aptos", 637);
                         try { await provider.connect(); } catch(_) {}
                         _connected = true;
                         return {
@@ -2169,7 +2016,6 @@
     };
 
     GhostIotaProvider.prototype.getAccounts = async function() {
-        reportDappChainToBridge("iota", 4218);
         if (window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("iota_getAccounts", []);
@@ -2194,7 +2040,6 @@
     };
 
     GhostIotaProvider.prototype.connect = async function(options) {
-        reportDappChainToBridge("iota", 4218);
         if (window.callGhostRpc) {
             try {
                 var res = await window.callGhostRpc("iota_connect", [options || {}]);
@@ -2405,7 +2250,6 @@
         var _listeners = [];
 
         function getCurrentAccount() {
-            reportDappChainToBridge("iota", 4218);
             var addr = iotaAddr;
             if (!addr && window.GhostBridge) {
                 try {
@@ -2460,6 +2304,7 @@
             url: "https://iota.org",
             chains: ["iota:mainnet", "iota:testnet", "iota:devnet", "iota:local"],
             get accounts() {
+                if (!_connected) return [];
                 var acc = getCurrentAccount();
                 return (acc && acc.address) ? [acc] : [];
             },
@@ -2467,7 +2312,6 @@
                 "standard:connect": {
                     version: "1.0.0",
                     connect: async function(input) {
-                        reportDappChainToBridge("iota", 4218);
                         try { await provider.connect(input); } catch(_) {}
                         _connected = true;
                         var acc = getCurrentAccount();
