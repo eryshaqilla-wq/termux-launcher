@@ -1037,7 +1037,9 @@
                 detail: function(api) {
                     var reg = (typeof api === "function") ? api : (api && api.register);
                     if (typeof reg === "function") {
-                        solWalletsList.forEach(function(w) { reg(w); });
+                        solWalletsList.forEach(function(w) {
+                            try { reg(w); } catch(_) {}
+                        });
                     }
                 }
             }));
@@ -1048,7 +1050,9 @@
                 solWalletsList.forEach(function(w) {
                     window.navigator.wallets.push(function(api) {
                         var reg = (typeof api === "function") ? api : (api && api.register);
-                        if (typeof reg === "function") reg(w);
+                        if (typeof reg === "function") {
+                            try { reg(w); } catch(_) {}
+                        }
                     });
                 });
             }
@@ -1059,7 +1063,9 @@
         var api = event ? event.detail : null;
         var reg = (typeof api === "function") ? api : (api && api.register);
         if (typeof reg === "function") {
-            solWalletsList.forEach(function(w) { reg(w); });
+            solWalletsList.forEach(function(w) {
+                try { reg(w); } catch(_) {}
+            });
         }
     });
     registerSolanaStandard();
@@ -1283,9 +1289,11 @@
             } catch(e) {}
         }
         if (!addr) {
-            addr = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : "");
+            addr = suiAddr || (window.GhostBridge && window.GhostBridge.getSuiWalletAddress ? window.GhostBridge.getSuiWalletAddress() : (window.GhostBridge && window.GhostBridge.getSuiAddress ? window.GhostBridge.getSuiAddress() : ""));
         }
-        if (!addr) addr = "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151";
+        if (!addr) {
+            return { accounts: [] };
+        }
         suiAddr = addr;
         window.__FUSION_SUI_WALLET_ADDRESS__ = addr;
         return {
@@ -1425,20 +1433,20 @@
         function getCurrentAccount() {
             reportDappChainToBridge("sui", 784);
             var a = suiAddr;
-            if (!a && window.GhostBridge && window.GhostBridge.getSuiWalletAddress) {
-                try { a = window.GhostBridge.getSuiWalletAddress(); } catch(e) {}
+            if (!a && window.GhostBridge) {
+                try {
+                    if (window.GhostBridge.getSuiWalletAddress) a = window.GhostBridge.getSuiWalletAddress();
+                    else if (window.GhostBridge.getSuiAddress) a = window.GhostBridge.getSuiAddress();
+                } catch(e) {}
             }
             if (!a && window.__FUSION_SUI_WALLET_ADDRESS__) {
                 a = window.__FUSION_SUI_WALLET_ADDRESS__;
             }
-            if (!a) a = "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151";
+            if (!a) return null;
             suiAddr = a;
             window.__FUSION_SUI_WALLET_ADDRESS__ = a;
 
-            var pubKeyHex = window.__FUSION_SUI_WALLET_PUBKEY__ || "";
-            if (!pubKeyHex && (a === "0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151" || a === "0x2d5cd38757a6423b513a54523d072ff737b3d5ddc87f56cb96556fbe09a37792")) {
-                pubKeyHex = "0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0";
-            }
+            var pubKeyHex = window.__FUSION_SUI_WALLET_PUBKEY__ || (window.GhostBridge && window.GhostBridge.getSuiPublicKey ? window.GhostBridge.getSuiPublicKey() : a);
             if (!pubKeyHex) pubKeyHex = a;
             var pubKeyBytes = new Uint8Array(32);
             try {
@@ -1475,8 +1483,8 @@
             url: "https://sui.io",
             chains: ["sui:mainnet", "sui:testnet", "sui:devnet", "sui:localnet", "sui:unknown"],
             get accounts() {
-                if (!_connected) return [];
-                return [getCurrentAccount()];
+                var acc = getCurrentAccount();
+                return (acc && acc.address) ? [acc] : [];
             },
             features: {
                 "standard:connect": {
@@ -1568,34 +1576,43 @@
     var backpackWalletSvg = "data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyNDAgMjQwIj4KICA8cmVjdCB3aWR0aD0iMjQwIiBoZWlnaHQ9IjI0MCIgc3R5bGU9ImZpbGw6IHJnYigyNTUsIDI1NSwgMjU1KTsiLz4KICA8cGF0aCBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGQ9Ik0xMjguOTA1IDYyLjc1YzQuOTY5IDAgOS42MzEuNjY3IDEzLjk0NyAxLjkwMkMxMzguNjI2IDU0LjgwNCAxMjkuODUzIDUyIDEyMC4wODkgNTJjLTkuNzgzIDAtMTguNTcyIDIuODE1LTIyLjc4OCAxMi43MSA0LjI4NS0xLjI3OSA4LjkyNi0xLjk2IDEzLjg3OS0xLjk2aDE3LjcyNVptLTE4Ljg2MiA5Ljg4NkM4Ni40NDUgNzIuNjM2IDczIDkxLjIgNzMgMTE0LjF2MjMuNTI0YzAgMi4yOSAxLjkxMyA0LjEwMSA0LjI3MyA0LjEwMWg4NS40NTRjMi4zNiAwIDQuMjczLTEuODExIDQuMjczLTQuMTAxVjExNC4xYzAtMjIuOS0xNS42MzUtNDEuNDY0LTM5LjIzMi00MS40NjRoLTE3LjcyNVptOS45MjQgNDEuNjdjOC4yNTkgMCAxNC45NTQtNi42OTYgMTQuOTU0LTE0Ljk1NXMtNi42OTUtMTQuOTU0LTE0Ljk1NC0xNC45NTQtMTQuOTU1IDYuNjk1LTE0Ljk1NSAxNC45NTQgNi42OTYgMTQuOTU1IDE0Ljk1NSAxNC45NTVaTTczIDE1NS41NTVjMC0yLjI5IDEuOTEzLTQuMTQ3IDQuMjczLTQuMTQ3aDg1LjQ1NGMyLjM2IDAgNC4yNzMgMS44NTcgNC4yNzMgNC4xNDd2MjQuODc4YzAgNC41OC0zLjgyNiA4LjI5My04LjU0NSA4LjI5M2gtNzYuOTFjLTQuNzIgMC04LjU0NS0zLjcxMy04LjU0NS04LjI5M3YtMjQuODc4WiIgY2xpcC1ydWxlPSJldmVub2RkIiBzdHlsZT0iZmlsbDogcmdiKDIyNywgNjIsIDYzKTsiLz4KPC9zdmc+";
     var suiWalletSvg = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzJBODJFRCIvPjxwYXRoIGQ9Ik0xNiA0LjVDMTYgNC41IDkuNSAxNC41IDkuNSAxOS41QzkuNSAyMy4wOSAxMi40MSAyNiAxNiAyNkMxOS41OSAyNiAyMi41IDIzLjA5IDIyLjUgMTkuNUMyMi41IDE0LjUgMTYgNC41IDE2IDQuNVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTE2IDExLjVDMTYgMTEuNSAxMi41IDE2LjUgMTIuNSAxOS41QzEyLjUgMjEuNDMgMTQuMDcgMjMgMTYgMjNDMTcuOTMgMjMgMTkuNSAyMS40MyAxOS41IDE5LjVDMTkuNSAxNi41IDE2IDExLjUgMTYgMTEuNVoiIGZpbGw9IiMyQTgyRUQiLz48L3N2Zz4=";
 
-    var suiWalletsList = [
-        createStandardSuiWallet("Slush — A Sui wallet", slushWalletSvg, slushWallet),
-        createStandardSuiWallet("Slush", slushWalletSvg, slushWallet),
-        createStandardSuiWallet("Slush Wallet", slushWalletSvg, slushWallet),
-        createStandardSuiWallet("OKX Wallet", okxWalletSvg, suiWallet),
-        createStandardSuiWallet("Binance Wallet", binanceWalletSvg, suiWallet),
-        createStandardSuiWallet("Bitget Wallet", bitgetWalletSvg, suiWallet),
-        createStandardSuiWallet("Nightly", nightlyWalletSvg, suiWallet),
-        createStandardSuiWallet("Backpack", backpackWalletSvg, suiWallet),
-        createStandardSuiWallet("Scallop Wallet", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("SafePal", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("Bybit Wallet", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("Gate Wallet", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("OneKey", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("Surf Wallet", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("Coin98 Wallet", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("Sui Wallet", suiWalletSvg, suiWallet),
-        createStandardSuiWallet("Suiet", suietWalletSvg, suietWallet),
-        createStandardSuiWallet("GhostWallet", ghostWalletSvg, suiWallet)
-    ];
+    function getFreshSuiWallets() {
+        return [
+            createStandardSuiWallet("Slush — A Sui wallet", slushWalletSvg, slushWallet),
+            createStandardSuiWallet("Slush", slushWalletSvg, slushWallet),
+            createStandardSuiWallet("Slush Wallet", slushWalletSvg, slushWallet),
+            createStandardSuiWallet("OKX Wallet", okxWalletSvg, suiWallet),
+            createStandardSuiWallet("Binance Wallet", binanceWalletSvg, suiWallet),
+            createStandardSuiWallet("Bitget Wallet", bitgetWalletSvg, suiWallet),
+            createStandardSuiWallet("Nightly", nightlyWalletSvg, suiWallet),
+            createStandardSuiWallet("Backpack", backpackWalletSvg, suiWallet),
+            createStandardSuiWallet("Scallop Wallet", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("SafePal", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("Bybit Wallet", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("Gate Wallet", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("OneKey", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("Surf Wallet", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("Coin98 Wallet", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("Sui Wallet", suiWalletSvg, suiWallet),
+            createStandardSuiWallet("Suiet", suietWalletSvg, suietWallet),
+            createStandardSuiWallet("GhostWallet", ghostWalletSvg, suiWallet)
+        ];
+    }
+    var suiWalletsList = getFreshSuiWallets();
 
-    function registerSuiStandard() {
+    var _lastSuiRegTime = 0;
+    function registerSuiStandard(force) {
+        var now = Date.now();
+        if (!force && (now - _lastSuiRegTime < 3500)) return;
+        _lastSuiRegTime = now;
+
         try {
+            var fresh = getFreshSuiWallets();
             window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", {
                 detail: function(api) {
                     var reg = (typeof api === "function") ? api : (api && api.register);
                     if (typeof reg === "function") {
-                        suiWalletsList.forEach(function(w) {
+                        fresh.forEach(function(w) {
                             try { reg(w); } catch(_) {}
                         });
                     }
@@ -1603,9 +1620,11 @@
             }));
         } catch(e) {}
         try {
-            if (typeof window.navigator !== "undefined") {
+            if (typeof window.navigator !== "undefined" && !window.__ghostSuiNavDone) {
+                window.__ghostSuiNavDone = true;
                 window.navigator.wallets = window.navigator.wallets || [];
-                suiWalletsList.forEach(function(w) {
+                var freshNav = getFreshSuiWallets();
+                freshNav.forEach(function(w) {
                     window.navigator.wallets.push(function(api) {
                         var reg = (typeof api === "function") ? api : (api && api.register);
                         if (typeof reg === "function") {
@@ -1621,29 +1640,39 @@
         var api = event ? event.detail : null;
         var reg = (typeof api === "function") ? api : (api && api.register);
         if (typeof reg === "function") {
-            suiWalletsList.forEach(function(w) {
+            getFreshSuiWallets().forEach(function(w) {
                 try { reg(w); } catch(_) {}
             });
         }
     });
 
     // Immediate registration
-    registerSuiStandard();
+    registerSuiStandard(true);
 
-    // Pulse registration to beat late-loading dApp bundles (like Cetus / Mysten dapp-kit)
+    // Initial startup pulse: only 4 times during the first 1.2s, then stop completely
     var _regAttempts = 0;
     var _regTimer = setInterval(function() {
-        registerSuiStandard();
+        registerSuiStandard(true);
         _regAttempts++;
-        if (_regAttempts > 25) clearInterval(_regTimer);
+        if (_regAttempts >= 4) {
+            clearInterval(_regTimer);
+        }
     }, 300);
 
-    // Also register on lifecycle & first interaction events
+    // Lifecycle triggers
     if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", registerSuiStandard, { once: true });
+        document.addEventListener("DOMContentLoaded", function() { registerSuiStandard(true); }, { once: true });
     }
-    window.addEventListener("load", registerSuiStandard, { once: true });
-    window.addEventListener("pointerdown", function() { registerSuiStandard(); }, { once: true });
+    window.addEventListener("load", function() { registerSuiStandard(true); }, { once: true });
+
+    // Only register on button clicks (modal open/login), never on continuous pointer/touch/scroll
+    window.addEventListener("click", function(e) {
+        var target = e.target;
+        var isBtn = target && (target.closest("button") || target.closest("[role='button']"));
+        if (isBtn) {
+            registerSuiStandard(false);
+        }
+    }, { passive: true });
 
     window.ghostWallet = window.ghostWallet || {};
     window.ghostWallet.sui = suiWallet;
@@ -1717,9 +1746,11 @@
             } catch(e) {}
         }
         if (!addr) {
-            addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : "");
+            addr = aptosAddr || (window.GhostBridge && window.GhostBridge.getAptosWalletAddress ? window.GhostBridge.getAptosWalletAddress() : (window.GhostBridge && window.GhostBridge.getAptosAddress ? window.GhostBridge.getAptosAddress() : ""));
         }
-        if (!addr) addr = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
+        if (!addr) {
+            return { address: "", publicKey: "" };
+        }
         aptosAddr = addr;
         window.__FUSION_APTOS_WALLET_ADDRESS__ = addr;
         return {
@@ -1813,13 +1844,16 @@
         function getCurrentAccount() {
             reportDappChainToBridge("aptos", 637);
             var addr = aptosAddr;
-            if (!addr && window.GhostBridge && window.GhostBridge.getAptosWalletAddress) {
-                try { addr = window.GhostBridge.getAptosWalletAddress(); } catch(e) {}
+            if (!addr && window.GhostBridge) {
+                try {
+                    if (window.GhostBridge.getAptosWalletAddress) addr = window.GhostBridge.getAptosWalletAddress();
+                    else if (window.GhostBridge.getAptosAddress) addr = window.GhostBridge.getAptosAddress();
+                } catch(e) {}
             }
             if (!addr && window.__FUSION_APTOS_WALLET_ADDRESS__) {
                 addr = window.__FUSION_APTOS_WALLET_ADDRESS__;
             }
-            if (!addr) addr = "0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae";
+            if (!addr) return null;
             aptosAddr = addr;
             window.__FUSION_APTOS_WALLET_ADDRESS__ = addr;
 
@@ -1874,8 +1908,8 @@
             url: "https://petra.app",
             chains: ["aptos:mainnet", "aptos:testnet", "aptos:devnet", "aptos:localnet"],
             get accounts() {
-                if (!_connected) return [];
-                return [getCurrentAccount()];
+                var acc = getCurrentAccount();
+                return (acc && acc.address) ? [acc] : [];
             },
             features: {
                 "standard:connect": {
@@ -2105,11 +2139,11 @@
     var ghostWalletSvg = window.__GHOST_WALLET_SVG__ || "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4Ij48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMGIxMDFkIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMDQwNzExIi8+PC9saW5lYXJHcmFkaWVudD48bGluZWFyR3JhZGllbnQgaWQ9ImJvZHkiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwMEYwRkYiLz48c3RvcCBvZmZzZXQ9IjUwJSIgc3RvcC1jb2xvcj0iIzAwQTNGRiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzcwMDBGRiIvPjwvbGluZWFyR3JhZGllbnQ+PGZpbHRlciBpZD0iZ2xvdyIgeD0iLTIwJSIgeT0iLTIwJSIgd2lkdGg9IjE0MCUiIGhlaWdodD0iMTQwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMyIgcmVzdWx0PSJibHVyIi8+PGZlQ29tcG9zaXRlIGluPSJTb3VyY2VHcmFwaGljIiBpbjI9ImJsdXIiIG9wZXJhdG9yPSJvdmVyIi8+PC9maWx0ZXI+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiByeD0iMjgiIGZpbGw9InVybCgjYmcpIi8+PHJlY3Qgd2lkdGg9IjEyNiIgaGVpZ2h0PSIxMjYiIHg9IjEiIHk9IjEiIHJ4PSIyNyIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDBGMEZGIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1vcGFjaXR5PSIwLjM1Ii8+PGcgZmlsdGVyPSJ1cmwoI2dsb3cpIj48cGF0aCBkPSJNNjQgMjQgQzQ0IDI0IDMwIDM5IDMwIDYwIEMzMCA3NiAzMCA5MiAzMCA5NiBDMzAgOTkgMzQgMTAxIDM3IDk4IEM0MSA5NCA0NiA5NCA1MCA5OCBDNTQgMTAyIDYwIDEwMiA2NCA5OCBDNjggOTQgNzQgOTQgNzggOTggQzgyIDEwMiA4OCAxMDIgOTEgOTggQzk0IDk0IDk4IDk3IDk4IDk2IEM5OCA5MiA5OCA3NiA5OCA2MCBDOTggMzkgODQgMjQgNjQgMjQgWiIgZmlsbD0idXJsKCNib2R5KSIvPjxlbGxpcHNlIGN4PSI1MCIgY3k9IjU2IiByeD0iNSIgcnk9IjgiIGZpbGw9IiMwNjA5MTMiLz48ZWxsaXBzZSBjeD0iNzgiIGN5PSI1NiIgcng9IjUiIHJ5PSI4IiBmaWxsPSIjMDYwOTEzIi8+PGVsbGlwc2UgY3g9IjUxLjUiIGN5PSI1NCIgcng9IjIiIHJ5PSIzLjUiIGZpbGw9IiNGRkZGRkYiLz48ZWxsaXBzZSBjeD0iNzkuNSIgY3k9IjU0IiByeD0iMiIgcnk9IjMuNSIgZmlsbD0iI0ZGRkZGRiIvPjwvZz48L3N2Zz4=";
 
     var iotaAddr = window.__FUSION_IOTA_WALLET_ADDRESS__ || "";
-    if (!iotaAddr && window.GhostBridge && window.GhostBridge.getIotaWalletAddress) {
-        try { iotaAddr = window.GhostBridge.getIotaWalletAddress(); } catch(e) {}
-    }
-    if (!iotaAddr) {
-        iotaAddr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
+    if (!iotaAddr && window.GhostBridge) {
+        try {
+            if (window.GhostBridge.getIotaWalletAddress) iotaAddr = window.GhostBridge.getIotaWalletAddress();
+            else if (window.GhostBridge.getIotaAddress) iotaAddr = window.GhostBridge.getIotaAddress();
+        } catch(e) {}
     }
 
     var iotaListeners = {};
@@ -2139,10 +2173,13 @@
                 }
             } catch (_) {}
         }
-        var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
-        if (!addr) addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
+        var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : (window.GhostBridge && window.GhostBridge.getIotaAddress ? window.GhostBridge.getIotaAddress() : ""));
+        if (!addr) {
+            this.accounts = [];
+            return [];
+        }
         iotaAddr = addr;
-        var pk = window.__FUSION_IOTA_WALLET_PUBKEY__ || (window.GhostBridge && window.GhostBridge.getIotaPublicKey ? window.GhostBridge.getIotaPublicKey() : "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6");
+        var pk = window.__FUSION_IOTA_WALLET_PUBKEY__ || (window.GhostBridge && window.GhostBridge.getIotaPublicKey ? window.GhostBridge.getIotaPublicKey() : addr);
         this.accounts = [{ address: addr, publicKey: pk }];
         return this.accounts;
     };
@@ -2167,13 +2204,14 @@
                 }
             } catch(e) {}
         }
-        var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : "");
+        var addr = iotaAddr || (window.GhostBridge && window.GhostBridge.getIotaWalletAddress ? window.GhostBridge.getIotaWalletAddress() : (window.GhostBridge && window.GhostBridge.getIotaAddress ? window.GhostBridge.getIotaAddress() : ""));
         var pk = window.__FUSION_IOTA_WALLET_PUBKEY__ || "";
         if (!addr) {
-            addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
+            this.accounts = [];
+            return [];
         }
         if (!pk) {
-            pk = (window.GhostBridge && window.GhostBridge.getIotaPublicKey ? window.GhostBridge.getIotaPublicKey() : "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6");
+            pk = (window.GhostBridge && window.GhostBridge.getIotaPublicKey ? window.GhostBridge.getIotaPublicKey() : addr);
         }
         iotaAddr = addr;
         window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
@@ -2360,22 +2398,22 @@
         function getCurrentAccount() {
             reportDappChainToBridge("iota", 4218);
             var addr = iotaAddr;
-            if (!addr && window.GhostBridge && window.GhostBridge.getIotaWalletAddress) {
-                try { addr = window.GhostBridge.getIotaWalletAddress(); } catch(e) {}
+            if (!addr && window.GhostBridge) {
+                try {
+                    if (window.GhostBridge.getIotaWalletAddress) addr = window.GhostBridge.getIotaWalletAddress();
+                    else if (window.GhostBridge.getIotaAddress) addr = window.GhostBridge.getIotaAddress();
+                } catch(e) {}
             }
             if (!addr && window.__FUSION_IOTA_WALLET_ADDRESS__) {
                 addr = window.__FUSION_IOTA_WALLET_ADDRESS__;
             }
-            if (!addr) addr = "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a";
+            if (!addr) return null;
             iotaAddr = addr;
             window.__FUSION_IOTA_WALLET_ADDRESS__ = addr;
 
             var pubKeyHex = window.__FUSION_IOTA_WALLET_PUBKEY__ || "";
             if (!pubKeyHex && window.GhostBridge && window.GhostBridge.getIotaPublicKey) {
                 try { pubKeyHex = window.GhostBridge.getIotaPublicKey(); } catch(e) {}
-            }
-            if (!pubKeyHex && addr === "0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a") {
-                pubKeyHex = "0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6";
             }
             if (!pubKeyHex) pubKeyHex = addr;
             var pubKeyBytes = new Uint8Array(32);
@@ -2413,8 +2451,8 @@
             url: "https://iota.org",
             chains: ["iota:mainnet", "iota:testnet", "iota:devnet", "iota:local"],
             get accounts() {
-                if (!_connected) return [];
-                return [getCurrentAccount()];
+                var acc = getCurrentAccount();
+                return (acc && acc.address) ? [acc] : [];
             },
             features: {
                 "standard:connect": {
@@ -2934,11 +2972,11 @@
                 }
             } catch(_) {}
             if (list.length === 0) {
-                list = [
-                    { name: "Master .env", address: "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359" },
-                    { name: "tuyul-2", address: "0xCBF711D2668b03b4cF485626ff261Dcc80705Ab3" },
-                    { name: "tuyul-3", address: "0x7a5bD0C7C686334b1d031C298a8417BFb3F1F4Da" }
-                ];
+                var curAddr = window.__FUSION_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getWalletAddress ? window.GhostBridge.getWalletAddress() : "");
+                var curName = window.__FUSION_WALLET_NAME__ || (window.GhostBridge && window.GhostBridge.getWalletName ? window.GhostBridge.getWalletName() : "Master");
+                if (curAddr) {
+                    list = [{ name: curName, address: curAddr }];
+                }
             }
             return list;
         },
@@ -6031,9 +6069,7 @@
                 wAddr = wList[0].address;
             }
         }
-        if (!wAddr) {
-            wAddr = "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
-        }
+        if (!wAddr) return;
 
         // 1. Deteksi input yang sedang aktif / fokus
         var targetInp = null;
@@ -6931,7 +6967,7 @@
                 } else if (activeCategory === "wallet") {
                     createItem("✨ {{WALLET_ADDRESS}} (Dinamis Akun Aktif)", "Otomatis address dompet yang aktif di Termux", function() {
                         var activeW = AgyDB.getActiveWallet();
-                        var wAddr = (activeW && activeW.address) ? activeW.address : "0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359";
+                        var wAddr = (activeW && activeW.address) ? activeW.address : (window.__FUSION_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getWalletAddress ? window.GhostBridge.getWalletAddress() : ""));
                         var wName = (activeW && activeW.name) ? activeW.name : "Master";
                         selectValue(wAddr, "Dinamis: " + wName, true);
                     }, true);

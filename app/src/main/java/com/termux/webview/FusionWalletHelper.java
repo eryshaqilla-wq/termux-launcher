@@ -15,23 +15,23 @@ public class FusionWalletHelper {
     public static boolean sLoaded = false;
     public static String sCustomWalletPath;
     public static int sMasterIndex = 0;
-    public static String[] sNames = {"Master .env"};
-    public static String[] sAddresses = {"0x87A6cD8c67649cb1c2221D87FedC3fCf2b22b359"};
+    public static String[] sNames = {"eso-1"};
+    public static String[] sAddresses = {"0x79E0EE08c6516d1204821f083285Ab65660c26E4"};
 
     public static int sSolMasterIndex = 0;
-    public static String[] sSolNames = {"Master Solana"};
+    public static String[] sSolNames = {"eso-1"};
     public static String[] sSolAddresses = {"8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf"};
 
     public static int sTronMasterIndex = 0;
-    public static String[] sTronNames = {"Master Tron"};
+    public static String[] sTronNames = {"eso-1"};
     public static String[] sTronAddresses = {"TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF"};
 
     public static int sSuiMasterIndex = 0;
-    public static String[] sSuiNames = {"Master Sui"};
+    public static String[] sSuiNames = {"eso-1"};
     public static String[] sSuiAddresses = {"0xe11bb239021e68c0494c91b5ef96dfc507d7a00f653d95c4dec56ac9c220a151"};
 
     public static int sAptosMasterIndex = 0;
-    public static String[] sAptosNames = {"Master Aptos"};
+    public static String[] sAptosNames = {"eso-1"};
     public static String[] sAptosAddresses = {"0xb531dfa998a53cfcb83cbd26eaa5c2fe5c192d6e79c00eb737fdf0ab9ea1c9ae"};
 
     public static int sIotaMasterIndex = 0;

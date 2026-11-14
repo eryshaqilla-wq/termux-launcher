@@ -810,6 +810,11 @@ public class GhostBridgeInterface implements Runnable {
     }
 
     @JavascriptInterface
+    public String getSuiAddress() {
+        return getSuiWalletAddress();
+    }
+
+    @JavascriptInterface
     public String getSuiWalletName() {
         if (sCurrentSuiWalletName != null && !sCurrentSuiWalletName.isEmpty()) {
             return sCurrentSuiWalletName;
@@ -849,6 +854,11 @@ public class GhostBridgeInterface implements Runnable {
     }
 
     @JavascriptInterface
+    public String getAptosAddress() {
+        return getAptosWalletAddress();
+    }
+
+    @JavascriptInterface
     public String getAptosWalletName() {
         if (sCurrentAptosWalletName != null && !sCurrentAptosWalletName.isEmpty()) {
             return sCurrentAptosWalletName;
@@ -880,6 +890,11 @@ public class GhostBridgeInterface implements Runnable {
             return mgr.mCurrentIotaWalletAddress;
         }
         return FusionWalletHelper.getMasterIotaAddress();
+    }
+
+    @JavascriptInterface
+    public String getIotaAddress() {
+        return getIotaWalletAddress();
     }
 
     @JavascriptInterface
