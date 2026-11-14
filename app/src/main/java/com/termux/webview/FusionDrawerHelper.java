@@ -814,8 +814,13 @@ public class FusionDrawerHelper {
                 if (fusionTab == null) {
                     sb2.append("about:blank");
                 } else {
-                    if (fusionTab.mIsMinimized) {
+                    if (fusionTab.mIsHeadless) {
+                        sb2.append("[HEADLESS] ");
+                    } else if (fusionTab.mIsMinimized) {
                         sb2.append("[MIN] ");
+                    }
+                    if (fusionTab.mIsDesktop) {
+                        sb2.append("[DESKTOP] ");
                     }
                     if (fusionTab.mProfile != null && !fusionTab.mProfile.isEmpty() && !"default".equals(fusionTab.mProfile)) {
                         sb2.append("[").append(fusionTab.mProfile).append("] ");

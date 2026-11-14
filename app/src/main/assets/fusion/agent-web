@@ -1644,6 +1644,8 @@ async function main() {
         console.log(`Usage:`);
         console.log(`  web                           (Buka halaman Beranda browser)`);
         console.log(`  web <url> [options]           (Buka URL di WebView)`);
+        console.log(`  web --headless <url>          (Buka URL di background tanpa UI / headless)`);
+        console.log(`  web --desktop <url>           (Buka URL dengan tampilan mode Desktop 1280px)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
         console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);
         console.log(`  web --modul <m> --profiles a,b [--parallel] (Putar makro untuk daftar profil tertentu)`);
@@ -2026,7 +2028,7 @@ async function main() {
         a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
         a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
         a.startsWith('--ai') || a.startsWith('--engine') ||
-        a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--ghost') ||
+        a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--headless') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
         a === 'home' || a === 'beranda' ||
         a.startsWith('http://') || a.startsWith('https://') ||

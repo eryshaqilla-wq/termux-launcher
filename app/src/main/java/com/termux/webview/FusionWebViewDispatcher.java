@@ -25,12 +25,21 @@ public class FusionWebViewDispatcher {
                     jSONObject.optBoolean("isAuto", false),
                     jSONObject.optString("wc", ""),
                     jSONObject.optString("proxy", ""),
-                    jSONObject.optInt("interval", 0)
+                    jSONObject.optInt("interval", 0),
+                    jSONObject.optBoolean("isHeadless", false)
                 );
                 return;
             } catch (Exception unused) {
                 return;
             }
+        }
+        if (str.startsWith("WEBVIEW_HEADLESS ")) {
+            String targetUrl = str.substring(17).trim();
+            if (targetUrl.isEmpty()) {
+                targetUrl = "https://google.com";
+            }
+            fusionWebViewManager.openConfig(targetUrl, "default", "", "base", true, false, false, "", "", 0, true);
+            return;
         }
         if (str.startsWith("WEBVIEW_GHOST ")) {
             String strSubstring = str.substring(14);

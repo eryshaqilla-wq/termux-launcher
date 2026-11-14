@@ -15,6 +15,7 @@ public class FusionTab {
     public TerminalSession mBoundSession = null;
     public String mTitle = "New Tab";
     public boolean mIsMinimized = false;
+    public boolean mIsHeadless = false;
     public boolean mIsPillCollapsed = false;
     public boolean mIsToolPillCollapsed = true;
     public boolean mHasFormFocus = false;
@@ -25,7 +26,7 @@ public class FusionTab {
     public int mAutoRotateIntervalSec = 0;
     public long mLastProxyRotatedTime = 0;
 
-    public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3) {
+    public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3, boolean isHeadless) {
         this.mId = i;
         this.mUrl = str;
         this.mProfile = str2;
@@ -33,5 +34,10 @@ public class FusionTab {
         this.mIsGhost = z;
         this.mIsDesktop = z2;
         this.mIsAuto = z3;
+        this.mIsHeadless = isHeadless;
+    }
+
+    public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3) {
+        this(i, str, str2, webView, z, z2, z3, false);
     }
 }

@@ -56,6 +56,25 @@ public class FusionWebViewClient extends WebViewClient {
             }
             fusionWebViewManager.injectScripts(webView);
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
+
+            // Injeksi viewport desktop sejak awal load jika tab aktif dalam mode desktop
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+            boolean isDesktop = (activeTab != null && activeTab.mIsDesktop) || fusionWebViewManager.mIsDesktopMode;
+            if (isDesktop && webView != null) {
+                String desktopViewportJs =
+                    "(function() {" +
+                    "  try {" +
+                    "    var meta = document.querySelector('meta[name=\"viewport\"]');" +
+                    "    if (!meta) {" +
+                    "      meta = document.createElement('meta');" +
+                    "      meta.name = 'viewport';" +
+                    "      document.head.appendChild(meta);" +
+                    "    }" +
+                    "    meta.setAttribute('content', 'width=1280, initial-scale=0.35, minimum-scale=0.1, maximum-scale=3.0, user-scalable=yes');" +
+                    "  } catch(e) {}" +
+                    "})();";
+                webView.evaluateJavascript(desktopViewportJs, null);
+            }
         }
     }
 

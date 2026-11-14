@@ -297,7 +297,8 @@ handle_webview() {
             echo "  --<chain>             Pilih jaringan (contoh: --base, --bsc, --arbitrum, --morph)"
             echo "  --auto                Mode auto-sign transaksi otomatis"
             echo "  --wc <uri>            Hubungkan sesi via WalletConnect URI"
-            echo "  --desktop             Gunakan desktop Chrome User-Agent"
+            echo "  --desktop             Gunakan mode desktop (1280px viewport & Desktop UA)"
+            echo "  --headless            Mode background murni / off-screen (tanpa render UI di layar)"
             echo "  --profile <name>      Nama profil/sesi cookie terisolasi"
             echo "  --fresh               Profil incognito sekali pakai"
             echo "  --ghost               Injeksi Ghost Web3 Provider"
@@ -434,6 +435,10 @@ handle_webview() {
         close|--close|hide|--hide)
             send_cmd "WEBVIEW_CLOSE"
             return 0
+            ;;
+        headless)
+            shift
+            set -- "--headless" "$@"
             ;;
         reload|--reload)
             send_cmd "WEBVIEW_RELOAD"
@@ -599,6 +604,7 @@ handle_webview() {
     local WALLET=""
     local CHAIN="base"
     local IS_DESKTOP=0
+    local IS_HEADLESS=0
     local IS_GHOST=1
     local IS_AUTO=0
     local BLOCK_MEDIA=0
@@ -653,6 +659,10 @@ handle_webview() {
                 ;;
             --desktop)
                 IS_DESKTOP=1
+                shift
+                ;;
+            --headless)
+                IS_HEADLESS=1
                 shift
                 ;;
             --ghost)
@@ -752,15 +762,20 @@ data = {
     'block_trackers': sys.argv[11] == '1',
     'block_css': sys.argv[12] == '1',
     'proxy': sys.argv[13],
-    'interval': int(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14].isdigit() else 0
+    'interval': int(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14].isdigit() else 0,
+    'isHeadless': sys.argv[15] == '1' if len(sys.argv) > 15 else False
 }
 print(json.dumps(data))
-" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL")
+" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL" "$IS_HEADLESS")
 
     local RESP
     RESP=$(send_cmd "WEBVIEW_CONFIG $CFG_PAYLOAD")
     if [ "$RESP" = "OK" ]; then
-        echo "Meluncurkan $URL di tab baru"
+        if [ "$IS_HEADLESS" = "1" ]; then
+            echo "Meluncurkan $URL di background (headless)"
+        else
+            echo "Meluncurkan $URL di tab baru"
+        fi
     elif [ -n "$RESP" ]; then
         echo "$RESP"
     fi

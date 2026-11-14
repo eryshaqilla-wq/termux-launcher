@@ -343,8 +343,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         public final String mWcUri;
         public final String mProxy;
         public final int mIntervalMins;
+        public final boolean mIsHeadless;
 
-        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
             this.mManager = fusionWebViewManager;
             this.mUrl = str;
             this.mProfile = str2;
@@ -356,10 +357,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mWcUri = str5;
             this.mProxy = str6;
             this.mIntervalMins = i;
+            this.mIsHeadless = isHeadless;
+        }
+
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, false);
         }
 
         public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, "", 0);
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, "", 0, false);
         }
 
         @Override // java.lang.Runnable
@@ -368,7 +374,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (fusionWebViewManager == null) {
                 return;
             }
-            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri, this.mProxy, this.mIntervalMins);
+            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri, this.mProxy, this.mIntervalMins, this.mIsHeadless);
         }
     }
 
@@ -824,6 +830,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         });
     }
 
+    public static void applyDesktopSettingsToWebView(WebView webView) {
+        if (webView == null) return;
+        WebSettings settings = webView.getSettings();
+        if (settings == null) return;
+        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setSupportZoom(true);
+        settings.setBuiltInZoomControls(true);
+        settings.setDisplayZoomControls(false);
+    }
+
     public WebView createNewConfiguredWebView(String profileName, boolean isDesktop) {
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity == null) {
@@ -841,12 +859,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
         if (isDesktop) {
-            settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
-            settings.setUseWideViewPort(true);
-            settings.setLoadWithOverviewMode(true);
-            settings.setSupportZoom(true);
-            settings.setBuiltInZoomControls(true);
-            settings.setDisplayZoomControls(false);
+            applyDesktopSettingsToWebView(webView);
         }
         try {
             android.webkit.CookieManager globalCm = android.webkit.CookieManager.getInstance();
@@ -926,6 +939,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
+        return createTabInternal(str, str2, str3, str4, z, z2, z3, str5, false);
+    }
+
+    public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, boolean isHeadless) {
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity == null) {
             return null;
@@ -941,7 +958,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.setElevation(0.0f);
         int i = this.mNextTabId;
         this.mNextTabId = i + 1;
-        FusionTab fusionTab = new FusionTab(i, str, str2, webView, z, z2, z3);
+        FusionTab fusionTab = new FusionTab(i, str, str2, webView, z, z2, z3, isHeadless);
+        if (isHeadless) {
+            fusionTab.mIsMinimized = true;
+            int virtW = z2 ? 1280 : 1080;
+            int virtH = z2 ? 720 : 1920;
+            webView.measure(
+                View.MeasureSpec.makeMeasureSpec(virtW, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(virtH, View.MeasureSpec.EXACTLY)
+            );
+            webView.layout(0, 0, virtW, virtH);
+            webView.setVisibility(View.GONE);
+            webView.resumeTimers();
+            acquireWakeLock();
+        }
         if (webView != null && webView.getWebViewClient() instanceof FusionWebViewClient) {
             ((FusionWebViewClient) webView.getWebViewClient()).setCurrentUrl(str);
         }
@@ -2628,16 +2658,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity == null) {
             return;
         }
-        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5, str6, i));
+        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless));
+    }
+
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
+        openConfig(str, str2, str3, str4, z, z2, z3, str5, str6, i, false);
     }
 
     public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-        openConfig(str, str2, str3, str4, z, z2, z3, str5, "", 0);
+        openConfig(str, str2, str3, str4, z, z2, z3, str5, "", 0, false);
     }
 
     public java.util.List<FusionTab> getTabList() {
@@ -2653,10 +2687,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, "", 0);
+        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, "", 0, false);
     }
 
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins) {
+        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, proxyStr, intervalMins, false);
+    }
+
+    public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins, boolean isHeadless) {
         TerminalSession currentSession = null;
         initViews();
         if (str == null || str.isEmpty() || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
@@ -2670,7 +2708,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mIsDesktopMode = z2;
         this.mIsAutoMode = z3;
         this.mWcUri = str5;
-        this.mIsMinimized = false;
+        this.mIsMinimized = isHeadless;
         if (str4 == null) {
             str4 = "base";
         }
@@ -2714,15 +2752,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (i >= 0) {
             FusionTab fusionTab2 = (FusionTab) this.mTabList.get(i);
             fusionTab2.mUrl = str;
-            fusionTab2.mIsMinimized = false;
+            fusionTab2.mIsDesktop = z2;
+            fusionTab2.mIsHeadless = isHeadless;
+            fusionTab2.mIsMinimized = isHeadless;
             targetTab = fusionTab2;
             switchTab(i);
             FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
             if (fusionTab2.mWebView != null) {
+                if (z2) {
+                    applyDesktopSettingsToWebView(fusionTab2.mWebView);
+                }
                 fusionTab2.mWebView.loadUrl(str);
             }
         } else {
-            FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5);
+            FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5, isHeadless);
             targetTab = fusionTabCreateTabInternal;
             switchTab(this.mTabList.size() - 1);
             if (fusionTabCreateTabInternal != null && fusionTabCreateTabInternal.mWebView != null) {
@@ -2977,6 +3020,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (this.mTabList == null || this.mTabList.isEmpty()) {
             return false;
         }
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null && (active.mIsHeadless || active.mIsMinimized)) {
+            return true;
+        }
         if (this.mPaneHost != null && this.mPaneHost.getVisibility() == View.VISIBLE) {
             return true;
         }
@@ -3185,8 +3232,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab = (FusionTab) arrayList.get(i2);
             if (i2 == i) {
                 WebView webView = fusionTab.mWebView;
-                if (fusionTab.mIsMinimized) {
+                if (fusionTab.mIsMinimized || fusionTab.mIsHeadless) {
                     webView.setVisibility(8);
+                    webView.resumeTimers();
                     TextView textView = this.mMinPillBtn;
                     if (textView != null) {
                         textView.setText(" MAX ");
@@ -3218,46 +3266,65 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             }
         }
-        if (this.mPaneHost != null) {
-            this.mPaneHost.setVisibility(View.VISIBLE);
-            this.mPaneHost.setAlpha(1.0f);
-            this.mPaneHost.setTranslationX(0.0f);
-            this.mPaneHost.bringToFront();
-        }
-        LinearLayout linearLayout = this.mControlPill;
-        if (linearLayout != null) {
-            if (linearLayout.getParent() == null && this.mPaneHost != null) {
-                FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
-                layoutParams.setMargins(0, 8, 12, 0);
-                this.mPaneHost.addView(linearLayout, layoutParams);
+        if (targetTab != null && targetTab.mIsHeadless) {
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setVisibility(View.GONE);
             }
-            linearLayout.setVisibility(0);
-            linearLayout.setElevation(160.0f);
-            linearLayout.bringToFront();
-        }
-        if (this.mToolScroll == null) {
-            FusionToolPillHelper.initToolPill(this);
-        }
-        if (this.mToolScroll != null) {
-            if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
-                float density = this.mActivity.getResources().getDisplayMetrics().density;
-                FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
-                layoutParams.setMargins(0, (int) (58 * density), 10, 0);
-                this.mPaneHost.addView(this.mToolScroll, layoutParams);
+            if (this.mTerminalPaneHost != null) {
+                this.mTerminalPaneHost.setVisibility(View.VISIBLE);
             }
-            if (this.mToolPill != null) {
-                this.mToolPill.setVisibility(View.VISIBLE);
+            if (this.mControlPill != null) {
+                this.mControlPill.setVisibility(View.GONE);
             }
-            this.mToolScroll.setVisibility(0);
-            this.mToolScroll.setElevation(160.0f);
-            this.mToolScroll.bringToFront();
-            FusionToolPillHelper.syncToolPillPosition(this);
-            FusionToolPillHelper.updateToolPillUi(this);
-        }
-        LinearLayout linearLayout2 = this.mMenuCard;
-        if (linearLayout2 != null && linearLayout2.getVisibility() == 0) {
-            linearLayout2.setElevation(170.0f);
-            linearLayout2.bringToFront();
+            if (this.mToolScroll != null) {
+                this.mToolScroll.setVisibility(View.GONE);
+            }
+            if (termuxActivity != null) {
+                termuxActivity.endWebViewExternalTextInput();
+                termuxActivity.refreshTerminalWindowBar();
+            }
+        } else {
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setVisibility(View.VISIBLE);
+                this.mPaneHost.setAlpha(1.0f);
+                this.mPaneHost.setTranslationX(0.0f);
+                this.mPaneHost.bringToFront();
+            }
+            LinearLayout linearLayout = this.mControlPill;
+            if (linearLayout != null) {
+                if (linearLayout.getParent() == null && this.mPaneHost != null) {
+                    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                    layoutParams.setMargins(0, 8, 12, 0);
+                    this.mPaneHost.addView(linearLayout, layoutParams);
+                }
+                linearLayout.setVisibility(0);
+                linearLayout.setElevation(160.0f);
+                linearLayout.bringToFront();
+            }
+            if (this.mToolScroll == null) {
+                FusionToolPillHelper.initToolPill(this);
+            }
+            if (this.mToolScroll != null) {
+                if (this.mToolScroll.getParent() == null && this.mPaneHost != null) {
+                    float density = this.mActivity.getResources().getDisplayMetrics().density;
+                    FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(-2, -2, 8388661);
+                    layoutParams.setMargins(0, (int) (58 * density), 10, 0);
+                    this.mPaneHost.addView(this.mToolScroll, layoutParams);
+                }
+                if (this.mToolPill != null) {
+                    this.mToolPill.setVisibility(View.VISIBLE);
+                }
+                this.mToolScroll.setVisibility(0);
+                this.mToolScroll.setElevation(160.0f);
+                this.mToolScroll.bringToFront();
+                FusionToolPillHelper.syncToolPillPosition(this);
+                FusionToolPillHelper.updateToolPillUi(this);
+            }
+            LinearLayout linearLayout2 = this.mMenuCard;
+            if (linearLayout2 != null && linearLayout2.getVisibility() == 0) {
+                linearLayout2.setElevation(170.0f);
+                linearLayout2.bringToFront();
+            }
         }
         updateContextUi();
     }

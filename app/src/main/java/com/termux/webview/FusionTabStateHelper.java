@@ -321,6 +321,7 @@ public class FusionTabStateHelper {
             return;
         } else {
             activeTab.mIsMinimized = false;
+            activeTab.mIsHeadless = false;
             View view3 = fusionWebViewManager.mTerminalPaneHost;
             if (view3 != null) {
                 view3.setVisibility(8);
