@@ -52,6 +52,11 @@ public class GhostBridgeInterface implements Runnable {
         }
         final String key = chainKey.trim().toLowerCase();
         final int id = chainId;
+
+        // Skip duplicate notifications to prevent UI thread thrashing
+        if (key.equals(sLastDetectedDappChainKey) && (id == sLastDetectedDappChainId || id == 0)) {
+            return;
+        }
         sLastDetectedDappChainKey = key;
         sLastDetectedDappChainId = id;
 
@@ -979,8 +984,13 @@ public class GhostBridgeInterface implements Runnable {
             return;
         }
         FusionChainHelper.setChainByHex(str);
-        sLastDetectedDappChainKey = FusionChainHelper.getCurrentChainKey();
-        sLastDetectedDappChainId = FusionChainHelper.getCurrentChainId();
+        String newKey = FusionChainHelper.getCurrentChainKey();
+        int newId = FusionChainHelper.getCurrentChainId();
+        if (newKey != null && newKey.equals(sLastDetectedDappChainKey) && newId == sLastDetectedDappChainId) {
+            return;
+        }
+        sLastDetectedDappChainKey = newKey;
+        sLastDetectedDappChainId = newId;
         FusionWebViewManager fusionWebViewManager = FusionWebViewManager.getInstance();
         if (fusionWebViewManager == null || (termuxActivity = fusionWebViewManager.mActivity) == null) {
             return;

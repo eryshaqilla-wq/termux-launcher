@@ -574,15 +574,32 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         updateContextUi();
     }
 
+    private static volatile boolean sCachedRpcAlive = false;
+    private static volatile long sLastRpcCheckTime = 0;
+    private static volatile boolean sIsCheckingRpc = false;
+
     public boolean checkRpcDaemon() {
-        try {
-            Socket socket = new Socket();
-            socket.connect(new InetSocketAddress("127.0.0.1", 3333), 200);
-            socket.close();
-            return true;
-        } catch (Exception unused) {
-            return false;
+        long now = System.currentTimeMillis();
+        if (now - sLastRpcCheckTime > 3000 && !sIsCheckingRpc) {
+            sIsCheckingRpc = true;
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        Socket socket = new Socket();
+                        socket.connect(new InetSocketAddress("127.0.0.1", 3333), 200);
+                        socket.close();
+                        sCachedRpcAlive = true;
+                    } catch (Exception unused) {
+                        sCachedRpcAlive = false;
+                    } finally {
+                        sLastRpcCheckTime = System.currentTimeMillis();
+                        sIsCheckingRpc = false;
+                    }
+                }
+            }).start();
         }
+        return sCachedRpcAlive;
     }
 
     public void clearWebviewCache() {
@@ -1845,17 +1862,24 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionToolPillHelper.initToolPill(this);
     }
 
+    private static final java.util.Map<String, String> sAssetScriptCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     public void injectAssetScript(WebView webView, String str) {
         try {
             TermuxActivity termuxActivity = this.mActivity;
             if (termuxActivity == null) {
                 return;
             }
-            InputStream inputStreamOpen = termuxActivity.getAssets().open("webview_engine/" + str);
-            byte[] bArr = new byte[inputStreamOpen.available()];
-            inputStreamOpen.read(bArr);
-            inputStreamOpen.close();
-            webView.evaluateJavascript(new String(bArr, "UTF-8"), null);
+            String script = sAssetScriptCache.get(str);
+            if (script == null) {
+                InputStream inputStreamOpen = termuxActivity.getAssets().open("webview_engine/" + str);
+                byte[] bArr = new byte[inputStreamOpen.available()];
+                inputStreamOpen.read(bArr);
+                inputStreamOpen.close();
+                script = new String(bArr, "UTF-8");
+                sAssetScriptCache.put(str, script);
+            }
+            webView.evaluateJavascript(script, null);
         } catch (Exception unused) {
         }
     }
@@ -3841,8 +3865,5 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
         }
         FusionToolPillHelper.updateToolPillUi(this);
-        if (this.mActivity != null) {
-            this.mActivity.refreshTerminalWindowBar();
-        }
     }
 }

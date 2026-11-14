@@ -199,11 +199,20 @@
         }
     }
 
+    var _lastReportedChainKey = null;
+    var _lastReportedChainId = null;
+
     function reportDappChainToBridge(chainKey, chainId) {
         if (!chainKey) return;
+        var numId = Number(chainId || 0);
+        if (_lastReportedChainKey === chainKey && _lastReportedChainId === numId) {
+            return;
+        }
+        _lastReportedChainKey = chainKey;
+        _lastReportedChainId = numId;
         try {
             if (window.GhostBridge && window.GhostBridge.reportDappChain) {
-                window.GhostBridge.reportDappChain(String(chainKey), Number(chainId || 0));
+                window.GhostBridge.reportDappChain(String(chainKey), numId);
             }
         } catch(_) {}
     }
