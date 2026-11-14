@@ -1645,6 +1645,7 @@ async function main() {
         console.log(`  web                           (Buka halaman Beranda browser)`);
         console.log(`  web <url> [options]           (Buka URL di WebView)`);
         console.log(`  web --headless <url>          (Buka URL di background tanpa UI / headless)`);
+        console.log(`  web --headless --new-tab <url> (Buka URL di tab baru background / paralel)`);
         console.log(`  web --desktop <url>           (Buka URL dengan tampilan mode Desktop 1280px)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
         console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);

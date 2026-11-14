@@ -26,7 +26,8 @@ public class FusionWebViewDispatcher {
                     jSONObject.optString("wc", ""),
                     jSONObject.optString("proxy", ""),
                     jSONObject.optInt("interval", 0),
-                    jSONObject.optBoolean("isHeadless", false)
+                    jSONObject.optBoolean("isHeadless", false),
+                    jSONObject.optBoolean("isNewTab", false)
                 );
                 return;
             } catch (Exception unused) {

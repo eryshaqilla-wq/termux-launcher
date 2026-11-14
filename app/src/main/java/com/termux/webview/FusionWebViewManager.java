@@ -344,8 +344,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         public final String mProxy;
         public final int mIntervalMins;
         public final boolean mIsHeadless;
+        public final boolean mIsNewTab;
 
-        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab) {
             this.mManager = fusionWebViewManager;
             this.mUrl = str;
             this.mProfile = str2;
@@ -358,14 +359,19 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mProxy = str6;
             this.mIntervalMins = i;
             this.mIsHeadless = isHeadless;
+            this.mIsNewTab = isNewTab;
+        }
+
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, false);
         }
 
         public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
-            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, false);
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, false, false);
         }
 
         public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, "", 0, false);
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, "", 0, false, false);
         }
 
         @Override // java.lang.Runnable
@@ -374,7 +380,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (fusionWebViewManager == null) {
                 return;
             }
-            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri, this.mProxy, this.mIntervalMins, this.mIsHeadless);
+            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri, this.mProxy, this.mIntervalMins, this.mIsHeadless, this.mIsNewTab);
         }
     }
 
@@ -2658,20 +2664,24 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab) {
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity == null) {
             return;
         }
-        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless));
+        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, isNewTab));
+    }
+
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
+        openConfig(str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, false);
     }
 
     public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
-        openConfig(str, str2, str3, str4, z, z2, z3, str5, str6, i, false);
+        openConfig(str, str2, str3, str4, z, z2, z3, str5, str6, i, false, false);
     }
 
     public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-        openConfig(str, str2, str3, str4, z, z2, z3, str5, "", 0, false);
+        openConfig(str, str2, str3, str4, z, z2, z3, str5, "", 0, false, false);
     }
 
     public java.util.List<FusionTab> getTabList() {
@@ -2687,14 +2697,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, "", 0, false);
+        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, "", 0, false, false);
     }
 
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins) {
-        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, proxyStr, intervalMins, false);
+        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, proxyStr, intervalMins, false, false);
     }
 
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins, boolean isHeadless) {
+        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, proxyStr, intervalMins, isHeadless, false);
+    }
+
+    public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins, boolean isHeadless, boolean isNewTab) {
         TerminalSession currentSession = null;
         initViews();
         if (str == null || str.isEmpty() || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
@@ -2735,7 +2749,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mTabList = new ArrayList();
         }
         int i = -1;
-        if (currentSession != null) {
+        if (!isNewTab && currentSession != null) {
             int size = this.mTabList.size();
             for (int i2 = 0; i2 < size; i2++) {
                 FusionTab fusionTab = (FusionTab) this.mTabList.get(i2);
