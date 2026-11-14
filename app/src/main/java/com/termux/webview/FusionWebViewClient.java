@@ -68,7 +68,7 @@ public class FusionWebViewClient extends WebViewClient {
             if (!fusionWebViewManager.isWebViewOpen() || fusionWebViewManager.mActiveWebView != webView) {
                 return;
             }
-            String autoChain = FusionChainHelper.detectChainFromUrl(url);
+            String autoChain = FusionChainHelper.detectChainFromUrl(str);
             if (autoChain != null) {
                 GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
             }
