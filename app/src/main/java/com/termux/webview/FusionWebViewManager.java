@@ -2063,6 +2063,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionChainHelper.setChainByIndex(i);
         this.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
         updateMenuTexts();
+        FusionToolPillHelper.updateToolPillUi(this);
         LinearLayout linearLayout = this.mMenuCard;
         if (linearLayout != null) {
             linearLayout.setVisibility(8);
@@ -2523,6 +2524,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionTab fusionTab = (FusionTab) arrayList.get(i);
             if (fusionTab.mWebView == webView) {
                 fusionTab.mUrl = str;
+                String autoChain = FusionChainHelper.detectChainFromUrl(str);
+                if (autoChain != null) {
+                    GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+                }
                 if (this.mActivity != null) {
                     this.mActivity.runOnUiThread(this::updateContextUi);
                 } else {
@@ -2581,6 +2586,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
 
         updateMenuTexts();
+        FusionToolPillHelper.updateToolPillUi(this);
         LinearLayout linearLayout = this.mMenuCard;
         if (linearLayout != null) {
             linearLayout.setVisibility(8);

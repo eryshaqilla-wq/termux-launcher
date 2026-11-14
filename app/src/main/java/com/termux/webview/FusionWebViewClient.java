@@ -50,6 +50,10 @@ public class FusionWebViewClient extends WebViewClient {
             if (!fusionWebViewManager.isWebViewOpen() || fusionWebViewManager.mActiveWebView != webView) {
                 return;
             }
+            String autoChain = FusionChainHelper.detectChainFromUrl(url);
+            if (autoChain != null) {
+                GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+            }
             fusionWebViewManager.injectScripts(webView);
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
         }
@@ -63,6 +67,10 @@ public class FusionWebViewClient extends WebViewClient {
         if (fusionWebViewManager != null) {
             if (!fusionWebViewManager.isWebViewOpen() || fusionWebViewManager.mActiveWebView != webView) {
                 return;
+            }
+            String autoChain = FusionChainHelper.detectChainFromUrl(url);
+            if (autoChain != null) {
+                GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
             }
             fusionWebViewManager.injectScripts(webView);
             fusionWebViewManager.onTabUrlLoaded(webView, str);

@@ -211,3 +211,109 @@ alias ipc="termux-ipc"
 alias copilot="agy-copilot"
 alias bashnh="bashnh"
 alias login="login"
+
+# ==========================================
+# DYNAMIC TAB TITLE VIA TERMUX IPC (SILENT)
+# ==========================================
+autoload -Uz add-zsh-hook 2>/dev/null || true
+typeset -g _CURRENT_TAB_TITLE=""
+
+# Override Oh My Zsh tab title parser agar perintah compound ('if ... wallet') tidak menjadi 'if'
+function omz_termsupport_preexec {
+    [[ "${DISABLE_AUTO_TITLE:-}" != true ]] || return 0
+
+    emulate -L zsh
+    setopt extended_glob
+
+    local LINE="${2:gs/%/%%}"
+    local CMD="${1[(wr)^(*=*|sudo|ssh|mosh|rake|-*)]:gs/%/%%}"
+
+    if [[ "$2" == *wallet* ]]; then
+        CMD="Wallet"
+    elif [[ "$CMD" == "if" || "$CMD" == "while" || "$CMD" == "for" || "$CMD" == "eval" ]]; then
+        local -a words
+        words=("${(z)2}")
+        for w in "${words[@]}"; do
+            case "$w" in
+                if|then|else|elif|fi|do|done|while|for|in|case|esac|command|-v|sudo|nohup|\{|\}|\(|\)|\;|\[|\]) continue ;;
+                *) CMD="$w"; break ;;
+            esac
+        done
+        [[ "$CMD" == "if" ]] && CMD="Termux"
+    fi
+
+    title "$CMD" "%100>...>${LINE}%<<"
+}
+
+_termux_tab_title_preexec() {
+    setopt localoptions no_monitor no_notify
+    local cmd_line="$1"
+    local expanded="$2"
+
+    # 1. Deteksi Wallet Daemon & Tools (prioritas utama)
+    if [[ "$cmd_line" == *wallet* || "$expanded" == *wallet* ]]; then
+        termux-ipc tab rename current "Wallet" >/dev/null 2>&1 &!
+        _CURRENT_TAB_TITLE="Wallet"
+        print -Pn "\e]2;Wallet\a\e]1;Wallet\a" 2>/dev/null || true
+        return
+    fi
+
+    local cmd="${cmd_line%% *}"
+    cmd="$(basename "$cmd")"
+    if [[ "$cmd" == "sudo" || "$cmd" == "nohup" || "$cmd" == "env" || "$cmd" == "command" || "$cmd" == "eval" ]]; then
+        local rest="${cmd_line#* }"
+        cmd="${rest%% *}"
+        cmd="$(basename "$cmd")"
+    fi
+
+    # Un-wrap compound keyword (if, while, for)
+    if [[ "$cmd" == "if" || "$cmd" == "while" || "$cmd" == "for" ]]; then
+        local -a words
+        words=("${(z)cmd_line}")
+        for w in "${words[@]}"; do
+            case "$w" in
+                if|then|else|elif|fi|do|done|while|for|in|case|esac|command|-v|sudo|nohup|\{|\}|\(|\)|\;|\[|\]) continue ;;
+                *) cmd="$(basename "$w")"; break ;;
+            esac
+        done
+    fi
+
+    case "$cmd" in
+        agy)
+            termux-ipc tab rename current "Agy" >/dev/null 2>&1 &!
+            _CURRENT_TAB_TITLE="Agy"
+            ;;
+        herdr)
+            termux-ipc tab rename current "Herdr" >/dev/null 2>&1 &!
+            _CURRENT_TAB_TITLE="Herdr"
+            ;;
+        ai|auto-engine)
+            termux-ipc tab rename current "AI" >/dev/null 2>&1 &!
+            _CURRENT_TAB_TITLE="AI"
+            ;;
+        telegram|pemantau|pmt)
+            termux-ipc tab rename current "Telegram" >/dev/null 2>&1 &!
+            _CURRENT_TAB_TITLE="Telegram"
+            ;;
+        web|browser|agent-web)
+            termux-ipc tab rename current "Browser" >/dev/null 2>&1 &!
+            _CURRENT_TAB_TITLE="Browser"
+            ;;
+        fastmint)
+            termux-ipc tab rename current "FastMint" >/dev/null 2>&1 &!
+            _CURRENT_TAB_TITLE="FastMint"
+            ;;
+    esac
+}
+
+_termux_tab_title_precmd() {
+    setopt localoptions no_monitor no_notify
+    if [[ -n "$_CURRENT_TAB_TITLE" ]]; then
+        termux-ipc tab rename current "Termux" >/dev/null 2>&1 &!
+        _CURRENT_TAB_TITLE=""
+    fi
+}
+
+add-zsh-hook preexec _termux_tab_title_preexec 2>/dev/null || true
+add-zsh-hook precmd _termux_tab_title_precmd 2>/dev/null || true
+

@@ -73,6 +73,12 @@ public class GhostBridgeInterface implements Runnable {
                 public void run() {
                     mgr.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
                     mgr.updateMenuTexts();
+                    FusionToolPillHelper.updateToolPillUi(mgr);
+                    if (FusionDrawerHelper.isWalletDrawerOpen()) {
+                        FusionDrawerHelper.showWalletDrawer(mgr);
+                    } else if (FusionDrawerHelper.isChainDrawerOpen()) {
+                        FusionDrawerHelper.showChainDrawer(mgr);
+                    }
                 }
             });
         }
@@ -499,6 +505,7 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"error\":\"Empty payload\"}";
         }
         if (str.contains("sol_connect") || str.contains("solana_requestAccounts") || str.contains("sol_accounts") || str.contains("sol_getAccounts") || str.contains("solana_accounts")) {
+            handleDappChainDetected("solana", 501);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -522,6 +529,7 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":{\"publicKey\":\"8B63qh1St7qVLVM3fNXCaK1jET6Pbmw96AuTMC2BYXaf\"}}";
         }
         if (str.contains("sol_signIn")) {
+            handleDappChainDetected("solana", 501);
             if (!checkRpcAlive()) {
                 notifyDaemonOffline("⚡ [GhostWallet] Sign-In Solana butuh daemon aktif! Jalankan 'wallet' di terminal.");
                 return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
@@ -540,6 +548,7 @@ public class GhostBridgeInterface implements Runnable {
             return daemonResp;
         }
         if (str.contains("tron_connect") || str.contains("tron_requestAccounts") || str.contains("tron_accounts")) {
+            handleDappChainDetected("tron", 728126428);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -562,7 +571,8 @@ public class GhostBridgeInterface implements Runnable {
             }
             return "{\"result\":{\"code\":200,\"message\":\"success\",\"address\":\"TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF\"}}";
         }
-        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts") || str.contains("sui_accounts")) {
+        if (str.contains("sui_connect") || str.contains("sui_getAccounts") || str.contains("sui_requestAccounts") || str.contains("sui_accounts") || str.contains("sui_signTransactionBlock") || str.contains("sui_signTransaction") || str.contains("sui_signAndExecuteTransactionBlock") || str.contains("sui_signAndExecuteTransaction")) {
+            handleDappChainDetected("sui", 784);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -589,7 +599,8 @@ public class GhostBridgeInterface implements Runnable {
             }
             return "{\"result\":[{\"address\":\"0x2d5cd38757a6423b513a54523d072ff737b3d5ddc87f56cb96556fbe09a37792\",\"publicKey\":\"0xea495ed3ad35427d2d26a50f88fc5659b4d4bd8250b7917336e130e71e1146a0\"}]}";
         }
-        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts")) {
+        if (str.contains("aptos_connect") || str.contains("aptos_account") || str.contains("aptos_getAccount") || str.contains("aptos_accounts") || str.contains("aptos_signTransaction") || str.contains("aptos_signAndSubmitTransaction")) {
+            handleDappChainDetected("aptos", 637);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -612,7 +623,8 @@ public class GhostBridgeInterface implements Runnable {
             }
             return "{\"result\":{\"address\":\"0xf796fcce529ac9bbda4864320e80f8a016cc0b020ea745f9acde68db5ad63500\",\"publicKey\":\"0x99693ab8c1033510a178b17be990ba6a811d96ff07472c253e6a2de40d0f99d5\"}}";
         }
-        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts")) {
+        if (str.contains("iota_connect") || str.contains("iota_getAccounts") || str.contains("iota_requestAccounts") || str.contains("iota_accounts") || str.contains("iota_signTransactionBlock") || str.contains("iota_signTransaction") || str.contains("iota_signAndExecuteTransactionBlock") || str.contains("iota_signAndExecuteTransaction")) {
+            handleDappChainDetected("iota", 4218);
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
@@ -934,6 +946,12 @@ public class GhostBridgeInterface implements Runnable {
         if (fusionWebViewManager != null) {
             fusionWebViewManager.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
             fusionWebViewManager.updateMenuTexts();
+            FusionToolPillHelper.updateToolPillUi(fusionWebViewManager);
+            if (FusionDrawerHelper.isWalletDrawerOpen()) {
+                FusionDrawerHelper.showWalletDrawer(fusionWebViewManager);
+            } else if (FusionDrawerHelper.isChainDrawerOpen()) {
+                FusionDrawerHelper.showChainDrawer(fusionWebViewManager);
+            }
         }
     }
 

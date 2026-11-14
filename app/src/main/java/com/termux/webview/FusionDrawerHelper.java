@@ -39,6 +39,14 @@ public class FusionDrawerHelper {
     public static int sWalletPage = -1;
     public static String sWalletFilterQuery = "";
 
+    public static boolean isWalletDrawerOpen() {
+        return sWalletDrawer != null && sWalletDrawer.getVisibility() == android.view.View.VISIBLE;
+    }
+
+    public static boolean isChainDrawerOpen() {
+        return sChainDrawer != null && sChainDrawer.getVisibility() == android.view.View.VISIBLE;
+    }
+
     public static void closeAllDrawers(FusionWebViewManager fusionWebViewManager) {
         if (fusionWebViewManager == null) {
             return;
@@ -917,8 +925,8 @@ public class FusionDrawerHelper {
         linearLayout3.addView(textView2);
         linearLayout2.addView(linearLayout3);
         final TextView textView3 = new TextView(appCompatActivity);
-        textView3.setText("Ganti akun dompet aktif seketika");
-        textView3.setTextColor(-6577749);
+        textView3.setText("Jaringan Aktif: " + FusionChainHelper.getCurrentChainName() + " (" + FusionChainHelper.getCurrentChainKey() + ")");
+        textView3.setTextColor(-7686920);
         textView3.setTextSize(2, 11.0f);
         textView3.setPadding(0, 2, 0, 8);
         linearLayout2.addView(textView3);

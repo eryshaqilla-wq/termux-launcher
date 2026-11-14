@@ -1408,27 +1408,27 @@
                 },
                 "sui:signAndExecuteTransactionBlock": {
                     version: "1.0.0",
-                    signAndExecuteTransactionBlock: async function(input) { return await provider.signAndExecuteTransactionBlock(input); }
+                    signAndExecuteTransactionBlock: async function(input) { reportDappChainToBridge("sui", 784); return await provider.signAndExecuteTransactionBlock(input); }
                 },
                 "sui:signAndExecuteTransaction": {
                     version: "2.0.0",
-                    signAndExecuteTransaction: async function(input) { return await provider.signAndExecuteTransaction(input); }
+                    signAndExecuteTransaction: async function(input) { reportDappChainToBridge("sui", 784); return await provider.signAndExecuteTransaction(input); }
                 },
                 "sui:signTransactionBlock": {
                     version: "1.0.0",
-                    signTransactionBlock: async function(input) { return await provider.signTransactionBlock(input); }
+                    signTransactionBlock: async function(input) { reportDappChainToBridge("sui", 784); return await provider.signTransactionBlock(input); }
                 },
                 "sui:signTransaction": {
                     version: "2.0.0",
-                    signTransaction: async function(input) { return await provider.signTransaction(input); }
+                    signTransaction: async function(input) { reportDappChainToBridge("sui", 784); return await provider.signTransaction(input); }
                 },
                 "sui:signMessage": {
                     version: "1.0.0",
-                    signMessage: async function(input) { return await provider.signMessage(input); }
+                    signMessage: async function(input) { reportDappChainToBridge("sui", 784); return await provider.signMessage(input); }
                 },
                 "sui:signPersonalMessage": {
                     version: "1.0.0",
-                    signPersonalMessage: async function(input) { return await provider.signPersonalMessage(input); }
+                    signPersonalMessage: async function(input) { reportDappChainToBridge("sui", 784); return await provider.signPersonalMessage(input); }
                 },
                 "sui:reportTransactionEffects": {
                     version: "1.0.0",
