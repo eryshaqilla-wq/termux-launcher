@@ -100,6 +100,20 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.closeWebView();
             return;
         }
+        if (str.startsWith("WEBVIEW_ATTACH ") || str.equals("WEBVIEW_ATTACH")) {
+            String idxStr = str.length() > 14 ? str.substring(14).trim() : "";
+            int idx = 0;
+            try { if (!idxStr.isEmpty()) idx = Integer.parseInt(idxStr); } catch (Exception ignored) {}
+            fusionWebViewManager.attachTab(idx);
+            return;
+        }
+        if (str.startsWith("WEBVIEW_DETACH ") || str.equals("WEBVIEW_DETACH")) {
+            String idxStr = str.length() > 14 ? str.substring(14).trim() : "";
+            int idx = -1;
+            try { if (!idxStr.isEmpty()) idx = Integer.parseInt(idxStr); } catch (Exception ignored) {}
+            fusionWebViewManager.detachTab(idx);
+            return;
+        }
         if (str.equals("WEBVIEW_BACK")) {
             new FusionWebViewManager.BackClick(fusionWebViewManager).onClick(null);
             return;
@@ -252,6 +266,10 @@ public class FusionWebViewDispatcher {
                     return;
                 }
             }
+        }
+        if (str.equals("WEBVIEW_KILL_ALL")) {
+            fusionWebViewManager.killAllTabs();
+            return;
         }
         if (str.equals("WEBVIEW_SHOW_TABS") || str.equals("WEBVIEW_TABS")) {
             fusionWebViewManager.showTabManagerDialog();

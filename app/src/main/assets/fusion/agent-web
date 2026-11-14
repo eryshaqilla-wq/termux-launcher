@@ -1374,6 +1374,8 @@ async function executeSingleProfile(url, extraFlags = []) {
     let passwordArg = null;
     let explicitPassword = false;
     let contextText = '';
+    let isMonitorRequested = false;
+    let monitorPort = '9223';
 
     for (let i = 0; i < extraFlags.length; i++) {
         const flag = extraFlags[i];
@@ -1452,6 +1454,12 @@ async function executeSingleProfile(url, extraFlags = []) {
             }
         } else if (flag.startsWith('--ai=') || flag.startsWith('--engine=')) {
             setAiEngineState(flag.split('=')[1]);
+        } else if (flag === '--monitor' || flag === 'monitor' || flag === '--watch' || flag === 'watch') {
+            isMonitorRequested = true;
+            if (extraFlags[i + 1] && /^\d+$/.test(extraFlags[i + 1])) {
+                monitorPort = extraFlags[i + 1];
+                i++;
+            }
         } else {
             flagsWithoutProfile.push(flag);
         }
@@ -1547,6 +1555,17 @@ async function executeSingleProfile(url, extraFlags = []) {
     // Hanya tampilkan jika ada output error tidak terduga
     if (res && !res.toLowerCase().includes('meluncurkan') && res !== 'OK') {
         console.log(res);
+    }
+
+    if (isMonitorRequested && !recipe) {
+        console.log(`[WebView Live Monitor] Menghubungkan ke Watch Mode...`);
+        await sleep(800);
+        const monScript = fs.existsSync('/root/wallet/webview_monitor.cjs') 
+            ? '/root/wallet/webview_monitor.cjs' 
+            : (fs.existsSync('/wallet/webview_monitor.cjs') ? '/wallet/webview_monitor.cjs' : path.join(__dirname, 'webview_monitor.cjs'));
+        const child = spawn('node', [monScript, monitorPort], { stdio: 'inherit' });
+        child.on('close', code => process.exit(code || 0));
+        return;
     }
 
     if (recipe) {
@@ -1645,8 +1664,15 @@ async function main() {
         console.log(`  web                           (Buka halaman Beranda browser)`);
         console.log(`  web <url> [options]           (Buka URL di WebView)`);
         console.log(`  web --headless <url>          (Buka URL di background tanpa UI / headless)`);
+        console.log(`  web --headless --monitor <url> (Buka URL di background & langsung aktifkan Live Watch Monitor)`);
         console.log(`  web --headless --new-tab <url> (Buka URL di tab baru background / paralel)`);
         console.log(`  web --desktop <url>           (Buka URL dengan tampilan mode Desktop 1280px)`);
+        console.log(`  web list [--json]             (Lihat daftar semua WebView aktif: Headless & Visual)`);
+        console.log(`  web attach <idx>              (Bawa tab headless ke layar / visual mode)`);
+        console.log(`  web detach <idx>              (Kirim tab visual ke background / headless mode)`);
+        console.log(`  web monitor [port]            (Live Watch Mode WebView via Web/WLAN, default: 9223)`);
+        console.log(`  web --kill [idx]              (Tutup tab nomor <idx>, default: tab aktif)`);
+        console.log(`  web --kill-all                (Tutup seluruh tab WebView sekaligus)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
         console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);
         console.log(`  web --modul <m> --profiles a,b [--parallel] (Putar makro untuk daftar profil tertentu)`);
@@ -1755,6 +1781,107 @@ async function main() {
         if (prof) {
             await runSessionWatcher(prof);
         }
+        process.exit(0);
+    }
+
+    const isListCmd = (
+        cmd === 'list' ||
+        cmd === '--list' ||
+        cmd === 'ls' ||
+        cmd === 'tabs' ||
+        cmd === '--tabs'
+    );
+
+    if (isListCmd) {
+        const isJson = args.includes('--json') || args.includes('-j');
+        const output = runIpc(isJson ? 'list --json' : 'list');
+        if (output) console.log(output);
+        process.exit(0);
+    }
+
+    const isAttachCmd = (
+        cmd === 'attach' ||
+        cmd === '--attach'
+    );
+
+    if (isAttachCmd) {
+        const targetIdx = args[1] !== undefined ? args[1] : '0';
+        const output = runIpc(`attach ${targetIdx}`);
+        if (output) console.log(output);
+        process.exit(0);
+    }
+
+    const isDetachCmd = (
+        cmd === 'detach' ||
+        cmd === '--detach'
+    );
+
+    if (isDetachCmd) {
+        const targetIdx = args[1] !== undefined ? args[1] : '-1';
+        const output = runIpc(`detach ${targetIdx}`);
+        if (output) console.log(output);
+        process.exit(0);
+    }
+
+    const isMonitorCmd = (
+        cmd === 'monitor' ||
+        cmd === '--monitor' ||
+        cmd === 'watch' ||
+        cmd === '--watch'
+    );
+
+    const hasTargetUrl = args.some(a => 
+        a.startsWith('http://') || a.startsWith('https://') || 
+        (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json')) ||
+        a === 'home' || a === 'beranda' ||
+        a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
+        a.startsWith('--headless') || a.startsWith('--desktop')
+    );
+
+    if (isMonitorCmd && !hasTargetUrl) {
+        let port = '9223';
+        for (let i = 1; i < args.length; i++) {
+            if ((args[i] === '--port' || args[i] === '-p') && args[i + 1]) {
+                port = args[i + 1];
+                i++;
+            } else if (!args[i].startsWith('-') && /^\d+$/.test(args[i])) {
+                port = args[i];
+            }
+        }
+        const monScript = fs.existsSync('/root/wallet/webview_monitor.cjs') 
+            ? '/root/wallet/webview_monitor.cjs' 
+            : (fs.existsSync('/wallet/webview_monitor.cjs') ? '/wallet/webview_monitor.cjs' : path.join(__dirname, 'webview_monitor.cjs'));
+        const child = spawn('node', [monScript, port], { stdio: 'inherit' });
+        child.on('close', code => process.exit(code || 0));
+        return;
+    }
+
+    const isKillAllCmd = (
+        cmd === 'kill-all' ||
+        cmd === '--kill-all' ||
+        cmd === 'close-all' ||
+        cmd === '--close-all' ||
+        ((cmd === 'kill' || cmd === '--kill') && (args[1] === 'all' || args[1] === '--all'))
+    );
+
+    if (isKillAllCmd) {
+        const output = runIpc('kill-all');
+        if (output) console.log(output);
+        process.exit(0);
+    }
+
+    const isKillCmd = (
+        cmd === 'kill' ||
+        cmd === '--kill' ||
+        cmd === 'kill-tab' ||
+        cmd === '--kill-tab' ||
+        cmd === 'killtab'
+    );
+
+    if (isKillCmd) {
+        const targetIdx = args[1] && !args[1].startsWith('-') ? args[1] : '';
+        const output = runIpc(targetIdx ? `kill-tab ${targetIdx}` : 'kill-tab');
+        if (output) console.log(output);
         process.exit(0);
     }
 
@@ -2031,6 +2158,7 @@ async function main() {
         a.startsWith('--ai') || a.startsWith('--engine') ||
         a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--headless') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
+        a.startsWith('--monitor') || a === 'monitor' || a.startsWith('--watch') || a === 'watch' ||
         a === 'home' || a === 'beranda' ||
         a.startsWith('http://') || a.startsWith('https://') ||
         (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json'))
@@ -2041,12 +2169,19 @@ async function main() {
         let passFlags = [];
         for (let i = 0; i < args.length; i++) {
             const item = args[i];
-            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine') {
+            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine' || item === '--monitor' || item === 'monitor' || item === '--watch' || item === 'watch') {
                 passFlags.push(item);
-                if (args[i + 1] && !args[i + 1].startsWith('--')) {
-                    // Cek jika item adalah option yang mengambil value
-                    passFlags.push(args[i + 1]);
-                    i++;
+                if (args[i + 1] && !args[i + 1].startsWith('--') && !args[i + 1].startsWith('http://') && !args[i + 1].startsWith('https://') && args[i + 1] !== 'home' && args[i + 1] !== 'beranda') {
+                    // Cek jika item adalah option yang mengambil value (misal port untuk monitor)
+                    if (item === '--monitor' || item === 'monitor' || item === '--watch' || item === 'watch') {
+                        if (/^\d+$/.test(args[i + 1])) {
+                            passFlags.push(args[i + 1]);
+                            i++;
+                        }
+                    } else {
+                        passFlags.push(args[i + 1]);
+                        i++;
+                    }
                 }
             } else if (item === '--in-worker-tab' || item === '--all-profiles' || item === '--allprofiles' || item === '--parallel') {
                 passFlags.push(item);

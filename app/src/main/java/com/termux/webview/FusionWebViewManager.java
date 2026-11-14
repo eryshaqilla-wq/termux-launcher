@@ -54,6 +54,7 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
@@ -2095,6 +2096,36 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         killActiveTab();
     }
 
+    public void killAllTabs() {
+        final TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        act.runOnUiThread(() -> {
+            if (this.mTabList != null) {
+                while (!this.mTabList.isEmpty()) {
+                    killTabDirect(0);
+                }
+            }
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setVisibility(View.GONE);
+                this.mPaneHost.removeAllViews();
+            }
+            if (this.mTerminalPaneHost != null) {
+                this.mTerminalPaneHost.setVisibility(View.VISIBLE);
+            }
+            if (this.mControlPill != null) {
+                this.mControlPill.setVisibility(View.GONE);
+            }
+            if (this.mToolScroll != null) {
+                this.mToolScroll.setVisibility(View.GONE);
+            }
+            this.mActiveWebView = null;
+            this.mActiveTab = 0;
+            act.endWebViewExternalTextInput();
+            act.refreshTerminalWindowBar();
+            FusionToast.makeText(act, "All WebView Tabs Closed", Toast.LENGTH_SHORT).show();
+        });
+    }
+
     public void onChainSelected(int i) {
         FusionChainHelper.setChainByIndex(i);
         this.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
@@ -2686,6 +2717,111 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
     public java.util.List<FusionTab> getTabList() {
         return this.mTabList;
+    }
+
+    public String getTabsJson() {
+        if (this.mTabList == null || this.mTabList.isEmpty()) {
+            return "[]";
+        }
+        JSONArray arr = new JSONArray();
+        int activeIdx = this.mActiveTab;
+        for (int i = 0; i < this.mTabList.size(); i++) {
+            FusionTab tab = (FusionTab) this.mTabList.get(i);
+            if (tab == null) continue;
+            try {
+                JSONObject obj = new JSONObject();
+                obj.put("index", i);
+                obj.put("id", tab.mId);
+                obj.put("url", tab.mUrl != null ? tab.mUrl : "about:blank");
+                obj.put("title", tab.mTitle != null ? tab.mTitle : "New Tab");
+                obj.put("profile", tab.mProfile != null ? tab.mProfile : "default");
+                obj.put("isHeadless", tab.mIsHeadless);
+                obj.put("isMinimized", tab.mIsMinimized);
+                obj.put("isDesktop", tab.mIsDesktop);
+                obj.put("isGhost", tab.mIsGhost);
+                obj.put("active", i == activeIdx);
+                if (tab.mProxyItem != null && tab.mProxyItem.isValid()) {
+                    obj.put("proxy", tab.mProxyItem.toDisplayString());
+                } else {
+                    obj.put("proxy", "direct");
+                }
+                arr.put(obj);
+            } catch (Exception ignored) {}
+        }
+        return arr.toString();
+    }
+
+    public void attachTab(final int index) {
+        final TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        act.runOnUiThread(() -> {
+            if (this.mTabList == null || this.mTabList.isEmpty()) return;
+            int target = (index >= 0 && index < this.mTabList.size()) ? index : 0;
+            FusionTab tab = (FusionTab) this.mTabList.get(target);
+            if (tab != null) {
+                tab.mIsHeadless = false;
+                tab.mIsMinimized = false;
+                if (tab.mWebView != null) {
+                    tab.mWebView.setVisibility(View.VISIBLE);
+                    tab.mWebView.onResume();
+                    tab.mWebView.resumeTimers();
+                    tab.mWebView.bringToFront();
+                }
+            }
+            switchTab(target);
+            if (this.mPaneHost != null) {
+                this.mPaneHost.setVisibility(View.VISIBLE);
+                this.mPaneHost.setAlpha(1.0f);
+                this.mPaneHost.bringToFront();
+            }
+            if (this.mTerminalPaneHost != null) {
+                this.mTerminalPaneHost.setVisibility(View.GONE);
+            }
+            if (this.mControlPill != null) {
+                this.mControlPill.setVisibility(View.VISIBLE);
+            }
+            if (this.mToolScroll != null) {
+                this.mToolScroll.setVisibility(View.VISIBLE);
+            }
+            act.beginWebViewExternalTextInput();
+            act.refreshTerminalWindowBar();
+            FusionToast.makeText(act, "Attached to Tab " + (target + 1), Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    public void detachTab(final int index) {
+        final TermuxActivity act = this.mActivity;
+        if (act == null) return;
+        act.runOnUiThread(() -> {
+            if (this.mTabList == null || this.mTabList.isEmpty()) return;
+            int target = (index >= 0 && index < this.mTabList.size()) ? index : this.mActiveTab;
+            FusionTab tab = (FusionTab) this.mTabList.get(target);
+            if (tab != null) {
+                tab.mIsHeadless = true;
+                tab.mIsMinimized = true;
+                if (tab.mWebView != null) {
+                    tab.mWebView.setVisibility(View.GONE);
+                    tab.mWebView.resumeTimers();
+                }
+            }
+            if (target == this.mActiveTab) {
+                if (this.mPaneHost != null) {
+                    this.mPaneHost.setVisibility(View.GONE);
+                }
+                if (this.mTerminalPaneHost != null) {
+                    this.mTerminalPaneHost.setVisibility(View.VISIBLE);
+                }
+                if (this.mControlPill != null) {
+                    this.mControlPill.setVisibility(View.GONE);
+                }
+                if (this.mToolScroll != null) {
+                    this.mToolScroll.setVisibility(View.GONE);
+                }
+                act.endWebViewExternalTextInput();
+                act.refreshTerminalWindowBar();
+            }
+            FusionToast.makeText(act, "Detached Tab " + (target + 1) + " (Headless)", Toast.LENGTH_SHORT).show();
+        });
     }
 
     public void openUrl(String str, String str2, boolean z, boolean z2) {

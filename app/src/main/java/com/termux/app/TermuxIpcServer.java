@@ -670,6 +670,67 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.equals("WEBVIEW_LIST") || strTrim.equals("WEBVIEW_GET_TABS")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                String res = mgr != null ? mgr.getTabsJson() : "[]";
+                                outputStream.write((res + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_ATTACH ") || strTrim.equals("WEBVIEW_ATTACH")) {
+                                String idxStr = strTrim.length() > 14 ? strTrim.substring(14).trim() : "";
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    int idx = 0;
+                                    try { if (!idxStr.isEmpty()) idx = Integer.parseInt(idxStr); } catch (Exception ignored) {}
+                                    mgr.attachTab(idx);
+                                    outputStream.write("OK\n".getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_DETACH ") || strTrim.equals("WEBVIEW_DETACH")) {
+                                String idxStr = strTrim.length() > 14 ? strTrim.substring(14).trim() : "";
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    int idx = -1;
+                                    try { if (!idxStr.isEmpty()) idx = Integer.parseInt(idxStr); } catch (Exception ignored) {}
+                                    mgr.detachTab(idx);
+                                    outputStream.write("OK\n".getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_KILL_TAB ") || strTrim.equals("WEBVIEW_KILL_TAB")) {
+                                String idxStr = strTrim.length() > 16 ? strTrim.substring(16).trim() : "";
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    if (idxStr.isEmpty()) {
+                                        mgr.killActiveTab();
+                                    } else {
+                                        try {
+                                            mgr.killTab(Integer.parseInt(idxStr));
+                                        } catch (Exception ignored) {
+                                            mgr.killActiveTab();
+                                        }
+                                    }
+                                    outputStream.write("OK\n".getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_KILL_ALL")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    mgr.killAllTabs();
+                                    outputStream.write("OK\n".getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
                             } else if ((strTrim.equalsIgnoreCase("KEYBOARD_SHOW") || strTrim.equalsIgnoreCase("SHOW")) && (activity = TermuxIpcServer.getActivity()) != null) {
                                 activity.runOnUiThread(new KeyboardRunnable(activity, 3));
                             } else {

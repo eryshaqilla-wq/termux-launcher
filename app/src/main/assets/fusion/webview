@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# webview - Fusion WebView & Agent Automation Wrapper
+exec web "$@"
