@@ -400,6 +400,11 @@ public class FusionToolPillHelper {
 
     public static void updateToolPillUi(FusionWebViewManager manager) {
         if (manager == null) return;
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
+        if (activeTab != null && activeTab.mIsHeadless) {
+            hideToolPill(manager);
+            return;
+        }
         if (!manager.isWebViewOpen()) {
             hideToolPill(manager);
             return;
@@ -504,6 +509,10 @@ public class FusionToolPillHelper {
 
     public static void syncTabToolState(FusionWebViewManager manager, FusionTab tab) {
         if (manager == null || tab == null) return;
+        if (tab.mIsHeadless) {
+            hideToolPill(manager);
+            return;
+        }
         if (!manager.isWebViewOpen()) {
             hideToolPill(manager);
             return;

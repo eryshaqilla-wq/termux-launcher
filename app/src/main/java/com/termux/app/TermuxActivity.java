@@ -27162,6 +27162,10 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             if (active != null) {
                 bindTerminalInputFocus(active);
             }
+            com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+            if (mgr != null) {
+                mgr.syncVisibility();
+            }
         };
         paneHost.animate().cancel();
         paneHost.setTranslationY(0f);

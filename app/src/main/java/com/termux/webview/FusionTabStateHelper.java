@@ -68,13 +68,28 @@ public class FusionTabStateHelper {
         TermuxActivity termuxActivity = fusionWebViewManager.mActivity;
         if (termuxActivity != null && (currentSession = termuxActivity.getCurrentSession()) != null) {
             int activeIdx = fusionWebViewManager.mActiveTab;
+            // 1. Prioritaskan tab visual/minimized (non-headless) yang terikat ke sesi aktif
+            if (activeIdx >= 0 && activeIdx < arrayList.size()) {
+                FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
+                if (candidate != null && candidate.mBoundSession == currentSession && !candidate.mIsHeadless) {
+                    return candidate;
+                }
+            }
+            int size = arrayList.size();
+            for (int i2 = 0; i2 < size; i2++) {
+                FusionTab fusionTab = (FusionTab) arrayList.get(i2);
+                if (fusionTab != null && fusionTab.mBoundSession == currentSession && !fusionTab.mIsHeadless) {
+                    fusionWebViewManager.mActiveTab = i2;
+                    return fusionTab;
+                }
+            }
+            // 2. Fallback: jika hanya ada tab headless di sesi aktif ini
             if (activeIdx >= 0 && activeIdx < arrayList.size()) {
                 FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
                 if (candidate != null && candidate.mBoundSession == currentSession) {
                     return candidate;
                 }
             }
-            int size = arrayList.size();
             for (int i2 = 0; i2 < size; i2++) {
                 FusionTab fusionTab = (FusionTab) arrayList.get(i2);
                 if (fusionTab != null && fusionTab.mBoundSession == currentSession) {

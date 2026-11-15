@@ -1137,6 +1137,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             } else if (hasMiddleCanvasWebView() && this.mPaneHost.getVisibility() != View.VISIBLE) {
                 this.mPaneHost.setVisibility(View.VISIBLE);
+                this.mPaneHost.setTranslationX(0f);
+                this.mPaneHost.setAlpha(1f);
+                syncVisibility();
             }
         }
     }
@@ -1156,9 +1159,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             } else if (hasMiddleCanvasWebView()) {
                 this.mPaneHost.setVisibility(View.VISIBLE);
+                this.mPaneHost.setTranslationX(0f);
+                this.mPaneHost.setAlpha(1f);
                 if (isMiddleCanvasWebViewActive() && this.mActivity != null) {
                     this.mActivity.beginWebViewExternalTextInput();
                 }
+                syncVisibility();
             }
         }
     }
@@ -1219,7 +1225,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (session == null || this.mTabList == null) return false;
         for (int i = 0; i < this.mTabList.size(); i++) {
             FusionTab tab = (FusionTab) this.mTabList.get(i);
-            if (tab != null && !tab.mIsHeadless && !tab.mIsMinimized && (tab.mBoundSession == session || tab.mBoundSession == null) && tab.mWebView != null) {
+            if (tab != null && !tab.mIsHeadless && (tab.mBoundSession == session || tab.mBoundSession == null) && tab.mWebView != null) {
                 return true;
             }
         }
@@ -3210,8 +3216,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             return false;
         }
         FusionTab active = FusionTabStateHelper.getActiveTab(this);
-        if (active != null && (active.mIsHeadless || active.mIsMinimized)) {
-            return true;
+        if (active != null) {
+            if (active.mIsHeadless) {
+                return false;
+            }
+            if (active.mIsMinimized) {
+                return true;
+            }
         }
         if (this.mPaneHost != null && this.mPaneHost.getVisibility() == View.VISIBLE) {
             return true;
@@ -3595,10 +3606,29 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         TerminalSession currentSession = termuxActivity.getCurrentSession();
         if ((arrayList = this.mTabList) != null && (size = arrayList.size()) > 0) {
             int activeIdx = this.mActiveTab;
+            // 1. Prioritaskan tab visual / minimized (non-headless) yang bound ke currentSession
             if (activeIdx >= 0 && activeIdx < size) {
                 FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
-                if (candidate != null && candidate.mBoundSession != null && candidate.mBoundSession == currentSession) {
+                if (candidate != null && candidate.mBoundSession != null && candidate.mBoundSession == currentSession && !candidate.mIsHeadless) {
                     i = activeIdx;
+                }
+            }
+            if (i < 0 && currentSession != null) {
+                for (int i2 = 0; i2 < size; i2++) {
+                    FusionTab fusionTab = (FusionTab) arrayList.get(i2);
+                    if (fusionTab != null && fusionTab.mBoundSession == currentSession && !fusionTab.mIsHeadless) {
+                        i = i2;
+                        break;
+                    }
+                }
+            }
+            // 2. Fallback: jika hanya ada tab headless di sesi ini
+            if (i < 0 && currentSession != null) {
+                if (activeIdx >= 0 && activeIdx < size) {
+                    FusionTab candidate = (FusionTab) arrayList.get(activeIdx);
+                    if (candidate != null && candidate.mBoundSession != null && candidate.mBoundSession == currentSession) {
+                        i = activeIdx;
+                    }
                 }
             }
             if (i < 0 && currentSession != null) {
@@ -3610,7 +3640,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     }
                 }
             }
-            // Bind newly created tab that has no session yet
+            // 3. Bind newly created tab that has no session yet
             if (i < 0 && currentSession != null) {
                 for (int i2 = 0; i2 < size; i2++) {
                     FusionTab fusionTab = (FusionTab) arrayList.get(i2);
