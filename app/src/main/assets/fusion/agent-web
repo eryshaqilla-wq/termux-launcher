@@ -1374,9 +1374,6 @@ async function executeSingleProfile(url, extraFlags = []) {
     let passwordArg = null;
     let explicitPassword = false;
     let contextText = '';
-    let isMonitorRequested = false;
-    let isControlMode = false;
-    let monitorPort = '9223';
 
     for (let i = 0; i < extraFlags.length; i++) {
         const flag = extraFlags[i];
@@ -1455,13 +1452,6 @@ async function executeSingleProfile(url, extraFlags = []) {
             }
         } else if (flag.startsWith('--ai=') || flag.startsWith('--engine=')) {
             setAiEngineState(flag.split('=')[1]);
-        } else if (flag === '--monitor' || flag === 'monitor' || flag === '--watch' || flag === 'watch' || flag === '--monitor-control' || flag === 'monitor-control' || flag === '--control') {
-            isMonitorRequested = true;
-            if (flag.includes('control')) isControlMode = true;
-            if (extraFlags[i + 1] && /^\d+$/.test(extraFlags[i + 1])) {
-                monitorPort = extraFlags[i + 1];
-                i++;
-            }
         } else {
             flagsWithoutProfile.push(flag);
         }
@@ -1564,20 +1554,6 @@ async function executeSingleProfile(url, extraFlags = []) {
         runIpc('detach');
     }
 
-    if (isMonitorRequested && !recipe) {
-        console.log(`[WebView Live Monitor] Menghubungkan ke ${isControlMode ? 'Control Mode (Ambil Alih 30-60 FPS)' : 'Watch Mode (30-60 FPS)'}...`);
-        await sleep(800);
-        try { execSync(`fuser -k ${monitorPort}/tcp 2>/dev/null || true`); } catch (_) {}
-        const monScript = fs.existsSync('/root/wallet/webview_monitor.cjs') 
-            ? '/root/wallet/webview_monitor.cjs' 
-            : (fs.existsSync('/wallet/webview_monitor.cjs') ? '/wallet/webview_monitor.cjs' : path.join(__dirname, 'webview_monitor.cjs'));
-        const monArgs = [monScript, monitorPort];
-        if (isControlMode) monArgs.push('--control');
-        const child = spawn('node', monArgs, { stdio: 'inherit' });
-        child.on('close', code => process.exit(code || 0));
-        return;
-    }
-
     if (recipe) {
         let eventsToRun = (recipe.events || []).slice();
         if (stopIfWord) {
@@ -1674,14 +1650,11 @@ async function main() {
         console.log(`  web                           (Buka halaman Beranda browser)`);
         console.log(`  web <url> [options]           (Buka URL di WebView)`);
         console.log(`  web --headless <url>          (Buka URL di background tanpa UI / headless)`);
-        console.log(`  web --headless --monitor <url> (Buka URL di background & langsung aktifkan Live Watch Monitor)`);
         console.log(`  web --headless --new-tab <url> (Buka URL di tab baru background / paralel)`);
         console.log(`  web --desktop <url>           (Buka URL dengan tampilan mode Desktop 1280px)`);
         console.log(`  web list [--json]             (Lihat daftar semua WebView aktif: Headless & Visual)`);
-        console.log(`  web attach <idx>              (Bawa tab headless ke layar / visual mode)`);
-        console.log(`  web detach <idx>              (Kirim tab visual ke background / headless mode)`);
-        console.log(`  web monitor [port]            (Live Watch Mode WebView via Web/WLAN, default: 9223)`);
-        console.log(`  web --monitor-control [port]  (Live Stream & Ambil Alih Kendali via WLAN 30-60 FPS)`);
+        console.log(`  web attach [idx]              (Bawa tab headless ke layar untuk dipantau langsung)`);
+        console.log(`  web detach [idx]              (Kirim tab visual ke background / headless mode)`);
         console.log(`  web --kill [idx]              (Tutup tab nomor <idx>, default: tab aktif)`);
         console.log(`  web --kill-all                (Tutup seluruh tab WebView sekaligus)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
@@ -1852,27 +1825,11 @@ async function main() {
     );
 
     if (isMonitorCmd && !hasTargetUrl) {
-        let port = '9223';
-        let isControl = cmd.includes('control') || args.includes('--control');
-        for (let i = 1; i < args.length; i++) {
-            if ((args[i] === '--port' || args[i] === '-p') && args[i + 1]) {
-                port = args[i + 1];
-                i++;
-            } else if (args[i] === '--control' || args[i] === '-c') {
-                isControl = true;
-            } else if (!args[i].startsWith('-') && /^\d+$/.test(args[i])) {
-                port = args[i];
-            }
-        }
-        try { execSync(`fuser -k ${port}/tcp 2>/dev/null || true`); } catch (_) {}
-        const monScript = fs.existsSync('/root/wallet/webview_monitor.cjs') 
-            ? '/root/wallet/webview_monitor.cjs' 
-            : (fs.existsSync('/wallet/webview_monitor.cjs') ? '/wallet/webview_monitor.cjs' : path.join(__dirname, 'webview_monitor.cjs'));
-        const monArgs = [monScript, port];
-        if (isControl) monArgs.push('--control');
-        const child = spawn('node', monArgs, { stdio: 'inherit' });
-        child.on('close', code => process.exit(code || 0));
-        return;
+        console.log(`[WebView] Fitur web monitor dinonaktifkan. Mengalihkan ke 'web attach' untuk memantau tab langsung di layar...`);
+        const targetIdx = args[1] && /^\d+$/.test(args[1]) ? args[1] : '0';
+        const output = runIpc(`attach ${targetIdx}`);
+        if (output) console.log(output);
+        process.exit(0);
     }
 
     const isKillAllCmd = (
@@ -1886,8 +1843,6 @@ async function main() {
     if (isKillAllCmd) {
         const output = runIpc('kill-all');
         if (output) console.log(output);
-        try { execSync('fuser -k 9223/tcp 2>/dev/null || true'); } catch (_) {}
-        try { execSync('pkill -f "webview_monitor.cjs" 2>/dev/null || true'); } catch (_) {}
         process.exit(0);
     }
 
@@ -2179,8 +2134,6 @@ async function main() {
         a.startsWith('--ai') || a.startsWith('--engine') ||
         a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--headless') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
-        a.startsWith('--monitor') || a === 'monitor' || a.startsWith('--watch') || a === 'watch' ||
-        a.startsWith('--monitor-control') || a === 'monitor-control' || a === '--control' ||
         a === 'home' || a === 'beranda' ||
         a.startsWith('http://') || a.startsWith('https://') ||
         (a.includes('.') && !a.startsWith('-') && !a.endsWith('.js') && !a.endsWith('.cjs') && !a.endsWith('.json'))
@@ -2191,19 +2144,11 @@ async function main() {
         let passFlags = [];
         for (let i = 0; i < args.length; i++) {
             const item = args[i];
-            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine' || item === '--monitor' || item === 'monitor' || item === '--watch' || item === 'watch' || item === '--monitor-control' || item === 'monitor-control' || item === '--control') {
+            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine') {
                 passFlags.push(item);
                 if (args[i + 1] && !args[i + 1].startsWith('--') && !args[i + 1].startsWith('http://') && !args[i + 1].startsWith('https://') && args[i + 1] !== 'home' && args[i + 1] !== 'beranda') {
-                    // Cek jika item adalah option yang mengambil value (misal port untuk monitor)
-                    if (item.includes('monitor') || item.includes('watch') || item === '--control') {
-                        if (/^\d+$/.test(args[i + 1])) {
-                            passFlags.push(args[i + 1]);
-                            i++;
-                        }
-                    } else {
-                        passFlags.push(args[i + 1]);
-                        i++;
-                    }
+                    passFlags.push(args[i + 1]);
+                    i++;
                 }
             } else if (item === '--in-worker-tab' || item === '--all-profiles' || item === '--allprofiles' || item === '--parallel') {
                 passFlags.push(item);
