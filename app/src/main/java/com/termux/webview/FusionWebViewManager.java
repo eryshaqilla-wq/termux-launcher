@@ -2741,7 +2741,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 obj.put("isGhost", tab.mIsGhost);
                 obj.put("active", i == activeIdx);
                 if (tab.mProxyItem != null && tab.mProxyItem.isValid()) {
-                    obj.put("proxy", tab.mProxyItem.toDisplayString());
+                    obj.put("proxy", tab.mProxyItem.getDisplayName());
                 } else {
                     obj.put("proxy", "direct");
                 }

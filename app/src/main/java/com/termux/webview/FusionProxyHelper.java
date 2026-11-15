@@ -97,6 +97,10 @@ public class FusionProxyHelper {
             }
             return sb.toString();
         }
+
+        public String toDisplayString() {
+            return getDisplayName();
+        }
     }
 
     public interface TestCallback {
