@@ -93,12 +93,16 @@ public class FusionWebViewClient extends WebViewClient {
             }
             fusionWebViewManager.injectScripts(webView);
             fusionWebViewManager.onTabUrlLoaded(webView, str);
-            FusionToolPillHelper.showToolPill(fusionWebViewManager);
-            FusionToolPillHelper.bringToFront();
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+            if (activeTab == null || !activeTab.mIsHeadless) {
+                FusionToolPillHelper.showToolPill(fusionWebViewManager);
+                FusionToolPillHelper.bringToFront();
+            } else {
+                FusionToolPillHelper.hideToolPill(fusionWebViewManager);
+            }
             FusionExtensionHelper.injectMatchingScripts(webView, str, "document_idle");
 
             // Injeksi viewport desktop jika tab aktif dalam mode desktop
-            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
             boolean isDesktop = (activeTab != null && activeTab.mIsDesktop) || fusionWebViewManager.mIsDesktopMode;
             if (isDesktop && webView != null) {
                 String desktopViewportJs =

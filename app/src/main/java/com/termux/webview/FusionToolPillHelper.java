@@ -527,6 +527,11 @@ public class FusionToolPillHelper {
 
     public static void showToolPill(FusionWebViewManager manager) {
         if (manager == null) return;
+        FusionTab active = FusionTabStateHelper.getActiveTab(manager);
+        if (active != null && active.mIsHeadless) {
+            hideToolPill(manager);
+            return;
+        }
         if (!manager.isWebViewOpen()) {
             hideToolPill(manager);
             return;

@@ -573,7 +573,7 @@ public class FusionRecPillHelper {
             return;
         }
         FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
-        if (activeTab == null || activeTab.mIsMinimized) {
+        if (activeTab == null || activeTab.mIsMinimized || activeTab.mIsHeadless) {
             hideRecPill();
             return;
         }

@@ -2968,8 +2968,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         syncVisibility();
         updateContextUi();
-        FusionToolPillHelper.showToolPill(this);
-        FusionToolPillHelper.bringToFront();
+        if (targetTab == null || !targetTab.mIsHeadless) {
+            FusionToolPillHelper.showToolPill(this);
+            FusionToolPillHelper.bringToFront();
+        } else {
+            FusionToolPillHelper.hideToolPill(this);
+            if (this.mControlPill != null) {
+                this.mControlPill.setVisibility(View.GONE);
+            }
+            if (this.mToolScroll != null) {
+                this.mToolScroll.setVisibility(View.GONE);
+            }
+        }
     }
 
     public void openWorkerTab(String str) {
@@ -3597,6 +3607,27 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         webView2.setVisibility(8);
                         webView2.resumeTimers();
                     }
+                }
+                if (fusionTab2.mIsHeadless) {
+                    if (this.mPaneHost != null) {
+                        this.mPaneHost.setVisibility(View.INVISIBLE);
+                        this.mPaneHost.setTranslationX(-10000.0f);
+                    }
+                    if (this.mTerminalPaneHost != null) {
+                        this.mTerminalPaneHost.setVisibility(View.VISIBLE);
+                        this.mTerminalPaneHost.bringToFront();
+                    }
+                    if (this.mControlPill != null) {
+                        this.mControlPill.setVisibility(View.GONE);
+                    }
+                    if (this.mToolScroll != null) {
+                        this.mToolScroll.setVisibility(View.GONE);
+                    }
+                    FusionDrawerHelper.closeAllDrawers(this);
+                    FusionRecPillHelper.hideRecPill();
+                    termuxActivity.endWebViewExternalTextInput();
+                    termuxActivity.refreshTerminalWindowBar();
+                    return;
                 }
                 if (this.mPaneHost == null) {
                     initViews();
