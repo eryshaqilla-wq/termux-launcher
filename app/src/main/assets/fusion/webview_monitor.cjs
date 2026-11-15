@@ -3,8 +3,9 @@
 /**
  * ESO WEBVIEW LIVE MONITOR & REMOTE CONTROL (WLAN 30-60 FPS)
  * Memantau dan MENGAMBIL ALIH (Remote Control) WebView Termux secara real-time via Web/WLAN.
- * Mendukung Watch Mode (Read-Only) dan Control Mode (Klik, Scroll, Ketik) di kecepatan 30-60 FPS.
- * Zero-Lag Binary WebSocket Screencast Protocol.
+ * Mendukung Watch Mode (Read-Only) dan Control Mode (Klik, Drag, Swipe, Scroll, Ketik Langsung)
+ * Arsitektur Scrcpy-Style: Zero-Lag Binary WebSocket Screencast Stream (0% Idle CPU).
+ * UI Modern Catppuccin Mocha dengan Fullscreen Mode & Virtual Scrcpy Navigation Bar.
  */
 
 const http = require('http');
@@ -12,7 +13,7 @@ const url = require('url');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const { execSync, spawn } = require('child_process');
+const { execSync } = require('child_process');
 
 let WebSocket;
 try {
@@ -232,14 +233,16 @@ function getDashboardHtml(reqHost, isDefaultControl) {
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ESO WebView Live Monitor & Takeover</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ESO WebView Live Stream & Takeover</title>
   <style>
     :root {
-      --bg: #11111b;
+      --bg: #0f0f17;
       --card: #181825;
       --surface: #1e1e2e;
-      --border: #313244;
+      --surface-hover: #313244;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: #89b4fa;
       --text: #cdd6f4;
       --subtext: #a6adc8;
       --overlay: #6c7086;
@@ -250,6 +253,7 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       --mauve: #cba6f7;
       --teal: #94e2d5;
       --yellow: #f9e2af;
+      --nav-height: 48px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -260,6 +264,7 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
+      user-select: none;
     }
     header {
       background-color: var(--card);
@@ -270,14 +275,15 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
+      z-index: 100;
     }
     .brand {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
     .brand h1 {
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 700;
       letter-spacing: 0.5px;
       color: var(--blue);
@@ -291,7 +297,7 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       background: var(--green);
       border-radius: 50%;
       box-shadow: 0 0 10px var(--green);
-      animation: pulse 1.5s infinite;
+      animation: pulse 1.6s infinite;
     }
     @keyframes pulse {
       0% { transform: scale(0.95); opacity: 0.8; }
@@ -307,14 +313,17 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       overflow: hidden;
     }
     .mode-btn {
-      padding: 6px 12px;
-      font-size: 0.78rem;
+      padding: 6px 14px;
+      font-size: 0.8rem;
       font-weight: 700;
       cursor: pointer;
       border: none;
       background: transparent;
       color: var(--subtext);
       transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
     .mode-btn.active.watch {
       background: rgba(148, 226, 213, 0.2);
@@ -323,7 +332,7 @@ function getDashboardHtml(reqHost, isDefaultControl) {
     .mode-btn.active.control {
       background: rgba(250, 179, 135, 0.25);
       color: var(--peach);
-      box-shadow: inset 0 0 8px rgba(250, 179, 135, 0.3);
+      box-shadow: inset 0 0 10px rgba(250, 179, 135, 0.3);
     }
     .header-controls {
       display: flex;
@@ -341,15 +350,22 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       cursor: pointer;
       outline: none;
       transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
     }
     select:hover, button:hover {
+      background: var(--surface-hover);
       border-color: var(--blue);
     }
     button.primary {
       background: var(--blue);
       color: var(--bg);
-      font-weight: 600;
+      font-weight: 700;
       border: none;
+    }
+    button.primary:hover {
+      background: #b4befe;
     }
     button.warning {
       background: rgba(250, 179, 135, 0.15);
@@ -370,20 +386,81 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 14px;
+      padding: 12px;
       gap: 12px;
+      position: relative;
     }
     .monitor-card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
       overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.6);
       display: flex;
       flex-direction: column;
-      max-width: 1050px;
+      max-width: 1100px;
       width: 100%;
+      position: relative;
+      transition: all 0.3s ease;
     }
+
+    /* FULLSCREEN MODE (Scrcpy Immersion) */
+    .monitor-card.fullscreen-mode {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      border-radius: 0 !important;
+      border: none !important;
+      z-index: 99999 !important;
+      background: #000 !important;
+      margin: 0 !important;
+    }
+    .monitor-card.fullscreen-mode .viewer-area {
+      height: 100vh !important;
+      max-height: 100vh !important;
+    }
+    .monitor-card.fullscreen-mode .card-bar,
+    .monitor-card.fullscreen-mode .toolbar,
+    .monitor-card.fullscreen-mode .control-ribbon {
+      position: absolute;
+      left: 0;
+      right: 0;
+      z-index: 10001;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      background: rgba(24, 24, 37, 0.92);
+      backdrop-filter: blur(12px);
+    }
+    .monitor-card.fullscreen-mode .card-bar {
+      top: 0;
+      transform: translateY(-100%);
+    }
+    .monitor-card.fullscreen-mode .toolbar {
+      bottom: 0;
+      transform: translateY(100%);
+    }
+    .monitor-card.fullscreen-mode .control-ribbon {
+      bottom: var(--nav-height);
+      transform: translateY(100%);
+    }
+    .monitor-card.fullscreen-mode:hover .card-bar,
+    .monitor-card.fullscreen-mode:hover .toolbar,
+    .monitor-card.fullscreen-mode:hover .control-ribbon,
+    .monitor-card.fullscreen-mode.hud-visible .card-bar,
+    .monitor-card.fullscreen-mode.hud-visible .toolbar,
+    .monitor-card.fullscreen-mode.hud-visible .control-ribbon {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
     .card-bar {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -399,7 +476,7 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 480px;
+      max-width: 500px;
       font-family: monospace;
       font-size: 0.78rem;
     }
@@ -418,55 +495,128 @@ function getDashboardHtml(reqHost, isDefaultControl) {
     .badge.visual { background: rgba(166, 227, 161, 0.2); color: var(--green); border: 1px solid rgba(166, 227, 161, 0.4); }
     .badge.desktop { background: rgba(137, 180, 250, 0.2); color: var(--blue); border: 1px solid rgba(137, 180, 250, 0.4); }
     .badge.profile { background: rgba(250, 179, 135, 0.2); color: var(--peach); border: 1px solid rgba(250, 179, 135, 0.4); }
+
     .viewer-area {
       background: #000;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 480px;
-      max-height: 72vh;
+      min-height: 520px;
+      max-height: 76vh;
       overflow: hidden;
       user-select: none;
+      touch-action: none;
     }
     .viewer-area.control-mode {
       cursor: crosshair;
     }
     .viewer-area img {
       max-width: 100%;
-      max-height: 72vh;
+      max-height: 100%;
       object-fit: contain;
       display: block;
       pointer-events: auto;
+      touch-action: none;
     }
+
+    /* HUD Status Overlay */
     .hud-overlay {
       position: absolute;
-      bottom: 10px;
+      top: 10px;
       left: 10px;
       right: 10px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       pointer-events: none;
+      z-index: 10;
     }
     .hud-pill {
       background: rgba(17, 17, 27, 0.85);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      padding: 5px 10px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 5px 12px;
       border-radius: 999px;
       font-size: 0.72rem;
       color: var(--text);
       display: flex;
       align-items: center;
       gap: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
     .hud-pill.control-banner {
-      background: rgba(250, 179, 135, 0.25);
-      border-color: rgba(250, 179, 135, 0.5);
+      background: rgba(250, 179, 135, 0.28);
+      border-color: rgba(250, 179, 135, 0.6);
       color: var(--peach);
       font-weight: 700;
     }
+
+    /* SCRCPY VIRTUAL NAVIGATION BAR (Docked at Bottom of Viewer) */
+    .scrcpy-nav-bar {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(24, 24, 37, 0.88);
+      backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 30px;
+      padding: 4px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    .scrcpy-nav-btn {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s ease;
+    }
+    .scrcpy-nav-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--blue);
+      transform: translateY(-1px);
+    }
+    .scrcpy-nav-btn:active {
+      transform: translateY(1px);
+    }
+    .scrcpy-nav-btn.primary-action {
+      background: var(--blue);
+      color: var(--bg);
+      font-weight: 700;
+    }
+    .scrcpy-nav-btn.primary-action:hover {
+      background: #b4befe;
+    }
+
+    /* Physical Keyboard Focus Indicator */
+    .keyboard-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      color: var(--teal);
+    }
+    .keyboard-indicator .kbd-dot {
+      width: 7px;
+      height: 7px;
+      background: var(--teal);
+      border-radius: 50%;
+    }
+
+    /* Direct Input Ribbon */
     .control-ribbon {
       background: var(--surface);
       border-top: 1px solid var(--border);
@@ -490,8 +640,9 @@ function getDashboardHtml(reqHost, isDefaultControl) {
     .control-input:focus {
       border-color: var(--blue);
     }
+
     .toolbar {
-      padding: 10px 14px;
+      padding: 8px 14px;
       background: var(--card);
       border-top: 1px solid var(--border);
       display: flex;
@@ -506,7 +657,7 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       gap: 6px;
     }
     .info-footer {
-      max-width: 1050px;
+      max-width: 1100px;
       width: 100%;
       background: var(--card);
       border: 1px solid var(--border);
@@ -551,22 +702,16 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       <select id="tabSelector" onchange="changeTab(this.value)">
         <option value="">Memuat tab...</option>
       </select>
-      <select id="fpsSelector" onchange="setFps(this.value)">
-        <option value="60">60 FPS (Ultra 60Hz)</option>
-        <option value="30" selected>30 FPS (WLAN Fluid)</option>
-        <option value="15">15 FPS (Fast)</option>
-        <option value="5">5 FPS (Standard)</option>
-        <option value="1">1 FPS (Eco)</option>
-      </select>
-      <button class="primary" onclick="toggleAttach()">👁️ Attach</button>
-      <button class="warning" onclick="toggleDetach()">🕶️ Detach</button>
-      <button class="danger" onclick="killCurrentTab()">❌ Kill Tab</button>
+      <button class="primary" onclick="toggleFullscreen()" id="btnFullscreenTop">⛶ Fullscreen</button>
+      <button class="warning" onclick="toggleAttach()">👁️ Attach</button>
+      <button onclick="toggleDetach()">🕶️ Detach</button>
+      <button class="danger" onclick="killCurrentTab()">❌ Kill</button>
       <button class="danger" onclick="killAllTabs()">💥 Kill All</button>
     </div>
   </header>
 
   <main>
-    <div class="monitor-card">
+    <div class="monitor-card" id="monitorCard">
       <div class="card-bar">
         <div style="display:flex; align-items:center; gap:8px; min-width:0;">
           <span style="font-weight:700;" id="tabTitle">Menunggu WebView...</span>
@@ -577,55 +722,70 @@ function getDashboardHtml(reqHost, isDefaultControl) {
         </div>
       </div>
       
-      <div class="viewer-area" id="viewerArea">
-        <img id="liveView" src="/api/placeholder.svg" alt="WebView Live Stream">
+      <div class="viewer-area" id="viewerArea" tabindex="0">
+        <img id="liveView" src="/api/placeholder.svg" alt="WebView Live Stream" draggable="false">
+        
         <div class="hud-overlay">
           <div class="hud-pill" id="fpsPill">
             <span>FPS: <strong id="fpsVal">30</strong></span>
             <span>•</span>
-            <span id="latencyVal">Latency: 12ms</span>
+            <span id="streamState">Scrcpy-Stream</span>
           </div>
           <div class="hud-pill control-banner" id="controlBanner" style="display:none;">
-            <span>🎮 AMBIL ALIH AKTIF (Klik & Ketik Aktif)</span>
+            <span>🎮 AMBIL ALIH AKTIF (100% Native Gestures)</span>
           </div>
-          <div class="hud-pill">
+          <div class="hud-pill" id="profilePill">
             <span id="profileVal">Profile: default</span>
           </div>
+        </div>
+
+        <!-- Scrcpy Virtual Navigation Bar -->
+        <div class="scrcpy-nav-bar" id="scrcpyNavBar">
+          <button class="scrcpy-nav-btn" onclick="sendNav('back')" title="Kembali (Back)">◀ Back</button>
+          <button class="scrcpy-nav-btn" onclick="sendNav('forward')" title="Maju (Forward)">▶ Forward</button>
+          <button class="scrcpy-nav-btn" onclick="sendNav('home')" title="Beranda (Home)">🏠 Home</button>
+          <button class="scrcpy-nav-btn" onclick="sendNav('reload')" title="Muat Ulang (Reload)">🔄 Reload</button>
+          <button class="scrcpy-nav-btn" onclick="toggleRibbonInput()" title="Buka Input Keyboard">⌨ Ketik</button>
+          <button class="scrcpy-nav-btn" onclick="pasteClipboard()" title="Paste Clipboard">📋 Paste</button>
+          <button class="scrcpy-nav-btn primary-action" onclick="toggleFullscreen()" title="Layar Penuh (Fullscreen)">⛶ Full</button>
         </div>
       </div>
 
       <div class="control-ribbon" id="controlRibbon" style="display:none;">
-        <input type="text" id="typeInput" class="control-input" placeholder="Ketik teks di sini lalu tekan Enter untuk input ke webview..." onkeydown="handleInputKey(event)">
-        <button class="primary" onclick="sendInputText()">⏎ Kirim Teks</button>
+        <input type="text" id="typeInput" class="control-input" placeholder="Ketik teks di sini lalu tekan Enter..." onkeydown="handleInputKey(event)">
+        <button class="primary" onclick="sendInputText()">⏎ Kirim</button>
         <button onclick="sendSpecialKey('Enter', 'Enter', 13)">⏎ Enter</button>
-        <button onclick="sendSpecialKey('Backspace', 'Backspace', 8)">⌫ Backspace</button>
+        <button onclick="sendSpecialKey('Backspace', 'Backspace', 8)">⌫ Del</button>
         <button onclick="sendSpecialKey('Tab', 'Tab', 9)">⇥ Tab</button>
-        <button onclick="sendScroll(0, -400)">⬆️ Scroll Up</button>
-        <button onclick="sendScroll(0, 400)">⬇️ Scroll Down</button>
+        <button onclick="sendSpecialKey('Escape', 'Escape', 27)">⎋ Esc</button>
+        <button onclick="sendScrollDelta(0, -350)">⬆️ Up</button>
+        <button onclick="sendScrollDelta(0, 350)">⬇️ Down</button>
       </div>
 
       <div class="toolbar">
         <div class="tool-group">
-          <span style="font-size:0.78rem; color:var(--subtext);">WLAN: <strong>http://${reqHost}</strong></span>
+          <span style="font-size:0.78rem; color:var(--subtext);">WLAN Host: <strong>http://${reqHost}</strong></span>
+          <span style="font-size:0.78rem; color:var(--overlay);">|</span>
+          <span class="keyboard-indicator" id="kbdIndicator">
+            <span class="kbd-dot"></span> Direct Keyboard Active
+          </span>
         </div>
         <div class="tool-group">
-          <button onclick="reloadTab()">🔄 Reload</button>
           <button onclick="copyCurrentUrl()">📋 Salin URL</button>
+          <button onclick="toggleFullscreen()">⛶ Layar Penuh</button>
         </div>
       </div>
     </div>
 
     <div class="info-footer">
-      <h3>🚀 Cheatsheet Kontrol Terminal (Zsh):</h3>
+      <h3>🚀 Kontrol Cepat & Shortcut Terminal:</h3>
       <div class="cmd-grid">
         <div class="cmd-box">webview --headless --monitor &lt;url&gt;</div>
-        <div class="cmd-box">webview --monitor-control [port]</div>
-        <div class="cmd-box">webview --list [--json]</div>
+        <div class="cmd-box">webview --monitor-control</div>
         <div class="cmd-box">webview --attach &lt;idx&gt;</div>
         <div class="cmd-box">webview --detach &lt;idx&gt;</div>
-        <div class="cmd-box">webview --kill [idx]</div>
+        <div class="cmd-box">webview --kill &lt;idx&gt;</div>
         <div class="cmd-box">webview --kill-all</div>
-        <div class="cmd-box">webview --desktop &lt;url&gt;</div>
       </div>
     </div>
   </main>
@@ -638,12 +798,17 @@ function getDashboardHtml(reqHost, isDefaultControl) {
     let mode = ${isDefaultControl ? "'control'" : "'watch'"};
     let wsStream = null;
     let currentWsUrl = '';
-    let isFetching = false;
-    let fallbackTimer = null;
+    let hudHideTimer = null;
 
     // Real FPS counter
     let framesThisSecond = 0;
     let lastFpsUpdate = performance.now();
+
+    // Elements
+    const imgEl = document.getElementById('liveView');
+    const viewerArea = document.getElementById('viewerArea');
+    const monitorCard = document.getElementById('monitorCard');
+    const controlRibbon = document.getElementById('controlRibbon');
 
     async function loadTabs() {
       try {
@@ -725,26 +890,28 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       mode = newMode;
       const btnW = document.getElementById('btnWatch');
       const btnC = document.getElementById('btnControl');
-      const vArea = document.getElementById('viewerArea');
       const banner = document.getElementById('controlBanner');
-      const ribbon = document.getElementById('controlRibbon');
+      const kbd = document.getElementById('kbdIndicator');
 
       if (mode === 'control') {
         btnW.className = 'mode-btn';
         btnC.className = 'mode-btn active control';
-        vArea.classList.add('control-mode');
+        viewerArea.classList.add('control-mode');
         banner.style.display = 'flex';
-        ribbon.style.display = 'flex';
+        controlRibbon.style.display = 'flex';
+        kbd.style.display = 'inline-flex';
+        viewerArea.focus();
       } else {
         btnW.className = 'mode-btn active watch';
         btnC.className = 'mode-btn';
-        vArea.classList.remove('control-mode');
+        viewerArea.classList.remove('control-mode');
         banner.style.display = 'none';
-        ribbon.style.display = 'none';
+        controlRibbon.style.display = 'none';
+        kbd.style.display = 'none';
       }
     }
 
-    // WebSocket 30-60 FPS Screencast & Input Bridge
+    // WebSocket 30-60 FPS Screencast Stream
     function connectWsStream() {
       stopWsStream();
       if (!currentTabId) return;
@@ -759,11 +926,10 @@ function getDashboardHtml(reqHost, isDefaultControl) {
         wsStream.onmessage = (event) => {
           if (event.data instanceof Blob) {
             const blobUrl = URL.createObjectURL(event.data);
-            const img = document.getElementById('liveView');
-            img.onload = () => {
+            imgEl.onload = () => {
               URL.revokeObjectURL(blobUrl);
             };
-            img.src = blobUrl;
+            imgEl.src = blobUrl;
 
             // Frame counter calculation
             framesThisSecond++;
@@ -778,14 +944,10 @@ function getDashboardHtml(reqHost, isDefaultControl) {
         };
 
         wsStream.onclose = () => {
-          document.getElementById('statusDot').className = 'status-dot';
-          document.getElementById('statusText').innerText = 'Reconnecting Stream...';
-          setTimeout(connectWsStream, 1000);
+          setTimeout(connectWsStream, 1200);
         };
 
         wsStream.onerror = () => {
-          document.getElementById('statusDot').className = 'status-dot';
-          document.getElementById('statusText').innerText = 'Stream Error. Reconnecting...';
           setTimeout(connectWsStream, 1500);
         };
       } catch (_) {
@@ -800,89 +962,183 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       }
     }
 
-    function setFps(val) {
-      fps = parseInt(val, 10);
-      document.getElementById('fpsVal').innerText = fps;
-      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
-        wsStream.send(JSON.stringify({ action: 'setFps', fps: fps }));
-      } else {
-        connectWsStream();
-      }
-    }
-
-    // Remote Control Input Dispatchers
-    const imgEl = document.getElementById('liveView');
-
-    function getRelativeCoordinates(event) {
+    // PIXEL-PERFECT COORDINATE CALCULATION (Letterbox & Pillarbox aware)
+    function getRenderRect() {
       const rect = imgEl.getBoundingClientRect();
       const naturalW = imgEl.naturalWidth || 1080;
       const naturalH = imgEl.naturalHeight || 1920;
+      const naturalAspect = naturalW / naturalH;
+      const elementAspect = rect.width / rect.height;
 
-      const clickX = event.clientX - rect.left;
-      const clickY = event.clientY - rect.top;
-
-      const scaledX = Math.round((clickX / rect.width) * naturalW);
-      const scaledY = Math.round((clickY / rect.height) * naturalH);
+      let renderW, renderH, offsetX, offsetY;
+      if (elementAspect > naturalAspect) {
+        // Pillarbox (bars on left/right)
+        renderH = rect.height;
+        renderW = renderH * naturalAspect;
+        offsetX = (rect.width - renderW) / 2;
+        offsetY = 0;
+      } else {
+        // Letterbox (bars on top/bottom)
+        renderW = rect.width;
+        renderH = renderW / naturalAspect;
+        offsetX = 0;
+        offsetY = (rect.height - renderH) / 2;
+      }
 
       return {
-        x: Math.max(0, Math.min(scaledX, naturalW)),
-        y: Math.max(0, Math.min(scaledY, naturalH))
+        left: rect.left + offsetX,
+        top: rect.top + offsetY,
+        width: renderW,
+        height: renderH,
+        naturalW: naturalW,
+        naturalH: naturalH
       };
     }
 
-    imgEl.addEventListener('click', (e) => {
+    function toImageCoords(clientX, clientY) {
+      const box = getRenderRect();
+      const relX = clientX - box.left;
+      const relY = clientY - box.top;
+      const x = Math.round((relX / box.width) * box.naturalW);
+      const y = Math.round((relY / box.height) * box.naturalH);
+
+      return {
+        x: Math.max(0, Math.min(x, box.naturalW)),
+        y: Math.max(0, Math.min(y, box.naturalH)),
+        isInside: relX >= 0 && relX <= box.width && relY >= 0 && relY <= box.height
+      };
+    }
+
+    // 100% SCRCPY POINTER GESTURES (Drag, Swipe, Click, Scroll)
+    let isPointerDown = false;
+    let activePointerId = null;
+
+    imgEl.addEventListener('pointerdown', (e) => {
       if (mode !== 'control') return;
-      const coords = getRelativeCoordinates(e);
-      sendMouseEvent('click', coords.x, coords.y);
+      e.preventDefault();
+      viewerArea.focus();
+      const coords = toImageCoords(e.clientX, e.clientY);
+      isPointerDown = true;
+      activePointerId = e.pointerId;
+      try { imgEl.setPointerCapture(e.pointerId); } catch (_) {}
+
+      sendPointerEvent('pointerDown', coords.x, coords.y, e.button === 2 ? 'right' : 'left', e.buttons || 1);
     });
 
+    imgEl.addEventListener('pointermove', (e) => {
+      if (mode !== 'control') return;
+      if (!isPointerDown) return;
+      e.preventDefault();
+      const coords = toImageCoords(e.clientX, e.clientY);
+
+      sendPointerEvent('pointerMove', coords.x, coords.y, 'none', e.buttons || 1);
+    });
+
+    function finishPointer(e) {
+      if (!isPointerDown) return;
+      isPointerDown = false;
+      const coords = toImageCoords(e.clientX, e.clientY);
+      try { imgEl.releasePointerCapture(activePointerId); } catch (_) {}
+      activePointerId = null;
+
+      sendPointerEvent('pointerUp', coords.x, coords.y, e.button === 2 ? 'right' : 'left', 0);
+    }
+
+    imgEl.addEventListener('pointerup', finishPointer);
+    imgEl.addEventListener('pointercancel', finishPointer);
+
+    // Prevent context menu to allow smooth right-click / gestures
+    imgEl.addEventListener('contextmenu', (e) => {
+      if (mode === 'control') {
+        e.preventDefault();
+      }
+    });
+
+    // Mouse Wheel / Trackpad Smooth Scrolling
     imgEl.addEventListener('wheel', (e) => {
       if (mode !== 'control') return;
       e.preventDefault();
-      const coords = getRelativeCoordinates(e);
-      sendScroll(coords.x, coords.y, e.deltaX, e.deltaY);
+      const coords = toImageCoords(e.clientX, e.clientY);
+      sendWheel(coords.x, coords.y, e.deltaX, e.deltaY);
     }, { passive: false });
 
-    function sendMouseEvent(action, x, y) {
-      if (!wsStream || wsStream.readyState !== WebSocket.OPEN) {
-        fetch('/api/input/mouse?tab=' + encodeURIComponent(currentTabId) + '&action=' + action + '&x=' + x + '&y=' + y, { method: 'POST' });
-        return;
-      }
+    function sendPointerEvent(action, x, y, button, buttons) {
+      if (!wsStream || wsStream.readyState !== WebSocket.OPEN) return;
       wsStream.send(JSON.stringify({
-        action: 'mouse',
-        type: action,
+        action: action,
         x: x,
-        y: y
+        y: y,
+        button: button,
+        buttons: buttons
       }));
     }
 
-    function sendScroll(x, y, dx, dy) {
-      if (typeof dx === 'undefined') {
-        dx = x;
-        dy = y;
-        x = 540;
-        y = 960;
-      }
-      if (!wsStream || wsStream.readyState !== WebSocket.OPEN) {
-        fetch('/api/input/wheel?tab=' + encodeURIComponent(currentTabId) + '&x=' + x + '&y=' + y + '&dx=' + dx + '&dy=' + dy, { method: 'POST' });
-        return;
-      }
+    function sendWheel(x, y, dx, dy) {
+      if (!wsStream || wsStream.readyState !== WebSocket.OPEN) return;
       wsStream.send(JSON.stringify({
         action: 'wheel',
         x: x,
         y: y,
-        deltaX: dx,
-        deltaY: dy
+        deltaX: Math.round(dx),
+        deltaY: Math.round(dy)
       }));
     }
 
+    function sendScrollDelta(dx, dy) {
+      sendWheel(540, 960, dx, dy);
+    }
+
+    // DIRECT PHYSICAL KEYBOARD CAPTURE
+    window.addEventListener('keydown', (e) => {
+      if (mode !== 'control') return;
+      // Jangan cegah jika fokus di input field ribbon
+      if (document.activeElement === document.getElementById('typeInput')) return;
+
+      // Handle shortcuts
+      if (e.key === 'F11') {
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+      }
+      if (e.key === 'Escape' && document.fullscreenElement) {
+        // Biarkan default fullscreen exit
+        return;
+      }
+
+      // Forward key to CDP
+      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
+        e.preventDefault();
+        wsStream.send(JSON.stringify({
+          action: 'keyDown',
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode,
+          modifiers: (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0)
+        }));
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (mode !== 'control') return;
+      if (document.activeElement === document.getElementById('typeInput')) return;
+
+      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
+        e.preventDefault();
+        wsStream.send(JSON.stringify({
+          action: 'keyUp',
+          key: e.key,
+          code: e.code,
+          keyCode: e.keyCode
+        }));
+      }
+    });
+
+    // Direct Text Input Helpers
     function sendInputText() {
       const input = document.getElementById('typeInput');
       const txt = input.value;
       if (!txt) return;
-      if (!wsStream || wsStream.readyState !== WebSocket.OPEN) {
-        fetch('/api/input/text?tab=' + encodeURIComponent(currentTabId) + '&text=' + encodeURIComponent(txt), { method: 'POST' });
-      } else {
+      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
         wsStream.send(JSON.stringify({ action: 'text', text: txt }));
       }
       input.value = '';
@@ -895,17 +1151,100 @@ function getDashboardHtml(reqHost, isDefaultControl) {
     }
 
     function sendSpecialKey(key, code, keyCode) {
-      if (!wsStream || wsStream.readyState !== WebSocket.OPEN) {
-        fetch('/api/input/key?tab=' + encodeURIComponent(currentTabId) + '&key=' + encodeURIComponent(key) + '&code=' + encodeURIComponent(code) + '&keyCode=' + keyCode, { method: 'POST' });
-        return;
+      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
+        wsStream.send(JSON.stringify({
+          action: 'keyDown',
+          key: key,
+          code: code,
+          keyCode: keyCode
+        }));
+        setTimeout(() => {
+          wsStream.send(JSON.stringify({
+            action: 'keyUp',
+            key: key,
+            code: code,
+            keyCode: keyCode
+          }));
+        }, 30);
       }
-      wsStream.send(JSON.stringify({
-        action: 'keyPress',
-        key: key,
-        code: code,
-        keyCode: keyCode
-      }));
     }
+
+    // Navigation Commands (Back, Forward, Home, Reload)
+    function sendNav(command) {
+      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
+        wsStream.send(JSON.stringify({ action: 'nav', command: command }));
+      }
+    }
+
+    // Clipboard Paste into active element
+    async function pasteClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text && wsStream && wsStream.readyState === WebSocket.OPEN) {
+          wsStream.send(JSON.stringify({ action: 'text', text: text }));
+        }
+      } catch (e) {
+        const fallback = prompt('Tempel teks ke WebView:');
+        if (fallback && wsStream && wsStream.readyState === WebSocket.OPEN) {
+          wsStream.send(JSON.stringify({ action: 'text', text: fallback }));
+        }
+      }
+    }
+
+    function toggleRibbonInput() {
+      if (controlRibbon.style.display === 'none') {
+        controlRibbon.style.display = 'flex';
+        document.getElementById('typeInput').focus();
+      } else {
+        controlRibbon.style.display = 'none';
+      }
+    }
+
+    // FULLSCREEN TOGGLE & AUTO-HIDING HUD
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        if (monitorCard.requestFullscreen) {
+          monitorCard.requestFullscreen();
+        } else if (monitorCard.webkitRequestFullscreen) {
+          monitorCard.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    }
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+    function onFullscreenChange() {
+      const isFull = Boolean(document.fullscreenElement);
+      if (isFull) {
+        monitorCard.classList.add('fullscreen-mode');
+        document.getElementById('btnFullscreenTop').innerText = '✕ Exit Full';
+        triggerHudReveal();
+      } else {
+        monitorCard.classList.remove('fullscreen-mode');
+        document.getElementById('btnFullscreenTop').innerText = '⛶ Fullscreen';
+      }
+    }
+
+    function triggerHudReveal() {
+      monitorCard.classList.add('hud-visible');
+      if (hudHideTimer) clearTimeout(hudHideTimer);
+      hudHideTimer = setTimeout(() => {
+        if (document.fullscreenElement) {
+          monitorCard.classList.remove('hud-visible');
+        }
+      }, 2500);
+    }
+
+    monitorCard.addEventListener('mousemove', () => {
+      if (document.fullscreenElement) {
+        triggerHudReveal();
+      }
+    });
 
     // Quick Actions
     async function toggleAttach() {
@@ -923,7 +1262,7 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       try {
         const res = await fetch('/api/detach?idx=' + currentTabIndex, { method: 'POST' });
         const data = await res.json();
-        alert(data.message || 'Detached ke background (Headless)!');
+        alert(data.message || 'Detached ke background (Headless Mode)!');
         setTimeout(loadTabs, 800);
       } catch (e) {
         alert('Gagal detach: ' + e.message);
@@ -950,12 +1289,6 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       }
     }
 
-    async function reloadTab() {
-      try {
-        await fetch('/api/reload?idx=' + currentTabIndex, { method: 'POST' });
-      } catch (_) {}
-    }
-
     function copyCurrentUrl() {
       const urlText = document.getElementById('tabUrl').innerText;
       if (urlText && urlText !== '-') {
@@ -964,8 +1297,8 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       }
     }
 
-    // Auto-refresh tab list every 3s
-    setInterval(loadTabs, 3500);
+    // Auto-refresh tab list every 4s
+    setInterval(loadTabs, 4000);
 
     // Initial load
     setMode(mode);
@@ -1048,71 +1381,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // API: Action Input Mouse (HTTP Fallback)
-    if (pathname === '/api/input/mouse') {
-        const tabs = await getAllTabs();
-        const tabTarget = parsedUrl.query.tab;
-        let selected = tabs.find(t => t.id === tabTarget || String(t.index) === String(tabTarget)) || tabs[0];
-        const x = parseInt(parsedUrl.query.x || '0', 10);
-        const y = parseInt(parsedUrl.query.y || '0', 10);
-        if (selected && selected.wsUrl && WebSocket) {
-            try {
-                const cdp = new WebSocket(selected.wsUrl);
-                cdp.on('open', () => {
-                    cdp.send(JSON.stringify({ id: 1, method: 'Input.dispatchMouseEvent', params: { type: 'mousePressed', x, y, button: 'left', clickCount: 1 } }));
-                    cdp.send(JSON.stringify({ id: 2, method: 'Input.dispatchMouseEvent', params: { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 } }));
-                    setTimeout(() => cdp.close(), 100);
-                });
-            } catch (_) {}
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-        return;
-    }
-
-    // API: Action Input Wheel (HTTP Fallback)
-    if (pathname === '/api/input/wheel') {
-        const tabs = await getAllTabs();
-        const tabTarget = parsedUrl.query.tab;
-        let selected = tabs.find(t => t.id === tabTarget || String(t.index) === String(tabTarget)) || tabs[0];
-        const x = parseInt(parsedUrl.query.x || '540', 10);
-        const y = parseInt(parsedUrl.query.y || '960', 10);
-        const dx = parseInt(parsedUrl.query.dx || '0', 10);
-        const dy = parseInt(parsedUrl.query.dy || '0', 10);
-        if (selected && selected.wsUrl && WebSocket) {
-            try {
-                const cdp = new WebSocket(selected.wsUrl);
-                cdp.on('open', () => {
-                    cdp.send(JSON.stringify({ id: 1, method: 'Input.dispatchMouseEvent', params: { type: 'mouseWheel', x, y, deltaX: dx, deltaY: dy } }));
-                    setTimeout(() => cdp.close(), 100);
-                });
-            } catch (_) {}
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-        return;
-    }
-
-    // API: Action Input Text (HTTP Fallback)
-    if (pathname === '/api/input/text') {
-        const tabs = await getAllTabs();
-        const tabTarget = parsedUrl.query.tab;
-        let selected = tabs.find(t => t.id === tabTarget || String(t.index) === String(tabTarget)) || tabs[0];
-        const text = parsedUrl.query.text || '';
-        if (selected && selected.wsUrl && WebSocket) {
-            try {
-                const cdp = new WebSocket(selected.wsUrl);
-                cdp.on('open', () => {
-                    cdp.send(JSON.stringify({ id: 1, method: 'Input.insertText', params: { text } }));
-                    setTimeout(() => cdp.close(), 100);
-                });
-            } catch (_) {}
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-        return;
-    }
-
     // API: Action Attach
     if (pathname === '/api/attach') {
         const idx = parsedUrl.query.idx || '0';
@@ -1190,7 +1458,7 @@ const server = http.createServer(async (req, res) => {
     res.end('Not Found');
 });
 
-// 8. WebSocket 30-60 FPS Screencast & Remote Control Bridge
+// 8. WebSocket 30-60 FPS Screencast & 100% Remote Control Bridge (Scrcpy Protocol)
 if (WebSocket && WebSocket.Server) {
     const wss = new WebSocket.Server({ noServer: true });
 
@@ -1208,8 +1476,6 @@ if (WebSocket && WebSocket.Server) {
     wss.on('connection', async (clientWs, req) => {
         const parsed = url.parse(req.url, true);
         const tabTarget = parsed.query.tab;
-        let fpsRate = parseInt(parsed.query.fps || '30', 10);
-        fpsRate = Math.min(Math.max(fpsRate, 1), 60);
 
         const tabs = await getAllTabs();
         const selected = tabs.find(t => t.id === tabTarget || String(t.index) === String(tabTarget)) || tabs[0];
@@ -1222,8 +1488,6 @@ if (WebSocket && WebSocket.Server) {
         let cdpWs = null;
         let reqId = 1;
         let isClosed = false;
-        let frameIntervalTimer = null;
-        let inFlight = false;
 
         try {
             cdpWs = new WebSocket(selected.wsUrl);
@@ -1284,38 +1548,48 @@ if (WebSocket && WebSocket.Server) {
             } catch (_) {}
         });
 
-        // Client Input Handler (Remote Control Takeover)
+        // Client Input Handler (100% Scrcpy-Style Native Gestures & Key Takeover)
         clientWs.on('message', (raw) => {
             if (isClosed || !cdpWs || cdpWs.readyState !== WebSocket.OPEN) return;
             try {
                 const ev = JSON.parse(raw.toString());
-                if (ev.action === 'setFps') {
-                    fpsRate = Math.min(Math.max(parseInt(ev.fps || '30', 10), 1), 60);
-                    if (frameIntervalTimer) clearInterval(frameIntervalTimer);
-                    const msInterval = Math.max(Math.round(1000 / fpsRate), 16);
-                    frameIntervalTimer = setInterval(() => {
-                        if (isClosed || inFlight) return;
-                        inFlight = true;
-                        try {
-                            cdpWs.send(JSON.stringify({
-                                id: reqId++,
-                                method: 'Page.captureScreenshot',
-                                params: { format: 'jpeg', quality: 65, fromSurface: false, captureBeyondViewport: true }
-                            }));
-                        } catch (_) { inFlight = false; }
-                    }, msInterval);
-                } else if (ev.action === 'mouse') {
-                    const x = ev.x || 0;
-                    const y = ev.y || 0;
+
+                // Pointer Events (Drag, Swipe, Click)
+                if (ev.action === 'pointerDown') {
                     cdpWs.send(JSON.stringify({
                         id: reqId++,
                         method: 'Input.dispatchMouseEvent',
-                        params: { type: 'mousePressed', x, y, button: 'left', clickCount: 1 }
+                        params: {
+                            type: 'mousePressed',
+                            x: ev.x,
+                            y: ev.y,
+                            button: ev.button || 'left',
+                            buttons: ev.buttons || 1,
+                            clickCount: 1
+                        }
                     }));
+                } else if (ev.action === 'pointerMove') {
                     cdpWs.send(JSON.stringify({
                         id: reqId++,
                         method: 'Input.dispatchMouseEvent',
-                        params: { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 }
+                        params: {
+                            type: 'mouseMoved',
+                            x: ev.x,
+                            y: ev.y,
+                            buttons: ev.buttons || 1
+                        }
+                    }));
+                } else if (ev.action === 'pointerUp') {
+                    cdpWs.send(JSON.stringify({
+                        id: reqId++,
+                        method: 'Input.dispatchMouseEvent',
+                        params: {
+                            type: 'mouseReleased',
+                            x: ev.x,
+                            y: ev.y,
+                            button: ev.button || 'left',
+                            clickCount: 1
+                        }
                     }));
                 } else if (ev.action === 'wheel') {
                     cdpWs.send(JSON.stringify({
@@ -1335,17 +1609,69 @@ if (WebSocket && WebSocket.Server) {
                         method: 'Input.insertText',
                         params: { text: ev.text || '' }
                     }));
-                } else if (ev.action === 'keyPress') {
+                } else if (ev.action === 'keyDown') {
+                    const isChar = ev.key && ev.key.length === 1 && !ev.ctrlKey && !ev.altKey;
                     cdpWs.send(JSON.stringify({
                         id: reqId++,
                         method: 'Input.dispatchKeyEvent',
-                        params: { type: 'keyDown', key: ev.key, code: ev.code, windowsVirtualKeyCode: ev.keyCode }
+                        params: {
+                            type: 'rawKeyDown',
+                            key: ev.key,
+                            code: ev.code,
+                            windowsVirtualKeyCode: ev.keyCode,
+                            modifiers: ev.modifiers || 0,
+                            text: isChar ? ev.key : undefined,
+                            unmodifiedText: isChar ? ev.key : undefined
+                        }
                     }));
+                    if (isChar) {
+                        cdpWs.send(JSON.stringify({
+                            id: reqId++,
+                            method: 'Input.dispatchKeyEvent',
+                            params: {
+                                type: 'char',
+                                text: ev.key,
+                                unmodifiedText: ev.key
+                            }
+                        }));
+                    }
+                } else if (ev.action === 'keyUp') {
                     cdpWs.send(JSON.stringify({
                         id: reqId++,
                         method: 'Input.dispatchKeyEvent',
-                        params: { type: 'keyUp', key: ev.key, code: ev.code, windowsVirtualKeyCode: ev.keyCode }
+                        params: {
+                            type: 'keyUp',
+                            key: ev.key,
+                            code: ev.code,
+                            windowsVirtualKeyCode: ev.keyCode
+                        }
                     }));
+                } else if (ev.action === 'nav') {
+                    if (ev.command === 'back') {
+                        cdpWs.send(JSON.stringify({
+                            id: reqId++,
+                            method: 'Runtime.evaluate',
+                            params: { expression: 'window.history.back()' }
+                        }));
+                    } else if (ev.command === 'forward') {
+                        cdpWs.send(JSON.stringify({
+                            id: reqId++,
+                            method: 'Runtime.evaluate',
+                            params: { expression: 'window.history.forward()' }
+                        }));
+                    } else if (ev.command === 'reload') {
+                        cdpWs.send(JSON.stringify({
+                            id: reqId++,
+                            method: 'Page.reload',
+                            params: { ignoreCache: true }
+                        }));
+                    } else if (ev.command === 'home') {
+                        cdpWs.send(JSON.stringify({
+                            id: reqId++,
+                            method: 'Page.navigate',
+                            params: { url: 'https://www.google.com' }
+                        }));
+                    }
                 }
             } catch (_) {}
         });
@@ -1376,6 +1702,7 @@ function onListening() {
     });
     console.log(`\x1b[36m│\x1b[0m  \x1b[1mMode\x1b[0m      : ${DEFAULT_CONTROL ? '\x1b[33m🎮 Remote Control (Ambil Alih 30-60 FPS)\x1b[0m' : '\x1b[32m👁️ Watch Mode (30-60 FPS Stream)\x1b[0m'}  \x1b[36m│\x1b[0m`);
     console.log('\x1b[36m│\x1b[0m  \x1b[1mEngine\x1b[0m    : \x1b[35mScrcpy-Style Event-Driven Stream (0% Idle CPU)\x1b[0m\x1b[36m│\x1b[0m');
+    console.log('\x1b[36m│\x1b[0m  \x1b[1mFeatures\x1b[0m  : \x1b[36mFullscreen Mode, Drag/Swipe Gestures, Virtual Nav\x1b[0m\x1b[36m│\x1b[0m');
     console.log('\x1b[36m└────────────────────────────────────────────────────────┘\x1b[0m\n');
     console.log('Tekan Ctrl + C untuk menghentikan monitor.\n');
 }
