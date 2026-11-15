@@ -425,14 +425,31 @@ for t in tabs:
             fi
             return 0
             ;;
-        monitor|--monitor|watch|--watch)
+        monitor|--monitor|watch|--watch|monitor-control|--monitor-control)
+            local IS_CTRL=0
+            [[ "$1" == *control* ]] && IS_CTRL=1
             shift
-            local PORT="${1:-9223}"
+            local PORT="9223"
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --control) IS_CTRL=1 ;;
+                    *)
+                        if [[ "$1" =~ ^[0-9]+$ ]]; then
+                            PORT="$1"
+                        fi
+                        ;;
+                esac
+                shift
+            done
             local MON_SCRIPT="/root/wallet/webview_monitor.cjs"
             if [ ! -f "$MON_SCRIPT" ] && [ -f "/wallet/webview_monitor.cjs" ]; then
                 MON_SCRIPT="/wallet/webview_monitor.cjs"
             fi
-            exec node "$MON_SCRIPT" "$PORT"
+            if [ "$IS_CTRL" -eq 1 ]; then
+                exec node "$MON_SCRIPT" "$PORT" --control
+            else
+                exec node "$MON_SCRIPT" "$PORT"
+            fi
             ;;
         new-tab|new-tabs|--new-tab|--new-tabs|worker|--worker)
             shift
@@ -741,6 +758,7 @@ for t in tabs:
     local IS_DESKTOP=0
     local IS_HEADLESS=0
     local IS_MONITOR=0
+    local IS_CONTROL=0
     local MONITOR_PORT=9223
     local IS_NEW_TAB=0
     local IS_GHOST=1
@@ -803,8 +821,9 @@ for t in tabs:
                 IS_HEADLESS=1
                 shift
                 ;;
-            --monitor|--watch)
+            --monitor|--watch|--monitor-control|--control)
                 IS_MONITOR=1
+                [[ "$1" == *control* ]] && IS_CONTROL=1
                 if [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]]; then
                     MONITOR_PORT="$2"
                     shift 2
@@ -933,13 +952,21 @@ print(json.dumps(data))
     fi
 
     if [ "$IS_MONITOR" = "1" ]; then
-        echo "[termux-ipc] Membuka Live Monitor (WLAN & Local) untuk URL ini..."
+        if [ "$IS_CONTROL" = "1" ]; then
+            echo "[termux-ipc] Membuka Live Monitor & Control (WLAN 30-60 FPS) untuk URL ini..."
+        else
+            echo "[termux-ipc] Membuka Live Monitor (WLAN & Local) untuk URL ini..."
+        fi
         sleep 0.8
         local MON_SCRIPT="/root/wallet/webview_monitor.cjs"
         if [ ! -f "$MON_SCRIPT" ] && [ -f "/wallet/webview_monitor.cjs" ]; then
             MON_SCRIPT="/wallet/webview_monitor.cjs"
         fi
-        exec node "$MON_SCRIPT" "$MONITOR_PORT"
+        if [ "$IS_CONTROL" = "1" ]; then
+            exec node "$MON_SCRIPT" "$MONITOR_PORT" --control
+        else
+            exec node "$MON_SCRIPT" "$MONITOR_PORT"
+        fi
     fi
 }
 

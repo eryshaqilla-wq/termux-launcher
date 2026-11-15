@@ -2771,6 +2771,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             switchTab(target);
             if (this.mPaneHost != null) {
                 this.mPaneHost.setVisibility(View.VISIBLE);
+                this.mPaneHost.setTranslationX(0.0f);
                 this.mPaneHost.setAlpha(1.0f);
                 this.mPaneHost.bringToFront();
             }
@@ -2800,16 +2801,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 tab.mIsHeadless = true;
                 tab.mIsMinimized = true;
                 if (tab.mWebView != null) {
-                    tab.mWebView.setVisibility(View.GONE);
+                    tab.mWebView.setVisibility(View.VISIBLE);
                     tab.mWebView.resumeTimers();
                 }
             }
             if (target == this.mActiveTab) {
                 if (this.mPaneHost != null) {
-                    this.mPaneHost.setVisibility(View.GONE);
+                    this.mPaneHost.setVisibility(View.INVISIBLE);
+                    this.mPaneHost.setTranslationX(-10000.0f);
                 }
                 if (this.mTerminalPaneHost != null) {
                     this.mTerminalPaneHost.setVisibility(View.VISIBLE);
+                    this.mTerminalPaneHost.bringToFront();
                 }
                 if (this.mControlPill != null) {
                     this.mControlPill.setVisibility(View.GONE);
@@ -3418,10 +3421,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         if (targetTab != null && targetTab.mIsHeadless) {
             if (this.mPaneHost != null) {
-                this.mPaneHost.setVisibility(View.GONE);
+                this.mPaneHost.setVisibility(View.INVISIBLE);
+                this.mPaneHost.setTranslationX(-10000.0f);
             }
             if (this.mTerminalPaneHost != null) {
                 this.mTerminalPaneHost.setVisibility(View.VISIBLE);
+                this.mTerminalPaneHost.bringToFront();
             }
             if (this.mControlPill != null) {
                 this.mControlPill.setVisibility(View.GONE);
