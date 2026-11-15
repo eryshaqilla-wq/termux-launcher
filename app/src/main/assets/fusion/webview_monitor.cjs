@@ -778,14 +778,18 @@ function getDashboardHtml(reqHost, isDefaultControl) {
         };
 
         wsStream.onclose = () => {
-          startFallbackPolling();
+          document.getElementById('statusDot').className = 'status-dot';
+          document.getElementById('statusText').innerText = 'Reconnecting Stream...';
+          setTimeout(connectWsStream, 1000);
         };
 
         wsStream.onerror = () => {
-          startFallbackPolling();
+          document.getElementById('statusDot').className = 'status-dot';
+          document.getElementById('statusText').innerText = 'Stream Error. Reconnecting...';
+          setTimeout(connectWsStream, 1500);
         };
       } catch (_) {
-        startFallbackPolling();
+        setTimeout(connectWsStream, 1500);
       }
     }
 
@@ -794,30 +798,6 @@ function getDashboardHtml(reqHost, isDefaultControl) {
         try { wsStream.close(); } catch (_) {}
         wsStream = null;
       }
-      if (fallbackTimer) {
-        clearInterval(fallbackTimer);
-        fallbackTimer = null;
-      }
-    }
-
-    function startFallbackPolling() {
-      if (fallbackTimer) return;
-      const interval = Math.max(Math.round(1000 / Math.min(fps, 10)), 150);
-      fallbackTimer = setInterval(async () => {
-        if (!currentTabId || isFetching) return;
-        isFetching = true;
-        const t0 = performance.now();
-        const img = document.getElementById('liveView');
-        const testImg = new Image();
-        testImg.onload = () => {
-          img.src = testImg.src;
-          const dt = Math.round(performance.now() - t0);
-          document.getElementById('latencyVal').innerText = 'Latency: ' + dt + 'ms';
-          isFetching = false;
-        };
-        testImg.onerror = () => { isFetching = false; };
-        testImg.src = '/api/screenshot?tab=' + encodeURIComponent(currentTabId) + '&t=' + Date.now();
-      }, interval);
     }
 
     function setFps(val) {
@@ -1254,7 +1234,6 @@ if (WebSocket && WebSocket.Server) {
 
         const cleanup = () => {
             isClosed = true;
-            if (frameIntervalTimer) clearInterval(frameIntervalTimer);
             if (cdpWs) {
                 try {
                     cdpWs.send(JSON.stringify({ id: reqId++, method: 'Page.stopScreencast' }));
@@ -1272,35 +1251,18 @@ if (WebSocket && WebSocket.Server) {
             if (isClosed) return;
             cdpWs.send(JSON.stringify({ id: reqId++, method: 'Page.enable' }));
 
-            // Start High-FPS Screencast
+            // Start Event-Driven Screencast Stream (scrcpy-style: 0% CPU idle, push on compositor damage)
             cdpWs.send(JSON.stringify({
                 id: reqId++,
                 method: 'Page.startScreencast',
                 params: {
                     format: 'jpeg',
-                    quality: 70,
+                    quality: 75,
                     maxWidth: 1080,
                     maxHeight: 1920,
                     everyNthFrame: 1
                 }
             }));
-
-            // Active Frame Pusher Loop (30-60 FPS)
-            const msInterval = Math.max(Math.round(1000 / fpsRate), 16);
-            frameIntervalTimer = setInterval(() => {
-                if (isClosed || inFlight) return;
-                inFlight = true;
-                const shotId = reqId++;
-                try {
-                    cdpWs.send(JSON.stringify({
-                        id: shotId,
-                        method: 'Page.captureScreenshot',
-                        params: { format: 'jpeg', quality: 65, fromSurface: false, captureBeyondViewport: true }
-                    }));
-                } catch (_) {
-                    inFlight = false;
-                }
-            }, msInterval);
         });
 
         cdpWs.on('message', (data) => {
@@ -1318,18 +1280,8 @@ if (WebSocket && WebSocket.Server) {
                         method: 'Page.screencastFrameAck',
                         params: { sessionId: msg.params.sessionId }
                     }));
-                } else if (msg.result && msg.result.data) {
-                    inFlight = false;
-                    const imgBuf = Buffer.from(msg.result.data, 'base64');
-                    if (clientWs.readyState === WebSocket.OPEN) {
-                        clientWs.send(imgBuf);
-                    }
-                } else {
-                    inFlight = false;
                 }
-            } catch (_) {
-                inFlight = false;
-            }
+            } catch (_) {}
         });
 
         // Client Input Handler (Remote Control Takeover)
@@ -1423,7 +1375,7 @@ function onListening() {
         console.log(`\x1b[36m│\x1b[0m  \x1b[1m${line.padEnd(52)}\x1b[0m\x1b[36m│\x1b[0m`);
     });
     console.log(`\x1b[36m│\x1b[0m  \x1b[1mMode\x1b[0m      : ${DEFAULT_CONTROL ? '\x1b[33m🎮 Remote Control (Ambil Alih 30-60 FPS)\x1b[0m' : '\x1b[32m👁️ Watch Mode (30-60 FPS Stream)\x1b[0m'}  \x1b[36m│\x1b[0m`);
-    console.log('\x1b[36m│\x1b[0m  \x1b[1mSpeed\x1b[0m     : \x1b[35m30-60 FPS Zero-Lag Binary WebSocket\x1b[0m    \x1b[36m│\x1b[0m');
+    console.log('\x1b[36m│\x1b[0m  \x1b[1mEngine\x1b[0m    : \x1b[35mScrcpy-Style Event-Driven Stream (0% Idle CPU)\x1b[0m\x1b[36m│\x1b[0m');
     console.log('\x1b[36m└────────────────────────────────────────────────────────┘\x1b[0m\n');
     console.log('Tekan Ctrl + C untuk menghentikan monitor.\n');
 }
