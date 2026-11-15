@@ -1562,6 +1562,7 @@ async function executeSingleProfile(url, extraFlags = []) {
     if (isMonitorRequested && !recipe) {
         console.log(`[WebView Live Monitor] Menghubungkan ke ${isControlMode ? 'Control Mode (Ambil Alih 30-60 FPS)' : 'Watch Mode (30-60 FPS)'}...`);
         await sleep(800);
+        try { execSync(`fuser -k ${monitorPort}/tcp 2>/dev/null || true`); } catch (_) {}
         const monScript = fs.existsSync('/root/wallet/webview_monitor.cjs') 
             ? '/root/wallet/webview_monitor.cjs' 
             : (fs.existsSync('/wallet/webview_monitor.cjs') ? '/wallet/webview_monitor.cjs' : path.join(__dirname, 'webview_monitor.cjs'));
@@ -1858,6 +1859,7 @@ async function main() {
                 port = args[i];
             }
         }
+        try { execSync(`fuser -k ${port}/tcp 2>/dev/null || true`); } catch (_) {}
         const monScript = fs.existsSync('/root/wallet/webview_monitor.cjs') 
             ? '/root/wallet/webview_monitor.cjs' 
             : (fs.existsSync('/wallet/webview_monitor.cjs') ? '/wallet/webview_monitor.cjs' : path.join(__dirname, 'webview_monitor.cjs'));
@@ -1879,6 +1881,8 @@ async function main() {
     if (isKillAllCmd) {
         const output = runIpc('kill-all');
         if (output) console.log(output);
+        try { execSync('fuser -k 9223/tcp 2>/dev/null || true'); } catch (_) {}
+        try { execSync('pkill -f "webview_monitor.cjs" 2>/dev/null || true'); } catch (_) {}
         process.exit(0);
     }
 

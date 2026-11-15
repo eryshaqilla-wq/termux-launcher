@@ -445,6 +445,7 @@ for t in tabs:
             if [ ! -f "$MON_SCRIPT" ] && [ -f "/wallet/webview_monitor.cjs" ]; then
                 MON_SCRIPT="/wallet/webview_monitor.cjs"
             fi
+            fuser -k "$PORT/tcp" 2>/dev/null || true
             if [ "$IS_CTRL" -eq 1 ]; then
                 exec node "$MON_SCRIPT" "$PORT" --control
             else
@@ -568,6 +569,8 @@ for t in tabs:
         kill-all|--kill-all|close-all|--close-all)
             send_cmd "WEBVIEW_KILL_ALL"
             echo "[termux-ipc] Seluruh tab WebView telah ditutup."
+            pkill -f "webview_monitor.cjs" 2>/dev/null || true
+            fuser -k 9223/tcp 2>/dev/null || true
             return 0
             ;;
         kill-worker|--kill-worker)

@@ -1396,7 +1396,18 @@ if (WebSocket && WebSocket.Server) {
     });
 }
 
-server.listen(PORT, '0.0.0.0', () => {
+function freePort(port) {
+    try {
+        const out = execSync(`fuser ${port}/tcp 2>/dev/null || true`, { encoding: 'utf8' }).trim();
+        if (out) {
+            execSync(`fuser -k ${port}/tcp 2>/dev/null || true`);
+            const start = Date.now();
+            while (Date.now() - start < 150) {}
+        }
+    } catch (_) {}
+}
+
+function onListening() {
     ensurePortForward();
     const ips = getNetworkIps();
     console.log('\n\x1b[36m┌────────────────────────────────────────────────────────┐\x1b[0m');
@@ -1411,4 +1422,31 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('\x1b[36m│\x1b[0m  \x1b[1mSpeed\x1b[0m     : \x1b[35m30-60 FPS Zero-Lag Binary WebSocket\x1b[0m    \x1b[36m│\x1b[0m');
     console.log('\x1b[36m└────────────────────────────────────────────────────────┘\x1b[0m\n');
     console.log('Tekan Ctrl + C untuk menghentikan monitor.\n');
+}
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.warn(`[WebView Monitor] Port ${PORT} sedang dipakai, membebaskan port...`);
+        try {
+            execSync(`fuser -k ${PORT}/tcp 2>/dev/null || true`);
+            setTimeout(() => {
+                server.listen(PORT, '0.0.0.0', onListening);
+            }, 300);
+            return;
+        } catch (_) {}
+    }
+    console.error(`[WebView Monitor] Server error:`, err.message);
+    process.exit(1);
 });
+
+function gracefulExit() {
+    try { server.close(); } catch (_) {}
+    try { wss.close(); } catch (_) {}
+    process.exit(0);
+}
+process.on('SIGINT', gracefulExit);
+process.on('SIGTERM', gracefulExit);
+process.on('SIGHUP', gracefulExit);
+
+freePort(PORT);
+server.listen(PORT, '0.0.0.0', onListening);
