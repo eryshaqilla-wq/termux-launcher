@@ -419,7 +419,6 @@ public class FusionToolPillHelper {
             sToolPill.setVisibility(View.VISIBLE);
         }
 
-        FusionTab activeTab = FusionTabStateHelper.getActiveTab(manager);
         boolean isCollapsed = activeTab != null ? activeTab.mIsToolPillCollapsed : sIsCollapsed;
 
         TextView toggleBtn = manager.mToolToggleBtn != null ? manager.mToolToggleBtn : sToggleBtn;
