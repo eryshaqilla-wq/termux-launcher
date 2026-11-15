@@ -689,8 +689,10 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
-                            } else if (strTrim.startsWith("WEBVIEW_DETACH ") || strTrim.equals("WEBVIEW_DETACH")) {
-                                String idxStr = strTrim.length() > 14 ? strTrim.substring(14).trim() : "";
+                            } else if (strTrim.startsWith("WEBVIEW_DETACH ") || strTrim.equals("WEBVIEW_DETACH") || strTrim.startsWith("WEBVIEW_DETACH_TAB ") || strTrim.equals("WEBVIEW_DETACH_TAB")) {
+                                String idxStr = "";
+                                if (strTrim.startsWith("WEBVIEW_DETACH_TAB ")) idxStr = strTrim.substring(18).trim();
+                                else if (strTrim.startsWith("WEBVIEW_DETACH ")) idxStr = strTrim.substring(14).trim();
                                 com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
                                 if (mgr != null) {
                                     int idx = -1;

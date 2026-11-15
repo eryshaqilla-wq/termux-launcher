@@ -1122,6 +1122,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
     public void onTerminalWallOffsetChanged(float translationX, float alpha) {
         if (this.mPaneHost != null) {
+            FusionTab active = FusionTabStateHelper.getActiveTab(this);
+            if (active != null && active.mIsHeadless) {
+                this.mPaneHost.setVisibility(View.INVISIBLE);
+                this.mPaneHost.setTranslationX(-10000.0f);
+                return;
+            }
             this.mPaneHost.setTranslationX(translationX);
             this.mPaneHost.setAlpha(alpha);
             boolean onScreen = alpha > 0.05f;
@@ -1137,6 +1143,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
     public void onTerminalOffScreenChanged(boolean offScreen) {
         if (this.mPaneHost != null) {
+            FusionTab active = FusionTabStateHelper.getActiveTab(this);
+            if (active != null && active.mIsHeadless) {
+                this.mPaneHost.setVisibility(View.INVISIBLE);
+                this.mPaneHost.setTranslationX(-10000.0f);
+                return;
+            }
             if (offScreen) {
                 this.mPaneHost.setVisibility(View.GONE);
                 if (this.mActivity != null) {
@@ -1172,9 +1184,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 this.mActivity.endWebViewExternalTextInput();
             }
         } else {
-            if (this.mPaneHost != null) {
-                this.mPaneHost.setTranslationX(0f);
-                this.mPaneHost.setAlpha(1f);
+            FusionTab active = FusionTabStateHelper.getActiveTab(this);
+            if (active != null && active.mIsHeadless) {
+                if (this.mPaneHost != null) {
+                    this.mPaneHost.setVisibility(View.INVISIBLE);
+                    this.mPaneHost.setTranslationX(-10000.0f);
+                }
+            } else {
+                if (this.mPaneHost != null) {
+                    this.mPaneHost.setTranslationX(0f);
+                    this.mPaneHost.setAlpha(1f);
+                }
             }
             syncVisibility();
         }
@@ -1186,7 +1206,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (session == null || this.mTabList == null) return false;
         for (int i = 0; i < this.mTabList.size(); i++) {
             FusionTab tab = (FusionTab) this.mTabList.get(i);
-            if (tab != null && tab.mBoundSession == session && !tab.mIsMinimized && tab.mWebView != null) {
+            if (tab != null && tab.mBoundSession == session && !tab.mIsMinimized && !tab.mIsHeadless && tab.mWebView != null) {
                 return true;
             }
         }
@@ -1199,7 +1219,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (session == null || this.mTabList == null) return false;
         for (int i = 0; i < this.mTabList.size(); i++) {
             FusionTab tab = (FusionTab) this.mTabList.get(i);
-            if (tab != null && (tab.mBoundSession == session || tab.mBoundSession == null) && tab.mWebView != null) {
+            if (tab != null && !tab.mIsHeadless && !tab.mIsMinimized && (tab.mBoundSession == session || tab.mBoundSession == null) && tab.mWebView != null) {
                 return true;
             }
         }
@@ -1282,10 +1302,16 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         FrameLayout frameLayout = this.mPaneHost;
         if (frameLayout != null) {
-            frameLayout.setPadding(0, 0, 0, 0);
-            frameLayout.setAlpha(1.0f);
-            frameLayout.setTranslationX(0.0f);
-            frameLayout.bringToFront();
+            FusionTab active = FusionTabStateHelper.getActiveTab(this);
+            if (active != null && active.mIsHeadless) {
+                frameLayout.setVisibility(View.INVISIBLE);
+                frameLayout.setTranslationX(-10000.0f);
+            } else {
+                frameLayout.setPadding(0, 0, 0, 0);
+                frameLayout.setAlpha(1.0f);
+                frameLayout.setTranslationX(0.0f);
+                frameLayout.bringToFront();
+            }
         }
 
         // Re-parent active webviews if needed

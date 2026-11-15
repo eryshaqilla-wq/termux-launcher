@@ -107,8 +107,10 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.attachTab(idx);
             return;
         }
-        if (str.startsWith("WEBVIEW_DETACH ") || str.equals("WEBVIEW_DETACH")) {
-            String idxStr = str.length() > 14 ? str.substring(14).trim() : "";
+        if (str.startsWith("WEBVIEW_DETACH ") || str.equals("WEBVIEW_DETACH") || str.startsWith("WEBVIEW_DETACH_TAB ") || str.equals("WEBVIEW_DETACH_TAB")) {
+            String idxStr = "";
+            if (str.startsWith("WEBVIEW_DETACH_TAB ")) idxStr = str.substring(18).trim();
+            else if (str.startsWith("WEBVIEW_DETACH ")) idxStr = str.substring(14).trim();
             int idx = -1;
             try { if (!idxStr.isEmpty()) idx = Integer.parseInt(idxStr); } catch (Exception ignored) {}
             fusionWebViewManager.detachTab(idx);

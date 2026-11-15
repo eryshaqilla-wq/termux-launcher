@@ -35,7 +35,18 @@ for target in targets:
         s.settimeout(2.5)
         s.connect(target)
         s.sendall(payload)
-        resp = s.recv(4096).decode(errors='ignore').strip()
+        chunks = []
+        while True:
+            try:
+                data = s.recv(8192)
+                if not data:
+                    break
+                chunks.append(data)
+                if len(data) < 8192 or b'\n' in data:
+                    break
+            except Exception:
+                break
+        resp = b''.join(chunks).decode(errors='ignore').strip()
         s.close()
         break
     except Exception:
@@ -289,6 +300,17 @@ handle_webview() {
             echo "  tma-init              Ekstrak dan salin Telegram Mini App initData"
             echo "  new-terminal          Tambah tab sesi terminal shell Termux baru"
             echo ""
+            echo "Sub-command Tab & Mode:"
+            echo "  list | --list [--json]  Daftar semua tab WebView aktif (Headless / Normal)"
+            echo "  attach <idx>          Bawa tab ke tampilan layar (Visual Mode)"
+            echo "  detach <idx>          Kirim tab ke background murni (Headless Mode)"
+            echo "  monitor [port]        Jalankan Live Watch Mode via Web/WLAN (default: 9223)"
+            echo "  new-tab <url>         Buka URL di tab baru mandiri"
+            echo "  tabs                  Tampilkan dialog pemilih tab"
+            echo "  kill [idx]            Tutup tab nomor <idx> (default: tab aktif)"
+            echo "  kill-all              Tutup seluruh tab WebView sekaligus"
+            echo "  close                 Tutup WebView visual"
+            echo ""
             echo "Buka URL dengan Konfigurasi Web3 / Anti-Sybil:"
             echo "  termux-ipc webview [options] <url>"
             echo ""
@@ -297,7 +319,9 @@ handle_webview() {
             echo "  --<chain>             Pilih jaringan (contoh: --base, --bsc, --arbitrum, --morph)"
             echo "  --auto                Mode auto-sign transaksi otomatis"
             echo "  --wc <uri>            Hubungkan sesi via WalletConnect URI"
-            echo "  --desktop             Gunakan desktop Chrome User-Agent"
+            echo "  --desktop             Gunakan mode desktop (1280px viewport & Desktop UA)"
+            echo "  --headless            Mode background murni / off-screen (tanpa render UI di layar)"
+            echo "  --new-tab             Buka di tab baru mandiri tanpa menimpa tab aktif"
             echo "  --profile <name>      Nama profil/sesi cookie terisolasi"
             echo "  --fresh               Profil incognito sekali pakai"
             echo "  --ghost               Injeksi Ghost Web3 Provider"
@@ -307,6 +331,126 @@ handle_webview() {
             echo "  --block-css           Blokir file CSS stylesheet"
             echo "  --turbo               Aktifkan semua blocker untuk kecepatan maksimal"
             return 0
+            ;;
+        list|--list|ls)
+            shift
+            local JSON_FLAG=0
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --json|-j) JSON_FLAG=1 ;;
+                esac
+                shift
+            done
+            local RESP
+            RESP=$(send_cmd "WEBVIEW_LIST")
+            if [ -z "$RESP" ] || [ "$RESP" = "OK" ]; then
+                RESP=$(python3 -c "
+import urllib.request, json
+try:
+    req = urllib.request.urlopen('http://127.0.0.1:9222/json', timeout=1.5)
+    data = json.loads(req.read().decode())
+    tabs = []
+    for idx, item in enumerate(data):
+        if item.get('type') == 'page':
+            tabs.append({
+                'index': idx,
+                'id': item.get('id', ''),
+                'title': item.get('title', 'Page'),
+                'url': item.get('url', ''),
+                'profile': 'active',
+                'isHeadless': False,
+                'isDesktop': False,
+                'active': idx == 0
+            })
+    print(json.dumps(tabs))
+except Exception:
+    print('[]')
+")
+            fi
+            if [ "$JSON_FLAG" -eq 1 ]; then
+                echo "$RESP"
+            else
+                python3 -c "
+import sys, json
+
+raw = sys.stdin.read().strip()
+try:
+    tabs = json.loads(raw)
+except Exception:
+    tabs = []
+
+if not tabs:
+    print('Tidak ada tab WebView yang sedang aktif.')
+    sys.exit(0)
+
+print(f\"{'IDX':<4} {'STATUS':<10} {'MODE':<10} {'VIEW':<9} {'PROFILE':<12} {'TITLE':<25} {'URL'}\")
+print('-' * 95)
+for t in tabs:
+    idx = t.get('index', 0)
+    is_active = t.get('active', False)
+    status = '[ACTIVE]' if is_active else 'IDLE'
+    is_headless = t.get('isHeadless', False) or t.get('isMinimized', False)
+    mode = 'HEADLESS' if is_headless else 'NORMAL'
+    is_desktop = t.get('isDesktop', False)
+    view = 'DESKTOP' if is_desktop else 'MOBILE'
+    profile = t.get('profile', 'default')
+    title = (t.get('title') or 'New Tab')[:24]
+    url = t.get('url') or 'about:blank'
+    print(f\"{idx:<4} {status:<10} {mode:<10} {view:<9} {profile:<12} {title:<25} {url}\")
+" <<< "$RESP"
+            fi
+            return 0
+            ;;
+        attach|--attach)
+            shift
+            local IDX="${1:-0}"
+            local RESP
+            RESP=$(send_cmd "WEBVIEW_ATTACH $IDX")
+            if [ "$RESP" = "OK" ]; then
+                echo "[termux-ipc] Attached ke Tab $IDX (Visual Mode)"
+            else
+                echo "[termux-ipc] ${RESP:-Attached ke Tab $IDX}"
+            fi
+            return 0
+            ;;
+        detach|--detach)
+            shift
+            local IDX="${1:--1}"
+            local RESP
+            RESP=$(send_cmd "WEBVIEW_DETACH $IDX")
+            if [ "$RESP" = "OK" ]; then
+                echo "[termux-ipc] Detached Tab $IDX ke background (Headless Mode)"
+            else
+                echo "[termux-ipc] ${RESP:-Detached Tab $IDX}"
+            fi
+            return 0
+            ;;
+        monitor|--monitor|watch|--watch|monitor-control|--monitor-control)
+            local IS_CTRL=0
+            [[ "$1" == *control* ]] && IS_CTRL=1
+            shift
+            local PORT="9223"
+            while [ $# -gt 0 ]; do
+                case "$1" in
+                    --control) IS_CTRL=1 ;;
+                    *)
+                        if [[ "$1" =~ ^[0-9]+$ ]]; then
+                            PORT="$1"
+                        fi
+                        ;;
+                esac
+                shift
+            done
+            local MON_SCRIPT="/root/wallet/webview_monitor.cjs"
+            if [ ! -f "$MON_SCRIPT" ] && [ -f "/wallet/webview_monitor.cjs" ]; then
+                MON_SCRIPT="/wallet/webview_monitor.cjs"
+            fi
+            fuser -k "$PORT/tcp" 2>/dev/null || true
+            if [ "$IS_CTRL" -eq 1 ]; then
+                exec node "$MON_SCRIPT" "$PORT" --control
+            else
+                exec node "$MON_SCRIPT" "$PORT"
+            fi
             ;;
         new-tab|new-tabs|--new-tab|--new-tabs|worker|--worker)
             shift
@@ -407,14 +551,26 @@ handle_webview() {
             fi
             return 0
             ;;
-        kill-tab|--kill-tab)
+        kill-tab|--kill-tab|kill|--kill)
             shift
             local IDX="$1"
-            if [ -n "$IDX" ]; then
+            if [ "$IDX" = "all" ] || [ "$IDX" = "--all" ]; then
+                send_cmd "WEBVIEW_KILL_ALL"
+                echo "[termux-ipc] Seluruh tab WebView telah ditutup."
+            elif [ -n "$IDX" ]; then
                 send_cmd "WEBVIEW_KILL_TAB $IDX"
+                echo "[termux-ipc] Tab $IDX telah ditutup."
             else
-                send_cmd "WEBVIEW_KILL_WORKER"
+                send_cmd "WEBVIEW_KILL_TAB"
+                echo "[termux-ipc] Tab WebView aktif telah ditutup."
             fi
+            return 0
+            ;;
+        kill-all|--kill-all|close-all|--close-all)
+            send_cmd "WEBVIEW_KILL_ALL"
+            echo "[termux-ipc] Seluruh tab WebView telah ditutup."
+            pkill -f "webview_monitor.cjs" 2>/dev/null || true
+            fuser -k 9223/tcp 2>/dev/null || true
             return 0
             ;;
         kill-worker|--kill-worker)
@@ -434,6 +590,10 @@ handle_webview() {
         close|--close|hide|--hide)
             send_cmd "WEBVIEW_CLOSE"
             return 0
+            ;;
+        headless)
+            shift
+            set -- "--headless" "$@"
             ;;
         reload|--reload)
             send_cmd "WEBVIEW_RELOAD"
@@ -599,6 +759,11 @@ handle_webview() {
     local WALLET=""
     local CHAIN="base"
     local IS_DESKTOP=0
+    local IS_HEADLESS=0
+    local IS_MONITOR=0
+    local IS_CONTROL=0
+    local MONITOR_PORT=9223
+    local IS_NEW_TAB=0
     local IS_GHOST=1
     local IS_AUTO=0
     local BLOCK_MEDIA=0
@@ -653,6 +818,24 @@ handle_webview() {
                 ;;
             --desktop)
                 IS_DESKTOP=1
+                shift
+                ;;
+            --headless)
+                IS_HEADLESS=1
+                shift
+                ;;
+            --monitor|--watch|--monitor-control|--control)
+                IS_MONITOR=1
+                [[ "$1" == *control* ]] && IS_CONTROL=1
+                if [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]]; then
+                    MONITOR_PORT="$2"
+                    shift 2
+                else
+                    shift 1
+                fi
+                ;;
+            --new-tab|--new-tabs|--worker)
+                IS_NEW_TAB=1
                 shift
                 ;;
             --ghost)
@@ -752,17 +935,43 @@ data = {
     'block_trackers': sys.argv[11] == '1',
     'block_css': sys.argv[12] == '1',
     'proxy': sys.argv[13],
-    'interval': int(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14].isdigit() else 0
+    'interval': int(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14].isdigit() else 0,
+    'isHeadless': sys.argv[15] == '1' if len(sys.argv) > 15 else False,
+    'isNewTab': sys.argv[16] == '1' if len(sys.argv) > 16 else False
 }
 print(json.dumps(data))
-" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL")
+" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL" "$IS_HEADLESS" "$IS_NEW_TAB")
 
     local RESP
     RESP=$(send_cmd "WEBVIEW_CONFIG $CFG_PAYLOAD")
     if [ "$RESP" = "OK" ]; then
-        echo "Meluncurkan $URL di tab baru"
+        if [ "$IS_HEADLESS" = "1" ]; then
+            echo "Meluncurkan $URL di background (headless)"
+            sleep 0.2
+            send_cmd "WEBVIEW_DETACH" >/dev/null 2>&1 || true
+        else
+            echo "Meluncurkan $URL di tab baru"
+        fi
     elif [ -n "$RESP" ]; then
         echo "$RESP"
+    fi
+
+    if [ "$IS_MONITOR" = "1" ]; then
+        if [ "$IS_CONTROL" = "1" ]; then
+            echo "[termux-ipc] Membuka Live Monitor & Control (WLAN 30-60 FPS) untuk URL ini..."
+        else
+            echo "[termux-ipc] Membuka Live Monitor (WLAN & Local) untuk URL ini..."
+        fi
+        sleep 0.8
+        local MON_SCRIPT="/root/wallet/webview_monitor.cjs"
+        if [ ! -f "$MON_SCRIPT" ] && [ -f "/wallet/webview_monitor.cjs" ]; then
+            MON_SCRIPT="/wallet/webview_monitor.cjs"
+        fi
+        if [ "$IS_CONTROL" = "1" ]; then
+            exec node "$MON_SCRIPT" "$MONITOR_PORT" --control
+        else
+            exec node "$MON_SCRIPT" "$MONITOR_PORT"
+        fi
     fi
 }
 
