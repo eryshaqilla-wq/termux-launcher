@@ -1559,6 +1559,11 @@ async function executeSingleProfile(url, extraFlags = []) {
         console.log(res);
     }
 
+    if (flagsWithoutProfile.includes('--headless')) {
+        await sleep(200);
+        runIpc('detach');
+    }
+
     if (isMonitorRequested && !recipe) {
         console.log(`[WebView Live Monitor] Menghubungkan ke ${isControlMode ? 'Control Mode (Ambil Alih 30-60 FPS)' : 'Watch Mode (30-60 FPS)'}...`);
         await sleep(800);

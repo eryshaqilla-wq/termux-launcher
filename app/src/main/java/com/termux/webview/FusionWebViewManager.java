@@ -975,7 +975,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 View.MeasureSpec.makeMeasureSpec(virtH, View.MeasureSpec.EXACTLY)
             );
             webView.layout(0, 0, virtW, virtH);
-            webView.setVisibility(View.GONE);
+            webView.setVisibility(View.VISIBLE);
             webView.resumeTimers();
             acquireWakeLock();
         }
@@ -3386,24 +3386,25 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (i2 == i) {
                 WebView webView = fusionTab.mWebView;
                 if (fusionTab.mIsMinimized || fusionTab.mIsHeadless) {
-                    webView.setVisibility(8);
+                    webView.setVisibility(View.VISIBLE);
                     webView.resumeTimers();
                     TextView textView = this.mMinPillBtn;
                     if (textView != null) {
                         textView.setText(" MAX ");
                     }
                     if (this.mTerminalPaneHost != null) {
-                        this.mTerminalPaneHost.setVisibility(0);
+                        this.mTerminalPaneHost.setVisibility(View.VISIBLE);
+                        this.mTerminalPaneHost.bringToFront();
                     }
                 } else {
-                    webView.setVisibility(0);
+                    webView.setVisibility(View.VISIBLE);
                     webView.bringToFront();
                     TextView textView2 = this.mMinPillBtn;
                     if (textView2 != null) {
                         textView2.setText(" MIN ");
                     }
                     if (this.mTerminalPaneHost != null) {
-                        this.mTerminalPaneHost.setVisibility(8);
+                        this.mTerminalPaneHost.setVisibility(View.GONE);
                     }
                     if (termuxActivity != null) {
                         KeyboardUtils.setSoftInputModeAdjustResize(termuxActivity);
@@ -3415,7 +3416,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 FusionProxyHelper.updateProxyIndicator(this, fusionTab);
             } else {
                 if (fusionTab != null && fusionTab.mWebView != null) {
-                    fusionTab.mWebView.setVisibility(8);
+                    if (fusionTab.mIsHeadless) {
+                        fusionTab.mWebView.setVisibility(View.VISIBLE);
+                    } else {
+                        fusionTab.mWebView.setVisibility(View.GONE);
+                    }
                 }
             }
         }

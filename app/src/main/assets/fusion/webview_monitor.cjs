@@ -111,7 +111,11 @@ async function getAllTabs() {
 
     if (ipcTabs.length > 0) {
         return ipcTabs.map((tab, idx) => {
-            const matchedCdp = pageCdpTabs[idx] || pageCdpTabs.find(c => c.url === tab.url) || pageCdpTabs[0];
+            const matchedCdp = pageCdpTabs.find(c => c.url === tab.url)
+                || pageCdpTabs.find(c => tab.url && c.url && (c.url.startsWith(tab.url) || tab.url.startsWith(c.url)))
+                || pageCdpTabs.find(c => tab.title && c.title && tab.title.length > 2 && (c.title.includes(tab.title) || tab.title.includes(c.title)))
+                || pageCdpTabs[idx]
+                || pageCdpTabs[0];
             return {
                 index: tab.index !== undefined ? tab.index : idx,
                 id: tab.id || (matchedCdp ? matchedCdp.id : `tab_${idx}`),

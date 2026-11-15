@@ -947,6 +947,8 @@ print(json.dumps(data))
     if [ "$RESP" = "OK" ]; then
         if [ "$IS_HEADLESS" = "1" ]; then
             echo "Meluncurkan $URL di background (headless)"
+            sleep 0.2
+            send_cmd "WEBVIEW_DETACH_TAB" >/dev/null 2>&1 || true
         else
             echo "Meluncurkan $URL di tab baru"
         fi
