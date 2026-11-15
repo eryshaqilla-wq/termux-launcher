@@ -2,10 +2,8 @@
 
 /**
  * ESO WEBVIEW LIVE MONITOR & REMOTE CONTROL (WLAN 30-60 FPS)
- * Memantau dan MENGAMBIL ALIH (Remote Control) WebView Termux secara real-time via Web/WLAN.
- * Mendukung Watch Mode (Read-Only) dan Control Mode (Klik, Drag, Swipe, Scroll, Ketik Langsung)
- * Arsitektur Scrcpy-Style: Zero-Lag Binary WebSocket Screencast Stream (0% Idle CPU).
- * UI Modern Catppuccin Mocha dengan Fullscreen Mode & Virtual Scrcpy Navigation Bar.
+ * Arsitektur Scrcpy Pro: Singleton CDP Hub, Zero-Lag Event-Driven Screencast (0% Idle CPU).
+ * UI Pro Catppuccin Mocha dengan Mobile Device Frame, Touch Ripple, Gestures & Direct Keyboard.
  */
 
 const http = require('http');
@@ -152,108 +150,56 @@ async function getAllTabs() {
     return [];
 }
 
-// 4. Capture screenshot via CDP WebSocket (Fallback snapshot)
-function captureCdpScreenshot(wsUrl, quality = 75) {
-    return new Promise((resolve, reject) => {
-        if (!WebSocket) return reject(new Error('WebSocket module (ws) tidak tersedia'));
-        if (!wsUrl) return reject(new Error('WebSocket Debugger URL tidak tersedia'));
-
-        let ws;
-        try {
-            ws = new WebSocket(wsUrl);
-        } catch (e) {
-            return reject(e);
-        }
-
-        const timer = setTimeout(() => {
-            try { ws.close(); } catch (_) {}
-            reject(new Error('CDP Screenshot timeout (2.5s)'));
-        }, 2500);
-
-        ws.on('open', () => {
-            ws.send(JSON.stringify({ id: 1, method: 'Page.enable' }));
-            ws.send(JSON.stringify({
-                id: 101,
-                method: 'Page.captureScreenshot',
-                params: {
-                    format: 'jpeg',
-                    quality: Math.min(Math.max(quality, 30), 90),
-                    fromSurface: false,
-                    captureBeyondViewport: true
-                }
-            }));
-        });
-
-        ws.on('message', (msg) => {
-            try {
-                const res = JSON.parse(msg.toString());
-                if (res.id === 101) {
-                    clearTimeout(timer);
-                    ws.close();
-                    if (res.result && res.result.data) {
-                        return resolve(Buffer.from(res.result.data, 'base64'));
-                    }
-                    return reject(new Error(res.error ? res.error.message : 'No data'));
-                }
-            } catch (_) {}
-        });
-
-        ws.on('error', (err) => {
-            clearTimeout(timer);
-            reject(err);
-        });
-    });
-}
-
-// 5. Placeholder SVG generator saat standby
+// 4. Placeholder SVG generator saat standby
 function generatePlaceholderSvg(text, subtext) {
     return Buffer.from(`
     <svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
       <defs>
         <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#11111b"/>
-          <stop offset="50%" stop-color="#181825"/>
-          <stop offset="100%" stop-color="#1e1e2e"/>
+          <stop offset="0%" stop-color="#0b0b12"/>
+          <stop offset="50%" stop-color="#11111b"/>
+          <stop offset="100%" stop-color="#181825"/>
         </linearGradient>
       </defs>
       <rect width="100%" height="100%" fill="url(#bg)"/>
-      <circle cx="540" cy="800" r="160" fill="#313244" stroke="#89b4fa" stroke-width="4"/>
-      <path d="M 460 800 Q 540 700 620 800 Q 540 900 460 800 Z" fill="none" stroke="#89b4fa" stroke-width="8"/>
-      <circle cx="540" cy="800" r="40" fill="#a6e3a1"/>
-      <text x="540" y="1040" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="44" font-weight="bold" fill="#cdd6f4" text-anchor="middle">${text}</text>
-      <text x="540" y="1110" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="28" fill="#a6adc8" text-anchor="middle">${subtext}</text>
-      <text x="540" y="1200" font-family="monospace" font-size="24" fill="#6c7086" text-anchor="middle">webview &lt;url&gt;  |  webview --headless &lt;url&gt;</text>
+      <circle cx="540" cy="820" r="140" fill="#1e1e2e" stroke="#89b4fa" stroke-width="3" stroke-dasharray="10 6"/>
+      <path d="M 470 820 Q 540 730 610 820 Q 540 910 470 820 Z" fill="none" stroke="#89b4fa" stroke-width="6"/>
+      <circle cx="540" cy="820" r="32" fill="#a6e3a1"/>
+      <text x="540" y="1040" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="40" font-weight="700" fill="#cdd6f4" text-anchor="middle">${text}</text>
+      <text x="540" y="1100" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="26" fill="#a6adc8" text-anchor="middle">${subtext}</text>
+      <text x="540" y="1180" font-family="monospace" font-size="22" fill="#6c7086" text-anchor="middle">web --headless &lt;url&gt;  |  web &lt;url&gt;</text>
     </svg>
     `.trim());
 }
 
-// 6. Template HTML Single Page Application (Catppuccin Mocha Dark UI)
+// 5. Template HTML Single Page Application (Scrcpy Pro UI)
 function getDashboardHtml(reqHost, isDefaultControl) {
     return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>ESO WebView Live Stream & Takeover</title>
+  <title>ESO Scrcpy Web Controller</title>
   <style>
     :root {
-      --bg: #0f0f17;
-      --card: #181825;
+      --bg: #09090e;
+      --card: #11111a;
+      --card-elevated: #161622;
       --surface: #1e1e2e;
-      --surface-hover: #313244;
+      --surface-hover: #262638;
       --border: rgba(255, 255, 255, 0.08);
-      --border-focus: #89b4fa;
+      --border-active: #89b4fa;
       --text: #cdd6f4;
-      --subtext: #a6adc8;
+      --subtext: #9399b2;
       --overlay: #6c7086;
       --blue: #89b4fa;
+      --blue-glow: rgba(137, 180, 250, 0.35);
       --green: #a6e3a1;
+      --green-glow: rgba(166, 227, 161, 0.4);
       --peach: #fab387;
       --red: #f38ba8;
       --mauve: #cba6f7;
       --teal: #94e2d5;
-      --yellow: #f9e2af;
-      --nav-height: 48px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -266,370 +212,338 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       overflow-x: hidden;
       user-select: none;
     }
+    
+    /* Top App Bar */
     header {
-      background-color: var(--card);
+      background: var(--card);
       border-bottom: 1px solid var(--border);
-      padding: 10px 18px;
+      padding: 8px 18px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
       z-index: 100;
+      backdrop-filter: blur(12px);
     }
     .brand {
       display: flex;
       align-items: center;
       gap: 12px;
     }
-    .brand h1 {
-      font-size: 1.05rem;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      color: var(--blue);
+    .brand-logo {
       display: flex;
       align-items: center;
       gap: 8px;
+      font-weight: 800;
+      font-size: 1.05rem;
+      letter-spacing: 0.5px;
+      color: var(--blue);
     }
     .live-dot {
-      width: 10px;
-      height: 10px;
+      width: 9px;
+      height: 9px;
       background: var(--green);
       border-radius: 50%;
-      box-shadow: 0 0 10px var(--green);
-      animation: pulse 1.6s infinite;
+      box-shadow: 0 0 10px var(--green-glow);
+      animation: pulse 1.8s infinite;
     }
     @keyframes pulse {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 14px var(--green); }
-      100% { transform: scale(0.95); opacity: 0.8; }
+      0% { transform: scale(0.9); opacity: 0.7; }
+      50% { transform: scale(1.25); opacity: 1; box-shadow: 0 0 14px var(--green); }
+      100% { transform: scale(0.9); opacity: 0.7; }
     }
-    .mode-pill {
+
+    /* Mode Segmented Switch */
+    .mode-switch {
       display: flex;
       align-items: center;
-      background: var(--surface);
+      background: var(--bg);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
+      border-radius: 20px;
+      padding: 2px;
     }
     .mode-btn {
-      padding: 6px 14px;
-      font-size: 0.8rem;
+      padding: 5px 14px;
+      font-size: 0.78rem;
       font-weight: 700;
       cursor: pointer;
       border: none;
       background: transparent;
       color: var(--subtext);
-      transition: all 0.2s;
+      border-radius: 18px;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
     }
     .mode-btn.active.watch {
-      background: rgba(148, 226, 213, 0.2);
+      background: rgba(148, 226, 213, 0.18);
       color: var(--teal);
     }
     .mode-btn.active.control {
-      background: rgba(250, 179, 135, 0.25);
+      background: rgba(250, 179, 135, 0.22);
       color: var(--peach);
-      box-shadow: inset 0 0 10px rgba(250, 179, 135, 0.3);
+      box-shadow: 0 2px 8px rgba(250, 179, 135, 0.25);
     }
-    .header-controls {
+
+    .header-actions {
       display: flex;
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
     }
-    select, button {
+    select, button.btn {
       background: var(--surface);
       color: var(--text);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 7px 12px;
-      font-size: 0.82rem;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      font-weight: 600;
       cursor: pointer;
       outline: none;
-      transition: all 0.2s;
+      transition: all 0.18s ease;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
     }
-    select:hover, button:hover {
+    select:hover, button.btn:hover {
       background: var(--surface-hover);
-      border-color: var(--blue);
+      border-color: var(--border-active);
     }
-    button.primary {
+    button.btn-primary {
       background: var(--blue);
-      color: var(--bg);
-      font-weight: 700;
+      color: #0b0b12;
       border: none;
+      font-weight: 700;
     }
-    button.primary:hover {
+    button.btn-primary:hover {
       background: #b4befe;
+      box-shadow: 0 0 14px var(--blue-glow);
     }
-    button.warning {
+    button.btn-warning {
       background: rgba(250, 179, 135, 0.15);
       color: var(--peach);
-      border-color: rgba(250, 179, 135, 0.4);
+      border-color: rgba(250, 179, 135, 0.35);
     }
-    button.danger {
+    button.btn-danger {
       background: rgba(243, 139, 168, 0.15);
       color: var(--red);
-      border-color: rgba(243, 139, 168, 0.4);
+      border-color: rgba(243, 139, 168, 0.35);
     }
-    button.danger:hover {
+    button.btn-danger:hover {
       background: var(--red);
-      color: var(--bg);
+      color: #0b0b12;
     }
+
+    /* Main Workspace */
     main {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 12px;
+      justify-content: flex-start;
+      padding: 14px 10px;
       gap: 12px;
-      position: relative;
     }
-    .monitor-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      overflow: hidden;
-      box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+
+    /* Scrcpy Device Stage */
+    .device-stage {
+      position: relative;
       display: flex;
       flex-direction: column;
-      max-width: 1100px;
+      align-items: center;
+      justify-content: center;
       width: 100%;
+      max-width: 980px;
+    }
+
+    /* Phone Mockup Frame */
+    .phone-mockup {
       position: relative;
-      transition: all 0.3s ease;
+      background: #000;
+      border-radius: 28px;
+      padding: 10px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.85), 0 0 0 1px rgba(255,255,255,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      width: 100%;
+      max-width: 480px;
+      transition: max-width 0.3s ease;
+    }
+    .phone-mockup.desktop-view {
+      max-width: 960px;
+      border-radius: 16px;
     }
 
-    /* FULLSCREEN MODE (Scrcpy Immersion) */
-    .monitor-card.fullscreen-mode {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-      max-width: 100vw !important;
-      max-height: 100vh !important;
-      border-radius: 0 !important;
-      border: none !important;
-      z-index: 99999 !important;
-      background: #000 !important;
-      margin: 0 !important;
-    }
-    .monitor-card.fullscreen-mode .viewer-area {
-      height: 100vh !important;
-      max-height: 100vh !important;
-    }
-    .monitor-card.fullscreen-mode .card-bar,
-    .monitor-card.fullscreen-mode .toolbar,
-    .monitor-card.fullscreen-mode .control-ribbon {
-      position: absolute;
-      left: 0;
-      right: 0;
-      z-index: 10001;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.25s ease, transform 0.25s ease;
-      background: rgba(24, 24, 37, 0.92);
-      backdrop-filter: blur(12px);
-    }
-    .monitor-card.fullscreen-mode .card-bar {
-      top: 0;
-      transform: translateY(-100%);
-    }
-    .monitor-card.fullscreen-mode .toolbar {
-      bottom: 0;
-      transform: translateY(100%);
-    }
-    .monitor-card.fullscreen-mode .control-ribbon {
-      bottom: var(--nav-height);
-      transform: translateY(100%);
-    }
-    .monitor-card.fullscreen-mode:hover .card-bar,
-    .monitor-card.fullscreen-mode:hover .toolbar,
-    .monitor-card.fullscreen-mode:hover .control-ribbon,
-    .monitor-card.fullscreen-mode.hud-visible .card-bar,
-    .monitor-card.fullscreen-mode.hud-visible .toolbar,
-    .monitor-card.fullscreen-mode.hud-visible .control-ribbon {
-      opacity: 1;
-      pointer-events: auto;
-      transform: translateY(0);
-    }
-
-    .card-bar {
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: 8px 14px;
+    /* Status Notch Bar */
+    .device-notch-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
-      font-size: 0.82rem;
-    }
-    .url-chip {
+      padding: 4px 14px 8px 14px;
+      font-size: 0.72rem;
       color: var(--subtext);
+      background: #000;
+      z-index: 10;
+    }
+    .device-notch-bar .title-chip {
+      color: var(--text);
+      font-weight: 700;
+      max-width: 220px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 500px;
+    }
+    .device-notch-bar .url-badge {
       font-family: monospace;
-      font-size: 0.78rem;
-    }
-    .badge-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .badge {
       font-size: 0.68rem;
-      padding: 2px 7px;
-      border-radius: 6px;
-      font-weight: 700;
+      color: var(--overlay);
     }
-    .badge.headless { background: rgba(203, 166, 247, 0.2); color: var(--mauve); border: 1px solid rgba(203, 166, 247, 0.4); }
-    .badge.visual { background: rgba(166, 227, 161, 0.2); color: var(--green); border: 1px solid rgba(166, 227, 161, 0.4); }
-    .badge.desktop { background: rgba(137, 180, 250, 0.2); color: var(--blue); border: 1px solid rgba(137, 180, 250, 0.4); }
-    .badge.profile { background: rgba(250, 179, 135, 0.2); color: var(--peach); border: 1px solid rgba(250, 179, 135, 0.4); }
 
-    .viewer-area {
-      background: #000;
+    /* Display Screen Canvas */
+    .screen-viewport {
       position: relative;
+      background: #000;
+      border-radius: 18px;
+      overflow: hidden;
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 520px;
-      max-height: 76vh;
-      overflow: hidden;
-      user-select: none;
+      min-height: 480px;
+      max-height: 74vh;
+      outline: none;
       touch-action: none;
+      cursor: default;
     }
-    .viewer-area.control-mode {
+    .screen-viewport.control-active {
       cursor: crosshair;
     }
-    .viewer-area img {
+    .screen-viewport img {
       max-width: 100%;
-      max-height: 100%;
+      max-height: 74vh;
       object-fit: contain;
       display: block;
-      pointer-events: auto;
       touch-action: none;
+      pointer-events: auto;
     }
 
-    /* HUD Status Overlay */
-    .hud-overlay {
+    /* Visual Touch Ripple (Scrcpy Show Touches) */
+    .touch-dot {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      right: 10px;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(137, 180, 250, 0.4);
+      border: 2px solid var(--blue);
+      transform: translate(-50%, -50%) scale(0.6);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease, transform 0.12s ease;
+      z-index: 50;
+      box-shadow: 0 0 12px var(--blue-glow);
+    }
+    .touch-dot.active {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    /* HUD Metrics Overlay */
+    .hud-metrics {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       pointer-events: none;
-      z-index: 10;
+      z-index: 25;
     }
-    .hud-pill {
-      background: rgba(17, 17, 27, 0.85);
-      backdrop-filter: blur(10px);
+    .hud-chip {
+      background: rgba(15, 15, 23, 0.85);
+      backdrop-filter: blur(8px);
       border: 1px solid rgba(255, 255, 255, 0.12);
-      padding: 5px 12px;
-      border-radius: 999px;
+      padding: 4px 10px;
+      border-radius: 20px;
       font-size: 0.72rem;
       color: var(--text);
       display: flex;
       align-items: center;
       gap: 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
-    .hud-pill.control-banner {
-      background: rgba(250, 179, 135, 0.28);
-      border-color: rgba(250, 179, 135, 0.6);
-      color: var(--peach);
+    .hud-chip.fps-meter {
       font-weight: 700;
+      color: var(--green);
     }
 
-    /* SCRCPY VIRTUAL NAVIGATION BAR (Docked at Bottom of Viewer) */
-    .scrcpy-nav-bar {
+    /* Scrcpy Bottom Virtual Dock */
+    .scrcpy-dock {
       position: absolute;
-      bottom: 12px;
+      bottom: 14px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(24, 24, 37, 0.88);
-      backdrop-filter: blur(14px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 30px;
-      padding: 4px 10px;
+      background: rgba(17, 17, 26, 0.88);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 26px;
+      padding: 4px 8px;
       display: flex;
       align-items: center;
-      gap: 6px;
-      z-index: 20;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      transition: opacity 0.3s ease, transform 0.3s ease;
+      gap: 4px;
+      z-index: 30;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+      transition: opacity 0.25s ease, transform 0.25s ease;
     }
-    .scrcpy-nav-btn {
+    .dock-btn {
       background: transparent;
       border: none;
       color: var(--text);
-      padding: 7px 12px;
-      border-radius: 20px;
+      padding: 7px 11px;
+      border-radius: 18px;
       font-size: 0.78rem;
       font-weight: 600;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       gap: 5px;
       transition: all 0.15s ease;
     }
-    .scrcpy-nav-btn:hover {
+    .dock-btn:hover {
       background: rgba(255, 255, 255, 0.12);
       color: var(--blue);
       transform: translateY(-1px);
     }
-    .scrcpy-nav-btn:active {
+    .dock-btn:active {
       transform: translateY(1px);
     }
-    .scrcpy-nav-btn.primary-action {
+    .dock-btn.highlight {
       background: var(--blue);
-      color: var(--bg);
+      color: #0b0b12;
       font-weight: 700;
     }
-    .scrcpy-nav-btn.primary-action:hover {
-      background: #b4befe;
-    }
 
-    /* Physical Keyboard Focus Indicator */
-    .keyboard-indicator {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 0.72rem;
-      color: var(--teal);
-    }
-    .keyboard-indicator .kbd-dot {
-      width: 7px;
-      height: 7px;
-      background: var(--teal);
-      border-radius: 50%;
-    }
-
-    /* Direct Input Ribbon */
-    .control-ribbon {
-      background: var(--surface);
+    /* Quick Keyboard Input Drawer */
+    .keyboard-drawer {
+      background: var(--card);
       border-top: 1px solid var(--border);
-      padding: 8px 14px;
+      padding: 10px 14px;
+      border-radius: 0 0 20px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 15;
+    }
+    .drawer-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      flex-wrap: wrap;
     }
-    .control-input {
+    .type-input {
       flex: 1;
-      min-width: 220px;
-      background: var(--card);
+      background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 7px 12px;
@@ -637,27 +551,65 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       font-size: 0.82rem;
       outline: none;
     }
-    .control-input:focus {
+    .type-input:focus {
+      border-color: var(--blue);
+    }
+    .shortcut-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .chip-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--subtext);
+      padding: 4px 9px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip-btn:hover {
+      background: var(--surface-hover);
+      color: var(--text);
       border-color: var(--blue);
     }
 
-    .toolbar {
-      padding: 8px 14px;
-      background: var(--card);
-      border-top: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
+    /* Fullscreen Immersion */
+    .phone-mockup:fullscreen,
+    .phone-mockup:-webkit-full-screen {
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      border-radius: 0 !important;
+      padding: 0 !important;
+      background: #000 !important;
     }
-    .tool-group {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    .phone-mockup:fullscreen .screen-viewport,
+    .phone-mockup:-webkit-full-screen .screen-viewport {
+      height: 100vh !important;
+      max-height: 100vh !important;
+      border-radius: 0 !important;
     }
-    .info-footer {
-      max-width: 1100px;
+    .phone-mockup:fullscreen .device-notch-bar,
+    .phone-mockup:fullscreen .keyboard-drawer {
+      display: none !important;
+    }
+    .phone-mockup:fullscreen .scrcpy-dock {
+      bottom: 20px;
+    }
+    .phone-mockup.hud-hidden .scrcpy-dock,
+    .phone-mockup.hud-hidden .hud-metrics {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Quick Cheatsheet Footer */
+    .stage-footer {
+      max-width: 980px;
       width: 100%;
       background: var(--card);
       border: 1px solid var(--border);
@@ -666,126 +618,122 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       font-size: 0.78rem;
       color: var(--subtext);
     }
-    .info-footer h3 {
+    .stage-footer h4 {
       color: var(--blue);
-      font-size: 0.85rem;
+      font-size: 0.84rem;
       margin-bottom: 6px;
     }
-    .cmd-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 6px;
-      margin-top: 6px;
+    .shortcut-list {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      font-size: 0.75rem;
     }
-    .cmd-box {
+    .kbd-tag {
       background: var(--surface);
       border: 1px solid var(--border);
-      padding: 6px 10px;
-      border-radius: 6px;
+      padding: 2px 6px;
+      border-radius: 4px;
       font-family: monospace;
       color: var(--green);
-      font-size: 0.75rem;
     }
   </style>
 </head>
 <body>
   <header>
     <div class="brand">
-      <div class="live-dot"></div>
-      <h1>ESO WebView Stream</h1>
-      <div class="mode-pill">
-        <button id="btnWatch" class="mode-btn active watch" onclick="setMode('watch')">👁️ Watch</button>
-        <button id="btnControl" class="mode-btn control" onclick="setMode('control')">🎮 Ambil Alih</button>
+      <div class="brand-logo">
+        <div class="live-dot"></div>
+        <span>ESO SCRCPY PRO</span>
+      </div>
+      <div class="mode-switch">
+        <button id="btnWatch" class="mode-btn active watch" onclick="setMode('watch')">👁️ Spectator</button>
+        <button id="btnControl" class="mode-btn control" onclick="setMode('control')">🎮 Takeover</button>
       </div>
     </div>
-    <div class="header-controls">
+
+    <div class="header-actions">
       <select id="tabSelector" onchange="changeTab(this.value)">
         <option value="">Memuat tab...</option>
       </select>
-      <button class="primary" onclick="toggleFullscreen()" id="btnFullscreenTop">⛶ Fullscreen</button>
-      <button class="warning" onclick="toggleAttach()">👁️ Attach</button>
-      <button onclick="toggleDetach()">🕶️ Detach</button>
-      <button class="danger" onclick="killCurrentTab()">❌ Kill</button>
-      <button class="danger" onclick="killAllTabs()">💥 Kill All</button>
+      <button class="btn btn-primary" onclick="toggleFullscreen()" id="btnFullTop">⛶ Fullscreen</button>
+      <button class="btn btn-warning" onclick="toggleAttach()">👁️ Attach</button>
+      <button class="btn" onclick="toggleDetach()">🕶️ Detach</button>
+      <button class="btn btn-danger" onclick="killCurrentTab()">❌ Kill</button>
     </div>
   </header>
 
   <main>
-    <div class="monitor-card" id="monitorCard">
-      <div class="card-bar">
-        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-          <span style="font-weight:700;" id="tabTitle">Menunggu WebView...</span>
-          <span class="url-chip" id="tabUrl">-</span>
-        </div>
-        <div class="badge-group" id="badgeGroup">
-          <span class="badge headless">HEADLESS</span>
-        </div>
-      </div>
-      
-      <div class="viewer-area" id="viewerArea" tabindex="0">
-        <img id="liveView" src="/api/placeholder.svg" alt="WebView Live Stream" draggable="false">
+    <div class="device-stage">
+      <div class="phone-mockup" id="phoneMockup">
         
-        <div class="hud-overlay">
-          <div class="hud-pill" id="fpsPill">
-            <span>FPS: <strong id="fpsVal">30</strong></span>
-            <span>•</span>
-            <span id="streamState">Scrcpy-Stream</span>
+        <!-- Status Bar -->
+        <div class="device-notch-bar">
+          <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+            <span class="title-chip" id="tabTitle">Menunggu WebView...</span>
+            <span id="badgeMode" style="font-size:0.65rem; padding:1px 6px; border-radius:4px; background:rgba(203,166,247,0.2); color:var(--mauve); font-weight:700;">HEADLESS</span>
           </div>
-          <div class="hud-pill control-banner" id="controlBanner" style="display:none;">
-            <span>🎮 AMBIL ALIH AKTIF (100% Native Gestures)</span>
+          <span class="url-badge" id="tabUrl">-</span>
+        </div>
+
+        <!-- Touch Screen Viewport -->
+        <div class="screen-viewport" id="screenViewport" tabindex="0">
+          <img id="liveView" src="/api/placeholder.svg" alt="WebView Live Stream" draggable="false">
+          
+          <!-- Visual Touch Indicator -->
+          <div class="touch-dot" id="touchDot"></div>
+
+          <!-- Floating HUD Metrics -->
+          <div class="hud-metrics" id="hudMetrics">
+            <div class="hud-chip fps-meter">
+              <span id="fpsVal">--</span> FPS • <span id="pingVal">4ms</span>
+            </div>
+            <div class="hud-chip" id="controlStateChip" style="color:var(--teal);">
+              👁️ Watch Mode
+            </div>
           </div>
-          <div class="hud-pill" id="profilePill">
-            <span id="profileVal">Profile: default</span>
+
+          <!-- Bottom Navigation Dock -->
+          <div class="scrcpy-dock" id="scrcpyDock">
+            <button class="dock-btn" onclick="sendNav('back')" title="Kembali (Klik Kanan mouse juga berfungsi sebagai Back)">◀ Back</button>
+            <button class="dock-btn" onclick="sendNav('home')" title="Beranda (Klik Tengah mouse)">◯ Home</button>
+            <button class="dock-btn" onclick="sendNav('reload')" title="Muat Ulang Halaman">🔄 Reload</button>
+            <button class="dock-btn" onclick="toggleKeyboardDrawer()" title="Keyboard Input Drawer">⌨ Ketik</button>
+            <button class="dock-btn" onclick="pasteClipboard()" title="Paste Clipboard">📋 Paste</button>
+            <button class="dock-btn highlight" onclick="toggleFullscreen()" title="Layar Penuh">⛶ Full</button>
           </div>
         </div>
 
-        <!-- Scrcpy Virtual Navigation Bar -->
-        <div class="scrcpy-nav-bar" id="scrcpyNavBar">
-          <button class="scrcpy-nav-btn" onclick="sendNav('back')" title="Kembali (Back)">◀ Back</button>
-          <button class="scrcpy-nav-btn" onclick="sendNav('forward')" title="Maju (Forward)">▶ Forward</button>
-          <button class="scrcpy-nav-btn" onclick="sendNav('home')" title="Beranda (Home)">🏠 Home</button>
-          <button class="scrcpy-nav-btn" onclick="sendNav('reload')" title="Muat Ulang (Reload)">🔄 Reload</button>
-          <button class="scrcpy-nav-btn" onclick="toggleRibbonInput()" title="Buka Input Keyboard">⌨ Ketik</button>
-          <button class="scrcpy-nav-btn" onclick="pasteClipboard()" title="Paste Clipboard">📋 Paste</button>
-          <button class="scrcpy-nav-btn primary-action" onclick="toggleFullscreen()" title="Layar Penuh (Fullscreen)">⛶ Full</button>
+        <!-- Keyboard Drawer -->
+        <div class="keyboard-drawer" id="keyboardDrawer" style="display:none;">
+          <div class="drawer-row">
+            <input type="text" id="typeInput" class="type-input" placeholder="Ketik teks di sini lalu tekan Enter..." onkeydown="handleInputKey(event)">
+            <button class="btn btn-primary" onclick="sendInputText()">⏎ Kirim</button>
+          </div>
+          <div class="shortcut-row">
+            <button class="chip-btn" onclick="sendSpecialKey('Enter', 'Enter', 13)">⏎ Enter</button>
+            <button class="chip-btn" onclick="sendSpecialKey('Backspace', 'Backspace', 8)">⌫ Del</button>
+            <button class="chip-btn" onclick="sendSpecialKey('Tab', 'Tab', 9)">⇥ Tab</button>
+            <button class="chip-btn" onclick="sendSpecialKey('Escape', 'Escape', 27)">⎋ Esc</button>
+            <button class="chip-btn" onclick="sendScrollDelta(0, -350)">⬆ Scroll Up</button>
+            <button class="chip-btn" onclick="sendScrollDelta(0, 350)">⬇ Scroll Down</button>
+            <button class="chip-btn" onclick="toggleDesktopView()">🖥️ Switch Viewport</button>
+          </div>
         </div>
-      </div>
 
-      <div class="control-ribbon" id="controlRibbon" style="display:none;">
-        <input type="text" id="typeInput" class="control-input" placeholder="Ketik teks di sini lalu tekan Enter..." onkeydown="handleInputKey(event)">
-        <button class="primary" onclick="sendInputText()">⏎ Kirim</button>
-        <button onclick="sendSpecialKey('Enter', 'Enter', 13)">⏎ Enter</button>
-        <button onclick="sendSpecialKey('Backspace', 'Backspace', 8)">⌫ Del</button>
-        <button onclick="sendSpecialKey('Tab', 'Tab', 9)">⇥ Tab</button>
-        <button onclick="sendSpecialKey('Escape', 'Escape', 27)">⎋ Esc</button>
-        <button onclick="sendScrollDelta(0, -350)">⬆️ Up</button>
-        <button onclick="sendScrollDelta(0, 350)">⬇️ Down</button>
-      </div>
-
-      <div class="toolbar">
-        <div class="tool-group">
-          <span style="font-size:0.78rem; color:var(--subtext);">WLAN Host: <strong>http://${reqHost}</strong></span>
-          <span style="font-size:0.78rem; color:var(--overlay);">|</span>
-          <span class="keyboard-indicator" id="kbdIndicator">
-            <span class="kbd-dot"></span> Direct Keyboard Active
-          </span>
-        </div>
-        <div class="tool-group">
-          <button onclick="copyCurrentUrl()">📋 Salin URL</button>
-          <button onclick="toggleFullscreen()">⛶ Layar Penuh</button>
-        </div>
       </div>
     </div>
 
-    <div class="info-footer">
-      <h3>🚀 Kontrol Cepat & Shortcut Terminal:</h3>
-      <div class="cmd-grid">
-        <div class="cmd-box">webview --headless --monitor &lt;url&gt;</div>
-        <div class="cmd-box">webview --monitor-control</div>
-        <div class="cmd-box">webview --attach &lt;idx&gt;</div>
-        <div class="cmd-box">webview --detach &lt;idx&gt;</div>
-        <div class="cmd-box">webview --kill &lt;idx&gt;</div>
-        <div class="cmd-box">webview --kill-all</div>
+    <!-- Cheatsheet & Gestures Info -->
+    <div class="stage-footer">
+      <h4>⚡ Scrcpy Gestur & Kontrol Native:</h4>
+      <div class="shortcut-list">
+        <span><span class="kbd-tag">Drag / Swipe</span> Geser layar</span>
+        <span><span class="kbd-tag">Klik Kanan</span> Tombol Back (Kembali)</span>
+        <span><span class="kbd-tag">Klik Tengah</span> Tombol Home</span>
+        <span><span class="kbd-tag">Scroll Wheel</span> Scroll halaman</span>
+        <span><span class="kbd-tag">Keyboard Fisik</span> Ketik langsung ke input aktif</span>
+        <span><span class="kbd-tag">F11</span> Toggle Fullscreen</span>
       </div>
     </div>
   </main>
@@ -793,33 +741,40 @@ function getDashboardHtml(reqHost, isDefaultControl) {
   <script>
     let currentTabId = '';
     let currentTabIndex = 0;
+    let currentWsUrl = '';
     let tabsList = [];
-    let fps = 30;
     let mode = ${isDefaultControl ? "'control'" : "'watch'"};
     let wsStream = null;
-    let currentWsUrl = '';
-    let hudHideTimer = null;
+    let isConnected = false;
+    let hudTimer = null;
 
-    // Real FPS counter
-    let framesThisSecond = 0;
-    let lastFpsUpdate = performance.now();
+    // Measured FPS calculation
+    let framesCounter = 0;
+    let lastFpsStamp = performance.now();
 
-    // Elements
+    // DOM Elements
     const imgEl = document.getElementById('liveView');
-    const viewerArea = document.getElementById('viewerArea');
-    const monitorCard = document.getElementById('monitorCard');
-    const controlRibbon = document.getElementById('controlRibbon');
+    const viewport = document.getElementById('screenViewport');
+    const mockup = document.getElementById('phoneMockup');
+    const touchDot = document.getElementById('touchDot');
+    const kbdDrawer = document.getElementById('keyboardDrawer');
 
+    // 1. Load Tabs (Does NOT disconnect active WebSocket)
     async function loadTabs() {
       try {
         const res = await fetch('/api/tabs');
-        tabsList = await res.json();
+        const list = await res.json();
+        if (!Array.isArray(list)) return;
+        tabsList = list;
+
         const sel = document.getElementById('tabSelector');
+        const prevVal = sel.value;
         sel.innerHTML = '';
+
         if (tabsList.length === 0) {
           sel.innerHTML = '<option value="">Tidak ada WebView aktif</option>';
           document.getElementById('tabTitle').innerText = 'Tidak ada WebView aktif';
-          document.getElementById('tabUrl').innerText = 'Buka webview via terminal: webview <url>';
+          document.getElementById('tabUrl').innerText = 'Buka webview via terminal: web <url>';
           document.getElementById('liveView').src = '/api/placeholder.svg';
           stopWsStream();
           return;
@@ -831,25 +786,24 @@ function getDashboardHtml(reqHost, isDefaultControl) {
           const modeTag = t.isHeadless ? '[HEADLESS]' : '[VISUAL]';
           const viewTag = t.isDesktop ? '[DESKTOP]' : '[MOBILE]';
           opt.innerText = '#' + t.index + ' ' + modeTag + ' ' + viewTag + ' ' + (t.title || 'Tab');
-          if (t.active && !currentTabId) {
-            opt.selected = true;
-            currentTabId = opt.value;
-            currentTabIndex = t.index;
-            currentWsUrl = t.wsUrl;
-          }
           sel.appendChild(opt);
         });
 
-        if (!currentTabId && tabsList.length > 0) {
+        if (prevVal && tabsList.some(t => (t.id || t.index) == prevVal)) {
+          sel.value = prevVal;
+        } else if (!currentTabId && tabsList.length > 0) {
           currentTabId = tabsList[0].id || tabsList[0].index;
           currentTabIndex = tabsList[0].index;
           currentWsUrl = tabsList[0].wsUrl;
+          sel.value = currentTabId;
+          updateTabMetadata();
+          connectWsStream();
+        } else if (currentTabId) {
+          sel.value = currentTabId;
+          updateTabMetadata();
         }
-
-        updateTabMetadata();
-        connectWsStream();
-      } catch (err) {
-        console.error('Gagal memuat tabs:', err);
+      } catch (e) {
+        console.warn('Gagal memuat tabs:', e);
       }
     }
 
@@ -858,24 +812,27 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       if (!tab) return;
       document.getElementById('tabTitle').innerText = tab.title || 'WebView Tab';
       document.getElementById('tabUrl').innerText = tab.url || 'about:blank';
-      document.getElementById('profileVal').innerText = 'Profile: ' + (tab.profile || 'default');
-
-      const bg = document.getElementById('badgeGroup');
-      bg.innerHTML = '';
+      
+      const badge = document.getElementById('badgeMode');
       if (tab.isHeadless) {
-        bg.innerHTML += '<span class="badge headless">HEADLESS</span>';
+        badge.innerText = 'HEADLESS';
+        badge.style.background = 'rgba(203,166,247,0.2)';
+        badge.style.color = 'var(--mauve)';
       } else {
-        bg.innerHTML += '<span class="badge visual">VISUAL</span>';
+        badge.innerText = 'VISUAL';
+        badge.style.background = 'rgba(166,227,161,0.2)';
+        badge.style.color = 'var(--green)';
       }
+
       if (tab.isDesktop) {
-        bg.innerHTML += '<span class="badge desktop">DESKTOP</span>';
-      }
-      if (tab.proxy && tab.proxy !== 'direct') {
-        bg.innerHTML += '<span class="badge profile">' + tab.proxy + '</span>';
+        mockup.classList.add('desktop-view');
+      } else {
+        mockup.classList.remove('desktop-view');
       }
     }
 
     function changeTab(val) {
+      if (val === currentTabId) return;
       currentTabId = val;
       const tab = tabsList.find(t => (t.id || t.index) == val);
       if (tab) {
@@ -883,45 +840,52 @@ function getDashboardHtml(reqHost, isDefaultControl) {
         currentWsUrl = tab.wsUrl;
       }
       updateTabMetadata();
-      connectWsStream();
+      connectWsStream(true);
     }
 
     function setMode(newMode) {
       mode = newMode;
       const btnW = document.getElementById('btnWatch');
       const btnC = document.getElementById('btnControl');
-      const banner = document.getElementById('controlBanner');
-      const kbd = document.getElementById('kbdIndicator');
+      const chip = document.getElementById('controlStateChip');
 
       if (mode === 'control') {
         btnW.className = 'mode-btn';
         btnC.className = 'mode-btn active control';
-        viewerArea.classList.add('control-mode');
-        banner.style.display = 'flex';
-        controlRibbon.style.display = 'flex';
-        kbd.style.display = 'inline-flex';
-        viewerArea.focus();
+        viewport.classList.add('control-active');
+        chip.innerText = '🎮 Takeover Active';
+        chip.style.color = 'var(--peach)';
+        kbdDrawer.style.display = 'flex';
+        viewport.focus();
       } else {
         btnW.className = 'mode-btn active watch';
         btnC.className = 'mode-btn';
-        viewerArea.classList.remove('control-mode');
-        banner.style.display = 'none';
-        controlRibbon.style.display = 'none';
-        kbd.style.display = 'none';
+        viewport.classList.remove('control-active');
+        chip.innerText = '👁️ Spectator Mode';
+        chip.style.color = 'var(--teal)';
+        kbdDrawer.style.display = 'none';
       }
     }
 
-    // WebSocket 30-60 FPS Screencast Stream
-    function connectWsStream() {
+    // 2. Persistent WebSocket Screencast Connection
+    function connectWsStream(force = false) {
+      if (!force && wsStream && (wsStream.readyState === WebSocket.OPEN || wsStream.readyState === WebSocket.CONNECTING)) {
+        return;
+      }
       stopWsStream();
       if (!currentTabId) return;
 
       const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = wsProto + '//' + location.host + '/ws?tab=' + encodeURIComponent(currentTabId) + '&fps=' + fps;
-      
+      const wsUrl = wsProto + '//' + location.host + '/ws?tab=' + encodeURIComponent(currentTabId);
+
       try {
         wsStream = new WebSocket(wsUrl);
         wsStream.binaryType = 'blob';
+
+        wsStream.onopen = () => {
+          isConnected = true;
+          document.getElementById('pingVal').innerText = '0ms';
+        };
 
         wsStream.onmessage = (event) => {
           if (event.data instanceof Blob) {
@@ -931,26 +895,32 @@ function getDashboardHtml(reqHost, isDefaultControl) {
             };
             imgEl.src = blobUrl;
 
-            // Frame counter calculation
-            framesThisSecond++;
+            // Frame rate counter
+            framesCounter++;
             const now = performance.now();
-            if (now - lastFpsUpdate >= 1000) {
-              const measuredFps = Math.round((framesThisSecond * 1000) / (now - lastFpsUpdate));
-              document.getElementById('fpsVal').innerText = measuredFps;
-              framesThisSecond = 0;
-              lastFpsUpdate = now;
+            if (now - lastFpsStamp >= 1000) {
+              const measured = Math.round((framesCounter * 1000) / (now - lastFpsStamp));
+              document.getElementById('fpsVal').innerText = measured;
+              framesCounter = 0;
+              lastFpsStamp = now;
             }
           }
         };
 
         wsStream.onclose = () => {
-          setTimeout(connectWsStream, 1200);
+          isConnected = false;
+          document.getElementById('fpsVal').innerText = '--';
+          setTimeout(() => {
+            if (!isConnected) connectWsStream();
+          }, 1500);
         };
 
         wsStream.onerror = () => {
-          setTimeout(connectWsStream, 1500);
+          setTimeout(() => {
+            if (!isConnected) connectWsStream();
+          }, 1500);
         };
-      } catch (_) {
+      } catch (e) {
         setTimeout(connectWsStream, 1500);
       }
     }
@@ -960,10 +930,11 @@ function getDashboardHtml(reqHost, isDefaultControl) {
         try { wsStream.close(); } catch (_) {}
         wsStream = null;
       }
+      isConnected = false;
     }
 
-    // PIXEL-PERFECT COORDINATE CALCULATION (Letterbox & Pillarbox aware)
-    function getRenderRect() {
+    // 3. Pixel-Perfect Letterbox Calculation
+    function getRenderBox() {
       const rect = imgEl.getBoundingClientRect();
       const naturalW = imgEl.naturalWidth || 1080;
       const naturalH = imgEl.naturalHeight || 1920;
@@ -972,13 +943,11 @@ function getDashboardHtml(reqHost, isDefaultControl) {
 
       let renderW, renderH, offsetX, offsetY;
       if (elementAspect > naturalAspect) {
-        // Pillarbox (bars on left/right)
         renderH = rect.height;
         renderW = renderH * naturalAspect;
         offsetX = (rect.width - renderW) / 2;
         offsetY = 0;
       } else {
-        // Letterbox (bars on top/bottom)
         renderW = rect.width;
         renderH = renderW / naturalAspect;
         offsetX = 0;
@@ -995,8 +964,8 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       };
     }
 
-    function toImageCoords(clientX, clientY) {
-      const box = getRenderRect();
+    function toDeviceCoords(clientX, clientY) {
+      const box = getRenderBox();
       const relX = clientX - box.left;
       const relY = clientY - box.top;
       const x = Math.round((relX / box.width) * box.naturalW);
@@ -1005,64 +974,89 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       return {
         x: Math.max(0, Math.min(x, box.naturalW)),
         y: Math.max(0, Math.min(y, box.naturalH)),
-        isInside: relX >= 0 && relX <= box.width && relY >= 0 && relY <= box.height
+        screenRelX: clientX - viewport.getBoundingClientRect().left,
+        screenRelY: clientY - viewport.getBoundingClientRect().top
       };
     }
 
-    // 100% SCRCPY POINTER GESTURES (Drag, Swipe, Click, Scroll)
-    let isPointerDown = false;
-    let activePointerId = null;
+    // 4. Pointer Gestures with Visual Touch Feedback
+    let isPointerActive = false;
+    let pointerId = null;
 
-    imgEl.addEventListener('pointerdown', (e) => {
+    viewport.addEventListener('pointerdown', (e) => {
       if (mode !== 'control') return;
       e.preventDefault();
-      viewerArea.focus();
-      const coords = toImageCoords(e.clientX, e.clientY);
-      isPointerDown = true;
-      activePointerId = e.pointerId;
-      try { imgEl.setPointerCapture(e.pointerId); } catch (_) {}
+      viewport.focus();
 
-      sendPointerEvent('pointerDown', coords.x, coords.y, e.button === 2 ? 'right' : 'left', e.buttons || 1);
+      // Right Click -> Android Back
+      if (e.button === 2) {
+        sendNav('back');
+        return;
+      }
+      // Middle Click -> Android Home
+      if (e.button === 1) {
+        sendNav('home');
+        return;
+      }
+
+      isPointerActive = true;
+      pointerId = e.pointerId;
+      try { viewport.setPointerCapture(e.pointerId); } catch (_) {}
+
+      const coords = toDeviceCoords(e.clientX, e.clientY);
+      updateTouchDot(coords.screenRelX, coords.screenRelY, true);
+
+      sendPointer('pointerDown', coords.x, coords.y, 'left', e.buttons || 1);
     });
 
-    imgEl.addEventListener('pointermove', (e) => {
-      if (mode !== 'control') return;
-      if (!isPointerDown) return;
+    viewport.addEventListener('pointermove', (e) => {
+      if (mode !== 'control' || !isPointerActive) return;
       e.preventDefault();
-      const coords = toImageCoords(e.clientX, e.clientY);
+      const coords = toDeviceCoords(e.clientX, e.clientY);
+      updateTouchDot(coords.screenRelX, coords.screenRelY, true);
 
-      sendPointerEvent('pointerMove', coords.x, coords.y, 'none', e.buttons || 1);
+      sendPointer('pointerMove', coords.x, coords.y, 'none', e.buttons || 1);
     });
 
-    function finishPointer(e) {
-      if (!isPointerDown) return;
-      isPointerDown = false;
-      const coords = toImageCoords(e.clientX, e.clientY);
-      try { imgEl.releasePointerCapture(activePointerId); } catch (_) {}
-      activePointerId = null;
+    function endPointer(e) {
+      if (!isPointerActive) return;
+      isPointerActive = false;
+      const coords = toDeviceCoords(e.clientX, e.clientY);
+      updateTouchDot(coords.screenRelX, coords.screenRelY, false);
+      try { viewport.releasePointerCapture(pointerId); } catch (_) {}
+      pointerId = null;
 
-      sendPointerEvent('pointerUp', coords.x, coords.y, e.button === 2 ? 'right' : 'left', 0);
+      sendPointer('pointerUp', coords.x, coords.y, 'left', 0);
     }
 
-    imgEl.addEventListener('pointerup', finishPointer);
-    imgEl.addEventListener('pointercancel', finishPointer);
+    viewport.addEventListener('pointerup', endPointer);
+    viewport.addEventListener('pointercancel', endPointer);
 
-    // Prevent context menu to allow smooth right-click / gestures
-    imgEl.addEventListener('contextmenu', (e) => {
+    viewport.addEventListener('contextmenu', (e) => {
       if (mode === 'control') {
         e.preventDefault();
       }
     });
 
-    // Mouse Wheel / Trackpad Smooth Scrolling
-    imgEl.addEventListener('wheel', (e) => {
+    function updateTouchDot(relX, relY, show) {
+      if (show) {
+        touchDot.style.left = relX + 'px';
+        touchDot.style.top = relY + 'px';
+        touchDot.classList.add('active');
+      } else {
+        touchDot.classList.remove('active');
+      }
+    }
+
+    // Mouse Wheel Scrolling
+    viewport.addEventListener('wheel', (e) => {
       if (mode !== 'control') return;
       e.preventDefault();
-      const coords = toImageCoords(e.clientX, e.clientY);
+      const coords = toDeviceCoords(e.clientX, e.clientY);
       sendWheel(coords.x, coords.y, e.deltaX, e.deltaY);
     }, { passive: false });
 
-    function sendPointerEvent(action, x, y, button, buttons) {
+    function sendPointer(action, x, y, button, buttons) {
       if (!wsStream || wsStream.readyState !== WebSocket.OPEN) return;
       wsStream.send(JSON.stringify({
         action: action,
@@ -1088,24 +1082,20 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       sendWheel(540, 960, dx, dy);
     }
 
-    // DIRECT PHYSICAL KEYBOARD CAPTURE
+    // 5. Direct Physical Keyboard Typing
     window.addEventListener('keydown', (e) => {
       if (mode !== 'control') return;
-      // Jangan cegah jika fokus di input field ribbon
       if (document.activeElement === document.getElementById('typeInput')) return;
 
-      // Handle shortcuts
       if (e.key === 'F11') {
         e.preventDefault();
         toggleFullscreen();
         return;
       }
       if (e.key === 'Escape' && document.fullscreenElement) {
-        // Biarkan default fullscreen exit
         return;
       }
 
-      // Forward key to CDP
       if (wsStream && wsStream.readyState === WebSocket.OPEN) {
         e.preventDefault();
         wsStream.send(JSON.stringify({
@@ -1133,13 +1123,19 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       }
     });
 
-    // Direct Text Input Helpers
+    // 6. Navigation & Quick Inputs
+    function sendNav(cmd) {
+      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
+        wsStream.send(JSON.stringify({ action: 'nav', command: cmd }));
+      }
+    }
+
     function sendInputText() {
       const input = document.getElementById('typeInput');
-      const txt = input.value;
-      if (!txt) return;
+      const val = input.value;
+      if (!val) return;
       if (wsStream && wsStream.readyState === WebSocket.OPEN) {
-        wsStream.send(JSON.stringify({ action: 'text', text: txt }));
+        wsStream.send(JSON.stringify({ action: 'text', text: val }));
       }
       input.value = '';
     }
@@ -1152,61 +1148,47 @@ function getDashboardHtml(reqHost, isDefaultControl) {
 
     function sendSpecialKey(key, code, keyCode) {
       if (wsStream && wsStream.readyState === WebSocket.OPEN) {
-        wsStream.send(JSON.stringify({
-          action: 'keyDown',
-          key: key,
-          code: code,
-          keyCode: keyCode
-        }));
+        wsStream.send(JSON.stringify({ action: 'keyDown', key, code, keyCode }));
         setTimeout(() => {
-          wsStream.send(JSON.stringify({
-            action: 'keyUp',
-            key: key,
-            code: code,
-            keyCode: keyCode
-          }));
+          wsStream.send(JSON.stringify({ action: 'keyUp', key, code, keyCode }));
         }, 30);
       }
     }
 
-    // Navigation Commands (Back, Forward, Home, Reload)
-    function sendNav(command) {
-      if (wsStream && wsStream.readyState === WebSocket.OPEN) {
-        wsStream.send(JSON.stringify({ action: 'nav', command: command }));
-      }
-    }
-
-    // Clipboard Paste into active element
     async function pasteClipboard() {
       try {
         const text = await navigator.clipboard.readText();
         if (text && wsStream && wsStream.readyState === WebSocket.OPEN) {
-          wsStream.send(JSON.stringify({ action: 'text', text: text }));
+          wsStream.send(JSON.stringify({ action: 'text', text }));
         }
-      } catch (e) {
-        const fallback = prompt('Tempel teks ke WebView:');
-        if (fallback && wsStream && wsStream.readyState === WebSocket.OPEN) {
-          wsStream.send(JSON.stringify({ action: 'text', text: fallback }));
+      } catch (_) {
+        const manual = prompt('Ketik / tempel teks untuk dikirim ke WebView:');
+        if (manual && wsStream && wsStream.readyState === WebSocket.OPEN) {
+          wsStream.send(JSON.stringify({ action: 'text', text: manual }));
         }
       }
     }
 
-    function toggleRibbonInput() {
-      if (controlRibbon.style.display === 'none') {
-        controlRibbon.style.display = 'flex';
+    function toggleKeyboardDrawer() {
+      if (kbdDrawer.style.display === 'none') {
+        kbdDrawer.style.display = 'flex';
         document.getElementById('typeInput').focus();
       } else {
-        controlRibbon.style.display = 'none';
+        kbdDrawer.style.display = 'none';
       }
     }
 
-    // FULLSCREEN TOGGLE & AUTO-HIDING HUD
+    function toggleDesktopView() {
+      mockup.classList.toggle('desktop-view');
+    }
+
+    // 7. Fullscreen & Auto-Hiding HUD
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
-        if (monitorCard.requestFullscreen) {
-          monitorCard.requestFullscreen();
-        } else if (monitorCard.webkitRequestFullscreen) {
-          monitorCard.webkitRequestFullscreen();
+        if (mockup.requestFullscreen) {
+          mockup.requestFullscreen();
+        } else if (mockup.webkitRequestFullscreen) {
+          mockup.webkitRequestFullscreen();
         }
       } else {
         if (document.exitFullscreen) {
@@ -1215,34 +1197,29 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       }
     }
 
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
-
-    function onFullscreenChange() {
+    document.addEventListener('fullscreenchange', () => {
       const isFull = Boolean(document.fullscreenElement);
+      document.getElementById('btnFullTop').innerText = isFull ? '✕ Exit Full' : '⛶ Fullscreen';
       if (isFull) {
-        monitorCard.classList.add('fullscreen-mode');
-        document.getElementById('btnFullscreenTop').innerText = '✕ Exit Full';
-        triggerHudReveal();
+        triggerHud();
       } else {
-        monitorCard.classList.remove('fullscreen-mode');
-        document.getElementById('btnFullscreenTop').innerText = '⛶ Fullscreen';
+        mockup.classList.remove('hud-hidden');
       }
-    }
+    });
 
-    function triggerHudReveal() {
-      monitorCard.classList.add('hud-visible');
-      if (hudHideTimer) clearTimeout(hudHideTimer);
-      hudHideTimer = setTimeout(() => {
+    function triggerHud() {
+      mockup.classList.remove('hud-hidden');
+      if (hudTimer) clearTimeout(hudTimer);
+      hudTimer = setTimeout(() => {
         if (document.fullscreenElement) {
-          monitorCard.classList.remove('hud-visible');
+          mockup.classList.add('hud-hidden');
         }
-      }, 2500);
+      }, 3000);
     }
 
-    monitorCard.addEventListener('mousemove', () => {
+    mockup.addEventListener('mousemove', () => {
       if (document.fullscreenElement) {
-        triggerHudReveal();
+        triggerHud();
       }
     });
 
@@ -1250,8 +1227,8 @@ function getDashboardHtml(reqHost, isDefaultControl) {
     async function toggleAttach() {
       try {
         const res = await fetch('/api/attach?idx=' + currentTabIndex, { method: 'POST' });
-        const data = await res.json();
-        alert(data.message || 'Attached ke layar!');
+        const d = await res.json();
+        alert(d.message || 'Attached ke layar visual!');
         setTimeout(loadTabs, 800);
       } catch (e) {
         alert('Gagal attach: ' + e.message);
@@ -1261,8 +1238,8 @@ function getDashboardHtml(reqHost, isDefaultControl) {
     async function toggleDetach() {
       try {
         const res = await fetch('/api/detach?idx=' + currentTabIndex, { method: 'POST' });
-        const data = await res.json();
-        alert(data.message || 'Detached ke background (Headless Mode)!');
+        const d = await res.json();
+        alert(d.message || 'Detached ke background (Headless)!');
         setTimeout(loadTabs, 800);
       } catch (e) {
         alert('Gagal detach: ' + e.message);
@@ -1279,28 +1256,10 @@ function getDashboardHtml(reqHost, isDefaultControl) {
       }
     }
 
-    async function killAllTabs() {
-      if (!confirm('Tutup SELURUH tab WebView?')) return;
-      try {
-        await fetch('/api/kill_all', { method: 'POST' });
-        setTimeout(loadTabs, 500);
-      } catch (e) {
-        alert('Gagal menutup semua tab: ' + e.message);
-      }
-    }
-
-    function copyCurrentUrl() {
-      const urlText = document.getElementById('tabUrl').innerText;
-      if (urlText && urlText !== '-') {
-        navigator.clipboard.writeText(urlText);
-        alert('URL disalin ke clipboard!');
-      }
-    }
-
-    // Auto-refresh tab list every 4s
+    // Tab List Refresh Interval (Only refreshes select menu, NEVER interrupts WebSocket stream)
     setInterval(loadTabs, 4000);
 
-    // Initial load
+    // Initial Load
     setMode(mode);
     loadTabs();
   </script>
@@ -1308,13 +1267,130 @@ function getDashboardHtml(reqHost, isDefaultControl) {
 </html>`;
 }
 
+// 6. Singleton CDP Hub per Tab (Never dropped on client reconnect)
+const cdpHub = {
+    sessions: new Map(),
+
+    getSession(wsUrl) {
+        if (!wsUrl) return null;
+        const s = this.sessions.get(wsUrl);
+        if (s && s.cdpWs && s.cdpWs.readyState === WebSocket.OPEN) {
+            return s;
+        }
+        return null;
+    },
+
+    createSession(wsUrl) {
+        const existing = this.sessions.get(wsUrl);
+        if (existing && existing.cdpWs && (existing.cdpWs.readyState === WebSocket.OPEN || existing.cdpWs.readyState === WebSocket.CONNECTING)) {
+            return existing;
+        }
+
+        const session = {
+            wsUrl,
+            cdpWs: null,
+            clients: new Set(),
+            lastFrame: null,
+            reqId: 1,
+            closeTimer: null
+        };
+        this.sessions.set(wsUrl, session);
+
+        try {
+            const cdp = new WebSocket(wsUrl);
+            session.cdpWs = cdp;
+
+            cdp.on('open', () => {
+                cdp.send(JSON.stringify({ id: session.reqId++, method: 'Page.enable' }));
+                cdp.send(JSON.stringify({
+                    id: session.reqId++,
+                    method: 'Page.startScreencast',
+                    params: {
+                        format: 'jpeg',
+                        quality: 75,
+                        maxWidth: 1080,
+                        maxHeight: 1920,
+                        everyNthFrame: 1
+                    }
+                }));
+            });
+
+            cdp.on('message', (data) => {
+                try {
+                    const msg = JSON.parse(data.toString());
+                    if (msg.method === 'Page.screencastFrame') {
+                        if (msg.params && msg.params.data) {
+                            const buf = Buffer.from(msg.params.data, 'base64');
+                            session.lastFrame = buf;
+                            for (const client of session.clients) {
+                                if (client.readyState === WebSocket.OPEN) {
+                                    client.send(buf);
+                                }
+                            }
+                        }
+                        cdp.send(JSON.stringify({
+                            method: 'Page.screencastFrameAck',
+                            params: { sessionId: msg.params.sessionId }
+                        }));
+                    }
+                } catch (_) {}
+            });
+
+            const onCdpClose = () => {
+                this.sessions.delete(wsUrl);
+            };
+            cdp.on('close', onCdpClose);
+            cdp.on('error', onCdpClose);
+
+        } catch (e) {
+            this.sessions.delete(wsUrl);
+            return null;
+        }
+
+        return session;
+    },
+
+    addClient(wsUrl, clientWs) {
+        let session = this.getSession(wsUrl) || this.createSession(wsUrl);
+        if (!session) return null;
+        if (session.closeTimer) {
+            clearTimeout(session.closeTimer);
+            session.closeTimer = null;
+        }
+        session.clients.add(clientWs);
+
+        // Send cached last frame immediately for 0ms visual feedback
+        if (session.lastFrame && clientWs.readyState === WebSocket.OPEN) {
+            clientWs.send(session.lastFrame);
+        }
+
+        return session;
+    },
+
+    removeClient(wsUrl, clientWs) {
+        const session = this.sessions.get(wsUrl);
+        if (!session) return;
+        session.clients.delete(clientWs);
+        if (session.clients.size === 0) {
+            session.closeTimer = setTimeout(() => {
+                if (session.clients.size === 0) {
+                    try {
+                        session.cdpWs.send(JSON.stringify({ id: session.reqId++, method: 'Page.stopScreencast' }));
+                        session.cdpWs.close();
+                    } catch (_) {}
+                    this.sessions.delete(wsUrl);
+                }
+            }, 15000);
+        }
+    }
+};
+
 // 7. HTTP Server Setup
 const server = http.createServer(async (req, res) => {
     const parsedUrl = url.parse(req.url, true);
     const pathname = parsedUrl.pathname;
     const reqHost = req.headers.host || `127.0.0.1:${PORT}`;
 
-    // CORS & Cache-Control headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -1325,14 +1401,12 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // Root UI
     if (pathname === '/' || pathname === '/index.html') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(getDashboardHtml(reqHost, DEFAULT_CONTROL));
         return;
     }
 
-    // Placeholder SVG
     if (pathname === '/api/placeholder.svg') {
         res.writeHead(200, {
             'Content-Type': 'image/svg+xml',
@@ -1342,7 +1416,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // API: Tabs
     if (pathname === '/api/tabs') {
         const tabs = await getAllTabs();
         res.writeHead(200, {
@@ -1353,35 +1426,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // API: Screenshot single frame (Fallback)
-    if (pathname === '/api/screenshot') {
-        const tabs = await getAllTabs();
-        const tabTarget = parsedUrl.query.tab;
-        let selected = tabs.find(t => t.id === tabTarget || String(t.index) === String(tabTarget));
-        if (!selected && tabs.length > 0) selected = tabs[0];
-
-        if (!selected || !selected.wsUrl) {
-            res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-            res.end(generatePlaceholderSvg('Tab Tidak Tersambung', 'Menunggu WebSocket DevTools'));
-            return;
-        }
-
-        try {
-            const buf = await captureCdpScreenshot(selected.wsUrl, 75);
-            res.writeHead(200, {
-                'Content-Type': 'image/jpeg',
-                'Content-Length': buf.length,
-                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
-            });
-            res.end(buf);
-        } catch (err) {
-            res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
-            res.end(generatePlaceholderSvg('Gagal Capture', err.message));
-        }
-        return;
-    }
-
-    // API: Action Attach
     if (pathname === '/api/attach') {
         const idx = parsedUrl.query.idx || '0';
         try {
@@ -1396,7 +1440,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // API: Action Detach
     if (pathname === '/api/detach') {
         const idx = parsedUrl.query.idx || '-1';
         try {
@@ -1411,21 +1454,6 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // API: Action Reload
-    if (pathname === '/api/reload') {
-        try {
-            const ipcBin = fs.existsSync('/usr/local/bin/termux-ipc') ? '/usr/local/bin/termux-ipc' : 'termux-ipc';
-            execSync(`${ipcBin} webview reload`, { timeout: 2000 });
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true }));
-        } catch (e) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: e.message }));
-        }
-        return;
-    }
-
-    // API: Action Kill Tab
     if (pathname === '/api/kill') {
         const idx = parsedUrl.query.idx || '';
         try {
@@ -1440,25 +1468,11 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // API: Action Kill All Tabs
-    if (pathname === '/api/kill_all') {
-        try {
-            const ipcBin = fs.existsSync('/usr/local/bin/termux-ipc') ? '/usr/local/bin/termux-ipc' : 'termux-ipc';
-            execSync(`${ipcBin} webview kill-all`, { timeout: 2000 });
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: true, message: `Seluruh tab WebView telah ditutup` }));
-        } catch (e) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ ok: false, error: e.message }));
-        }
-        return;
-    }
-
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     res.end('Not Found');
 });
 
-// 8. WebSocket 30-60 FPS Screencast & 100% Remote Control Bridge (Scrcpy Protocol)
+// 8. WebSocket Server & Scrcpy Hub Bridge
 if (WebSocket && WebSocket.Server) {
     const wss = new WebSocket.Server({ noServer: true });
 
@@ -1485,79 +1499,28 @@ if (WebSocket && WebSocket.Server) {
             return;
         }
 
-        let cdpWs = null;
-        let reqId = 1;
-        let isClosed = false;
-
-        try {
-            cdpWs = new WebSocket(selected.wsUrl);
-        } catch (e) {
+        const session = cdpHub.addClient(selected.wsUrl, clientWs);
+        if (!session) {
             try { clientWs.close(); } catch (_) {}
             return;
         }
 
         const cleanup = () => {
-            isClosed = true;
-            if (cdpWs) {
-                try {
-                    cdpWs.send(JSON.stringify({ id: reqId++, method: 'Page.stopScreencast' }));
-                    cdpWs.close();
-                } catch (_) {}
-                cdpWs = null;
-            }
+            cdpHub.removeClient(selected.wsUrl, clientWs);
         };
-
         clientWs.on('close', cleanup);
         clientWs.on('error', cleanup);
-        cdpWs.on('error', cleanup);
 
-        cdpWs.on('open', () => {
-            if (isClosed) return;
-            cdpWs.send(JSON.stringify({ id: reqId++, method: 'Page.enable' }));
-
-            // Start Event-Driven Screencast Stream (scrcpy-style: 0% CPU idle, push on compositor damage)
-            cdpWs.send(JSON.stringify({
-                id: reqId++,
-                method: 'Page.startScreencast',
-                params: {
-                    format: 'jpeg',
-                    quality: 75,
-                    maxWidth: 1080,
-                    maxHeight: 1920,
-                    everyNthFrame: 1
-                }
-            }));
-        });
-
-        cdpWs.on('message', (data) => {
-            if (isClosed) return;
-            try {
-                const msg = JSON.parse(data.toString());
-                if (msg.method === 'Page.screencastFrame') {
-                    if (msg.params && msg.params.data) {
-                        const imgBuf = Buffer.from(msg.params.data, 'base64');
-                        if (clientWs.readyState === WebSocket.OPEN) {
-                            clientWs.send(imgBuf);
-                        }
-                    }
-                    cdpWs.send(JSON.stringify({
-                        method: 'Page.screencastFrameAck',
-                        params: { sessionId: msg.params.sessionId }
-                    }));
-                }
-            } catch (_) {}
-        });
-
-        // Client Input Handler (100% Scrcpy-Style Native Gestures & Key Takeover)
+        // Native Input Event Forwarding
         clientWs.on('message', (raw) => {
-            if (isClosed || !cdpWs || cdpWs.readyState !== WebSocket.OPEN) return;
+            if (!session.cdpWs || session.cdpWs.readyState !== WebSocket.OPEN) return;
             try {
                 const ev = JSON.parse(raw.toString());
+                const cdp = session.cdpWs;
 
-                // Pointer Events (Drag, Swipe, Click)
                 if (ev.action === 'pointerDown') {
-                    cdpWs.send(JSON.stringify({
-                        id: reqId++,
+                    cdp.send(JSON.stringify({
+                        id: session.reqId++,
                         method: 'Input.dispatchMouseEvent',
                         params: {
                             type: 'mousePressed',
@@ -1569,8 +1532,8 @@ if (WebSocket && WebSocket.Server) {
                         }
                     }));
                 } else if (ev.action === 'pointerMove') {
-                    cdpWs.send(JSON.stringify({
-                        id: reqId++,
+                    cdp.send(JSON.stringify({
+                        id: session.reqId++,
                         method: 'Input.dispatchMouseEvent',
                         params: {
                             type: 'mouseMoved',
@@ -1580,8 +1543,8 @@ if (WebSocket && WebSocket.Server) {
                         }
                     }));
                 } else if (ev.action === 'pointerUp') {
-                    cdpWs.send(JSON.stringify({
-                        id: reqId++,
+                    cdp.send(JSON.stringify({
+                        id: session.reqId++,
                         method: 'Input.dispatchMouseEvent',
                         params: {
                             type: 'mouseReleased',
@@ -1592,8 +1555,8 @@ if (WebSocket && WebSocket.Server) {
                         }
                     }));
                 } else if (ev.action === 'wheel') {
-                    cdpWs.send(JSON.stringify({
-                        id: reqId++,
+                    cdp.send(JSON.stringify({
+                        id: session.reqId++,
                         method: 'Input.dispatchMouseEvent',
                         params: {
                             type: 'mouseWheel',
@@ -1604,15 +1567,15 @@ if (WebSocket && WebSocket.Server) {
                         }
                     }));
                 } else if (ev.action === 'text') {
-                    cdpWs.send(JSON.stringify({
-                        id: reqId++,
+                    cdp.send(JSON.stringify({
+                        id: session.reqId++,
                         method: 'Input.insertText',
                         params: { text: ev.text || '' }
                     }));
                 } else if (ev.action === 'keyDown') {
                     const isChar = ev.key && ev.key.length === 1 && !ev.ctrlKey && !ev.altKey;
-                    cdpWs.send(JSON.stringify({
-                        id: reqId++,
+                    cdp.send(JSON.stringify({
+                        id: session.reqId++,
                         method: 'Input.dispatchKeyEvent',
                         params: {
                             type: 'rawKeyDown',
@@ -1625,8 +1588,8 @@ if (WebSocket && WebSocket.Server) {
                         }
                     }));
                     if (isChar) {
-                        cdpWs.send(JSON.stringify({
-                            id: reqId++,
+                        cdp.send(JSON.stringify({
+                            id: session.reqId++,
                             method: 'Input.dispatchKeyEvent',
                             params: {
                                 type: 'char',
@@ -1636,8 +1599,8 @@ if (WebSocket && WebSocket.Server) {
                         }));
                     }
                 } else if (ev.action === 'keyUp') {
-                    cdpWs.send(JSON.stringify({
-                        id: reqId++,
+                    cdp.send(JSON.stringify({
+                        id: session.reqId++,
                         method: 'Input.dispatchKeyEvent',
                         params: {
                             type: 'keyUp',
@@ -1648,26 +1611,26 @@ if (WebSocket && WebSocket.Server) {
                     }));
                 } else if (ev.action === 'nav') {
                     if (ev.command === 'back') {
-                        cdpWs.send(JSON.stringify({
-                            id: reqId++,
+                        cdp.send(JSON.stringify({
+                            id: session.reqId++,
                             method: 'Runtime.evaluate',
                             params: { expression: 'window.history.back()' }
                         }));
                     } else if (ev.command === 'forward') {
-                        cdpWs.send(JSON.stringify({
-                            id: reqId++,
+                        cdp.send(JSON.stringify({
+                            id: session.reqId++,
                             method: 'Runtime.evaluate',
                             params: { expression: 'window.history.forward()' }
                         }));
                     } else if (ev.command === 'reload') {
-                        cdpWs.send(JSON.stringify({
-                            id: reqId++,
+                        cdp.send(JSON.stringify({
+                            id: session.reqId++,
                             method: 'Page.reload',
                             params: { ignoreCache: true }
                         }));
                     } else if (ev.command === 'home') {
-                        cdpWs.send(JSON.stringify({
-                            id: reqId++,
+                        cdp.send(JSON.stringify({
+                            id: session.reqId++,
                             method: 'Page.navigate',
                             params: { url: 'https://www.google.com' }
                         }));
@@ -1693,16 +1656,15 @@ function onListening() {
     ensurePortForward();
     const ips = getNetworkIps();
     console.log('\n\x1b[36m┌────────────────────────────────────────────────────────┐\x1b[0m');
-    console.log('\x1b[36m│\x1b[0m   \x1b[1m\x1b[32m🛸 ESO WEBVIEW STREAM & REMOTE CONTROL\x1b[0m               \x1b[36m│\x1b[0m');
+    console.log('\x1b[36m│\x1b[0m   \x1b[1m\x1b[32m🛸 ESO SCRCPY PRO - STREAM & REMOTE CONTROL\x1b[0m          \x1b[36m│\x1b[0m');
     console.log('\x1b[36m├────────────────────────────────────────────────────────┤\x1b[0m');
     console.log(`\x1b[36m│\x1b[0m  \x1b[1mLocal URL\x1b[0m : \x1b[33mhttp://127.0.0.1:${PORT}\x1b[0m                          \x1b[36m│\x1b[0m`);
     ips.forEach(i => {
         const line = `  WLAN (${i.iface}) : http://${i.ip}:${PORT}`;
         console.log(`\x1b[36m│\x1b[0m  \x1b[1m${line.padEnd(52)}\x1b[0m\x1b[36m│\x1b[0m`);
     });
-    console.log(`\x1b[36m│\x1b[0m  \x1b[1mMode\x1b[0m      : ${DEFAULT_CONTROL ? '\x1b[33m🎮 Remote Control (Ambil Alih 30-60 FPS)\x1b[0m' : '\x1b[32m👁️ Watch Mode (30-60 FPS Stream)\x1b[0m'}  \x1b[36m│\x1b[0m`);
-    console.log('\x1b[36m│\x1b[0m  \x1b[1mEngine\x1b[0m    : \x1b[35mScrcpy-Style Event-Driven Stream (0% Idle CPU)\x1b[0m\x1b[36m│\x1b[0m');
-    console.log('\x1b[36m│\x1b[0m  \x1b[1mFeatures\x1b[0m  : \x1b[36mFullscreen Mode, Drag/Swipe Gestures, Virtual Nav\x1b[0m\x1b[36m│\x1b[0m');
+    console.log(`\x1b[36m│\x1b[0m  \x1b[1mMode\x1b[0m      : ${DEFAULT_CONTROL ? '\x1b[33m🎮 Takeover Control (30-60 FPS)\x1b[0m' : '\x1b[32m👁️ Spectator Mode (30-60 FPS Stream)\x1b[0m'}  \x1b[36m│\x1b[0m`);
+    console.log('\x1b[36m│\x1b[0m  \x1b[1mHub\x1b[0m       : \x1b[35mSingleton CDP Screencast Hub (Persistent 60Hz)\x1b[0m \x1b[36m│\x1b[0m');
     console.log('\x1b[36m└────────────────────────────────────────────────────────┘\x1b[0m\n');
     console.log('Tekan Ctrl + C untuk menghentikan monitor.\n');
 }
@@ -1724,7 +1686,6 @@ server.on('error', (err) => {
 
 function gracefulExit() {
     try { server.close(); } catch (_) {}
-    try { wss.close(); } catch (_) {}
     process.exit(0);
 }
 process.on('SIGINT', gracefulExit);
