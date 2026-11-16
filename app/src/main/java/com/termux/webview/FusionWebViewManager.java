@@ -966,6 +966,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         int i = this.mNextTabId;
         this.mNextTabId = i + 1;
         FusionTab fusionTab = new FusionTab(i, str, str2, webView, z, z2, z3, isHeadless);
+        String initialChain = (str4 != null && !str4.isEmpty()) ? str4 : "bsc";
+        String autoChain = FusionChainHelper.detectChainFromUrl(str);
+        if (autoChain != null && !autoChain.isEmpty()) {
+            initialChain = autoChain;
+        } else if (FusionChainHelper.isNonEvmKey(initialChain) && !FusionChainHelper.isNonEvmUrl(str)) {
+            initialChain = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
+        }
+        fusionTab.mChainKey = initialChain;
+        fusionTab.mChainId = FusionChainHelper.getChainIdByKey(initialChain);
         if (isHeadless) {
             fusionTab.mIsMinimized = true;
             int virtW = z2 ? 1280 : 1080;
@@ -2161,6 +2170,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public void onChainSelected(int i) {
         FusionChainHelper.setChainByIndex(i);
         this.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+        if (activeTab != null) {
+            activeTab.mChainKey = FusionChainHelper.getCurrentChainKey();
+            activeTab.mChainId = FusionChainHelper.getCurrentChainId();
+        }
         updateMenuTexts();
         FusionToolPillHelper.updateToolPillUi(this);
         LinearLayout linearLayout = this.mMenuCard;
@@ -2894,8 +2908,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mIsAutoMode = z3;
         this.mWcUri = str5;
         this.mIsMinimized = isHeadless;
-        if (str4 == null) {
-            str4 = "base";
+        String autoFromUrl = FusionChainHelper.detectChainFromUrl(str);
+        if (autoFromUrl != null && !autoFromUrl.isEmpty()) {
+            str4 = autoFromUrl;
+        } else if (str4 == null || str4.isEmpty()) {
+            str4 = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
         }
         this.mCurrentChainKey = str4;
         FusionChainHelper.setChain(str4);
@@ -2940,6 +2957,14 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             fusionTab2.mIsDesktop = z2;
             fusionTab2.mIsHeadless = isHeadless;
             fusionTab2.mIsMinimized = isHeadless;
+            String autoChain2 = FusionChainHelper.detectChainFromUrl(str);
+            if (autoChain2 != null && !autoChain2.isEmpty()) {
+                fusionTab2.mChainKey = autoChain2;
+                fusionTab2.mChainId = FusionChainHelper.getChainIdByKey(autoChain2);
+            } else if (FusionChainHelper.isNonEvmKey(fusionTab2.mChainKey) && !FusionChainHelper.isNonEvmUrl(str)) {
+                fusionTab2.mChainKey = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
+                fusionTab2.mChainId = FusionChainHelper.sLastEvmChainId;
+            }
             targetTab = fusionTab2;
             switchTab(i);
             FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
@@ -3532,6 +3557,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 linearLayout2.setElevation(170.0f);
                 linearLayout2.bringToFront();
             }
+        }
+        if (targetTab != null) {
+            FusionTabStateHelper.syncTabState(this, targetTab);
         }
         updateContextUi();
     }

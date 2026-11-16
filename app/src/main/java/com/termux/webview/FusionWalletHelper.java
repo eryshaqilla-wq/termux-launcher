@@ -518,17 +518,27 @@ public class FusionWalletHelper {
     }
 
     public static String getStartWalletDaemonCommand(String activeUrl) {
-        if (activeUrl == null || activeUrl.isEmpty()) {
-            try {
-                FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-                if (mgr != null && mgr.mActiveWebView != null) {
-                    activeUrl = mgr.mActiveWebView.getUrl();
+        FusionTab activeTab = null;
+        try {
+            FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if (mgr != null) {
+                activeTab = FusionTabStateHelper.getActiveTab(mgr);
+                if (activeUrl == null || activeUrl.isEmpty()) {
+                    if (mgr.mActiveWebView != null) {
+                        activeUrl = mgr.mActiveWebView.getUrl();
+                    }
                 }
-            } catch (Throwable ignored) {}
-        }
+            }
+        } catch (Throwable ignored) {}
+
         String net = null;
         if (activeUrl != null && !activeUrl.isEmpty()) {
             net = FusionChainHelper.detectChainFromUrl(activeUrl);
+        }
+        if (net == null || net.isEmpty()) {
+            if (activeTab != null && activeTab.mChainKey != null && !activeTab.mChainKey.isEmpty()) {
+                net = activeTab.mChainKey;
+            }
         }
         if (net == null || net.isEmpty()) {
             net = GhostBridgeInterface.getLastDetectedDappChainKey();
@@ -539,7 +549,9 @@ public class FusionWalletHelper {
         if (FusionChainHelper.isNonEvmKey(net)) {
             String checkNonEvm = (activeUrl != null && !activeUrl.isEmpty()) ? FusionChainHelper.detectChainFromUrl(activeUrl) : null;
             if (checkNonEvm == null || !FusionChainHelper.isNonEvmKey(checkNonEvm)) {
-                net = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
+                if (activeUrl != null && !FusionChainHelper.isNonEvmUrl(activeUrl)) {
+                    net = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
+                }
             }
         }
         if (net == null || net.isEmpty()) {

@@ -25,6 +25,8 @@ public class FusionTab {
     public boolean mIsProxyEnabled = false;
     public int mAutoRotateIntervalSec = 0;
     public long mLastProxyRotatedTime = 0;
+    public String mChainKey = "bsc";
+    public int mChainId = 56;
 
     public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3, boolean isHeadless) {
         this.mId = i;

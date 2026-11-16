@@ -186,6 +186,22 @@ public class FusionTabStateHelper {
         if (str != null) {
             fusionWebViewManager.mCurrentProfile = str;
         }
+        if (fusionTab.mChainKey != null && !fusionTab.mChainKey.isEmpty()) {
+            if (fusionTab.mChainId > 0) {
+                FusionChainHelper.setChainById(fusionTab.mChainId);
+            } else {
+                FusionChainHelper.setChain(fusionTab.mChainKey);
+            }
+            fusionWebViewManager.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
+            GhostBridgeInterface.sLastDetectedDappChainKey = fusionTab.mChainKey;
+            GhostBridgeInterface.sLastDetectedDappChainId = fusionTab.mChainId;
+            FusionToolPillHelper.updateToolPillUi(fusionWebViewManager);
+            if (FusionDrawerHelper.isWalletDrawerOpen()) {
+                FusionDrawerHelper.showWalletDrawer(fusionWebViewManager);
+            } else if (FusionDrawerHelper.isChainDrawerOpen()) {
+                FusionDrawerHelper.showChainDrawer(fusionWebViewManager);
+            }
+        }
     }
 
     public static void toggleCollapsePill(FusionWebViewManager fusionWebViewManager) {

@@ -96,6 +96,94 @@ public class FusionChainHelper {
                "sui".equals(k) || "aptos".equals(k) || "apt".equals(k) || "iota".equals(k);
     }
 
+    public static boolean isNonEvmUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return false;
+        }
+        String lower = url.toLowerCase();
+        if (lower.contains("jup.ag") || lower.contains("raydium") || lower.contains("pump.fun") || 
+            lower.contains("solana") || lower.contains("magiceden") || lower.contains("tensor.trade") || 
+            lower.contains("orca.so") || lower.contains("birdeye.so") || lower.contains("phantom.app") || 
+            lower.contains("solscan") || lower.contains("solflare")) {
+            return true;
+        }
+        if (lower.contains("sui.io") || lower.contains("suiscan") || lower.contains("cetus.zone") || 
+            lower.contains("turbos") || lower.contains("navi.protocol") || lower.contains("scallop") || 
+            lower.contains("aftermath") || lower.contains("bluefin") || lower.contains("sui")) {
+            return true;
+        }
+        if (lower.contains("aptoslabs") || lower.contains("aptoscan") || lower.contains("panora") || 
+            lower.contains("thalas") || lower.contains("liquidswap") || lower.contains("amnis") || 
+            lower.contains("aptos")) {
+            return true;
+        }
+        if (lower.contains("tronscan") || lower.contains("sunpump") || lower.contains("sun.io") || 
+            lower.contains("justlend") || lower.contains("trondao") || lower.contains("tron")) {
+            return true;
+        }
+        if (lower.contains("iota.org") || lower.contains("iota.cafe") || lower.contains("magicsea") || 
+            lower.contains("iotabee") || lower.contains("tangle") || lower.contains("iota")) {
+            return true;
+        }
+        return false;
+    }
+
+    public static int getChainIdByKey(String key) {
+        if (key == null || key.isEmpty()) return 56;
+        String[] keys = sChainKeys;
+        int[] ids = sChainIds;
+        if (keys != null && ids != null) {
+            for (int i = 0; i < keys.length; i++) {
+                if (key.equalsIgnoreCase(keys[i])) {
+                    return ids[i];
+                }
+            }
+        }
+        if ("solana".equalsIgnoreCase(key) || "sol".equalsIgnoreCase(key)) return 501;
+        if ("sui".equalsIgnoreCase(key)) return 784;
+        if ("tron".equalsIgnoreCase(key) || "trx".equalsIgnoreCase(key)) return 728126428;
+        if ("aptos".equalsIgnoreCase(key) || "apt".equalsIgnoreCase(key)) return 637;
+        if ("iota".equalsIgnoreCase(key)) return 4218;
+        if ("iotaevm".equalsIgnoreCase(key)) return 8822;
+        if ("bsc".equalsIgnoreCase(key)) return 56;
+        if ("base".equalsIgnoreCase(key)) return 8453;
+        if ("eth".equalsIgnoreCase(key)) return 1;
+        if ("arbitrum".equalsIgnoreCase(key) || "arb".equalsIgnoreCase(key)) return 42161;
+        if ("polygon".equalsIgnoreCase(key) || "pol".equalsIgnoreCase(key) || "matic".equalsIgnoreCase(key)) return 137;
+        if ("morph".equalsIgnoreCase(key)) return 2818;
+        if ("arc-mainnet".equalsIgnoreCase(key) || "arc".equalsIgnoreCase(key)) return 5042;
+        return 56;
+    }
+
+    public static String getChainKeyById(int id) {
+        int[] ids = sChainIds;
+        String[] keys = sChainKeys;
+        if (ids != null && keys != null) {
+            for (int i = 0; i < ids.length; i++) {
+                if (ids[i] == id) {
+                    return keys[i];
+                }
+            }
+        }
+        switch (id) {
+            case 8453: return "base";
+            case 56: return "bsc";
+            case 42161: return "arbitrum";
+            case 137: return "polygon";
+            case 2818: return "morph";
+            case 5042: return "arc-mainnet";
+            case 1: return "eth";
+            case 501: return "solana";
+            case 784: return "sui";
+            case 101:
+            case 637: return "aptos";
+            case 4218: return "iota";
+            case 8822: return "iotaevm";
+            case 728126428: return "tron";
+            default: return "bsc";
+        }
+    }
+
     public static String detectChainFromUrl(String url) {
         if (url == null || url.isEmpty()) {
             return null;

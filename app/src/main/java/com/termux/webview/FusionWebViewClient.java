@@ -53,6 +53,10 @@ public class FusionWebViewClient extends WebViewClient {
             String autoChain = FusionChainHelper.detectChainFromUrl(url);
             if (autoChain != null) {
                 GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+            } else if (FusionChainHelper.isNonEvm() && !FusionChainHelper.isNonEvmUrl(url)) {
+                String evm = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
+                int evmId = FusionChainHelper.sLastEvmChainId > 0 ? FusionChainHelper.sLastEvmChainId : 56;
+                GhostBridgeInterface.handleDappChainDetected(evm, evmId);
             }
             fusionWebViewManager.injectScripts(webView);
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
@@ -90,6 +94,10 @@ public class FusionWebViewClient extends WebViewClient {
             String autoChain = FusionChainHelper.detectChainFromUrl(str);
             if (autoChain != null) {
                 GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+            } else if (FusionChainHelper.isNonEvm() && !FusionChainHelper.isNonEvmUrl(str)) {
+                String evm = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
+                int evmId = FusionChainHelper.sLastEvmChainId > 0 ? FusionChainHelper.sLastEvmChainId : 56;
+                GhostBridgeInterface.handleDappChainDetected(evm, evmId);
             }
             fusionWebViewManager.injectScripts(webView);
             fusionWebViewManager.onTabUrlLoaded(webView, str);

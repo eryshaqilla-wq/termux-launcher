@@ -219,9 +219,67 @@
     window.reportDappChainToBridge = reportDappChainToBridge;
 
     function scanDappChainFromWebData() {
-        // Disabled: Follow EVM way - network never switches automatically from web scraping or timers
+        try {
+            // 1. Wagmi / Web3Modal / AppKit store in localStorage
+            if (window.localStorage) {
+                var wagmiStore = localStorage.getItem("wagmi.store");
+                if (wagmiStore) {
+                    try {
+                        var parsed = JSON.parse(wagmiStore);
+                        var state = parsed.state || parsed;
+                        var cId = state.chainId || state.current;
+                        if (cId) {
+                            var cKey = mapChainIdToKey(cId);
+                            if (cKey) {
+                                reportDappChainToBridge(cKey, cId);
+                                return;
+                            }
+                        }
+                    } catch(_) {}
+                }
+                var directCid = localStorage.getItem("@w3m/chain_id") || 
+                                localStorage.getItem("appkit_chain_id") || 
+                                localStorage.getItem("connected_chain_id");
+                if (directCid) {
+                    var cidNum = parseInt(directCid, 10);
+                    if (!isNaN(cidNum) && cidNum > 0) {
+                        var cKey = mapChainIdToKey(cidNum);
+                        if (cKey) {
+                            reportDappChainToBridge(cKey, cidNum);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // 2. Global JS configuration (Wagmi, Next.js, Web3 clients)
+            if (window.wagmiConfig && window.wagmiConfig.state && window.wagmiConfig.state.chainId) {
+                var cId = window.wagmiConfig.state.chainId;
+                var cKey = mapChainIdToKey(cId);
+                if (cKey) {
+                    reportDappChainToBridge(cKey, cId);
+                    return;
+                }
+            }
+            if (window.__wagmi && window.__wagmi.state && window.__wagmi.state.chainId) {
+                var cId = window.__wagmi.state.chainId;
+                var cKey = mapChainIdToKey(cId);
+                if (cKey) {
+                    reportDappChainToBridge(cKey, cId);
+                    return;
+                }
+            }
+        } catch(_) {}
     }
     window.__fusionScanDappChain = scanDappChainFromWebData;
+
+    try {
+        window.addEventListener("storage", function(e) {
+            if (e && (e.key === "wagmi.store" || e.key === "@w3m/chain_id" || e.key === "appkit_chain_id" || e.key === "connected_chain_id")) {
+                scanDappChainFromWebData();
+            }
+        });
+    } catch(_) {}
 
     window.__ghostIsDaemonAlive = function() {
         if (window.GhostBridge && window.GhostBridge.isDaemonAlive) {
@@ -307,6 +365,8 @@
                         var k = mapChainIdToKey(decId);
                         if (k) reportDappChainToBridge(k, decId);
                     } catch(_) {}
+                    setTimeout(scanDappChainFromWebData, 300);
+                    setTimeout(scanDappChainFromWebData, 1000);
                 }
                 return [activeAddr];
             }
@@ -385,6 +445,10 @@
                         walletAddress = parsed.result[0];
                         fakeProvider.selectedAddress = parsed.result[0];
                         emitEvent("accountsChanged", [walletAddress]);
+                        if (method === 'eth_requestAccounts') {
+                            setTimeout(scanDappChainFromWebData, 300);
+                            setTimeout(scanDappChainFromWebData, 1000);
+                        }
                     }
                     return parsed.result;
                 }

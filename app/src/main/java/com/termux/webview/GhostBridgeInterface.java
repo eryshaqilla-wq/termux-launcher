@@ -67,20 +67,27 @@ public class GhostBridgeInterface implements Runnable {
         }
 
         final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-        if (mgr != null && mgr.mActivity != null) {
-            mgr.mActivity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    mgr.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
-                    mgr.updateMenuTexts();
-                    FusionToolPillHelper.updateToolPillUi(mgr);
-                    if (FusionDrawerHelper.isWalletDrawerOpen()) {
-                        FusionDrawerHelper.showWalletDrawer(mgr);
-                    } else if (FusionDrawerHelper.isChainDrawerOpen()) {
-                        FusionDrawerHelper.showChainDrawer(mgr);
+        if (mgr != null) {
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(mgr);
+            if (activeTab != null) {
+                activeTab.mChainKey = FusionChainHelper.getCurrentChainKey();
+                activeTab.mChainId = FusionChainHelper.getCurrentChainId();
+            }
+            if (mgr.mActivity != null) {
+                mgr.mActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mgr.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
+                        mgr.updateMenuTexts();
+                        FusionToolPillHelper.updateToolPillUi(mgr);
+                        if (FusionDrawerHelper.isWalletDrawerOpen()) {
+                            FusionDrawerHelper.showWalletDrawer(mgr);
+                        } else if (FusionDrawerHelper.isChainDrawerOpen()) {
+                            FusionDrawerHelper.showChainDrawer(mgr);
+                        }
                     }
-                }
-            });
+                });
+            }
         }
     }
 
@@ -1022,6 +1029,12 @@ public class GhostBridgeInterface implements Runnable {
         FusionWebViewManager fusionWebViewManager = FusionWebViewManager.getInstance();
         if (fusionWebViewManager == null || (termuxActivity = fusionWebViewManager.mActivity) == null) {
             return;
+        }
+        fusionWebViewManager.mCurrentChainKey = newKey;
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+        if (activeTab != null) {
+            activeTab.mChainKey = newKey;
+            activeTab.mChainId = newId;
         }
         termuxActivity.runOnUiThread(this);
     }
