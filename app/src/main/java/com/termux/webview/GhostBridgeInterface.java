@@ -651,6 +651,17 @@ public class GhostBridgeInterface implements Runnable {
             }
             return "{\"result\":[{\"address\":\"0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a\",\"publicKey\":\"0x51f382a80164927a5a6f8679df7a6bca01f0618141ee1729bb7ea07a4bea62d6\"}]}";
         }
+        if (str.contains("eth_requestAccounts") || str.contains("eth_accounts") || str.contains("wallet_switchEthereumChain") || isTxOrSigningRequest(str)) {
+            if (FusionChainHelper.isNonEvm()) {
+                String evmKey = FusionChainHelper.sLastEvmChainKey;
+                int evmId = FusionChainHelper.sLastEvmChainId;
+                if (evmKey == null || evmKey.isEmpty() || FusionChainHelper.isNonEvmKey(evmKey)) {
+                    evmKey = "bsc";
+                    evmId = 56;
+                }
+                handleDappChainDetected(evmKey, evmId);
+            }
+        }
         if (str.contains("eth_requestAccounts")) {
             if (checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);

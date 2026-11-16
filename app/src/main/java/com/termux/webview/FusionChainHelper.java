@@ -82,6 +82,20 @@ public class FusionChainHelper {
         return "iota".equalsIgnoreCase(sCurrentChainKey) || "iotaevm".equalsIgnoreCase(sCurrentChainKey) || sCurrentChainId == 4218 || sCurrentChainId == 8822;
     }
 
+    public static String sLastEvmChainKey = "bsc";
+    public static int sLastEvmChainId = 56;
+
+    public static boolean isNonEvm() {
+        return isSolana() || isTron() || isSui() || isAptos() || ("iota".equalsIgnoreCase(sCurrentChainKey) && sCurrentChainId == 4218);
+    }
+
+    public static boolean isNonEvmKey(String key) {
+        if (key == null) return false;
+        String k = key.trim().toLowerCase();
+        return "solana".equals(k) || "sol".equals(k) || "tron".equals(k) || "trx".equals(k) || 
+               "sui".equals(k) || "aptos".equals(k) || "apt".equals(k) || "iota".equals(k);
+    }
+
     public static String detectChainFromUrl(String url) {
         if (url == null || url.isEmpty()) {
             return null;
@@ -358,30 +372,44 @@ public class FusionChainHelper {
             case 8453:
                 sCurrentChainKey = "base";
                 sCurrentChainName = "Base Mainnet";
+                sLastEvmChainKey = "base";
+                sLastEvmChainId = 8453;
                 break;
             case 56:
                 sCurrentChainKey = "bsc";
                 sCurrentChainName = "Binance Smart Chain";
+                sLastEvmChainKey = "bsc";
+                sLastEvmChainId = 56;
                 break;
             case 42161:
                 sCurrentChainKey = "arbitrum";
                 sCurrentChainName = "Arbitrum One";
+                sLastEvmChainKey = "arbitrum";
+                sLastEvmChainId = 42161;
                 break;
             case 137:
                 sCurrentChainKey = "polygon";
                 sCurrentChainName = "Polygon (Matic)";
+                sLastEvmChainKey = "polygon";
+                sLastEvmChainId = 137;
                 break;
             case 2818:
                 sCurrentChainKey = "morph";
                 sCurrentChainName = "Morph L2";
+                sLastEvmChainKey = "morph";
+                sLastEvmChainId = 2818;
                 break;
             case 5042:
                 sCurrentChainKey = "arc-mainnet";
                 sCurrentChainName = "Arc";
+                sLastEvmChainKey = "arc-mainnet";
+                sLastEvmChainId = 5042;
                 break;
             case 1:
                 sCurrentChainKey = "eth";
                 sCurrentChainName = "Ethereum Mainnet";
+                sLastEvmChainKey = "eth";
+                sLastEvmChainId = 1;
                 break;
             case 501:
                 sCurrentChainKey = "solana";
@@ -407,6 +435,8 @@ public class FusionChainHelper {
             case 8822:
                 sCurrentChainKey = "iotaevm";
                 sCurrentChainName = "IOTA EVM Mainnet";
+                sLastEvmChainKey = "iotaevm";
+                sLastEvmChainId = 8822;
                 break;
             default:
                 sCurrentChainKey = "chain-" + i;
@@ -423,5 +453,7 @@ public class FusionChainHelper {
         sCurrentChainKey = strArr[i];
         sCurrentChainName = sChainNames[i];
         sCurrentChainId = sChainIds[i];
+        sLastEvmChainKey = sCurrentChainKey;
+        sLastEvmChainId = sCurrentChainId;
     }
 }

@@ -518,12 +518,32 @@ public class FusionWalletHelper {
     }
 
     public static String getStartWalletDaemonCommand(String activeUrl) {
-        String net = GhostBridgeInterface.getLastDetectedDappChainKey();
+        if (activeUrl == null || activeUrl.isEmpty()) {
+            try {
+                FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                if (mgr != null && mgr.mActiveWebView != null) {
+                    activeUrl = mgr.mActiveWebView.getUrl();
+                }
+            } catch (Throwable ignored) {}
+        }
+        String net = null;
+        if (activeUrl != null && !activeUrl.isEmpty()) {
+            net = FusionChainHelper.detectChainFromUrl(activeUrl);
+        }
+        if (net == null || net.isEmpty()) {
+            net = GhostBridgeInterface.getLastDetectedDappChainKey();
+        }
         if (net == null || net.isEmpty()) {
             net = FusionChainHelper.getCurrentChainKey();
         }
+        if (FusionChainHelper.isNonEvmKey(net)) {
+            String checkNonEvm = (activeUrl != null && !activeUrl.isEmpty()) ? FusionChainHelper.detectChainFromUrl(activeUrl) : null;
+            if (checkNonEvm == null || !FusionChainHelper.isNonEvmKey(checkNonEvm)) {
+                net = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
+            }
+        }
         if (net == null || net.isEmpty()) {
-            net = "base";
+            net = "bsc";
         }
         String netFlag = (net != null && !net.isEmpty()) ? ("--" + net + " ") : "";
         String wFlag = "";

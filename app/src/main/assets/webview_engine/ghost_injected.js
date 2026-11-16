@@ -264,6 +264,7 @@
         }
     });
 
+    var _isInternalChainSwitch = false;
     window.addEventListener("chainChanged", function(e) {
         var newChain = (e.detail) ? e.detail : "";
         if (newChain) {
@@ -273,7 +274,7 @@
                 fakeProvider.networkVersion = String(dec);
             } catch(err) {}
             emitEvent("chainChanged", newChain);
-            if (window.GhostBridge && window.GhostBridge.postRpc) {
+            if (!_isInternalChainSwitch && window.GhostBridge && window.GhostBridge.postRpc) {
                 try { window.GhostBridge.postRpc(JSON.stringify({ method: 'wallet_switchEthereumChain', params: [{ chainId: newChain }] })); } catch(err) {}
             }
         }
@@ -294,6 +295,15 @@
                     try {
                         var cIdHex = (window.GhostBridge && window.GhostBridge.getChainIdHex) ? window.GhostBridge.getChainIdHex() : fakeProvider.chainId;
                         var decId = (cIdHex && cIdHex.indexOf("0x") === 0) ? parseInt(cIdHex, 16) : parseInt(cIdHex, 10);
+                        // If current chain is non-EVM (Sui 784, Solana 501, Tron 728126428, Aptos 637/101, Iota 4218), default to BSC (56) on EVM connect
+                        if (decId === 784 || decId === 501 || decId === 728126428 || decId === 637 || decId === 101 || decId === 4218 || isNaN(decId)) {
+                            decId = 56;
+                            fakeProvider.chainId = "0x38";
+                            fakeProvider.networkVersion = "56";
+                            if (window.GhostBridge && window.GhostBridge.switchChainByHex) {
+                                try { window.GhostBridge.switchChainByHex("0x38"); } catch(_) {}
+                            }
+                        }
                         var k = mapChainIdToKey(decId);
                         if (k) reportDappChainToBridge(k, decId);
                     } catch(_) {}
@@ -356,7 +366,12 @@
                     try { window.GhostBridge.postRpc(JSON.stringify(args)); } catch(e) {}
                 }
                 emitEvent("chainChanged", targetHex);
-                window.dispatchEvent(new CustomEvent("chainChanged", { detail: targetHex }));
+                _isInternalChainSwitch = true;
+                try {
+                    window.dispatchEvent(new CustomEvent("chainChanged", { detail: targetHex }));
+                } finally {
+                    _isInternalChainSwitch = false;
+                }
             }
             return null;
         }
