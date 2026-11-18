@@ -20702,7 +20702,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
             applyChromeTravelAlpha(1f, 1f);
             // The panes' clip comes off with the hold: the geometry pass below lays them out at
             // the size the clip was standing in for, in the same traversal.
-            if (held && mPaneController != null) mPaneController.setTravelBottomCoverPx(0);
+            if (mPaneController != null) mPaneController.setTravelBottomCoverPx(0);
             // A keyboard pre-rolled for a place the wall did not stay on goes away quietly, as it
             // came: the place under it never had it up. One the arriving place wants is already
             // where it belongs, and the place's own sync below finds nothing to do.
@@ -21060,7 +21060,7 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         mKeyboardTravelSharePx = 0f;
         mTravelHeldOverlapPx = 0;
         applyAccessoryStackTranslation();
-        if (held && mPaneController != null) mPaneController.setTravelBottomCoverPx(0);
+        if (mPaneController != null) mPaneController.setTravelBottomCoverPx(0);
         // The keyboard's own show or hide and the content's room are one pass, at the batch's end.
         mGeometry.beginBatch();
         try {
