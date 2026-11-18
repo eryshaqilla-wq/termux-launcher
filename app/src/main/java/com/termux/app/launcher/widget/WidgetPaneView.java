@@ -337,6 +337,14 @@ public final class WidgetPaneView extends FrameLayout {
     // intercept claims a stream only when horizontal travel wins the slop race inside the grid,
     // so the grid's own pages move without stealing a vertical scroll or a widget tap.
 
+    @Override public boolean canScrollHorizontally(int direction) {
+        if (picker.isOpen() || widgetEditActive()) return true;
+        if (pageCount <= 1) return false;
+        if (direction < 0) return currentPage > 0;
+        if (direction > 0) return currentPage < pageCount - 1;
+        return false;
+    }
+
     @Override public boolean onInterceptTouchEvent(@NonNull MotionEvent event) {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:

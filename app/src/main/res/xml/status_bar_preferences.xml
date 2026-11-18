@@ -75,6 +75,11 @@
             app:title="@string/settings_status_bar_border_hold_page_title"
             app:summary="@string/settings_status_bar_border_hold_page_summary"
             app:defaultValue="true" />
+        <SwitchPreferenceCompat
+            app:key="wall_free_horizontal_swipe_enabled"
+            app:title="@string/settings_wall_free_horizontal_swipe_title"
+            app:summary="@string/settings_wall_free_horizontal_swipe_summary"
+            app:defaultValue="true" />
         <ListPreference
             app:key="terminal_back_key_action"
             app:title="@string/settings_terminal_back_action_title"

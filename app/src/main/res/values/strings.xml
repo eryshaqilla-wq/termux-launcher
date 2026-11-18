@@ -32,6 +32,8 @@
     <string name="settings_status_bar_corner_page_tap_summary">Pindah kanvas saat mengetuk ikon scope/sudut status bar.</string>
     <string name="settings_status_bar_border_hold_page_title">Tekan Lama Pojok/Tepi untuk Pindah Kanvas</string>
     <string name="settings_status_bar_border_hold_page_summary">Pindah kanvas saat menekan dan menahan pojok atau tepi kanvas.</string>
+    <string name="settings_wall_free_horizontal_swipe_title">Swipe Kiri/Kanan di Mana Saja untuk Pindah Kanvas</string>
+    <string name="settings_wall_free_horizontal_swipe_summary">Geser kiri atau kanan di area mana saja pada kanvas untuk berpindah antar kanvas (Widgets / Terminal / Display).</string>
     <string name="settings_terminal_back_action_title">Aksi Gestur Back Kanvas Tengah</string>
     <string name="settings_terminal_back_action_sessions">Buka/Tutup Panel Sesi (Kotak 1)</string>
     <string name="settings_terminal_back_action_escape">Tombol Escape (ESC)</string>

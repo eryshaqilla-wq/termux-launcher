@@ -1569,6 +1569,17 @@ public class TermuxAppSharedPreferences extends AppSharedPreferences {
             TERMUX_APP.KEY_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED, enabled, false);
     }
 
+    public boolean isWallFreeHorizontalSwipeEnabled() {
+        return SharedPreferenceUtils.getBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_WALL_FREE_HORIZONTAL_SWIPE_ENABLED,
+            TERMUX_APP.DEFAULT_WALL_FREE_HORIZONTAL_SWIPE_ENABLED);
+    }
+
+    public void setWallFreeHorizontalSwipeEnabled(boolean enabled) {
+        SharedPreferenceUtils.setBoolean(mSharedPreferences,
+            TERMUX_APP.KEY_WALL_FREE_HORIZONTAL_SWIPE_ENABLED, enabled, false);
+    }
+
     public String getTerminalBackKeyAction() {
         return SharedPreferenceUtils.getString(mSharedPreferences,
             TERMUX_APP.KEY_TERMINAL_BACK_KEY_ACTION,

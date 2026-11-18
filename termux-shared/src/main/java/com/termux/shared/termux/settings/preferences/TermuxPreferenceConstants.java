@@ -354,6 +354,10 @@ public final class TermuxPreferenceConstants {
         public static final String KEY_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED = "status_bar_border_hold_page_enabled";
         public static final boolean DEFAULT_STATUS_BAR_BORDER_HOLD_PAGE_ENABLED = true;
 
+        /** Toggle for swiping horizontally anywhere on a canvas to switch canvas. */
+        public static final String KEY_WALL_FREE_HORIZONTAL_SWIPE_ENABLED = "wall_free_horizontal_swipe_enabled";
+        public static final boolean DEFAULT_WALL_FREE_HORIZONTAL_SWIPE_ENABLED = true;
+
         /** Action to perform on Back gesture/key when on the Terminal canvas (center canvas). */
         public static final String KEY_TERMINAL_BACK_KEY_ACTION = "terminal_back_key_action";
         public static final String DEFAULT_TERMINAL_BACK_KEY_ACTION = "sessions";

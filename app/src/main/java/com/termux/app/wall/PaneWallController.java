@@ -99,6 +99,8 @@ public final class PaneWallController implements PaneWallLayout.Listener {
         default void onPagePoseChanged() { }
         /** Whether pressing and holding on the border/corner of a canvas initiates paging/canvas switch. */
         default boolean isBorderHoldPagingEnabled() { return true; }
+        /** Whether swiping horizontally anywhere on a canvas switches between canvases. */
+        default boolean isFreeHorizontalSwipeEnabled() { return false; }
     }
 
     /** Saved-instance-state key for the page the wall is showing. */
@@ -390,6 +392,11 @@ public final class PaneWallController implements PaneWallLayout.Listener {
     @Override
     public boolean isBorderHoldPagingEnabled() {
         return mHost.isBorderHoldPagingEnabled();
+    }
+
+    @Override
+    public boolean isFreeHorizontalSwipeEnabled() {
+        return mHost.isFreeHorizontalSwipeEnabled();
     }
 
     @Override

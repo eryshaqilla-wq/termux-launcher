@@ -108,6 +108,9 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
             case "status_bar_border_hold_page_enabled":
                 mPreferences.setStatusBarBorderHoldPageEnabled(value);
                 break;
+            case "wall_free_horizontal_swipe_enabled":
+                mPreferences.setWallFreeHorizontalSwipeEnabled(value);
+                break;
             case "status_bar_swipe_expansion_enabled":
                 mPreferences.setStatusBarSwipeExpansionEnabled(value);
                 break;
@@ -165,6 +168,8 @@ class TerminalIOPreferencesDataStore extends PreferenceDataStore {
                 return mPreferences.isStatusBarCornerPageTapEnabled();
             case "status_bar_border_hold_page_enabled":
                 return mPreferences.isStatusBarBorderHoldPageEnabled();
+            case "wall_free_horizontal_swipe_enabled":
+                return mPreferences.isWallFreeHorizontalSwipeEnabled();
             case "status_bar_swipe_expansion_enabled":
                 return mPreferences.isStatusBarSwipeExpansionEnabled();
             default:

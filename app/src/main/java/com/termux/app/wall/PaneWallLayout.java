@@ -193,6 +193,10 @@ public final class PaneWallLayout extends ViewGroup {
          * Whether pressing and holding on the border/corner of a canvas initiates paging/canvas switch.
          */
         default boolean isBorderHoldPagingEnabled() { return true; }
+        /**
+         * Whether swiping horizontally anywhere on a canvas switches between canvases.
+         */
+        default boolean isFreeHorizontalSwipeEnabled() { return false; }
     }
 
     private final Map<PaneWallPage, View> mPageViews = new EnumMap<>(PaneWallPage.class);
@@ -239,6 +243,15 @@ public final class PaneWallLayout extends ViewGroup {
     private float mBorderDownY;
     /** Held from the claim to the lift, for the release velocity the settle reads. */
     @Nullable private VelocityTracker mBorderVelocity;
+    /** Free horizontal swipe tracking across the canvas body (when enabled in settings). */
+    private boolean mFreeSwipeTracking;
+    private boolean mFreeSwipeDragging;
+    private int mFreeSwipePointerId = MotionEvent.INVALID_POINTER_ID;
+    private float mFreeSwipeDownX;
+    private float mFreeSwipeDownY;
+    private float mFreeSwipeStartX;
+    private float mFreeSwipeLastX;
+    @Nullable private VelocityTracker mFreeSwipeVelocity;
     /**
      * Its own handler rather than {@link View#postDelayed}: a detached view queues those until
      * it is attached, and the hold has to fire or be cancelled on its own clock.
@@ -666,6 +679,7 @@ public final class PaneWallLayout extends ViewGroup {
         // The wall's own border drag is a claimant like the others: the rest of its finger's
         // travel is swallowed and moves nothing.
         mBorderDrag.abandon();
+        releaseFreeSwipe();
         syncBorderGlow();
     }
 
@@ -819,16 +833,205 @@ public final class PaneWallLayout extends ViewGroup {
             || mBorderDrag.isStatusSwipe();
     }
 
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent event) {
+        if (mCancellingChild || isBorderClaimed() || !isFreeSwipeAvailable()) {
+            if (!mFreeSwipeDragging) releaseFreeSwipe();
+            return false;
+        }
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                startFreeSwipeTracking(event);
+                return false;
+            case MotionEvent.ACTION_MOVE:
+                return handleFreeSwipeMove(event, true);
+            case MotionEvent.ACTION_POINTER_DOWN:
+                if (!mFreeSwipeDragging) releaseFreeSwipe();
+                return false;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_CANCEL:
+                if (!mFreeSwipeDragging) releaseFreeSwipe();
+                return false;
+            default:
+                return mFreeSwipeDragging;
+        }
+    }
+
     /**
      * A DOWN nothing under the finger took — the air around the pages, which is the wall's own
      * and where the borders live — is kept only while the drag is armed, so a press on a border
-     * can hold or swipe. Anything else that lands here belongs to an armed finger whose child has
-     * already been cancelled, and is swallowed.
+     * can hold or swipe. When free horizontal swipe is enabled, unclaimed touches are also kept
+     * so a swipe starting on empty canvas space can page the wall.
      */
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (mCancellingChild) return false;
+        if (mFreeSwipeDragging) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_MOVE:
+                    handleFreeSwipeMove(event, false);
+                    return true;
+                case MotionEvent.ACTION_POINTER_UP:
+                    handoffFreeSwipePointer(event);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    finishFreeSwipe(event, false);
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    finishFreeSwipe(event, true);
+                    return true;
+                default:
+                    return true;
+            }
+        }
+        if (isFreeSwipeAvailable()) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    if (!mFreeSwipeTracking) startFreeSwipeTracking(event);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (handleFreeSwipeMove(event, false)) return true;
+                    return mFreeSwipeTracking || mBorderDrag.isArmed();
+                case MotionEvent.ACTION_POINTER_DOWN:
+                    releaseFreeSwipe();
+                    return mBorderDrag.isArmed();
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    releaseFreeSwipe();
+                    return mBorderDrag.isArmed();
+                default:
+                    break;
+            }
+        }
         return mBorderDrag.isArmed();
+    }
+
+    private boolean isFreeSwipeAvailable() {
+        return mGesturesEnabled && mPages.size() > 1
+            && mListener != null && mListener.isFreeHorizontalSwipeEnabled();
+    }
+
+    private void startFreeSwipeTracking(@NonNull MotionEvent event) {
+        releaseFreeSwipe();
+        mFreeSwipeTracking = true;
+        mFreeSwipePointerId = event.getPointerId(0);
+        mFreeSwipeDownX = event.getX(0);
+        mFreeSwipeDownY = event.getY(0);
+        mFreeSwipeStartX = mFreeSwipeDownX;
+        mFreeSwipeLastX = mFreeSwipeDownX;
+        mFreeSwipeVelocity = VelocityTracker.obtain();
+        mFreeSwipeVelocity.addMovement(event);
+    }
+
+    private boolean handleFreeSwipeMove(@NonNull MotionEvent event, boolean checkChildren) {
+        if (mFreeSwipeDragging) {
+            int idx = event.findPointerIndex(mFreeSwipePointerId);
+            if (idx < 0) return true;
+            if (mFreeSwipeVelocity != null) mFreeSwipeVelocity.addMovement(event);
+            float x = event.getX(idx);
+            mFreeSwipeLastX = x;
+            dragTo(x - mFreeSwipeStartX);
+            return true;
+        }
+        if (!mFreeSwipeTracking) return false;
+        int idx = event.findPointerIndex(mFreeSwipePointerId);
+        if (idx < 0) {
+            releaseFreeSwipe();
+            return false;
+        }
+        if (mFreeSwipeVelocity != null) mFreeSwipeVelocity.addMovement(event);
+        float x = event.getX(idx);
+        float y = event.getY(idx);
+        float dx = x - mFreeSwipeDownX;
+        float dy = y - mFreeSwipeDownY;
+        int touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        if (Math.abs(dy) > touchSlop && Math.abs(dy) >= Math.abs(dx)) {
+            releaseFreeSwipe();
+            return false;
+        }
+        if (Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy)) {
+            if (checkChildren && canChildScrollHorizontally(this, false, (int) dx, (int) x, (int) y)) {
+                releaseFreeSwipe();
+                return false;
+            }
+            mFreeSwipeDragging = true;
+            mFreeSwipeStartX = x;
+            mFreeSwipeLastX = x;
+            mHoldHandler.removeCallbacks(mHoldElapsed);
+            mBorderDrag.abandon();
+            syncBorderGlow();
+            if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
+            beginDrag(true, x);
+            dragTo(0f);
+            return true;
+        }
+        return false;
+    }
+
+    private void handoffFreeSwipePointer(@NonNull MotionEvent event) {
+        int actionIndex = event.getActionIndex();
+        if (event.getPointerId(actionIndex) != mFreeSwipePointerId) return;
+        int newIndex = actionIndex == 0 ? 1 : 0;
+        if (newIndex >= event.getPointerCount()) return;
+        float carried = mFreeSwipeLastX - mFreeSwipeStartX;
+        mFreeSwipePointerId = event.getPointerId(newIndex);
+        mFreeSwipeLastX = event.getX(newIndex);
+        mFreeSwipeStartX = mFreeSwipeLastX - carried;
+        if (mFreeSwipeVelocity != null) {
+            mFreeSwipeVelocity.clear();
+            mFreeSwipeVelocity.addMovement(event);
+        }
+    }
+
+    private void finishFreeSwipe(@NonNull MotionEvent event, boolean cancelled) {
+        float velocity = 0f;
+        if (!cancelled && mFreeSwipeVelocity != null) {
+            mFreeSwipeVelocity.addMovement(event);
+            mFreeSwipeVelocity.computeCurrentVelocity(1000);
+            velocity = mFreeSwipeVelocity.getXVelocity();
+        }
+        releaseFreeSwipe();
+        if (cancelled) {
+            cancelDrag();
+        } else {
+            endDrag(velocity);
+        }
+    }
+
+    private void releaseFreeSwipe() {
+        mFreeSwipeTracking = false;
+        mFreeSwipeDragging = false;
+        mFreeSwipePointerId = MotionEvent.INVALID_POINTER_ID;
+        if (mFreeSwipeVelocity != null) {
+            mFreeSwipeVelocity.recycle();
+            mFreeSwipeVelocity = null;
+        }
+    }
+
+    private static boolean canChildScrollHorizontally(@NonNull View v, boolean checkSelf,
+                                                      int dx, int x, int y) {
+        if (v instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) v;
+            int scrollX = v.getScrollX();
+            int scrollY = v.getScrollY();
+            for (int i = group.getChildCount() - 1; i >= 0; i--) {
+                View child = group.getChildAt(i);
+                if (child.getVisibility() != View.VISIBLE) continue;
+                float left = child.getLeft() + child.getTranslationX();
+                float top = child.getTop() + child.getTranslationY();
+                float right = child.getRight() + child.getTranslationX();
+                float bottom = child.getBottom() + child.getTranslationY();
+                int cx = x + scrollX;
+                int cy = y + scrollY;
+                if (cx >= left && cx < right && cy >= top && cy < bottom) {
+                    if (canChildScrollHorizontally(child, true, dx,
+                        Math.round(cx - left), Math.round(cy - top))) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return checkSelf && v.canScrollHorizontally(-dx);
     }
 
     /**
@@ -2146,6 +2349,7 @@ public final class PaneWallLayout extends ViewGroup {
         settleKeyboardRevealNow();
         settleStatusFoldNow();
         releaseBorderDrag();
+        releaseFreeSwipe();
         finishSink();
         releasePlank();
         releaseStills();

@@ -2480,6 +2480,9 @@ public final class TerminalView extends View {
             mTouchMouseDragReported = false;
             mTapShiftBypass = false;
             mScrollAxis = SCROLL_AXIS_UNDECIDED;
+            if (isSelectingText() || (mTouchMouseMode && !event.isFromSource(InputDevice.SOURCE_MOUSE))) {
+                if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
+            }
         }
         handleHoldTouch(event);
         if (mTouchMouseMode && !event.isFromSource(InputDevice.SOURCE_MOUSE)) {
@@ -2518,6 +2521,11 @@ public final class TerminalView extends View {
         }
         mGestureRecognizer.onTouchEvent(event);
         return true;
+    }
+
+    @Override
+    public boolean canScrollHorizontally(int direction) {
+        return super.canScrollHorizontally(direction) || isSelectingText() || mTouchMouseMode;
     }
 
     /**

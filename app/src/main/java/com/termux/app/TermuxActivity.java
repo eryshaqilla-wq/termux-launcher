@@ -21148,6 +21148,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
                 @Override public boolean isBorderHoldPagingEnabled() {
                     return mPreferences == null || mPreferences.isStatusBarBorderHoldPageEnabled();
                 }
+                @Override public boolean isFreeHorizontalSwipeEnabled() {
+                    if (mPreferences != null && !mPreferences.isWallFreeHorizontalSwipeEnabled()) {
+                        return false;
+                    }
+                    if (mPaneWallController != null
+                            && mPaneWallController.currentPage() == com.termux.app.wall.PaneWallPage.DISPLAY) {
+                        com.termux.app.x11.X11PaneFrame displayPage = mPaneWallController.displayPage();
+                        if (isEmbeddedDisplayRunning()
+                                || (displayPage != null && displayPage.isRunning())) {
+                            return false;
+                        }
+                    }
+                    return true;
+                }
                 @Override public void onBorderStatusSwipe(boolean expand) {
                     if (isBorderStatusSwipeAvailable()) setTopStatusBarCollapsed(!expand, true);
                 }
