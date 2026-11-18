@@ -2150,6 +2150,7 @@ public final class PaneWallLayout extends ViewGroup {
      */
     private void applyPagePositions() {
         int width = getWidth();
+        int snappedOffsetPx = Math.round(mOffsetPx);
         for (Map.Entry<PaneWallPage, View> entry : mPageViews.entrySet()) {
             View view = entry.getValue();
             if (!mPages.contains(entry.getKey())) {
@@ -2158,10 +2159,11 @@ public final class PaneWallLayout extends ViewGroup {
             }
             // On a ring each page is placed the shorter way round from the current one, so the
             // page past the outer edge is already waiting on the other side when a drag reaches
-            // for it.
-            float x = PaneWallPolicy.relativePosition(mPages, mCurrent, entry.getKey())
-                * (float) width + mOffsetPx
-                + (entry.getKey() == mNudgePage ? mNudgePx : 0f);
+            // for it. Snap horizontal translation to whole device pixels so adjacent page glass
+            // slabs meet on an exact integer pixel boundary without Porter-Duff subpixel seams.
+            float x = PaneWallPolicy.relativePosition(mPages, mCurrent, entry.getKey()) * width
+                + snappedOffsetPx
+                + (entry.getKey() == mNudgePage ? Math.round(mNudgePx) : 0);
             view.setTranslationX(x);
             boolean onScreen = width <= 0 || Math.abs(x) < width;
             if (entry.getKey() == PaneWallPage.TERMINAL) {

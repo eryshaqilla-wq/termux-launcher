@@ -55,7 +55,7 @@ import com.termux.app.chrome.WallpaperParallax;
 public final class PaneGlassBackdropView extends View implements PaneRim.SlabEdge {
 
     private final Paint mFramePaint = new Paint(Paint.FILTER_BITMAP_FLAG);
-    private final Paint mTintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mTintPaint = new Paint();
     private final Matrix mFrameMatrix = new Matrix();
     /** Where this slab stands over the wallpaper; read on every draw, see {@link GlassAnchor#place}. */
     private final GlassAnchor.Placement mPlacement = new GlassAnchor.Placement();

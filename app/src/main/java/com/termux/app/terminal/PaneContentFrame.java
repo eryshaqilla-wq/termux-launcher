@@ -165,8 +165,15 @@ public class PaneContentFrame extends FrameLayout implements TerminalView.Paddin
             return;
         mRequestedRadiusPx = requestedRadiusPx;
         mClipToShape = clipToShape;
-        setOutlineProvider(clipToShape ? mShapeOutline : ViewOutlineProvider.BOUNDS);
-        setClipToOutline(clipToShape);
+        boolean roundClip = clipToShape && requestedRadiusPx > 0f;
+        setOutlineProvider(roundClip ? mShapeOutline : ViewOutlineProvider.BOUNDS);
+        setClipToOutline(roundClip);
+        if (!roundClip && mTravelBottomInsetPx > 0) {
+            mTravelClipRect.set(0, 0, getWidth(), Math.max(0, getHeight() - mTravelBottomInsetPx));
+            setClipBounds(mTravelClipRect);
+        } else {
+            setClipBounds(null);
+        }
         invalidateOutline();
         mBandClipPathDirty = true;
         mRetroEffect.refresh();
@@ -201,7 +208,8 @@ public class PaneContentFrame extends FrameLayout implements TerminalView.Paddin
         if (mTravelBottomInsetPx == inset)
             return;
         mTravelBottomInsetPx = inset;
-        if (mClipToShape) {
+        boolean roundClip = mClipToShape && mRequestedRadiusPx > 0f;
+        if (roundClip) {
             invalidateOutline();
         } else if (inset > 0) {
             mTravelClipRect.set(0, 0, getWidth(), Math.max(0, getHeight() - inset));
