@@ -5182,6 +5182,12 @@ public final class TerminalEmulator {
         return mKittyGraphics;
     }
 
+    public void setKittyDecoder(java.util.concurrent.Executor decoder) {
+        if (mKittyGraphics != null) {
+            mKittyGraphics.decoder = decoder;
+        }
+    }
+
     /**
      * Supplies the first row on display, negative into the scrollback. The view owns scrolling, so
      * the position is pulled when it is needed rather than pushed from a dozen scroll sites where

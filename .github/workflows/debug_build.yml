@@ -54,7 +54,7 @@ jobs:
           GRADLE_OPTS: >-
             -Dorg.gradle.internal.http.connectionTimeout=120000
             -Dorg.gradle.internal.http.socketTimeout=120000
-          GRADLE_MAX_ATTEMPTS: "1"
+          GRADLE_MAX_ATTEMPTS: "2"
           GRADLE_RETRY_SLEEP_SECONDS: "20"
           GRADLE_REFRESH_FROM_ATTEMPT: "2"
         run: |
@@ -67,7 +67,7 @@ jobs:
           GRADLE_OPTS: >-
             -Dorg.gradle.internal.http.connectionTimeout=120000
             -Dorg.gradle.internal.http.socketTimeout=120000
-          GRADLE_MAX_ATTEMPTS: "1"
+          GRADLE_MAX_ATTEMPTS: "2"
           GRADLE_RETRY_SLEEP_SECONDS: "20"
           GRADLE_REFRESH_FROM_ATTEMPT: "2"
         run: |

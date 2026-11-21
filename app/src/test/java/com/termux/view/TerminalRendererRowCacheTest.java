@@ -71,6 +71,7 @@ public class TerminalRendererRowCacheTest {
             @Override public void onBell() { }
             @Override public void onColorsChanged() { }
         }, true, COLUMNS, ROWS, 10, 10, ROWS * 2, CLIENT);
+        mEmulator.setKittyDecoder(Runnable::run);
         mRenderer = new TerminalRenderer(24, Typeface.MONOSPACE, Typeface.MONOSPACE);
         mCanvas = new Canvas(Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888));
     }
