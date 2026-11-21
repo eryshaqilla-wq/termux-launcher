@@ -1,0 +1,653 @@
+#!/usr/bin/env node
+
+/**
+ * ⚡ 9ROUTER UNIVERSAL AI CLIENT AUTO-CONFIG ENGINE
+ * Mendeteksi klien AI yang terpasang (OpenCode, OpenClaw, Hermes, Aider, dll),
+ * membaca status koneksi ke 9Router, dan menginjeksi konfigurasi 9Router secara otomatis.
+ */
+
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
+const os = require("os");
+
+const HOME = os.homedir();
+const PORT = 20128;
+const BASE_URL = `http://127.0.0.1:${PORT}/v1`;
+
+// Ambil API Key dari data.sqlite
+function getApiKey() {
+  const dbPaths = [
+    path.join(HOME, ".9router", "db", "data.sqlite"),
+    "/root/.9router/db/data.sqlite",
+    "/data/data/com.termux/files/home/.9router/db/data.sqlite"
+  ];
+  for (const p of dbPaths) {
+    if (fs.existsSync(p)) {
+      try {
+        const { DatabaseSync } = require("node:sqlite");
+        const db = new DatabaseSync(p);
+        const row = db.prepare("SELECT key FROM apiKeys WHERE isActive = 1 LIMIT 1").get() ||
+                    db.prepare("SELECT key FROM apiKeys LIMIT 1").get();
+        db.close();
+        if (row && row.key) return row.key.trim();
+      } catch {
+        try {
+          const out = execSync(`sqlite3 "${p}" "SELECT key FROM apiKeys LIMIT 1" 2>/dev/null`, { encoding: "utf8" }).trim();
+          if (out) return out;
+        } catch {}
+      }
+    }
+  }
+  return "sk-9router-local-key";
+}
+
+// Ambil daftar model dari live server 9Router, cache riil, atau catalog Antigravity
+function getModelsList() {
+  const apiKey = getApiKey();
+  const liveModelsPath = path.join(HOME, ".9router", "live-models.json");
+  const prio = [
+    "ag/gemini-3.8-flash-medium",
+    "ag/gemini-3.8-flash-high",
+    "ag/gemini-3.8-flash-low",
+    "ag/claude-sonnet-5-5",
+    "ag/claude-sonnet-5-5-high",
+    "ag/claude-sonnet-5-5-medium",
+    "ag/claude-sonnet-5-5-low",
+    "ag/claude-opus-5-5",
+    "ag/claude-opus-5-5-high",
+    "ag/claude-opus-5-5-medium",
+    "ag/claude-opus-5-5-low",
+    "ag/gemini-3.7-flash-high",
+    "ag/gemini-3.7-flash-medium",
+    "ag/gemini-3.7-flash-low",
+    "ag/gemini-3.1-pro-high",
+    "ag/gemini-3.1-pro-low",
+    "ag/gemini-pro-agent",
+    "ag/claude-sonnet-4-6",
+    "ag/claude-opus-4-6-thinking",
+    "ag/gpt-oss-120b-medium"
+  ];
+
+  function sortModels(ids) {
+    const sorted = [];
+    prio.forEach(p => { if (ids.includes(p)) sorted.push(p); });
+    ids.forEach(id => { if (!sorted.includes(id)) sorted.push(id); });
+    return sorted;
+  }
+
+  // 1. Ambil real-time langsung dari live server 9Router via /v1/models
+  try {
+    const out = execSync(`curl -s -m 2 http://127.0.0.1:${PORT}/v1/models -H "Authorization: Bearer ${apiKey}" 2>/dev/null`, { encoding: "utf8" });
+    const json = JSON.parse(out);
+    if (json && json.data && Array.isArray(json.data)) {
+      const ids = json.data.map(m => m.id).filter(id => id.startsWith("ag/"));
+      if (ids.length > 0) {
+        try { fs.writeFileSync(liveModelsPath, out, "utf8"); } catch {}
+        return sortModels(ids);
+      }
+    }
+  } catch {}
+
+  // 2. Ambil dari cache riil hasil query server sebelumnya (jika Next.js sedang tidur/standby)
+  if (fs.existsSync(liveModelsPath)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(liveModelsPath, "utf8"));
+      if (data && data.data && Array.isArray(data.data)) {
+        const ids = data.data.map(m => m.id).filter(id => id.startsWith("ag/"));
+        if (ids.length > 0) return sortModels(ids);
+      }
+    } catch {}
+  }
+
+  // 3. Fallback riil lengkap mencakup seluruh tier (High, Medium, Low)
+  return [
+    "ag/gemini-3.8-flash-medium",
+    "ag/gemini-3.8-flash-high",
+    "ag/gemini-3.8-flash-low",
+    "ag/claude-sonnet-5-5",
+    "ag/claude-sonnet-5-5-high",
+    "ag/claude-sonnet-5-5-medium",
+    "ag/claude-sonnet-5-5-low",
+    "ag/claude-opus-5-5",
+    "ag/claude-opus-5-5-high",
+    "ag/claude-opus-5-5-medium",
+    "ag/claude-opus-5-5-low",
+    "ag/gemini-3.7-flash-high",
+    "ag/gemini-3.7-flash-medium",
+    "ag/gemini-3.7-flash-low",
+    "ag/gemini-3.1-pro-high",
+    "ag/gemini-3.1-pro-low",
+    "ag/gemini-pro-agent",
+    "ag/claude-sonnet-4-6",
+    "ag/claude-opus-4-6-thinking",
+    "ag/gpt-oss-120b-medium"
+  ];
+}
+
+function getCurrentModel() {
+  const prefPath = path.join(HOME, ".9router", "current-model");
+  if (fs.existsSync(prefPath)) {
+    const m = fs.readFileSync(prefPath, "utf8").trim();
+    if (m) return m;
+  }
+  const opencodeJson = path.join(HOME, ".config", "opencode", "opencode.json");
+  if (fs.existsSync(opencodeJson)) {
+    try {
+      const cfg = JSON.parse(fs.readFileSync(opencodeJson, "utf8"));
+      if (cfg && cfg.model) {
+        return cfg.model.replace("9router/", "");
+      }
+    } catch {}
+  }
+  return "ag/gemini-3.8-flash-medium";
+}
+
+function setModel(targetModel) {
+  const models = getModelsList();
+  let matched = models.find(m => m.toLowerCase() === targetModel.toLowerCase());
+  if (!matched) {
+    matched = models.find(m => m.toLowerCase().includes(targetModel.toLowerCase()));
+  }
+  if (!matched) {
+    matched = targetModel.startsWith("ag/") ? targetModel : `ag/${targetModel}`;
+  }
+
+  try {
+    fs.mkdirSync(path.join(HOME, ".9router"), { recursive: true });
+    fs.writeFileSync(path.join(HOME, ".9router", "current-model"), matched, "utf8");
+  } catch {}
+
+  const apiKey = getApiKey();
+
+  // 1. Update OpenCode
+  const opencodeCfg = path.join(HOME, ".config", "opencode", "opencode.json");
+  if (fs.existsSync(opencodeCfg)) {
+    try {
+      let cfg = JSON.parse(fs.readFileSync(opencodeCfg, "utf8"));
+      cfg.provider = cfg.provider || {};
+      cfg.provider["9router"] = cfg.provider["9router"] || {
+        npm: "@ai-sdk/openai-compatible",
+        name: "9Router Multi-Account",
+        options: { baseURL: BASE_URL, apiKey: apiKey },
+        models: {}
+      };
+      models.forEach(m => {
+        const cleanName = m.replace("ag/", "");
+        cfg.provider["9router"].models[m] = { name: `${cleanName} (9Router)` };
+      });
+      cfg.model = `9router/${matched}`;
+      fs.writeFileSync(opencodeCfg, JSON.stringify(cfg, null, 2), "utf8");
+    } catch {}
+  }
+
+  // 2. Update OpenClaw
+  const openclawCfg = path.join(HOME, ".openclaw", "openclaw.json");
+  if (fs.existsSync(openclawCfg)) {
+    try {
+      let cfg = JSON.parse(fs.readFileSync(openclawCfg, "utf8"));
+      cfg.model = matched;
+      fs.writeFileSync(openclawCfg, JSON.stringify(cfg, null, 2), "utf8");
+    } catch {}
+  }
+
+  // 3. Update Shell AI Env (~/.zshrc)
+  const zshrc = path.join(HOME, ".zshrc");
+  if (fs.existsSync(zshrc)) {
+    try {
+      let text = fs.readFileSync(zshrc, "utf8");
+      text = text.replace(/# >>> 9router env >>>[\s\S]*?# <<< 9router env <<<\n?/g, "");
+      const block = `
+# >>> 9router env >>>
+export OPENAI_BASE_URL="${BASE_URL}"
+export OPENAI_API_BASE="${BASE_URL}"
+export OPENAI_API_KEY="${apiKey}"
+export OPENAI_MODEL="${matched}"
+export FUSION_9ROUTER_ENV=1
+# <<< 9router env <<<
+`;
+      fs.writeFileSync(zshrc, text.trim() + "\n" + block, "utf8");
+    } catch {}
+  }
+
+  return matched;
+}
+
+// Definisi Klien yang Didukung
+const CLIENT_DEFINITIONS = [
+  {
+    id: "opencode",
+    name: "OpenCode",
+    detect: () => {
+      try {
+        const bin = execSync("which opencode 2>/dev/null", { encoding: "utf8" }).trim();
+        if (bin) return true;
+      } catch {}
+      return fs.existsSync(path.join(HOME, ".opencode", "bin", "opencode")) ||
+             fs.existsSync("/usr/local/bin/opencode");
+    },
+    version: () => {
+      try {
+        return execSync("opencode --version 2>/dev/null", { encoding: "utf8" }).trim();
+      } catch {
+        return "terpasang";
+      }
+    },
+    configPath: path.join(HOME, ".config", "opencode", "opencode.json"),
+    isConfigured: (cfgPath) => {
+      if (!fs.existsSync(cfgPath)) return false;
+      try {
+        const content = fs.readFileSync(cfgPath, "utf8");
+        return content.includes("127.0.0.1:20128") || content.includes(":20128");
+      } catch {
+        return false;
+      }
+    },
+    configure: (cfgPath, apiKey, models) => {
+      fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
+      let cfg = {};
+      if (fs.existsSync(cfgPath)) {
+        try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8")); } catch {}
+      }
+      cfg["$schema"] = "https://opencode.ai/config.json";
+      cfg.provider = cfg.provider || {};
+      cfg.provider["9router"] = {
+        npm: "@ai-sdk/openai-compatible",
+        name: "9Router Multi-Account",
+        options: {
+          baseURL: BASE_URL,
+          apiKey: apiKey
+        },
+        models: {}
+      };
+      models.forEach(m => {
+        const cleanName = m.replace("ag/", "");
+        cfg.provider["9router"].models[m] = {
+          name: `${cleanName} (9Router)`
+        };
+      });
+      cfg.model = `9router/${models[0]}`;
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), "utf8");
+      return true;
+    }
+  },
+  {
+    id: "openclaw",
+    name: "OpenClaw",
+    detect: () => {
+      try {
+        const bin = execSync("which openclaw 2>/dev/null", { encoding: "utf8" }).trim();
+        if (bin) return true;
+      } catch {}
+      return fs.existsSync(path.join(HOME, ".openclaw")) ||
+             fs.existsSync("/usr/local/bin/openclaw");
+    },
+    version: () => {
+      try {
+        return execSync("openclaw --version 2>/dev/null", { encoding: "utf8" }).trim().split("\n")[0];
+      } catch {
+        return "terpasang";
+      }
+    },
+    configPath: path.join(HOME, ".openclaw", "openclaw.json"),
+    isConfigured: (cfgPath) => {
+      if (!fs.existsSync(cfgPath)) return false;
+      try {
+        const content = fs.readFileSync(cfgPath, "utf8");
+        return content.includes("127.0.0.1:20128") || content.includes(":20128");
+      } catch {
+        return false;
+      }
+    },
+    configure: (cfgPath, apiKey, models) => {
+      fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
+      let cfg = {};
+      if (fs.existsSync(cfgPath)) {
+        try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8")); } catch {}
+      }
+      cfg.models = cfg.models || {};
+      cfg.models.mode = cfg.models.mode || "merge";
+      cfg.models.providers = cfg.models.providers || {};
+      cfg.models.providers["9router"] = {
+        baseUrl: BASE_URL,
+        apiKey: apiKey,
+        api: "openai-completions",
+        models: models.map(m => ({
+          id: m,
+          name: `${m.replace("ag/", "")} (9Router)`,
+          contextWindow: 1000000,
+          maxTokens: 65536
+        }))
+      };
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), "utf8");
+      return true;
+    }
+  },
+  {
+    id: "hermes",
+    name: "Hermes Agent",
+    detect: () => {
+      try {
+        const bin = execSync("which hermes 2>/dev/null", { encoding: "utf8" }).trim();
+        if (bin) return true;
+      } catch {}
+      return fs.existsSync(path.join(HOME, ".hermes"));
+    },
+    version: () => "terpasang",
+    configPath: path.join(HOME, ".hermes", "config.json"),
+    isConfigured: (cfgPath) => {
+      if (!fs.existsSync(cfgPath)) return false;
+      try {
+        const content = fs.readFileSync(cfgPath, "utf8");
+        return content.includes(":20128");
+      } catch {
+        return false;
+      }
+    },
+    configure: (cfgPath, apiKey, models) => {
+      fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
+      let cfg = {};
+      if (fs.existsSync(cfgPath)) {
+        try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8")); } catch {}
+      }
+      cfg.openai_base_url = BASE_URL;
+      cfg.openai_api_key = apiKey;
+      cfg.default_model = models[0];
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), "utf8");
+      return true;
+    }
+  },
+  {
+    id: "aider",
+    name: "Aider",
+    detect: () => {
+      try {
+        const bin = execSync("which aider 2>/dev/null", { encoding: "utf8" }).trim();
+        return !!bin;
+      } catch {
+        return false;
+      }
+    },
+    version: () => {
+      try {
+        return execSync("aider --version 2>/dev/null", { encoding: "utf8" }).trim();
+      } catch {
+        return "terpasang";
+      }
+    },
+    configPath: path.join(HOME, ".aider.conf.yml"),
+    isConfigured: (cfgPath) => {
+      if (!fs.existsSync(cfgPath)) return false;
+      try {
+        return fs.readFileSync(cfgPath, "utf8").includes(":20128");
+      } catch {
+        return false;
+      }
+    },
+    configure: (cfgPath, apiKey, models) => {
+      const content = `# Aider configuration for 9Router Multi-Account
+openai-api-base: ${BASE_URL}
+openai-api-key: ${apiKey}
+model: openai/${models[0]}
+`;
+      fs.writeFileSync(cfgPath, content, "utf8");
+      return true;
+    }
+  },
+  {
+    id: "continue",
+    name: "Continue.dev",
+    detect: () => fs.existsSync(path.join(HOME, ".continue")),
+    version: () => "terpasang",
+    configPath: path.join(HOME, ".continue", "config.json"),
+    isConfigured: (cfgPath) => {
+      if (!fs.existsSync(cfgPath)) return false;
+      try {
+        return fs.readFileSync(cfgPath, "utf8").includes(":20128");
+      } catch {
+        return false;
+      }
+    },
+    configure: (cfgPath, apiKey, models) => {
+      fs.mkdirSync(path.dirname(cfgPath), { recursive: true });
+      let cfg = {};
+      if (fs.existsSync(cfgPath)) {
+        try { cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8")); } catch {}
+      }
+      cfg.models = cfg.models || [];
+      const routerModel = {
+        title: "9Router AI (Antigravity)",
+        provider: "openai",
+        model: models[0],
+        apiBase: BASE_URL,
+        apiKey: apiKey
+      };
+      cfg.models = cfg.models.filter(m => !m.apiBase || !m.apiBase.includes(":20128"));
+      cfg.models.unshift(routerModel);
+      fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2), "utf8");
+      return true;
+    }
+  },
+  {
+    id: "shell_env",
+    name: "Shell AI Environment (~/.zshrc)",
+    detect: () => fs.existsSync(path.join(HOME, ".zshrc")) || fs.existsSync(path.join(HOME, ".bashrc")),
+    version: () => "zsh/bash",
+    configPath: path.join(HOME, ".zshrc"),
+    isConfigured: (cfgPath) => {
+      if (!fs.existsSync(cfgPath)) return false;
+      try {
+        return fs.readFileSync(cfgPath, "utf8").includes("FUSION_9ROUTER_ENV=1");
+      } catch {
+        return false;
+      }
+    },
+    configure: (cfgPath, apiKey) => {
+      const zshrc = path.join(HOME, ".zshrc");
+      if (fs.existsSync(zshrc)) {
+        let text = fs.readFileSync(zshrc, "utf8");
+        // Hapus blok lama jika ada
+        text = text.replace(/# >>> 9router env >>>[\s\S]*?# <<< 9router env <<<\n?/g, "");
+        const block = `
+# >>> 9router env >>>
+export OPENAI_BASE_URL="${BASE_URL}"
+export OPENAI_API_BASE="${BASE_URL}"
+export OPENAI_API_KEY="${apiKey}"
+export FUSION_9ROUTER_ENV=1
+# <<< 9router env <<<
+`;
+        fs.writeFileSync(zshrc, text.trim() + "\n" + block, "utf8");
+      }
+      return true;
+    }
+  }
+];
+
+function getDetectedInstalledClients() {
+  const list = [];
+  for (const client of CLIENT_DEFINITIONS) {
+    if (client.detect()) {
+      const isConf = client.isConfigured(client.configPath);
+      list.push({
+        id: client.id,
+        name: client.name,
+        version: client.version(),
+        isConfigured: isConf,
+        configPath: client.configPath
+      });
+    }
+  }
+  return list;
+}
+
+// Subcommand handling
+const args = process.argv.slice(2);
+const command = args[0] || "interactive";
+
+if (command === "apikey" || command === "--apikey") {
+  const apiKey = getApiKey();
+  console.log(apiKey || "");
+  process.exit(0);
+}
+
+if (command === "model" || command === "models" || command === "set-model") {
+  const targetModel = args[1];
+  const models = getModelsList();
+  const current = getCurrentModel();
+
+  if (targetModel) {
+    const applied = setModel(targetModel);
+    console.log(`\n================== 9ROUTER MODEL SWITCHER ==================`);
+    console.log(`✅ Model aktif 9Router berhasil diubah ke: \x1b[32m${applied}\x1b[0m`);
+    console.log(`   • OpenCode   : 9router/${applied}`);
+    console.log(`   • OpenClaw   : ${applied}`);
+    console.log(`   • Shell Env  : ${applied}`);
+    console.log(`============================================================\n`);
+    process.exit(0);
+  }
+
+  // Interaktif
+  console.log("\n================== 9ROUTER MODEL SELECTOR ==================");
+  console.log(`📡 Gateway Endpoint    : ${BASE_URL}`);
+  console.log(`🤖 Model Aktif Saat Ini: \x1b[32m${current}\x1b[0m`);
+  console.log("------------------------------------------------------------");
+  console.log("Daftar Model Antigravity yang Tersedia di 9Router:");
+  models.forEach((m, idx) => {
+    const isCur = (m === current);
+    const badge = isCur ? " \x1b[32m[🟢 AKTIF]\x1b[0m" : "";
+    console.log(`  ${String(idx + 1).padStart(2, " ")}. ${m}${badge}`);
+  });
+  console.log("------------------------------------------------------------");
+
+  const readline = require("readline");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  rl.question(`Pilih nomor model untuk diaktifkan [1-${models.length}, Q]: `, (ans) => {
+    rl.close();
+    const c = ans.trim();
+    if (!c || c.toUpperCase() === "Q") {
+      console.log("Dibatalkan.");
+      process.exit(0);
+    }
+    const num = parseInt(c, 10);
+    if (num >= 1 && num <= models.length) {
+      const chosen = models[num - 1];
+      const applied = setModel(chosen);
+      console.log(`\n================== 9ROUTER MODEL SWITCHER ==================`);
+      console.log(`✅ Model aktif 9Router berhasil diubah ke: \x1b[32m${applied}\x1b[0m`);
+      console.log(`   • OpenCode   : 9router/${applied}`);
+      console.log(`   • OpenClaw   : ${applied}`);
+      console.log(`   • Shell Env  : ${applied}`);
+      console.log(`============================================================\n`);
+    } else {
+      console.log("Nomor model tidak valid.");
+      process.exit(1);
+    }
+  });
+}
+
+if (command === "list" || command === "json" || command === "--json") {
+  const models = getModelsList();
+  const installed = getDetectedInstalledClients();
+  const apiKey = getApiKey();
+  console.log(JSON.stringify({
+    apiKey: apiKey,
+    maskedApiKey: apiKey ? (apiKey.substring(0, 7) + "..." + apiKey.substring(apiKey.length - 4)) : "",
+    endpoint: BASE_URL,
+    defaultModel: models[0],
+    models: models,
+    clients: installed
+  }, null, 2));
+  process.exit(0);
+}
+
+if (command === "apply") {
+  const targetIds = args.slice(1);
+  const models = getModelsList();
+  const apiKey = getApiKey();
+  const installed = getDetectedInstalledClients();
+  const toConfigure = targetIds.includes("all") ? installed.map(c => c.id) : targetIds;
+
+  const results = [];
+  for (const client of CLIENT_DEFINITIONS) {
+    if (toConfigure.includes(client.id)) {
+      try {
+        const ok = client.configure(client.configPath, apiKey, models);
+        results.push({ id: client.id, name: client.name, success: ok });
+      } catch (e) {
+        results.push({ id: client.id, name: client.name, success: false, error: e.message });
+      }
+    }
+  }
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(results));
+  } else {
+    console.log("\n================== 9ROUTER AUTO-CONFIG ==================");
+    console.log(`Endpoint : ${BASE_URL}`);
+    console.log(`Model    : ${models[0]} (${models.length} model terdaftar di 9Router)`);
+    console.log(`API Key  : ${apiKey.substring(0, 7)}...`);
+    console.log("---------------------------------------------------------");
+    results.forEach(r => {
+      if (r.success) {
+        console.log(`  ✅ [BERHASIL] ${r.name} tersambung ke 9Router.`);
+      } else {
+        console.log(`  ❌ [GAGAL] ${r.name}: ${r.error}`);
+      }
+    });
+    console.log("=========================================================\n");
+  }
+  process.exit(0);
+}
+
+// Tampilan CLI Interaktif
+const readline = require("readline");
+const installed = getDetectedInstalledClients();
+const models = getModelsList();
+const apiKey = getApiKey();
+
+console.log("\n================== 9ROUTER CLIENT AUTO-CONFIG ==================");
+console.log(`📡 Gateway Endpoint : ${BASE_URL}`);
+console.log(`🤖 Model 9Router    : ${models[0]} (dan ${models.length - 1} varian lainnya)`);
+console.log(`🔑 9Router API Key  : ${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)}`);
+console.log("----------------------------------------------------------------");
+
+if (installed.length === 0) {
+  console.log("⚠️ Tidak ada klien AI yang terdeteksi terpasang di sistem ini.");
+  console.log("  Pasang OpenCode (opencode), OpenClaw, atau Aider terlebih dahulu.\n");
+  process.exit(0);
+}
+
+console.log("Klien AI yang Terdeteksi di Sistem:");
+installed.forEach((c, idx) => {
+  const badge = c.isConfigured ? "\x1b[32m[🟢 Terhubung ke 9Router]\x1b[0m" : "\x1b[33m[⚪ Belum Terhubung]\x1b[0m";
+  console.log(`  ${idx + 1}. ${c.name} (${c.version}) ${badge}`);
+  console.log(`     Config: ${c.configPath}`);
+});
+console.log(`  A. Konfigurasi SEMUA klien terdeteksi`);
+console.log(`  Q. Keluar`);
+console.log("----------------------------------------------------------------");
+
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+rl.question("Pilih nomor klien yang ingin dihubungkan ke 9Router [1-" + installed.length + ", A, Q]: ", (answer) => {
+  rl.close();
+  const choice = answer.trim().toUpperCase();
+  if (choice === "Q" || !choice) {
+    console.log("Dibatalkan.");
+    process.exit(0);
+  }
+
+  let selected = [];
+  if (choice === "A") {
+    selected = installed.map(c => c.id);
+  } else {
+    const num = parseInt(choice, 10);
+    if (num >= 1 && num <= installed.length) {
+      selected = [installed[num - 1].id];
+    } else {
+      console.log("Pilihan tidak valid.");
+      process.exit(1);
+    }
+  }
+
+  execSync(`/usr/local/bin/9router-autoconfig apply ${selected.join(" ")}`, { stdio: "inherit" });
+});

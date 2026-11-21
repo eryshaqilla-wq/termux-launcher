@@ -653,7 +653,54 @@ for t in tabs:
             send_cmd "WEBVIEW_COLLAPSE_PILL"
             return 0
             ;;
-        desktop|--desktop)
+        state|get-state)
+            send_cmd "WEBVIEW_STATE"
+            return 0
+            ;;
+        touch|click-native)
+            shift
+            send_cmd "WEBVIEW_TOUCH $*"
+            return 0
+            ;;
+        swipe)
+            shift
+            send_cmd "WEBVIEW_SWIPE $*"
+            return 0
+            ;;
+        longpress|long-press)
+            shift
+            send_cmd "WEBVIEW_LONG_PRESS $*"
+            return 0
+            ;;
+        keyboard-hide|hide-keyboard)
+            send_cmd "WEBVIEW_KEYBOARD_HIDE"
+            return 0
+            ;;
+        wakelock)
+            shift
+            send_cmd "WEBVIEW_WAKELOCK $*"
+            return 0
+            ;;
+        last-download)
+            send_cmd "WEBVIEW_LAST_DOWNLOAD"
+            return 0
+            ;;
+        upload-file|file-upload)
+            shift
+            send_cmd "WEBVIEW_UPLOAD_FILE $*"
+            return 0
+            ;;
+        wallet-set|set-wallet)
+            shift
+            send_cmd "WEBVIEW_WALLET_SET $*"
+            return 0
+            ;;
+        chain-set|set-chain)
+            shift
+            send_cmd "WEBVIEW_CHAIN_SET $*"
+            return 0
+            ;;
+        desktop)
             send_cmd "WEBVIEW_DESKTOP"
             return 0
             ;;
@@ -948,7 +995,7 @@ print(json.dumps(data))
         if [ "$IS_HEADLESS" = "1" ]; then
             echo "Meluncurkan $URL di background (headless)"
             sleep 0.2
-            send_cmd "WEBVIEW_DETACH_TAB" >/dev/null 2>&1 || true
+            send_cmd "WEBVIEW_DETACH" >/dev/null 2>&1 || true
         else
             echo "Meluncurkan $URL di tab baru"
         fi

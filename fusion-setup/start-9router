@@ -1,0 +1,45 @@
+#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+ROUTER_LOG_DIR="${HOME}/.9router"
+mkdir -p "$ROUTER_LOG_DIR"
+
+echo "[*] Memeriksa status 9router CJS daemon..."
+
+if ! ss -tlpn 2>/dev/null | grep -q ":20128 " && ! netstat -tlpn 2>/dev/null | grep -q ":20128 "; then
+    echo "[+] Menjalankan 9router CJS Micro-Daemon (On-Demand Mode)..."
+    if [ -f "$TARGET_DIR/9router.cjs" ]; then
+        setsid node "$TARGET_DIR/9router.cjs" start "$@" </dev/null > "$ROUTER_LOG_DIR/9router-daemon.log" 2>&1 &
+        disown 2>/dev/null || true
+    elif command -v 9router >/dev/null 2>&1; then
+        setsid 9router start "$@" </dev/null > "$ROUTER_LOG_DIR/9router-daemon.log" 2>&1 &
+        disown 2>/dev/null || true
+    fi
+    for i in {1..15}; do
+        if ss -tlpn 2>/dev/null | grep -q ":20128 " || netstat -tlpn 2>/dev/null | grep -q ":20128 "; then
+            break
+        fi
+        sleep 1
+    done
+else
+    echo "[✓] 9router gateway sudah aktif di port 20128."
+fi
+
+if ss -tlpn 2>/dev/null | grep -q ":20128 " || netstat -tlpn 2>/dev/null | grep -q ":20128 "; then
+    echo "[✓] 9Router CJS Gateway aktif di port 20128 (~20MB RAM Siaga)."
+    if ss -tlpn 2>/dev/null | grep -q ":443 " || netstat -tlpn 2>/dev/null | grep -q ":443 "; then
+        echo "[✓] MITM Server port 443 aktif."
+    fi
+else
+    echo "[!] Port 20128 belum aktif. Cek log di $ROUTER_LOG_DIR/9router-daemon.log"
+fi

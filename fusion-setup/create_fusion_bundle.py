@@ -13,7 +13,7 @@ os.makedirs(os.path.join(BUNDLE_DIR, "configs"), exist_ok=True)
 print("--- 1. Menyiapkan Binary & Tools ke bundle/bin ---")
 # Cari termux-ipc
 ipc_source = None
-for candidate in ["/project/termux-launcher/fusion-setup/termux-ipc", "/project/termux-ipc", "/usr/local/bin/termux-ipc"]:
+for candidate in ["/project/termux-launcher/app/src/main/assets/fusion/termux-ipc", "/usr/local/bin/termux-ipc", "/project/termux-launcher/fusion-setup/termux-ipc", "/project/termux-ipc"]:
     if os.path.exists(candidate):
         ipc_source = candidate
         break
@@ -37,10 +37,12 @@ if os.path.exists(bashnh_src):
     print("✓ Added universal bashnh to bundle/bin")
 
 # Wrapper browser & web (Universal Autonomous Web Controller)
-agent_web_src = "/usr/local/bin/agent-web"
-if not os.path.exists(agent_web_src):
-    agent_web_src = "/project/termux-launcher/fusion-setup/agent-web"
-if os.path.exists(agent_web_src):
+agent_web_src = None
+for candidate in ["/project/termux-launcher/app/src/main/assets/fusion/agent-web", "/usr/local/bin/agent-web", "/project/termux-launcher/fusion-setup/agent-web"]:
+    if os.path.exists(candidate):
+        agent_web_src = candidate
+        break
+if agent_web_src:
     shutil.copy2(agent_web_src, os.path.join(BUNDLE_DIR, "bin/agent-web"))
     os.chmod(os.path.join(BUNDLE_DIR, "bin/agent-web"), 0o755)
     print("✓ Added agent-web to bundle/bin")
@@ -193,6 +195,134 @@ fi
 echo "9router (.cjs atau npm binary) tidak ditemukan di sistem."
 exit 1
 """)
+os.chmod(os.path.join(BUNDLE_DIR, "bin/9router"), 0o755)
+
+# Wrapper start-9router (Start 9Router CJS Micro-Daemon)
+with open(os.path.join(BUNDLE_DIR, "bin/start-9router"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+ROUTER_LOG_DIR="${HOME}/.9router"
+mkdir -p "$ROUTER_LOG_DIR"
+
+echo "[*] Memeriksa status 9router CJS daemon..."
+
+if ! ss -tlpn 2>/dev/null | grep -q ":20128 " && ! netstat -tlpn 2>/dev/null | grep -q ":20128 "; then
+    echo "[+] Menjalankan 9router CJS Micro-Daemon (On-Demand Mode)..."
+    if [ -f "$TARGET_DIR/9router.cjs" ]; then
+        setsid node "$TARGET_DIR/9router.cjs" start "$@" </dev/null > "$ROUTER_LOG_DIR/9router-daemon.log" 2>&1 &
+        disown 2>/dev/null || true
+    elif command -v 9router >/dev/null 2>&1; then
+        setsid 9router start "$@" </dev/null > "$ROUTER_LOG_DIR/9router-daemon.log" 2>&1 &
+        disown 2>/dev/null || true
+    fi
+    for i in {1..15}; do
+        if ss -tlpn 2>/dev/null | grep -q ":20128 " || netstat -tlpn 2>/dev/null | grep -q ":20128 "; then
+            break
+        fi
+        sleep 1
+    done
+else
+    echo "[✓] 9router gateway sudah aktif di port 20128."
+fi
+
+if ss -tlpn 2>/dev/null | grep -q ":20128 " || netstat -tlpn 2>/dev/null | grep -q ":20128 "; then
+    echo "[✓] 9Router CJS Gateway aktif di port 20128 (~20MB RAM Siaga)."
+    if ss -tlpn 2>/dev/null | grep -q ":443 " || netstat -tlpn 2>/dev/null | grep -q ":443 "; then
+        echo "[✓] MITM Server port 443 aktif."
+    fi
+else
+    echo "[!] Port 20128 belum aktif. Cek log di $ROUTER_LOG_DIR/9router-daemon.log"
+fi
+""")
+os.chmod(os.path.join(BUNDLE_DIR, "bin/start-9router"), 0o755)
+
+# Wrapper stop-9router (Stop 9Router Daemon)
+with open(os.path.join(BUNDLE_DIR, "bin/stop-9router"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+echo "[*] Menghentikan semua layanan 9router..."
+if [ -f "$TARGET_DIR/9router.cjs" ]; then
+    node "$TARGET_DIR/9router.cjs" stop "$@"
+elif command -v 9router >/dev/null 2>&1; then
+    9router stop "$@"
+fi
+""")
+os.chmod(os.path.join(BUNDLE_DIR, "bin/stop-9router"), 0o755)
+
+# Wrapper 9router-web (Open 9Router WebUI in Termux WebView)
+with open(os.path.join(BUNDLE_DIR, "bin/9router-web"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/9router.cjs" ]; then
+    node "$TARGET_DIR/9router.cjs" web "$@"
+elif command -v 9router >/dev/null 2>&1; then
+    9router web "$@"
+fi
+""")
+os.chmod(os.path.join(BUNDLE_DIR, "bin/9router-web"), 0o755)
+
+# 9Router mitm & autoconfig utilities
+for r_util in ["9router-mitm-on", "9router-mitm-off", "9router-autoconfig", "sync-agy-to-9router"]:
+    src_u = os.path.join("/usr/local/bin", r_util)
+    if os.path.exists(src_u):
+        shutil.copy2(src_u, os.path.join(BUNDLE_DIR, "bin", r_util))
+        os.chmod(os.path.join(BUNDLE_DIR, "bin", r_util), 0o755)
+
+# Wrapper termux-webview-mcp (Playwright Agentic MCP Server)
+with open(os.path.join(BUNDLE_DIR, "bin/termux-webview-mcp"), "w") as f:
+    f.write("""#!/data/data/com.termux/files/usr/bin/bash
+[ -f "$HOME/.fusion_env" ] && . "$HOME/.fusion_env"
+TARGET_DIR="${FUSION_WALLET_DIR:-$HOME/wallet}"
+
+if [ ! -d "$TARGET_DIR" ]; then
+    for cand in "$HOME/wallet" /wallet /root/wallet /data/data/com.termux/files/home/wallet; do
+        if [ -d "$cand" ]; then
+            TARGET_DIR="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -f "$TARGET_DIR/termux_webview_mcp_server.cjs" ]; then
+    exec node "$TARGET_DIR/termux_webview_mcp_server.cjs" "$@"
+fi
+echo "termux_webview_mcp_server.cjs tidak ditemukan di $TARGET_DIR"
+exit 1
+""")
+os.chmod(os.path.join(BUNDLE_DIR, "bin/termux-webview-mcp"), 0o755)
 
 # Wrapper telegram (Telegram Swarm & Bot Orchestrator)
 with open(os.path.join(BUNDLE_DIR, "bin/telegram"), "w") as f:
@@ -380,6 +510,7 @@ print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 for f_cjs in [
     "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "wallet_multichain.cjs", "auto_engine.cjs", "x_native.cjs",
     "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "agy_ganti.cjs", "eso_db.cjs",
+    "termux_webview_mcp_server.cjs", "playwright_mcp_engine.cjs",
     "config_telegram.json", "tele_filter_config.json", "filter_config.json",
     "query_db.json", "module_db.json", "pantau.json", "webview_profiles.json",
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
@@ -393,6 +524,33 @@ for f_cjs in [
             shutil.copy2(src_path, os.path.join(BUNDLE_DIR, "wallet", f_cjs))
             break
 print("✓ Added CJS suite & templates to bundle")
+
+print("--- 2b. Menyiapkan Userscripts ke bundle/scripts & bundle/wallet/scripts ---")
+scripts_bundle_dir = os.path.join(BUNDLE_DIR, "scripts")
+wallet_scripts_bundle_dir = os.path.join(BUNDLE_DIR, "wallet", "scripts")
+os.makedirs(scripts_bundle_dir, exist_ok=True)
+os.makedirs(wallet_scripts_bundle_dir, exist_ok=True)
+
+for us in [
+    "fusion_agent_playwright.user.js",
+    "ghost_solana.user.js",
+    "ghost_substrate.user.js",
+    "ghost_sui.user.js"
+]:
+    src_us = None
+    for cand in [
+        f"/project/termux-launcher/app/src/main/assets/fusion/{us}",
+        f"/root/.fusion/scripts/{us}",
+        f"/root/wallet/scripts/{us}",
+        f"/data/data/com.termux/files/home/.fusion/scripts/{us}"
+    ]:
+        if os.path.exists(cand):
+            src_us = cand
+            break
+    if src_us:
+        shutil.copy2(src_us, os.path.join(scripts_bundle_dir, us))
+        shutil.copy2(src_us, os.path.join(wallet_scripts_bundle_dir, us))
+        print(f"✓ Added userscript {us} to bundle")
 
 # Salin Web UI assets jika ada (web/index.html, dll)
 for w_dir in ["/root/wallet/web", "/project/node2cjs/web"]:
@@ -635,6 +793,8 @@ for target in [
     os.path.join(ASSETS_DIR, "telegram.cjs"),
     os.path.join(ASSETS_DIR, "9router.cjs"),
     os.path.join(ASSETS_DIR, "pemantautelegram.py"),
+    os.path.join(ASSETS_DIR, "termux_webview_mcp_server.cjs"),
+    os.path.join(ASSETS_DIR, "playwright_mcp_engine.cjs"),
     os.path.join(ASSETS_DIR, "wallets_db.json"),
     os.path.join(ASSETS_DIR, "chains_db.json"),
     os.path.join(ASSETS_DIR, "package.json"),
@@ -687,6 +847,20 @@ if os.path.exists(os.path.join(BUNDLE_DIR, "bin/telegram-relogin")):
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/9router")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(ASSETS_DIR, "9router"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/9router"), os.path.join(FUSION_SETUP_DIR, "9router"))
+for tool in [
+    "termux-webview-mcp", "start-9router", "stop-9router", "9router-web",
+    "9router-mitm-on", "9router-mitm-off", "9router-autoconfig", "sync-agy-to-9router"
+]:
+    src_tool = os.path.join(BUNDLE_DIR, "bin", tool)
+    if os.path.exists(src_tool):
+        shutil.copy2(src_tool, os.path.join(ASSETS_DIR, tool))
+        shutil.copy2(src_tool, os.path.join(FUSION_SETUP_DIR, tool))
+
+# Pastikan userscript fusion_agent_playwright.user.js tersinkron ke assets dan fusion-setup
+pw_us_src = os.path.join(BUNDLE_DIR, "scripts/fusion_agent_playwright.user.js")
+if os.path.exists(pw_us_src):
+    shutil.copy2(pw_us_src, os.path.join(ASSETS_DIR, "fusion_agent_playwright.user.js"))
+    shutil.copy2(pw_us_src, os.path.join(FUSION_SETUP_DIR, "fusion_agent_playwright.user.js"))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-switch")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-switch"), os.path.join(ASSETS_DIR, "agy-switch"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-switch"), os.path.join(FUSION_SETUP_DIR, "agy-switch"))

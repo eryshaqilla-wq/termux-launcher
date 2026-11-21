@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+TOKEN=$(python3 -c "import hashlib; m=open('/root/.9router/machine-id').read().strip(); s=open('/root/.9router/auth/cli-secret').read().strip(); print(hashlib.sha256((m+'9r-cli-auth'+s).encode()).hexdigest()[:16])")
+API_KEY=$(python3 -c "import sqlite3; c=sqlite3.connect('/root/.9router/db/data.sqlite'); print(c.execute('SELECT key FROM apiKeys LIMIT 1').fetchone()[0])")
+
+# 1. Start MITM Server port 443
+mkdir -p /root/.9router/mitm
+curl -s -X POST -H "x-9r-cli-token: $TOKEN" -H "Content-Type: application/json" -d "{\"apiKey\":\"$API_KEY\",\"sudoPassword\":\"\"}" http://127.0.0.1:20128/api/cli-tools/antigravity-mitm > /dev/null
+
+# 2. Redirect Antigravity domains in /etc/hosts (IPv4 & IPv6)
+curl -s -X PATCH -H "x-9r-cli-token: $TOKEN" -H "Content-Type: application/json" -d '{"tool":"antigravity","action":"enable"}' http://127.0.0.1:20128/api/cli-tools/antigravity-mitm > /dev/null
+
+# Pastikan IPv6 juga diblokir/dialihkan ke ::1 agar tidak bocor via IPv6 Google
+grep -q "::1 cloudcode-pa.googleapis.com" /etc/hosts || cat << 'HOSTSEOF' >> /etc/hosts
+::1 daily-cloudcode-pa.googleapis.com
+::1 cloudcode-pa.googleapis.com
+HOSTSEOF
+
+echo "✅ 9Router MITM Aktif untuk Antigravity (IPv4: 127.0.0.1 & IPv6: ::1 -> 9Router)"

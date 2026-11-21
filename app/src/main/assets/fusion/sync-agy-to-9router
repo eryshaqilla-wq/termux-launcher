@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Backward-compatibility wrapper -> agy-ganti sync
+exec agy-ganti sync "$@"

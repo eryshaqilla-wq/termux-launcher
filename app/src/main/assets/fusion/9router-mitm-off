@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+TOKEN=$(python3 -c "import hashlib; m=open('/root/.9router/machine-id').read().strip(); s=open('/root/.9router/auth/cli-secret').read().strip(); print(hashlib.sha256((m+'9r-cli-auth'+s).encode()).hexdigest()[:16])")
+
+# 1. Disable redirect in /etc/hosts
+curl -s -X PATCH -H "x-9r-cli-token: $TOKEN" -H "Content-Type: application/json" -d '{"tool":"antigravity","action":"disable"}' http://127.0.0.1:20128/api/cli-tools/antigravity-mitm > /dev/null
+
+# 2. Stop MITM Server
+curl -s -X DELETE -H "x-9r-cli-token: $TOKEN" -H "Content-Type: application/json" http://127.0.0.1:20128/api/cli-tools/antigravity-mitm > /dev/null
+
+echo "🛑 9Router MITM Dinonaktifkan (Antigravity kembali direct ke Google)"

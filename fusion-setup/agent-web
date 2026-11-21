@@ -252,6 +252,17 @@ function runIpcTab(action, args = []) {
     }
 }
 
+let playwrightBridgeInstance = null;
+function getPlaywrightBridge() {
+    if (!playwrightBridgeInstance) {
+        try {
+            const { TermuxPlaywrightBridge } = require('/root/wallet/playwright_mcp_engine.cjs');
+            playwrightBridgeInstance = new TermuxPlaywrightBridge();
+        } catch (_) {}
+    }
+    return playwrightBridgeInstance;
+}
+
 async function ensureGhostWalletRunning(preferTab = true) {
     const running = await isPortOpen(3333);
     if (running) {
@@ -1670,9 +1681,13 @@ async function main() {
         console.log(`  web save-session [nama]       (Simpan sesi website ke profil)`);
         console.log(`  web x-post "teks" [--profile] (Post tweet ke X)`);
         console.log(`  web prompt "instruksi"        (Eksekusi automasi via NLP)`);
-        console.log(`  web click "Nama Tombol"       (Klik elemen)`);
-        console.log(`  web type "Kolom" "Nilai"      (Input teks)`);
-        console.log(`  web snapshot                  (Ambil DOM dump aktif)`);
+        console.log(`  web mcp                       (Jalankan Playwright MCP Server untuk AI Agent)`);
+        console.log(`  web snapshot [depth]          (Ambil semantic ARIA accessibility tree [ref=eN])`);
+        console.log(`  web click <ref|nama|selector> (Klik elemen via ref e1, nama, atau CSS selector)`);
+        console.log(`  web fill <ref|kolom> "nilai"  (Input teks presisi ke elemen via ref e1)`);
+        console.log(`  web press <key>               (Simulasi tombol keyboard: Enter, Tab, Escape, dll.)`);
+        console.log(`  web hover <ref|selector>      (Arahkan kursor / hover elemen)`);
+        console.log(`  web wait "<query>" [timeout]  (Tunggu teks atau selector muncul di layar)`);
         console.log(`  web clear-cookies             (Bersihkan cookies & cache aktif)`);
         console.log(`  web eval "kode JS"            (Eksekusi JavaScript di WebView)`);
         console.log(`  web --ai [mode]               (Atur mode AI Engine permanen: auto|deepseek|9router|agy|off)`);
@@ -2171,6 +2186,13 @@ async function main() {
         process.exit(0);
     }
 
+    if (cmd === 'mcp' || cmd === '--mcp') {
+        const mcpServer = '/root/wallet/termux_webview_mcp_server.cjs';
+        const child = spawn('node', [mcpServer], { stdio: 'inherit' });
+        child.on('close', code => process.exit(code || 0));
+        return;
+    }
+
     if (cmd === 'prompt') {
         const promptText = args.slice(1).join(' ').trim();
         if (!promptText) {
@@ -2181,8 +2203,131 @@ async function main() {
         process.exit(0);
     }
 
+    if (cmd === 'click-human' || cmd === 'human-click') {
+        const target = args.slice(1).join(' ').trim();
+        if (!target) {
+            console.log(`${RED}Error: Tentukan elemen atau ref ID! (contoh: web click-human e2)${RESET}`);
+            process.exit(1);
+        }
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            try {
+                const res = await pb.clickHuman(target);
+                if (res.error) console.log(`${RED}Error: ${res.error}${RESET}`);
+                else console.log(`[Human Bézier Click Sukses] Target: ${target}`);
+                await pb.close();
+                process.exit(0);
+            } catch (_) {}
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'swipe') {
+        const x1 = parseFloat(args[1]);
+        const y1 = parseFloat(args[2]);
+        const x2 = parseFloat(args[3]);
+        const y2 = parseFloat(args[4]);
+        const dur = args[5] ? parseInt(args[5], 10) : 300;
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.swipe(x1, y1, x2, y2, dur);
+            console.log(JSON.stringify(res));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'drag') {
+        const start = args[1];
+        const end = args[2];
+        const dur = args[3] ? parseInt(args[3], 10) : 500;
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.drag(start, end, dur);
+            console.log(JSON.stringify(res));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'scroll') {
+        const dy = parseFloat(args[1] || '300');
+        const dx = parseFloat(args[2] || '0');
+        const dur = args[3] ? parseInt(args[3], 10) : 500;
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.scrollNatural(dx, dy, dur);
+            console.log(JSON.stringify(res));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'longpress' || cmd === 'long-press') {
+        const target = args[1];
+        const dur = args[2] ? parseInt(args[2], 10) : 1000;
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.longPress(target, dur);
+            console.log(JSON.stringify(res));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'hide-keyboard' || cmd === 'keyboard-hide') {
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.hideKeyboard();
+            console.log(JSON.stringify(res));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'wakelock') {
+        const mode = args[1] === 'off' ? false : true;
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.setWakeLock(mode);
+            console.log(JSON.stringify(res));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'last-download') {
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.getLastDownload();
+            console.log(JSON.stringify(res));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
     if (cmd === 'click') {
         const target = args.slice(1).join(' ').trim();
+        if (!target) {
+            console.log(`${RED}Error: Tentukan elemen atau ref ID yang ingin diklik! (contoh: web click e2)${RESET}`);
+            process.exit(1);
+        }
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            try {
+                const res = await pb.click(target);
+                if (res.error) {
+                    console.log(`${RED}Error: ${res.error}${RESET}`);
+                } else {
+                    console.log(`[Click Sukses] Target: ${target} (${res.action.tag || 'element'})`);
+                    if (res.snapshot) {
+                        console.log(`\nUpdated ARIA Snapshot:\n${res.snapshot}`);
+                    }
+                }
+                await pb.close();
+                process.exit(0);
+            } catch (_) {}
+        }
         runIpc(`prompt "klik ${target}"`);
         process.exit(0);
     }
@@ -2190,11 +2335,85 @@ async function main() {
     if (cmd === 'type' || cmd === 'fill') {
         const field = args[1];
         const val = args.slice(2).join(' ').trim();
+        if (!field) {
+            console.log(`${RED}Error: Tentukan ref ID atau kolom dan nilai! (contoh: web fill e1 "halo")${RESET}`);
+            process.exit(1);
+        }
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            try {
+                const res = await pb.fill(field, val);
+                if (res.error) {
+                    console.log(`${RED}Error: ${res.error}${RESET}`);
+                } else {
+                    console.log(`[Fill Sukses] Target: ${field} = "${val}"`);
+                    if (res.snapshot) {
+                        console.log(`\nUpdated ARIA Snapshot:\n${res.snapshot}`);
+                    }
+                }
+                await pb.close();
+                process.exit(0);
+            } catch (_) {}
+        }
         runIpc(`prompt "isi ${field} ${val}"`);
         process.exit(0);
     }
 
-    if (cmd === 'snapshot' || cmd === 'dom') {
+    if (cmd === 'press') {
+        const key = args[1] || 'Enter';
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            try {
+                await pb.press(key);
+                console.log(`[Press Sukses] Tombol [${key}] ditekan.`);
+                await pb.close();
+                process.exit(0);
+            } catch (_) {}
+        }
+        console.log(`[Press] Tombol [${key}] dikirim.`);
+        process.exit(0);
+    }
+
+    if (cmd === 'hover') {
+        const target = args.slice(1).join(' ').trim();
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            try {
+                const res = await pb.hover(target);
+                console.log(`[Hover Sukses] ${JSON.stringify(res)}`);
+                await pb.close();
+                process.exit(0);
+            } catch (_) {}
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'wait') {
+        const query = args[1];
+        const timeout = args[2] && /^\d+$/.test(args[2]) ? parseInt(args[2], 10) : 5000;
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            try {
+                const res = await pb.waitFor(query, timeout);
+                console.log(JSON.stringify(res, null, 2));
+                await pb.close();
+                process.exit(0);
+            } catch (_) {}
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'snapshot' || cmd === 'dom' || cmd === 'aria') {
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            try {
+                const depth = args[1] && /^\d+$/.test(args[1]) ? parseInt(args[1], 10) : 12;
+                const snap = await pb.snapshot(depth);
+                console.log(snap);
+                await pb.close();
+                process.exit(0);
+            } catch (err) {}
+        }
         await handleSnapshot();
         process.exit(0);
     }

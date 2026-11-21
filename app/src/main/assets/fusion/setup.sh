@@ -689,6 +689,13 @@ if [ -d "$FUSION_HOME/bin" ]; then
     chmod 755 "$PREFIX/bin/"* 2>/dev/null || true
 fi
 
+# Pasang userscripts ke $HOME/.fusion/scripts dan $HOME/wallet/scripts
+if [ -d "$FUSION_HOME/scripts" ]; then
+    mkdir -p "$HOME/.fusion/scripts" "$HOME/wallet/scripts" 2>/dev/null || true
+    cp -rf "$FUSION_HOME/scripts/"* "$HOME/.fusion/scripts/" 2>/dev/null || true
+    cp -rf "$FUSION_HOME/scripts/"* "$HOME/wallet/scripts/" 2>/dev/null || true
+fi
+
 # Pastikan termux-ipc menggunakan shebang Termux
 if [ -f "$PREFIX/bin/termux-ipc" ]; then
     sed -i '1s|.*|#!/data/data/com.termux/files/usr/bin/bash|' "$PREFIX/bin/termux-ipc" 2>/dev/null || true
@@ -1660,9 +1667,13 @@ else
     [ -f "/root/wallet/9router.cjs" ] && su -c "cp -f /root/wallet/9router.cjs '$CHOSEN_9R_PATH/root/wallet/9router.cjs'"
     su -c "chmod 755 '$CHOSEN_9R_PATH/root/wallet/9router.cjs' 2>/dev/null || true"
     # Pasang helper scripts di container
-    for scr in start-9router stop-9router 9router-web sync-agy-to-9router; do
+    for scr in start-9router stop-9router 9router-web sync-agy-to-9router 9router-mitm-on 9router-mitm-off 9router-autoconfig; do
         if [ -f "/usr/local/bin/$scr" ]; then
             su -c "cp -f '/usr/local/bin/$scr' '$CHOSEN_9R_PATH/usr/local/bin/$scr' && chmod 755 '$CHOSEN_9R_PATH/usr/local/bin/$scr'"
+        elif [ -f "$PREFIX/bin/$scr" ]; then
+            su -c "cp -f '$PREFIX/bin/$scr' '$CHOSEN_9R_PATH/usr/local/bin/$scr' && chmod 755 '$CHOSEN_9R_PATH/usr/local/bin/$scr'"
+        elif [ -f "$FUSION_HOME/bin/$scr" ]; then
+            su -c "cp -f '$FUSION_HOME/bin/$scr' '$CHOSEN_9R_PATH/usr/local/bin/$scr' && chmod 755 '$CHOSEN_9R_PATH/usr/local/bin/$scr'"
         fi
     done
 fi
@@ -1705,6 +1716,7 @@ chmod 644 "$HOME/wallet/"*.db 2>/dev/null || true
 if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CONTAINER_ROOTFS" ]; then
     su -c "mkdir -p '$TARGET_WALLET_DIR'" 2>/dev/null || true
     [ -d "$HOME/wallet" ] && su -c "cp -rf '$HOME/wallet/'* '$TARGET_WALLET_DIR/'" 2>/dev/null || true
+    [ -d "$HOME/.fusion/scripts" ] && su -c "mkdir -p '$CONTAINER_ROOTFS/root/.fusion/scripts' && cp -rf '$HOME/.fusion/scripts/'* '$CONTAINER_ROOTFS/root/.fusion/scripts/'" 2>/dev/null || true
     [ -f "$HOME/.fusion_env" ] && su -c "cp -f '$HOME/.fusion_env' '$CONTAINER_ROOTFS/root/.fusion_env'" 2>/dev/null || true
 fi
 
