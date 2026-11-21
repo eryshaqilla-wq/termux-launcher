@@ -82,7 +82,7 @@ public class FusionWebChromeClient extends WebChromeClient {
             try {
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
                 if (transport != null) {
-                    FusionWebViewManager.FusionTab newTab = manager.createTabInternal("about:blank", "default", "Popup", "bsc", true, false, false, "");
+                    FusionTab newTab = manager.createTabInternal("about:blank", "default", "Popup", "bsc", true, false, false, "");
                     if (newTab != null && newTab.mWebView != null) {
                         transport.setWebView(newTab.mWebView);
                         resultMsg.sendToTarget();

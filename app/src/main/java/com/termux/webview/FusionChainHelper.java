@@ -142,6 +142,21 @@ public class FusionChainHelper {
         return sCurrentChainName;
     }
 
+    public static String getCurrentChainSymbol() {
+        if (sDynamicChains != null && sCurrentChainKey != null) {
+            DynamicChainInfo info = sDynamicChains.get(sCurrentChainKey.toLowerCase());
+            if (info != null && info.symbol != null && !info.symbol.isEmpty()) {
+                return info.symbol;
+            }
+        }
+        if (isSolana()) return "SOL";
+        if (isTron()) return "TRX";
+        if (isSui()) return "SUI";
+        if (isAptos()) return "APT";
+        if (isIota()) return "IOTA";
+        return sCurrentChainKey != null ? sCurrentChainKey.toUpperCase() : "ETH";
+    }
+
     public static boolean isSolana() {
         return "solana".equalsIgnoreCase(sCurrentChainKey) || sCurrentChainId == 501;
     }
