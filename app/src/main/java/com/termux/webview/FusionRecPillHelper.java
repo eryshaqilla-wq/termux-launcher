@@ -222,7 +222,15 @@ public class FusionRecPillHelper {
         addrBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String curAddr = fusionWebViewManager.mCurrentWalletAddress;
+                String chain = FusionChainHelper.getCurrentChainKey();
+                String curAddr = GhostBridgeInterface.sActiveToolAddress;
+                if (curAddr == null || curAddr.isEmpty() || (GhostBridgeInterface.sActiveToolChain != null && !GhostBridgeInterface.sActiveToolChain.isEmpty() && !chain.equalsIgnoreCase(GhostBridgeInterface.sActiveToolChain))) {
+                    int curIdx = FusionWalletHelper.findIndexByName(fusionWebViewManager.mCurrentWalletName);
+                    curAddr = FusionWalletHelper.getAddressForChain(chain, curIdx);
+                }
+                if (curAddr == null || curAddr.isEmpty()) {
+                    curAddr = fusionWebViewManager.mCurrentWalletAddress;
+                }
                 if (curAddr == null || curAddr.isEmpty()) {
                     curAddr = FusionWalletHelper.getMasterAddress();
                 }

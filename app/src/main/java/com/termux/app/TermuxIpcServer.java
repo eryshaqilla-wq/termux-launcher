@@ -733,6 +733,170 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.equals("WEBVIEW_STATE") || strTrim.equals("WEBVIEW_GET_STATE")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                String res = mgr != null ? mgr.getWebviewStateJson() : "{}";
+                                outputStream.write((res + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_EVAL_SYNC ")) {
+                                String js = strTrim.substring(18);
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    String res = mgr.evaluateJsSync(js, 4000);
+                                    outputStream.write(((res != null ? res : "null") + "\n").getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_TOUCH ") || strTrim.startsWith("WEBVIEW_NATIVE_CLICK ")) {
+                                String coords = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                String[] parts = coords.split("[,\\s]+");
+                                if (parts.length >= 2) {
+                                    try {
+                                        float x = Float.parseFloat(parts[0]);
+                                        float y = Float.parseFloat(parts[1]);
+                                        com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                        if (mgr != null) {
+                                            mgr.dispatchNativeTouch(x, y);
+                                            outputStream.write("OK\n".getBytes());
+                                        } else {
+                                            outputStream.write("ERROR\n".getBytes());
+                                        }
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid coordinates\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WALLET_SET ") || strTrim.startsWith("WEBVIEW_SET_WALLET ")) {
+                                String wName = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    boolean ok = mgr.switchWalletByName(wName);
+                                    outputStream.write((ok ? "OK\n" : "ERROR: Wallet not found\n").getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_WALLET_NEXT")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    String nextW = mgr.switchToNextWallet();
+                                    outputStream.write(((nextW != null ? nextW : "OK") + "\n").getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_CHAIN_SET ") || strTrim.startsWith("WEBVIEW_SET_CHAIN ")) {
+                                String cKey = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    boolean ok = mgr.switchChainByKey(cKey);
+                                    outputStream.write((ok ? "OK\n" : "ERROR: Failed to switch chain\n").getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_UPLOAD_FILE ") || strTrim.startsWith("WEBVIEW_FILE_UPLOAD ")) {
+                                String filePath = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                boolean ok = com.termux.webview.FusionWebChromeClient.supplyFileToPendingChooser(filePath);
+                                outputStream.write((ok ? "OK\n" : "ERROR: File not found or failed\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_SWIPE ")) {
+                                String params = strTrim.substring(14).trim();
+                                String[] parts = params.split("[,\\s]+");
+                                if (parts.length >= 4) {
+                                    try {
+                                        float x1 = Float.parseFloat(parts[0]);
+                                        float y1 = Float.parseFloat(parts[1]);
+                                        float x2 = Float.parseFloat(parts[2]);
+                                        float y2 = Float.parseFloat(parts[3]);
+                                        int duration = parts.length >= 5 ? Integer.parseInt(parts[4]) : 300;
+                                        com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                        if (mgr != null) {
+                                            mgr.dispatchNativeSwipe(x1, y1, x2, y2, duration);
+                                            outputStream.write("OK\n".getBytes());
+                                        } else {
+                                            outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                        }
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid swipe arguments (x1 y1 x2 y2 [duration])\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_LONG_PRESS ") || strTrim.startsWith("WEBVIEW_LONGPRESS ")) {
+                                String params = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                String[] parts = params.split("[,\\s]+");
+                                if (parts.length >= 2) {
+                                    try {
+                                        float x = Float.parseFloat(parts[0]);
+                                        float y = Float.parseFloat(parts[1]);
+                                        int duration = parts.length >= 3 ? Integer.parseInt(parts[2]) : 800;
+                                        com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                        if (mgr != null) {
+                                            mgr.dispatchNativeLongPress(x, y, duration);
+                                            outputStream.write("OK\n".getBytes());
+                                        } else {
+                                            outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                        }
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid long press arguments (x y [duration])\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_KEYBOARD_HIDE") || strTrim.equals("KEYBOARD_HIDE")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    mgr.hideSoftKeyboard();
+                                }
+                                outputStream.write("OK\n".getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WAKELOCK")) {
+                                String arg = strTrim.length() > 16 ? strTrim.substring(16).trim() : "on";
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    if ("off".equalsIgnoreCase(arg) || "false".equalsIgnoreCase(arg)) {
+                                        mgr.releaseWakeLock();
+                                    } else {
+                                        mgr.acquireWakeLock();
+                                    }
+                                    outputStream.write("OK\n".getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_LAST_DOWNLOAD") || strTrim.equals("WEBVIEW_DOWNLOAD_LAST")) {
+                                String path = com.termux.webview.FusionDownloadListener.getLastDownloadedFilePath();
+                                outputStream.write(((path != null ? path : "") + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_CLIPBOARD_GET") || strTrim.equals("CLIPBOARD_GET")) {
+                                String clip = getClipboard();
+                                outputStream.write(((clip != null ? clip : "") + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_CLIPBOARD_SET ") || strTrim.startsWith("CLIPBOARD_SET ")) {
+                                String textToCopy = strTrim.substring(strTrim.indexOf(" ") + 1);
+                                setClipboard(textToCopy);
+                                outputStream.write("OK\n".getBytes());
+                                outputStream.flush();
+                                continue;
                             } else if ((strTrim.equalsIgnoreCase("KEYBOARD_SHOW") || strTrim.equalsIgnoreCase("SHOW")) && (activity = TermuxIpcServer.getActivity()) != null) {
                                 activity.runOnUiThread(new KeyboardRunnable(activity, 3));
                             } else {

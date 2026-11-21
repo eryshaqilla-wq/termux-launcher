@@ -7,11 +7,23 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionWalletHelper {
+    public static class DynamicChainWalletGroup {
+        public String chainKey;
+        public List<String> names = new ArrayList<>();
+        public List<String> addresses = new ArrayList<>();
+        public int masterIndex = 0;
+    }
+
+    public static final ConcurrentHashMap<String, DynamicChainWalletGroup> sDynamicWalletGroups = new ConcurrentHashMap<>();
+
     public static boolean sLoaded = false;
     public static String sCustomWalletPath;
     public static int sMasterIndex = 0;
@@ -37,6 +49,139 @@ public class FusionWalletHelper {
     public static int sIotaMasterIndex = 0;
     public static String[] sIotaNames = {"eso-1"};
     public static String[] sIotaAddresses = {"0xf12a6e99d4da110e8e864ed6d3d8ea29eb78627b00c566982464410a8aa0bb0a"};
+
+    public static int sSubstrateMasterIndex = 0;
+    public static String[] sSubstrateNames = {"eso-1"};
+    public static String[] sSubstrateAddresses = {"5FXYugRYwPbHD7HJnBsve5vfeqVsKsK6rRhr2Zskn6SpW3XR"};
+
+    public static int sPolkadotMasterIndex = 0;
+    public static String[] sPolkadotNames = {"eso-1"};
+    public static String[] sPolkadotAddresses = {"14Tr41gcoArkeeHpjpvvnEkpWTVX2AsEvvSLBrs7LBULgUJF"};
+
+    public static String[] getNamesForChain(String chainKey) {
+        if (chainKey == null) return sNames;
+        String k = chainKey.trim().toLowerCase();
+        DynamicChainWalletGroup group = sDynamicWalletGroups.get(k);
+        if (group != null && !group.names.isEmpty()) {
+            return group.names.toArray(new String[0]);
+        }
+        if ("solana".equals(k) || "sol".equals(k)) return sSolNames;
+        if ("tron".equals(k) || "trx".equals(k)) return sTronNames;
+        if ("sui".equals(k)) return sSuiNames;
+        if ("aptos".equals(k) || "apt".equals(k)) return sAptosNames;
+        if ("iota".equals(k)) return sIotaNames;
+        if ("substrate".equals(k) || "flop".equals(k)) return sSubstrateNames;
+        if ("polkadot".equals(k) || "dot".equals(k)) return sPolkadotNames;
+        return sNames;
+    }
+
+    public static String[] getAddressesForChain(String chainKey) {
+        if (chainKey == null) return sAddresses;
+        String k = chainKey.trim().toLowerCase();
+        DynamicChainWalletGroup group = sDynamicWalletGroups.get(k);
+        if (group != null && !group.addresses.isEmpty()) {
+            return group.addresses.toArray(new String[0]);
+        }
+        if ("solana".equals(k) || "sol".equals(k)) return sSolAddresses;
+        if ("tron".equals(k) || "trx".equals(k)) return sTronAddresses;
+        if ("sui".equals(k)) return sSuiAddresses;
+        if ("aptos".equals(k) || "apt".equals(k)) return sAptosAddresses;
+        if ("iota".equals(k)) return sIotaAddresses;
+        if ("substrate".equals(k) || "flop".equals(k)) return sSubstrateAddresses;
+        if ("polkadot".equals(k) || "dot".equals(k)) return sPolkadotAddresses;
+        return sAddresses;
+    }
+
+    public static int getMasterIndexForChain(String chainKey) {
+        if (chainKey == null) return sMasterIndex;
+        String k = chainKey.trim().toLowerCase();
+        DynamicChainWalletGroup group = sDynamicWalletGroups.get(k);
+        if (group != null) {
+            return group.masterIndex;
+        }
+        if ("solana".equals(k) || "sol".equals(k)) return sSolMasterIndex;
+        if ("tron".equals(k) || "trx".equals(k)) return sTronMasterIndex;
+        if ("sui".equals(k)) return sSuiMasterIndex;
+        if ("aptos".equals(k) || "apt".equals(k)) return sAptosMasterIndex;
+        if ("iota".equals(k)) return sIotaMasterIndex;
+        if ("substrate".equals(k) || "flop".equals(k)) return sSubstrateMasterIndex;
+        if ("polkadot".equals(k) || "dot".equals(k)) return sPolkadotMasterIndex;
+        return sMasterIndex;
+    }
+
+    public static String getAddressForChain(String chainKey, int i) {
+        String[] addrs = getAddressesForChain(chainKey);
+        if (addrs == null || addrs.length == 0) return "";
+        if (i >= 0 && i < addrs.length && addrs[i] != null && !addrs[i].isEmpty()) {
+            return addrs[i];
+        }
+        int mIdx = getMasterIndexForChain(chainKey);
+        if (mIdx >= 0 && mIdx < addrs.length && addrs[mIdx] != null) {
+            return addrs[mIdx];
+        }
+        return addrs[0];
+    }
+
+    public static String getNameForChain(String chainKey, int i) {
+        String[] names = getNamesForChain(chainKey);
+        if (names == null || names.length == 0) return "Master";
+        if (i >= 0 && i < names.length && names[i] != null && !names[i].isEmpty()) {
+            return names[i];
+        }
+        int mIdx = getMasterIndexForChain(chainKey);
+        if (mIdx >= 0 && mIdx < names.length && names[mIdx] != null) {
+            return names[mIdx];
+        }
+        return names[0];
+    }
+
+    public static String getMasterAddressForChain(String chainKey) {
+        return getAddressForChain(chainKey, getMasterIndexForChain(chainKey));
+    }
+
+    public static String getMasterNameForChain(String chainKey) {
+        return getNameForChain(chainKey, getMasterIndexForChain(chainKey));
+    }
+
+    public static void setDynamicWallet(String chainKey, String name, String address, boolean isMaster) {
+        if (chainKey == null || address == null) return;
+        String k = chainKey.trim().toLowerCase();
+        DynamicChainWalletGroup group = sDynamicWalletGroups.get(k);
+        if (group == null) {
+            group = new DynamicChainWalletGroup();
+            group.chainKey = k;
+            sDynamicWalletGroups.put(k, group);
+        }
+        int existingIdx = -1;
+        for (int i = 0; i < group.names.size(); i++) {
+            if (name != null && name.equalsIgnoreCase(group.names.get(i))) {
+                existingIdx = i;
+                break;
+            }
+        }
+        if (existingIdx >= 0) {
+            group.addresses.set(existingIdx, address);
+            if (isMaster) {
+                group.masterIndex = existingIdx;
+            }
+        } else {
+            group.names.add(name != null ? name : "wallet-" + (group.names.size() + 1));
+            group.addresses.add(address);
+            if (isMaster || group.names.size() == 1) {
+                group.masterIndex = group.names.size() - 1;
+            }
+        }
+
+        if ("substrate".equals(k) || "flop".equals(k)) {
+            sSubstrateNames = group.names.toArray(new String[0]);
+            sSubstrateAddresses = group.addresses.toArray(new String[0]);
+            sSubstrateMasterIndex = group.masterIndex;
+        } else if ("polkadot".equals(k) || "dot".equals(k)) {
+            sPolkadotNames = group.names.toArray(new String[0]);
+            sPolkadotAddresses = group.addresses.toArray(new String[0]);
+            sPolkadotMasterIndex = group.masterIndex;
+        }
+    }
 
     public static boolean hasSolanaWallets() {
         return sSolAddresses != null && sSolAddresses.length > 0 && !sSolAddresses[0].isEmpty();
@@ -632,13 +777,19 @@ public class FusionWalletHelper {
                 : "SELECT name, address, is_master FROM wallets ORDER BY is_master DESC, id ASC";
             loadChainFromCursor(db, evmQuery, "evm");
 
-            // 2. Multichain Wallets
+            // 2. Multichain Wallets (Dynamically load every distinct chain in wallets table)
             if (hasChainCol) {
-                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='solana' ORDER BY is_master DESC, id ASC", "solana");
-                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='tron' ORDER BY is_master DESC, id ASC", "tron");
-                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='sui' ORDER BY is_master DESC, id ASC", "sui");
-                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='aptos' ORDER BY is_master DESC, id ASC", "aptos");
-                loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='iota' ORDER BY is_master DESC, id ASC", "iota");
+                Cursor distinctCursor = db.rawQuery("SELECT DISTINCT chain FROM wallets WHERE chain IS NOT NULL AND chain != ''", null);
+                if (distinctCursor != null) {
+                    while (distinctCursor.moveToNext()) {
+                        String ch = distinctCursor.getString(0);
+                        if (ch != null && !ch.trim().isEmpty() && !"evm".equalsIgnoreCase(ch.trim())) {
+                            String chainKey = ch.trim().toLowerCase();
+                            loadChainFromCursor(db, "SELECT name, address, is_master FROM wallets WHERE chain='" + chainKey + "' ORDER BY is_master DESC, id ASC", chainKey);
+                        }
+                    }
+                    distinctCursor.close();
+                }
             }
             sLoaded = true;
             return true;
@@ -670,6 +821,16 @@ public class FusionWalletHelper {
                     }
                     idx++;
                 }
+
+                DynamicChainWalletGroup group = new DynamicChainWalletGroup();
+                group.chainKey = chain;
+                for (int j = 0; j < count; j++) {
+                    group.names.add(names[j]);
+                    group.addresses.add(addresses[j]);
+                }
+                group.masterIndex = masterIdx;
+                sDynamicWalletGroups.put(chain.toLowerCase(), group);
+
                 if ("evm".equals(chain)) {
                     sNames = names;
                     sAddresses = addresses;
@@ -694,6 +855,14 @@ public class FusionWalletHelper {
                     sIotaNames = names;
                     sIotaAddresses = addresses;
                     sIotaMasterIndex = masterIdx;
+                } else if ("substrate".equals(chain) || "flop".equals(chain)) {
+                    sSubstrateNames = names;
+                    sSubstrateAddresses = addresses;
+                    sSubstrateMasterIndex = masterIdx;
+                } else if ("polkadot".equals(chain) || "dot".equals(chain)) {
+                    sPolkadotNames = names;
+                    sPolkadotAddresses = addresses;
+                    sPolkadotMasterIndex = masterIdx;
                 }
             }
         } catch (Exception ignored) {

@@ -30,6 +30,10 @@ public class GhostBridgeInterface implements Runnable {
     public static String sCurrentAptosWalletAddress = "";
     public static String sCurrentIotaWalletName = "default";
     public static String sCurrentIotaWalletAddress = "";
+    public static String sActiveToolChain = "";
+    public static String sActiveToolSymbol = "";
+    public static String sActiveToolAddress = "";
+    public static String sActiveToolWalletName = "";
     public static String sLastTxHash = "";
     public static String sWcUri = "";
     public static boolean sIsAutoMode = false;
@@ -37,6 +41,103 @@ public class GhostBridgeInterface implements Runnable {
     public static int sLastDetectedDappChainId = 0;
     private static long sLastRpcCheckTime = 0;
     private static boolean sLastRpcCheckResult = false;
+
+    @JavascriptInterface
+    public void setToolWallet(final String jsonStr) {
+        if (jsonStr == null || jsonStr.trim().isEmpty()) return;
+        try {
+            JSONObject obj = new JSONObject(jsonStr);
+            final String chain = obj.optString("chain", obj.optString("network", ""));
+            final int chainId = obj.optInt("chainId", obj.optInt("id", 0));
+            final String chainName = obj.optString("chainName", obj.optString("name", ""));
+            final String symbol = obj.optString("symbol", "");
+            final String walletName = obj.optString("name", obj.optString("walletName", "eso-1"));
+            final String address = obj.optString("address", obj.optString("walletAddress", ""));
+            final boolean isNonEvm = obj.optBoolean("isNonEvm", true);
+
+            if (address.isEmpty()) return;
+
+            sActiveToolChain = chain;
+            sActiveToolSymbol = !symbol.isEmpty() ? symbol : chain.toUpperCase();
+            sActiveToolAddress = address;
+            sActiveToolWalletName = walletName;
+
+            if (!chain.isEmpty()) {
+                FusionChainHelper.registerDynamicChain(chain, !chainName.isEmpty() ? chainName : chain, sActiveToolSymbol, chainId, isNonEvm, null);
+                FusionChainHelper.setChain(chain);
+                FusionWalletHelper.setDynamicWallet(chain, walletName, address, true);
+            }
+
+            final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if (mgr != null && mgr.mActivity != null) {
+                mgr.mActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mgr.mCurrentWalletName = walletName;
+                        mgr.mCurrentWalletAddress = address;
+                        if (!chain.isEmpty()) {
+                            mgr.mCurrentChainKey = chain;
+                        }
+                        mgr.updateMenuTexts();
+                        FusionToolPillHelper.updateToolPillUi(mgr);
+                        FusionRecPillHelper.updateRecUi(mgr);
+                        if (FusionDrawerHelper.isWalletDrawerOpen()) {
+                            FusionDrawerHelper.showWalletDrawer(mgr);
+                        } else if (FusionDrawerHelper.isChainDrawerOpen()) {
+                            FusionDrawerHelper.showChainDrawer(mgr);
+                        }
+                    }
+                });
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    @JavascriptInterface
+    public void registerChain(final String jsonStr) {
+        if (jsonStr == null || jsonStr.trim().isEmpty()) return;
+        try {
+            JSONObject obj = new JSONObject(jsonStr);
+            String key = obj.getString("key");
+            String name = obj.optString("name", key);
+            String symbol = obj.optString("symbol", key.toUpperCase());
+            int chainId = obj.optInt("chainId", 0);
+            boolean isNonEvm = obj.optBoolean("isNonEvm", true);
+            JSONArray patternsArr = obj.optJSONArray("urlPatterns");
+            String[] patterns = null;
+            if (patternsArr != null) {
+                patterns = new String[patternsArr.length()];
+                for (int i = 0; i < patternsArr.length(); i++) {
+                    patterns[i] = patternsArr.getString(i);
+                }
+            }
+            FusionChainHelper.registerDynamicChain(key, name, symbol, chainId, isNonEvm, patterns);
+        } catch (Throwable ignored) {}
+    }
+
+    @JavascriptInterface
+    public String getActiveToolAddress() {
+        if (sActiveToolAddress != null && !sActiveToolAddress.isEmpty()) {
+            return sActiveToolAddress;
+        }
+        String curChain = FusionChainHelper.getCurrentChainKey();
+        return FusionWalletHelper.getAddressForChain(curChain, 0);
+    }
+
+    @JavascriptInterface
+    public String getActiveToolChain() {
+        if (sActiveToolChain != null && !sActiveToolChain.isEmpty()) {
+            return sActiveToolChain;
+        }
+        return FusionChainHelper.getCurrentChainKey();
+    }
+
+    @JavascriptInterface
+    public String getActiveToolSymbol() {
+        if (sActiveToolSymbol != null && !sActiveToolSymbol.isEmpty()) {
+            return sActiveToolSymbol;
+        }
+        return FusionToolPillHelper.getShortNetworkName();
+    }
 
     public static String getLastDetectedDappChainKey() {
         return sLastDetectedDappChainKey;
@@ -233,6 +334,112 @@ public class GhostBridgeInterface implements Runnable {
         FusionWebViewManager fusionWebViewManager = FusionWebViewManager.getInstance();
         if (fusionWebViewManager != null) {
             fusionWebViewManager.copyAddressToClipboard(str);
+        }
+    }
+
+    @JavascriptInterface
+    public String getClipboard() {
+        return TermuxIpcServer.getClipboard();
+    }
+
+    @JavascriptInterface
+    public String getLastDownload() {
+        return FusionDownloadListener.getLastDownloadedFilePath();
+    }
+
+    @JavascriptInterface
+    public void hideKeyboard() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.hideSoftKeyboard();
+        }
+    }
+
+    @JavascriptInterface
+    public boolean dispatchIpc(String command) {
+        if (command == null || command.trim().isEmpty()) return false;
+        FusionWebViewDispatcher.dispatch(command.trim());
+        return true;
+    }
+
+    @JavascriptInterface
+    public boolean dispatchTouch(float x, float y) {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        return mgr != null && mgr.dispatchNativeTouch(x, y);
+    }
+
+    @JavascriptInterface
+    public boolean dispatchSwipe(float x1, float y1, float x2, float y2, int durationMs) {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        return mgr != null && mgr.dispatchNativeSwipe(x1, y1, x2, y2, durationMs);
+    }
+
+    @JavascriptInterface
+    public boolean dispatchLongPress(float x, float y, int durationMs) {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        return mgr != null && mgr.dispatchNativeLongPress(x, y, durationMs);
+    }
+
+    @JavascriptInterface
+    public boolean supplyUploadFile(String filePath) {
+        return FusionWebChromeClient.supplyFileToPendingChooser(filePath);
+    }
+
+    @JavascriptInterface
+    public String readLocalFile(String path) {
+        if (path == null || path.isEmpty()) return "";
+        try {
+            File f = new File(path);
+            if (!f.exists() || !f.canRead()) return "";
+            FileInputStream fis = new FileInputStream(f);
+            byte[] data = new byte[(int) f.length()];
+            fis.read(data);
+            fis.close();
+            return new String(data, "UTF-8");
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    @JavascriptInterface
+    public boolean writeLocalFile(String path, String content) {
+        return writeWalletFileStatic(path, content);
+    }
+
+    @JavascriptInterface
+    public void openNewTab(String url) {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.addNewTab(url);
+        }
+    }
+
+    @JavascriptInterface
+    public void closeCurrentTab() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.killActiveTab();
+        }
+    }
+
+    @JavascriptInterface
+    public void switchTab(int index) {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null) {
+            mgr.switchTab(index);
+        }
+    }
+
+    @JavascriptInterface
+    public void toast(final String message) {
+        final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.mActivity != null && message != null) {
+            mgr.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    com.termux.app.FusionToast.makeText(mgr.mActivity, message, android.widget.Toast.LENGTH_SHORT).show();
+                }
+            });
         }
     }
 
@@ -437,7 +644,8 @@ public class GhostBridgeInterface implements Runnable {
             || str.contains("sui_signTransactionBlock") || str.contains("sui_signTransaction") || str.contains("sui_signMessage") || str.contains("sui_signPersonalMessage")
             || str.contains("aptos_signAndSubmitTransaction") || str.contains("aptos_signTransaction") || str.contains("aptos_signMessage")
             || str.contains("iota_signAndExecuteTransactionBlock") || str.contains("iota_signAndExecuteTransaction")
-            || str.contains("iota_signTransactionBlock") || str.contains("iota_signTransaction") || str.contains("iota_signMessage") || str.contains("iota_signPersonalMessage");
+            || str.contains("iota_signTransactionBlock") || str.contains("iota_signTransaction") || str.contains("iota_signMessage") || str.contains("iota_signPersonalMessage")
+            || str.contains("sub_signRaw") || str.contains("sub_signPayload") || str.contains("sub_sign") || str.contains("polkadot_sign");
     }
 
     @JavascriptInterface
@@ -510,6 +718,45 @@ public class GhostBridgeInterface implements Runnable {
         JSONObject jSONObjectOptJSONObject;
         if (str == null) {
             return "{\"error\":\"Empty payload\"}";
+        }
+        if (str.contains("sub_connect") || str.contains("sub_requestAccounts") || str.contains("sub_accounts") || str.contains("sub_getAccounts") || str.contains("polkadot_requestAccounts")) {
+            boolean isDot = str.contains("polkadot") || (FusionChainHelper.getCurrentChainKey() != null && FusionChainHelper.getCurrentChainKey().contains("polkadot"));
+            handleDappChainDetected(isDot ? "polkadot" : "substrate", isDot ? 0 : 42);
+            if (checkRpcAlive()) {
+                String daemonResp = forwardToDaemon(str);
+                if (daemonResp != null && !daemonResp.contains("\"error\"")) {
+                    try {
+                        JSONObject jo = new JSONObject(daemonResp);
+                        if (jo.has("result")) {
+                            Object res = jo.get("result");
+                            if (res instanceof JSONArray && ((JSONArray) res).length() > 0) {
+                                JSONObject first = ((JSONArray) res).optJSONObject(0);
+                                if (first != null && first.has("address")) {
+                                    sActiveToolAddress = first.getString("address");
+                                }
+                            } else if (res instanceof JSONObject && ((JSONObject) res).has("address")) {
+                                sActiveToolAddress = ((JSONObject) res).getString("address");
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                    return daemonResp;
+                }
+            }
+            String subAddr = sActiveToolAddress;
+            if (subAddr == null || subAddr.isEmpty()) {
+                subAddr = isDot ? FusionWalletHelper.getAddressForChain("polkadot", 0) : FusionWalletHelper.getAddressForChain("substrate", 0);
+            }
+            if (subAddr == null || subAddr.isEmpty()) {
+                subAddr = isDot ? "14Tr41gcoArkeeHpjpvvnEkpWTVX2AsEvvSLBrs7LBULgUJF" : "5FXYugRYwPbHD7HJnBsve5vfeqVsKsK6rRhr2Zskn6SpW3XR";
+            }
+            return "{\"result\":[{\"address\":\"" + subAddr + "\",\"name\":\"eso-1\",\"type\":\"ed25519\"}]}";
+        }
+        if (str.contains("sub_signRaw") || str.contains("sub_signPayload") || str.contains("sub_sign")) {
+            if (!checkRpcAlive()) {
+                notifyDaemonOffline("⚡ [GhostWallet] Transaksi/Signature Substrate butuh daemon aktif! Jalankan 'wallet' di terminal.");
+                return "{\"error\":{\"code\":4001,\"message\":\"Daemon GhostWallet belum aktif! Start daemon terlebih dahulu.\"}}";
+            }
+            return forwardToDaemon(str);
         }
         if (str.contains("sol_connect") || str.contains("solana_requestAccounts") || str.contains("sol_accounts") || str.contains("sol_getAccounts") || str.contains("solana_accounts")) {
             handleDappChainDetected("solana", 501);

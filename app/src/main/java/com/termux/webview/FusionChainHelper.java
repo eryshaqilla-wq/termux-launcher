@@ -10,10 +10,90 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.json.JSONObject;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionChainHelper {
+    public static class DynamicChainInfo {
+        public String key;
+        public String name;
+        public String symbol;
+        public int chainId;
+        public boolean isNonEvm;
+        public String[] urlPatterns;
+
+        public DynamicChainInfo(String key, String name, String symbol, int chainId, boolean isNonEvm, String[] urlPatterns) {
+            this.key = key;
+            this.name = name;
+            this.symbol = symbol;
+            this.chainId = chainId;
+            this.isNonEvm = isNonEvm;
+            this.urlPatterns = urlPatterns != null ? urlPatterns : new String[0];
+        }
+    }
+
+    public static final ConcurrentHashMap<String, DynamicChainInfo> sDynamicChains = new ConcurrentHashMap<>();
+
+    static {
+        registerDynamicChain("solana", "Solana Mainnet", "Sol", 501, true, new String[]{"jup.ag", "raydium", "pump.fun", "solana", "magiceden", "tensor.trade", "orca.so", "birdeye.so", "phantom.app", "solscan", "solflare"});
+        registerDynamicChain("tron", "Tron Mainnet", "Tron", 728126428, true, new String[]{"tronscan", "sunpump", "sun.io", "justlend", "trondao", "tron"});
+        registerDynamicChain("sui", "Sui Mainnet", "Sui", 784, true, new String[]{"sui.io", "suiscan", "cetus.zone", "turbos", "navi.protocol", "scallop", "aftermath", "bluefin", "sui"});
+        registerDynamicChain("aptos", "Aptos Mainnet", "Aptos", 637, true, new String[]{"aptoslabs", "aptoscan", "panora", "thalas", "liquidswap", "amnis", "aptos"});
+        registerDynamicChain("iota", "IOTA Rebased Mainnet", "IOTA", 4218, true, new String[]{"iota.org", "iota.cafe", "magicsea", "iotabee", "tangle", "iota"});
+        registerDynamicChain("substrate", "FLOP Devnet", "FLOP", 42, true, new String[]{"flop.network", "faucet.flop.network", "zkverify.io", "substrate"});
+        registerDynamicChain("polkadot", "Polkadot Mainnet", "DOT", 0, true, new String[]{"polkadot.js.org", "polkadot.network", "subscan.io", "talisman.xyz", "subwallet.app", "kusama", "polkadot"});
+    }
+
+    public static void registerDynamicChain(String key, String name, String symbol, int chainId, boolean isNonEvm, String[] urlPatterns) {
+        if (key == null || key.trim().isEmpty()) return;
+        String k = key.trim().toLowerCase();
+        DynamicChainInfo info = new DynamicChainInfo(k, name != null ? name : k, symbol != null ? symbol : k.toUpperCase(), chainId, isNonEvm, urlPatterns);
+        sDynamicChains.put(k, info);
+
+        if ("substrate".equals(k)) {
+            sDynamicChains.put("flop", info);
+        } else if ("polkadot".equals(k)) {
+            sDynamicChains.put("dot", info);
+            sDynamicChains.put("ksm", info);
+        } else if ("solana".equals(k)) {
+            sDynamicChains.put("sol", info);
+        } else if ("tron".equals(k)) {
+            sDynamicChains.put("trx", info);
+        } else if ("aptos".equals(k)) {
+            sDynamicChains.put("apt", info);
+        }
+        ensureInChainArrays(info);
+    }
+
+    private static synchronized void ensureInChainArrays(DynamicChainInfo info) {
+        if (sChainKeys == null) return;
+        for (String k : sChainKeys) {
+            if (info.key.equalsIgnoreCase(k)) return;
+        }
+        int oldLen = sChainKeys.length;
+        String[] newKeys = new String[oldLen + 1];
+        String[] newNames = new String[oldLen + 1];
+        String[] newDisp = new String[oldLen + 1];
+        int[] newIds = new int[oldLen + 1];
+
+        System.arraycopy(sChainKeys, 0, newKeys, 0, oldLen);
+        System.arraycopy(sChainNames, 0, newNames, 0, oldLen);
+        System.arraycopy(sChainDisplayNames, 0, newDisp, 0, oldLen);
+        System.arraycopy(sChainIds, 0, newIds, 0, oldLen);
+
+        newKeys[oldLen] = info.key;
+        newNames[oldLen] = info.name;
+        newDisp[oldLen] = info.name + (info.chainId > 0 ? " (" + info.chainId + ")" : "");
+        newIds[oldLen] = info.chainId;
+
+        sChainKeys = newKeys;
+        sChainNames = newNames;
+        sChainDisplayNames = newDisp;
+        sChainIds = newIds;
+    }
+
     public static String sCurrentChainKey = "base";
     public static int sCurrentChainId = 8453;
     public static String sCurrentChainName = "Base Mainnet";
@@ -86,14 +166,19 @@ public class FusionChainHelper {
     public static int sLastEvmChainId = 56;
 
     public static boolean isNonEvm() {
-        return isSolana() || isTron() || isSui() || isAptos() || ("iota".equalsIgnoreCase(sCurrentChainKey) && sCurrentChainId == 4218);
+        return isNonEvmKey(sCurrentChainKey);
     }
 
     public static boolean isNonEvmKey(String key) {
         if (key == null) return false;
         String k = key.trim().toLowerCase();
-        return "solana".equals(k) || "sol".equals(k) || "tron".equals(k) || "trx".equals(k) || 
-               "sui".equals(k) || "aptos".equals(k) || "apt".equals(k) || "iota".equals(k);
+        DynamicChainInfo info = sDynamicChains.get(k);
+        if (info != null) {
+            return info.isNonEvm;
+        }
+        return "solana".equals(k) || "sol".equals(k) || "tron".equals(k) || "trx".equals(k) ||
+               "sui".equals(k) || "aptos".equals(k) || "apt".equals(k) || "iota".equals(k) ||
+               "substrate".equals(k) || "flop".equals(k) || "polkadot".equals(k) || "dot".equals(k);
     }
 
     public static boolean isNonEvmUrl(String url) {
@@ -101,27 +186,41 @@ public class FusionChainHelper {
             return false;
         }
         String lower = url.toLowerCase();
-        if (lower.contains("jup.ag") || lower.contains("raydium") || lower.contains("pump.fun") || 
-            lower.contains("solana") || lower.contains("magiceden") || lower.contains("tensor.trade") || 
-            lower.contains("orca.so") || lower.contains("birdeye.so") || lower.contains("phantom.app") || 
+        for (DynamicChainInfo info : sDynamicChains.values()) {
+            if (info != null && info.isNonEvm && info.urlPatterns != null) {
+                for (String p : info.urlPatterns) {
+                    if (p != null && !p.isEmpty() && lower.contains(p.toLowerCase())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        if (lower.contains("flop.network") || lower.contains("polkadot.js.org") || lower.contains("subscan.io") ||
+            lower.contains("talisman.xyz") || lower.contains("subwallet.app") || lower.contains("zkverify.io") ||
+            lower.contains("kusama") || lower.contains("polkadot") || lower.contains("substrate")) {
+            return true;
+        }
+        if (lower.contains("jup.ag") || lower.contains("raydium") || lower.contains("pump.fun") ||
+            lower.contains("solana") || lower.contains("magiceden") || lower.contains("tensor.trade") ||
+            lower.contains("orca.so") || lower.contains("birdeye.so") || lower.contains("phantom.app") ||
             lower.contains("solscan") || lower.contains("solflare")) {
             return true;
         }
-        if (lower.contains("sui.io") || lower.contains("suiscan") || lower.contains("cetus.zone") || 
-            lower.contains("turbos") || lower.contains("navi.protocol") || lower.contains("scallop") || 
+        if (lower.contains("sui.io") || lower.contains("suiscan") || lower.contains("cetus.zone") ||
+            lower.contains("turbos") || lower.contains("navi.protocol") || lower.contains("scallop") ||
             lower.contains("aftermath") || lower.contains("bluefin") || lower.contains("sui")) {
             return true;
         }
-        if (lower.contains("aptoslabs") || lower.contains("aptoscan") || lower.contains("panora") || 
-            lower.contains("thalas") || lower.contains("liquidswap") || lower.contains("amnis") || 
+        if (lower.contains("aptoslabs") || lower.contains("aptoscan") || lower.contains("panora") ||
+            lower.contains("thalas") || lower.contains("liquidswap") || lower.contains("amnis") ||
             lower.contains("aptos")) {
             return true;
         }
-        if (lower.contains("tronscan") || lower.contains("sunpump") || lower.contains("sun.io") || 
+        if (lower.contains("tronscan") || lower.contains("sunpump") || lower.contains("sun.io") ||
             lower.contains("justlend") || lower.contains("trondao") || lower.contains("tron")) {
             return true;
         }
-        if (lower.contains("iota.org") || lower.contains("iota.cafe") || lower.contains("magicsea") || 
+        if (lower.contains("iota.org") || lower.contains("iota.cafe") || lower.contains("magicsea") ||
             lower.contains("iotabee") || lower.contains("tangle") || lower.contains("iota")) {
             return true;
         }
@@ -189,35 +288,50 @@ public class FusionChainHelper {
             return null;
         }
         String lower = url.toLowerCase();
-        if (lower.contains("jup.ag") || lower.contains("raydium") || lower.contains("pump.fun") || 
-            lower.contains("solana") || lower.contains("magiceden") || lower.contains("tensor.trade") || 
-            lower.contains("orca.so") || lower.contains("birdeye.so") || lower.contains("phantom.app") || 
+        for (DynamicChainInfo info : sDynamicChains.values()) {
+            if (info != null && info.urlPatterns != null) {
+                for (String p : info.urlPatterns) {
+                    if (p != null && !p.isEmpty() && lower.contains(p.toLowerCase())) {
+                        return info.key;
+                    }
+                }
+            }
+        }
+        if (lower.contains("flop.network") || lower.contains("zkverify.io")) {
+            return "substrate";
+        }
+        if (lower.contains("polkadot.js.org") || lower.contains("subscan.io") || lower.contains("polkadot") || lower.contains("kusama")) {
+            return "polkadot";
+        }
+        if (lower.contains("jup.ag") || lower.contains("raydium") || lower.contains("pump.fun") ||
+            lower.contains("solana") || lower.contains("magiceden") || lower.contains("tensor.trade") ||
+            lower.contains("orca.so") || lower.contains("birdeye.so") || lower.contains("phantom.app") ||
             lower.contains("solscan") || lower.contains("solflare")) {
             return "solana";
         }
-        if (lower.contains("iota.org") || lower.contains("iota.cafe") || lower.contains("magicsea") || 
+        if (lower.contains("iota.org") || lower.contains("iota.cafe") || lower.contains("magicsea") ||
             lower.contains("iotabee") || lower.contains("tangle") || lower.contains("iota")) {
             return "iota";
         }
-        if (lower.contains("sui.io") || lower.contains("suiscan") || lower.contains("cetus.zone") || 
-            lower.contains("turbos") || lower.contains("navi.protocol") || lower.contains("scallop") || 
+        if (lower.contains("sui.io") || lower.contains("suiscan") || lower.contains("cetus.zone") ||
+            lower.contains("turbos") || lower.contains("navi.protocol") || lower.contains("scallop") ||
             lower.contains("aftermath") || lower.contains("bluefin") || lower.contains("sui")) {
             return "sui";
         }
-        if (lower.contains("aptoslabs") || lower.contains("aptoscan") || lower.contains("panora") || 
-            lower.contains("thalas") || lower.contains("liquidswap") || lower.contains("amnis") || 
+        if (lower.contains("aptoslabs") || lower.contains("aptoscan") || lower.contains("panora") ||
+            lower.contains("thalas") || lower.contains("liquidswap") || lower.contains("amnis") ||
             lower.contains("aptos")) {
             return "aptos";
         }
-        if (lower.contains("tronscan") || lower.contains("sunpump") || lower.contains("sun.io") || 
+        if (lower.contains("tronscan") || lower.contains("sunpump") || lower.contains("sun.io") ||
             lower.contains("justlend") || lower.contains("trondao") || lower.contains("tron")) {
             return "tron";
         }
-        if (lower.contains("pancakeswap") || lower.contains("bscscan") || lower.contains("four.meme") || 
+        if (lower.contains("pancakeswap") || lower.contains("bscscan") || lower.contains("four.meme") ||
             lower.contains("binance") || lower.contains("bnbchain") || lower.contains("bsc")) {
             return "bsc";
         }
-        if (lower.contains("arbiscan") || lower.contains("arbitrum") || lower.contains("gmx.io") || 
+        if (lower.contains("arbiscan") || lower.contains("arbitrum") || lower.contains("gmx.io") ||
             lower.contains("camelot")) {
             return "arbitrum";
         }
@@ -227,11 +341,11 @@ public class FusionChainHelper {
         if (lower.contains("morphl2") || lower.contains("morphscan") || lower.contains("bulbaswap")) {
             return "morph";
         }
-        if (lower.contains("etherscan") || lower.contains("uniswap") || lower.contains("curve.fi") || 
+        if (lower.contains("etherscan") || lower.contains("uniswap") || lower.contains("curve.fi") ||
             lower.contains("lido.fi") || lower.contains("opensea")) {
             return "eth";
         }
-        if (lower.contains("base.org") || lower.contains("basescan") || lower.contains("aerodrome") || 
+        if (lower.contains("base.org") || lower.contains("basescan") || lower.contains("aerodrome") ||
             lower.contains("virtuals.io") || lower.contains("clanker")) {
             return "base";
         }
@@ -257,9 +371,14 @@ public class FusionChainHelper {
                 String name = c.getString(1);
                 int chainId = c.getInt(2);
                 if (key != null && !key.trim().isEmpty()) {
-                    keys.add(key.trim());
-                    names.add(name != null ? name.trim() : key.trim());
+                    String cleanKey = key.trim().toLowerCase();
+                    keys.add(cleanKey);
+                    names.add(name != null ? name.trim() : cleanKey);
                     ids.add(chainId);
+                    if (!sDynamicChains.containsKey(cleanKey)) {
+                        boolean isNonEvm = isNonEvmKey(cleanKey) || chainId == 0 || chainId == 501 || chainId == 784 || chainId == 728126428 || chainId == 42;
+                        registerDynamicChain(cleanKey, name, cleanKey.toUpperCase(), chainId, isNonEvm, null);
+                    }
                 }
             }
             c.close();
@@ -392,25 +511,43 @@ public class FusionChainHelper {
         if (str == null) {
             str = "base";
         }
-        if ("pol".equalsIgnoreCase(str) || "matic".equalsIgnoreCase(str)) {
+        String k = str.trim().toLowerCase();
+        if ("pol".equalsIgnoreCase(k) || "matic".equalsIgnoreCase(k)) {
             str = "polygon";
-        } else if ("arb".equalsIgnoreCase(str)) {
+        } else if ("arb".equalsIgnoreCase(k)) {
             str = "arbitrum";
-        } else if ("arc".equalsIgnoreCase(str)) {
+        } else if ("arc".equalsIgnoreCase(k)) {
             str = "arc-mainnet";
-        } else if ("sol".equalsIgnoreCase(str)) {
+        } else if ("sol".equalsIgnoreCase(k)) {
             str = "solana";
-        } else if ("trx".equalsIgnoreCase(str)) {
+        } else if ("trx".equalsIgnoreCase(k)) {
             str = "tron";
-        } else if ("sui".equalsIgnoreCase(str)) {
+        } else if ("sui".equalsIgnoreCase(k)) {
             str = "sui";
-        } else if ("apt".equalsIgnoreCase(str) || "aptos".equalsIgnoreCase(str)) {
+        } else if ("apt".equalsIgnoreCase(k) || "aptos".equalsIgnoreCase(k)) {
             str = "aptos";
-        } else if ("iota".equalsIgnoreCase(str)) {
+        } else if ("iota".equalsIgnoreCase(k)) {
             str = "iota";
-        } else if ("iotaevm".equalsIgnoreCase(str)) {
+        } else if ("iotaevm".equalsIgnoreCase(k)) {
             str = "iotaevm";
+        } else if ("flop".equalsIgnoreCase(k)) {
+            str = "substrate";
+        } else if ("dot".equalsIgnoreCase(k)) {
+            str = "polkadot";
         }
+
+        DynamicChainInfo dInfo = sDynamicChains.get(str.toLowerCase());
+        if (dInfo != null) {
+            sCurrentChainKey = dInfo.key;
+            sCurrentChainName = dInfo.name;
+            sCurrentChainId = dInfo.chainId;
+            if (!dInfo.isNonEvm) {
+                sLastEvmChainKey = dInfo.key;
+                sLastEvmChainId = dInfo.chainId;
+            }
+            return;
+        }
+
         if (str.startsWith("0x") || str.startsWith("0X")) {
             setChainByHex(str);
             return;
@@ -446,6 +583,18 @@ public class FusionChainHelper {
     }
 
     public static void setChainById(int i) {
+        for (DynamicChainInfo info : sDynamicChains.values()) {
+            if (info != null && info.chainId == i) {
+                sCurrentChainId = info.chainId;
+                sCurrentChainKey = info.key;
+                sCurrentChainName = info.name;
+                if (!info.isNonEvm) {
+                    sLastEvmChainKey = info.key;
+                    sLastEvmChainId = info.chainId;
+                }
+                return;
+            }
+        }
         int[] iArr = sChainIds;
         if (iArr != null) {
             for (int i2 = 0; i2 < iArr.length; i2++) {

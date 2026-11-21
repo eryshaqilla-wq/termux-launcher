@@ -44,7 +44,18 @@ public class FusionToolPillHelper {
     }
 
     public static String getShortNetworkName() {
+        if (GhostBridgeInterface.sActiveToolSymbol != null && !GhostBridgeInterface.sActiveToolSymbol.isEmpty()) {
+            return GhostBridgeInterface.sActiveToolSymbol;
+        }
         String key = FusionChainHelper.getCurrentChainKey();
+        if (key != null) {
+            FusionChainHelper.DynamicChainInfo info = FusionChainHelper.sDynamicChains.get(key.toLowerCase());
+            if (info != null && info.symbol != null && !info.symbol.isEmpty()) {
+                return info.symbol;
+            }
+        }
+        if ("substrate".equalsIgnoreCase(key) || "flop".equalsIgnoreCase(key)) return "FLOP";
+        if ("polkadot".equalsIgnoreCase(key) || "dot".equalsIgnoreCase(key)) return "DOT";
         if ("solana".equalsIgnoreCase(key)) return "Sol";
         if ("tron".equalsIgnoreCase(key)) return "Tron";
         if ("sui".equalsIgnoreCase(key)) return "Sui";
@@ -212,17 +223,10 @@ public class FusionToolPillHelper {
             @Override
             public void onClick(View v) {
                 String chain = FusionChainHelper.getCurrentChainKey();
-                String addr = manager.mCurrentWalletAddress;
-                if ("solana".equalsIgnoreCase(chain)) {
-                    addr = manager.mCurrentSolWalletAddress;
-                } else if ("tron".equalsIgnoreCase(chain)) {
-                    addr = manager.mCurrentTronWalletAddress;
-                } else if ("sui".equalsIgnoreCase(chain)) {
-                    addr = manager.mCurrentSuiWalletAddress;
-                } else if ("aptos".equalsIgnoreCase(chain)) {
-                    addr = manager.mCurrentAptosWalletAddress;
-                } else if ("iota".equalsIgnoreCase(chain)) {
-                    addr = manager.mCurrentIotaWalletAddress;
+                String addr = GhostBridgeInterface.sActiveToolAddress;
+                if (addr == null || addr.isEmpty() || (GhostBridgeInterface.sActiveToolChain != null && !GhostBridgeInterface.sActiveToolChain.isEmpty() && !chain.equalsIgnoreCase(GhostBridgeInterface.sActiveToolChain))) {
+                    int curIdx = FusionWalletHelper.findIndexByName(manager.mCurrentWalletName);
+                    addr = FusionWalletHelper.getAddressForChain(chain, curIdx);
                 }
                 if (addr == null || addr.isEmpty()) {
                     addr = manager.mCurrentWalletAddress;

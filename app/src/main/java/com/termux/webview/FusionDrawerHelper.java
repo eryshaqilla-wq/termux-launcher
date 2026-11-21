@@ -985,7 +985,9 @@ public class FusionDrawerHelper {
         pagingContainer.setLayoutParams(pagingLp);
         linearLayout2.addView(pagingContainer);
 
-        final String[] names = FusionWalletHelper.getNames();
+        final String activeChain = FusionChainHelper.getCurrentChainKey();
+        final String[] names = FusionWalletHelper.getNamesForChain(activeChain);
+        final String[] addresses = FusionWalletHelper.getAddressesForChain(activeChain);
         if (names == null || names.length == 0) {
             searchRow.setVisibility(View.GONE);
             pagingContainer.setVisibility(View.GONE);
@@ -1000,7 +1002,7 @@ public class FusionDrawerHelper {
             final int total = names.length;
 
             if (sWalletPage < 0) {
-                int masterIdx = FusionWalletHelper.sMasterIndex;
+                int masterIdx = FusionWalletHelper.getMasterIndexForChain(activeChain);
                 sWalletPage = (masterIdx >= 0 && masterIdx < total) ? (masterIdx / pageSize) : 0;
             }
 
@@ -1011,11 +1013,6 @@ public class FusionDrawerHelper {
                     linearLayout4.removeAllViews();
                     pagingContainer.removeAllViews();
 
-                    final boolean isSol = FusionChainHelper.isSolana();
-                    final boolean isTron = FusionChainHelper.isTron();
-                    final boolean isSui = FusionChainHelper.isSui();
-                    final boolean isAptos = FusionChainHelper.isAptos();
-                    final boolean isIota = FusionChainHelper.isIota();
                     String q = sWalletFilterQuery != null ? sWalletFilterQuery.trim().toLowerCase() : "";
                     List<Integer> matchedIndices = new ArrayList<>();
 
@@ -1044,42 +1041,9 @@ public class FusionDrawerHelper {
                                     continue;
                                 }
                             }
-                            if (isSol) {
-                                String solAddr = FusionWalletHelper.getSolAddress(i);
-                                if (solAddr != null && solAddr.toLowerCase().contains(q)) {
-                                    matchedIndices.add(i);
-                                    continue;
-                                }
-                            } else if (isTron) {
-                                String tronAddr = FusionWalletHelper.getTronAddress(i);
-                                if (tronAddr != null && tronAddr.toLowerCase().contains(q)) {
-                                    matchedIndices.add(i);
-                                    continue;
-                                }
-                            } else if (isSui) {
-                                String suiAddr = FusionWalletHelper.getSuiAddress(i);
-                                if (suiAddr != null && suiAddr.toLowerCase().contains(q)) {
-                                    matchedIndices.add(i);
-                                    continue;
-                                }
-                            } else if (isAptos) {
-                                String aptAddr = FusionWalletHelper.getAptosAddress(i);
-                                if (aptAddr != null && aptAddr.toLowerCase().contains(q)) {
-                                    matchedIndices.add(i);
-                                    continue;
-                                }
-                            } else if (isIota) {
-                                String iotaAddr = FusionWalletHelper.getIotaAddress(i);
-                                if (iotaAddr != null && iotaAddr.toLowerCase().contains(q)) {
-                                    matchedIndices.add(i);
-                                    continue;
-                                }
-                            } else {
-                                String evmAddr = FusionWalletHelper.getAddress(i);
-                                if (evmAddr != null && evmAddr.toLowerCase().contains(q)) {
-                                    matchedIndices.add(i);
-                                    continue;
-                                }
+                            if (addresses != null && i < addresses.length && addresses[i] != null && addresses[i].toLowerCase().contains(q)) {
+                                matchedIndices.add(i);
+                                continue;
                             }
                         }
                     }
@@ -1108,60 +1072,30 @@ public class FusionDrawerHelper {
                     int startIdx = sWalletPage * pageSize;
                     int endIdx = Math.min(totalMatched, startIdx + pageSize);
 
-                    String netTag = isSol ? " [Solana]" : (isTron ? " [Tron]" : (isSui ? " [Sui]" : (isAptos ? " [Aptos]" : (isIota ? " [IOTA]" : ""))));
+                    String netTag = " [" + FusionToolPillHelper.getShortNetworkName() + "]";
                     if (q.isEmpty()) {
                         textView3.setText("Dompet" + netTag + " " + (startIdx + 1) + " - " + endIdx + " dari " + totalMatched + " (Hal " + (sWalletPage + 1) + "/" + totalPages + ")");
                     } else {
                         textView3.setText("Hasil" + netTag + ": " + (startIdx + 1) + " - " + endIdx + " dari " + totalMatched + " dompet (Hal " + (sWalletPage + 1) + "/" + totalPages + ")");
                     }
 
+                    int activeMasterIdx = FusionWalletHelper.getMasterIndexForChain(activeChain);
                     for (int k = startIdx; k < endIdx; k++) {
                         final int realIdx = matchedIndices.get(k);
                         String str = names[realIdx];
                         StringBuilder sbItem = new StringBuilder();
-                        if (realIdx == FusionWalletHelper.sMasterIndex) {
+                        if (realIdx == activeMasterIdx) {
                             sbItem.append("* ");
                         }
                         sbItem.append(str);
-                        if (isSol) {
-                            String solAddr = FusionWalletHelper.getSolAddress(realIdx);
-                            if (solAddr != null && !solAddr.isEmpty()) {
-                                String shortSol = solAddr.length() > 8 ? solAddr.substring(0, 4) + "..." + solAddr.substring(solAddr.length() - 4) : solAddr;
-                                sbItem.append(" (").append(shortSol).append(")");
-                            }
-                        } else if (isTron) {
-                            String tronAddr = FusionWalletHelper.getTronAddress(realIdx);
-                            if (tronAddr != null && !tronAddr.isEmpty()) {
-                                String shortTron = tronAddr.length() > 8 ? tronAddr.substring(0, 4) + "..." + tronAddr.substring(tronAddr.length() - 4) : tronAddr;
-                                sbItem.append(" (").append(shortTron).append(")");
-                            }
-                        } else if (isSui) {
-                            String suiAddr = FusionWalletHelper.getSuiAddress(realIdx);
-                            if (suiAddr != null && !suiAddr.isEmpty()) {
-                                String shortSui = suiAddr.length() > 10 ? suiAddr.substring(0, 6) + "..." + suiAddr.substring(suiAddr.length() - 4) : suiAddr;
-                                sbItem.append(" (").append(shortSui).append(")");
-                            }
-                        } else if (isAptos) {
-                            String aptAddr = FusionWalletHelper.getAptosAddress(realIdx);
-                            if (aptAddr != null && !aptAddr.isEmpty()) {
-                                String shortApt = aptAddr.length() > 10 ? aptAddr.substring(0, 6) + "..." + aptAddr.substring(aptAddr.length() - 4) : aptAddr;
-                                sbItem.append(" (").append(shortApt).append(")");
-                            }
-                        } else if (isIota) {
-                            String iotaAddr = FusionWalletHelper.getIotaAddress(realIdx);
-                            if (iotaAddr != null && !iotaAddr.isEmpty()) {
-                                String shortIota = iotaAddr.length() > 12 ? iotaAddr.substring(0, 8) + "..." + iotaAddr.substring(iotaAddr.length() - 4) : iotaAddr;
-                                sbItem.append(" (").append(shortIota).append(")");
-                            }
-                        } else {
-                            String evmAddr = FusionWalletHelper.getAddress(realIdx);
-                            if (evmAddr != null && evmAddr.length() >= 10) {
-                                sbItem.append(" (").append(evmAddr.substring(0, 6)).append("...").append(evmAddr.substring(evmAddr.length() - 4)).append(")");
-                            }
+                        String addr = (addresses != null && realIdx < addresses.length) ? addresses[realIdx] : "";
+                        if (addr != null && !addr.isEmpty()) {
+                            String shortAddr = addr.length() > 14 ? (addr.substring(0, 6) + "..." + addr.substring(addr.length() - 4)) : addr;
+                            sbItem.append(" (").append(shortAddr).append(")");
                         }
                         TextView textView4 = new TextView(appCompatActivity);
                         textView4.setText(sbItem.toString());
-                        if (realIdx == FusionWalletHelper.sMasterIndex) {
+                        if (realIdx == activeMasterIdx) {
                             FusionUiHelper.setSolidAccentBtn(textView4, -7686920, -13947597);
                         } else {
                             FusionUiHelper.setSolidBtn(textView4);

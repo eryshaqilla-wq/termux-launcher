@@ -152,6 +152,49 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.cycleOpacity();
             return;
         }
+        if (str.startsWith("WEBVIEW_WALLET_SET ") || str.startsWith("WEBVIEW_SET_WALLET ")) {
+            String wName = str.substring(str.indexOf(" ") + 1).trim();
+            fusionWebViewManager.switchWalletByName(wName);
+            return;
+        }
+        if (str.equals("WEBVIEW_WALLET_NEXT")) {
+            fusionWebViewManager.switchToNextWallet();
+            return;
+        }
+        if (str.startsWith("WEBVIEW_CHAIN_SET ") || str.startsWith("WEBVIEW_SET_CHAIN ")) {
+            String cKey = str.substring(str.indexOf(" ") + 1).trim();
+            fusionWebViewManager.switchChainByKey(cKey);
+            return;
+        }
+        if (str.startsWith("WEBVIEW_TOUCH ") || str.startsWith("WEBVIEW_NATIVE_CLICK ")) {
+            String coords = str.substring(str.indexOf(" ") + 1).trim();
+            String[] parts = coords.split("[,\\s]+");
+            if (parts.length >= 2) {
+                try {
+                    float x = Float.parseFloat(parts[0]);
+                    float y = Float.parseFloat(parts[1]);
+                    fusionWebViewManager.dispatchNativeTouch(x, y);
+                } catch (Exception ignored) {}
+            }
+            return;
+        }
+        if (str.startsWith("WEBVIEW_PROFILE_LOAD ") || str.startsWith("WEBVIEW_LOAD_PROFILE ")) {
+            String prof = str.substring(str.indexOf(" ") + 1).trim();
+            if (fusionWebViewManager.mActiveWebView != null) {
+                FusionProfileManager.applyProfile(prof, fusionWebViewManager.mActiveWebView, false);
+            }
+            return;
+        }
+        if (str.equals("WEBVIEW_PROFILE_EJECT") || str.equals("WEBVIEW_EJECT")) {
+            FusionProfileManager.clearAllCookiesAndStorage();
+            fusionWebViewManager.clearWebviewCache();
+            return;
+        }
+        if (str.startsWith("WEBVIEW_UPLOAD_FILE ") || str.startsWith("WEBVIEW_FILE_UPLOAD ")) {
+            String filePath = str.substring(str.indexOf(" ") + 1).trim();
+            FusionWebChromeClient.supplyFileToPendingChooser(filePath);
+            return;
+        }
         if (str.equals("WEBVIEW_DEV_MODE")) {
             fusionWebViewManager.toggleDevMode();
             return;

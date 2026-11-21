@@ -7,13 +7,52 @@ import android.webkit.GeolocationPermissions;
 import android.webkit.JsPromptResult;
 import android.webkit.JsResult;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.net.Uri;
+import java.io.File;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionWebChromeClient extends WebChromeClient {
+    public static ValueCallback<Uri[]> sPendingFileChooser = null;
+    public static String sPendingUploadFilePath = null;
+
+    @Override
+    public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
+        if (sPendingUploadFilePath != null && !sPendingUploadFilePath.isEmpty()) {
+            File file = new File(sPendingUploadFilePath);
+            sPendingUploadFilePath = null;
+            if (file.exists()) {
+                Uri uri = Uri.fromFile(file);
+                filePathCallback.onReceiveValue(new Uri[]{uri});
+                return true;
+            }
+        }
+        sPendingFileChooser = filePathCallback;
+        return true;
+    }
+
+    public static boolean supplyFileToPendingChooser(String filePath) {
+        if (filePath == null || filePath.isEmpty()) {
+            if (sPendingFileChooser != null) {
+                sPendingFileChooser.onReceiveValue(null);
+                sPendingFileChooser = null;
+            }
+            return false;
+        }
+        File file = new File(filePath);
+        if (file.exists() && sPendingFileChooser != null) {
+            Uri uri = Uri.fromFile(file);
+            sPendingFileChooser.onReceiveValue(new Uri[]{uri});
+            sPendingFileChooser = null;
+            return true;
+        }
+        sPendingUploadFilePath = filePath;
+        return true;
+    }
     @Override // android.webkit.WebChromeClient
     public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
         if (resultMsg == null) {
@@ -38,7 +77,25 @@ public class FusionWebChromeClient extends WebChromeClient {
             }
         }
 
-        // 2. Untuk window.open() atau popup dynamic javascript, tangkap URL via temp WebView
+        // 2. Untuk window.open() atau popup dynamic javascript, sambungkan langsung ke Tab WebView baru
+        if (manager != null && manager.mActivity != null) {
+            try {
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                if (transport != null) {
+                    FusionWebViewManager.FusionTab newTab = manager.createTabInternal("about:blank", "default", "Popup", "bsc", true, false, false, "");
+                    if (newTab != null && newTab.mWebView != null) {
+                        transport.setWebView(newTab.mWebView);
+                        resultMsg.sendToTarget();
+                        manager.switchTab(manager.mTabList.size() - 1);
+                        return true;
+                    }
+                }
+            } catch (Throwable t) {
+                Log.e("FusionPopup", "Failed to transport popup window to new tab", t);
+            }
+        }
+
+        // 3. Fallback: tangkap URL via temp WebView
         if (view == null || view.getContext() == null) {
             return false;
         }

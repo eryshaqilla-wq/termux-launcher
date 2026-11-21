@@ -54,6 +54,11 @@ import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.ArrayList;
+import android.os.SystemClock;
+import android.view.inputmethod.InputMethodManager;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -630,7 +635,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public String switchToNextWallet() {
-        String[] names = FusionWalletHelper.getNames();
+        String activeChain = FusionChainHelper.getCurrentChainKey();
+        String[] names = FusionWalletHelper.getNamesForChain(activeChain);
         if (names == null || names.length == 0) return "";
         int curIdx = FusionWalletHelper.findIndexByName(this.mCurrentWalletName);
         int nextIdx = (curIdx + 1) % names.length;
@@ -647,7 +653,238 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 }
             });
         }
-        return nextName;
+        return FusionWalletHelper.getAddressForChain(activeChain, nextIdx);
+    }
+
+    public boolean switchWalletByName(String targetName) {
+        if (targetName == null || targetName.trim().isEmpty()) return false;
+        String cleanTarget = targetName.trim();
+        String activeChain = FusionChainHelper.getCurrentChainKey();
+        String[] names = FusionWalletHelper.getNamesForChain(activeChain);
+        if (names != null) {
+            for (int i = 0; i < names.length; i++) {
+                if (names[i] != null && (names[i].equalsIgnoreCase(cleanTarget) || names[i].toLowerCase().contains(cleanTarget.toLowerCase()))) {
+                    onWalletSelected(i);
+                    return true;
+                }
+            }
+        }
+        int idx = FusionWalletHelper.findIndexByName(cleanTarget);
+        if (idx >= 0) {
+            onWalletSelected(idx);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean switchChainByKey(String chainKey) {
+        if (chainKey == null || chainKey.trim().isEmpty()) return false;
+        FusionChainHelper.setChain(chainKey.trim());
+        this.mCurrentChainKey = FusionChainHelper.getCurrentChainKey();
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+        if (activeTab != null) {
+            activeTab.mChainKey = FusionChainHelper.getCurrentChainKey();
+            activeTab.mChainId = FusionChainHelper.getCurrentChainId();
+        }
+        updateMenuTexts();
+        FusionToolPillHelper.updateToolPillUi(this);
+        if (this.mActiveWebView != null && this.mActivity != null) {
+            final int chainId = FusionChainHelper.getCurrentChainId();
+            final String hexId = "0x" + Integer.toHexString(chainId);
+            this.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (mActiveWebView != null) {
+                        mActiveWebView.evaluateJavascript(
+                            "(function(){ if(window.ethereum && window.ethereum.emit){ window.ethereum.emit('chainChanged', '" + hexId + "'); } window.postMessage({type:'FUSION_CHAIN_CHANGED', chainId:" + chainId + ", hexId:'" + hexId + "'}, '*'); })();", null);
+                    }
+                }
+            });
+        }
+        return true;
+    }
+
+    public boolean dispatchNativeTouch(final float x, final float y) {
+        if (this.mActivity == null || this.mActiveWebView == null) return false;
+        this.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (mActiveWebView == null) return;
+                long now = SystemClock.uptimeMillis();
+                MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
+                mActiveWebView.dispatchTouchEvent(down);
+                down.recycle();
+                MotionEvent up = MotionEvent.obtain(now, now + 40, MotionEvent.ACTION_UP, x, y, 0);
+                mActiveWebView.dispatchTouchEvent(up);
+                up.recycle();
+            }
+        });
+        return true;
+    }
+
+    public boolean dispatchNativeSwipe(final float x1, final float y1, final float x2, final float y2, final int durationMs) {
+        if (this.mActivity == null || this.mActiveWebView == null) return false;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    final int duration = Math.max(50, Math.min(durationMs, 5000));
+                    final int steps = Math.max(6, duration / 16);
+                    final long startTime = SystemClock.uptimeMillis();
+
+                    mActivity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (mActiveWebView == null) return;
+                            MotionEvent down = MotionEvent.obtain(startTime, startTime, MotionEvent.ACTION_DOWN, x1, y1, 0);
+                            mActiveWebView.dispatchTouchEvent(down);
+                            down.recycle();
+                        }
+                    });
+
+                    for (int i = 1; i <= steps; i++) {
+                        Thread.sleep(duration / steps);
+                        final float progress = (float) i / steps;
+                        final float curX = x1 + (x2 - x1) * progress;
+                        final float curY = y1 + (y2 - y1) * progress;
+                        final long curTime = SystemClock.uptimeMillis();
+                        mActivity.runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (mActiveWebView == null) return;
+                                MotionEvent move = MotionEvent.obtain(startTime, curTime, MotionEvent.ACTION_MOVE, curX, curY, 0);
+                                mActiveWebView.dispatchTouchEvent(move);
+                                move.recycle();
+                            }
+                        });
+                    }
+
+                    final long endTime = SystemClock.uptimeMillis();
+                    mActivity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (mActiveWebView == null) return;
+                            MotionEvent up = MotionEvent.obtain(startTime, endTime, MotionEvent.ACTION_UP, x2, y2, 0);
+                            mActiveWebView.dispatchTouchEvent(up);
+                            up.recycle();
+                        }
+                    });
+                } catch (Throwable ignored) {}
+            }
+        }).start();
+        return true;
+    }
+
+    public boolean dispatchNativeLongPress(final float x, final float y, final int durationMs) {
+        if (this.mActivity == null || this.mActiveWebView == null) return false;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    final int duration = Math.max(200, Math.min(durationMs, 5000));
+                    final long startTime = SystemClock.uptimeMillis();
+
+                    mActivity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (mActiveWebView == null) return;
+                            MotionEvent down = MotionEvent.obtain(startTime, startTime, MotionEvent.ACTION_DOWN, x, y, 0);
+                            mActiveWebView.dispatchTouchEvent(down);
+                            down.recycle();
+                        }
+                    });
+
+                    Thread.sleep(duration);
+
+                    final long endTime = SystemClock.uptimeMillis();
+                    mActivity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (mActiveWebView == null) return;
+                            MotionEvent up = MotionEvent.obtain(startTime, endTime, MotionEvent.ACTION_UP, x, y, 0);
+                            mActiveWebView.dispatchTouchEvent(up);
+                            up.recycle();
+                        }
+                    });
+                } catch (Throwable ignored) {}
+            }
+        }).start();
+        return true;
+    }
+
+    public void hideSoftKeyboard() {
+        if (this.mActivity == null) return;
+        this.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    View view = mActivity.getCurrentFocus();
+                    if (view == null && mActiveWebView != null) {
+                        view = mActiveWebView;
+                    }
+                    if (view != null) {
+                        InputMethodManager imm = (InputMethodManager) mActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
+                        if (imm != null) {
+                            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        });
+    }
+
+    public String evaluateJsSync(final String str, long timeoutMs) {
+        if (this.mActivity == null || this.mActiveWebView == null) {
+            return null;
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicReference<String> resRef = new AtomicReference<>(null);
+        this.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (mActiveWebView != null) {
+                    mActiveWebView.evaluateJavascript(str, new ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String value) {
+                            resRef.set(value);
+                            latch.countDown();
+                        }
+                    });
+                } else {
+                    latch.countDown();
+                }
+            }
+        });
+        try {
+            latch.await(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException ignored) {}
+        return resRef.get();
+    }
+
+    public String getWebviewStateJson() {
+        JSONObject obj = new JSONObject();
+        try {
+            obj.put("url", this.mActiveWebView != null ? this.mActiveWebView.getUrl() : "");
+            obj.put("title", this.mActiveWebView != null ? this.mActiveWebView.getTitle() : "");
+            obj.put("active_tab", this.mActiveTab);
+            obj.put("total_tabs", this.mTabList != null ? this.mTabList.size() : 0);
+            obj.put("wallet_name", this.mCurrentWalletName != null ? this.mCurrentWalletName : "");
+            obj.put("wallet_address", this.mCurrentWalletAddress != null ? this.mCurrentWalletAddress : "");
+            obj.put("chain_key", FusionChainHelper.getCurrentChainKey());
+            obj.put("chain_id", FusionChainHelper.getCurrentChainId());
+            obj.put("chain_name", FusionChainHelper.getCurrentChainName());
+            obj.put("chain_symbol", FusionChainHelper.getCurrentChainSymbol());
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+            if (activeTab != null) {
+                obj.put("profile", activeTab.mProfile != null ? activeTab.mProfile : "default");
+                obj.put("is_headless", activeTab.mIsHeadless);
+                obj.put("is_proxy_enabled", activeTab.mIsProxyEnabled);
+                if (activeTab.mProxyItem != null) {
+                    obj.put("proxy", activeTab.mProxyItem.toString());
+                }
+            }
+        } catch (Exception ignored) {}
+        return obj.toString();
     }
 
     public void reloadActiveTab() {
@@ -882,6 +1119,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.setOnTouchListener(new TouchListener());
         webView.setWebChromeClient(new FusionWebChromeClient());
         webView.setWebViewClient(new FusionWebViewClient(this));
+        webView.setDownloadListener(new FusionDownloadListener((this.mActivity != null) ? this.mActivity : webView.getContext()));
         webView.addJavascriptInterface(new GhostBridgeInterface(), "GhostBridge");
         webView.addJavascriptInterface(new FusionExtensionHelper.FusionExtensionBridge((this.mActivity != null) ? this.mActivity : webView.getContext(), webView), "__FusionExtensionBridge__");
         FusionExtensionHelper.setupWebView(webView);
@@ -2652,10 +2890,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void onWalletSelected(int i) {
-        String name = FusionWalletHelper.getName(i);
-        String address = FusionWalletHelper.getAddress(i);
+        String activeChain = FusionChainHelper.getCurrentChainKey();
+        String name = FusionWalletHelper.getNameForChain(activeChain, i);
+        String address = FusionWalletHelper.getAddressForChain(activeChain, i);
         this.mCurrentWalletName = name;
         this.mCurrentWalletAddress = address;
+        GhostBridgeInterface.sActiveToolWalletName = name;
+        GhostBridgeInterface.sActiveToolAddress = address;
         GhostBridgeInterface.setWallet(name, address);
 
         String solName = FusionWalletHelper.getSolName(i);
@@ -2698,6 +2939,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             GhostBridgeInterface.setIotaWallet(iotaName, iotaAddr);
         }
 
+        String subAddr = FusionWalletHelper.getAddressForChain("substrate", i);
+        String dotAddr = FusionWalletHelper.getAddressForChain("polkadot", i);
+
         updateMenuTexts();
         FusionToolPillHelper.updateToolPillUi(this);
         LinearLayout linearLayout = this.mMenuCard;
@@ -2734,6 +2978,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
                 webView.evaluateJavascript("if(window.__FUSION_SET_IOTA_ACCOUNT__){window.__FUSION_SET_IOTA_ACCOUNT__('" + iotaAddr + "');}", null);
+            }
+            if (subAddr != null && !subAddr.isEmpty()) {
+                webView.evaluateJavascript("if(window.__FUSION_SET_SUBSTRATE_ACCOUNT__){window.__FUSION_SET_SUBSTRATE_ACCOUNT__('" + subAddr + "');}try{window.dispatchEvent(new CustomEvent('substrateAccountChanged',{detail:'" + subAddr + "'}));}catch(_){}", null);
+            }
+            if (dotAddr != null && !dotAddr.isEmpty()) {
+                webView.evaluateJavascript("if(window.__FUSION_SET_POLKADOT_ACCOUNT__){window.__FUSION_SET_POLKADOT_ACCOUNT__('" + dotAddr + "');}try{window.dispatchEvent(new CustomEvent('polkadotAccountChanged',{detail:'" + dotAddr + "'}));}catch(_){}", null);
             }
             if (this.mIsRecording) {
                 webView.evaluateJavascript("if(window.AgyRecorder && window.AgyRecorder.isRecording){window.AgyRecorder.recordEvent({type:'next_wallet',timestamp:Date.now(),text:'Ganti Wallet -> " + address + "'});}", null);
@@ -4056,92 +4306,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             StringBuilder sb = new StringBuilder();
             sb.append("Active: ");
             sb.append(this.mCurrentWalletName);
-            boolean isSol = FusionChainHelper.isSolana();
-            boolean isTron = FusionChainHelper.isTron();
-            boolean isSui = FusionChainHelper.isSui();
-            boolean isAptos = FusionChainHelper.isAptos();
-            boolean isIota = FusionChainHelper.isIota();
-            if (isSol) {
-                sb.append("\nSOL: ");
-                String sol = this.mCurrentSolWalletAddress;
-                if (sol == null || sol.isEmpty()) {
-                    sol = FusionWalletHelper.getMasterSolAddress();
+            String activeChain = FusionChainHelper.getCurrentChainKey();
+            if (FusionChainHelper.isNonEvm()) {
+                String sym = FusionToolPillHelper.getShortNetworkName();
+                sb.append("\n").append(sym).append(": ");
+                String curAddr = GhostBridgeInterface.sActiveToolAddress;
+                if (curAddr == null || curAddr.isEmpty() || (GhostBridgeInterface.sActiveToolChain != null && !GhostBridgeInterface.sActiveToolChain.isEmpty() && !activeChain.equalsIgnoreCase(GhostBridgeInterface.sActiveToolChain))) {
+                    int curIdx = FusionWalletHelper.findIndexByName(this.mCurrentWalletName);
+                    curAddr = FusionWalletHelper.getAddressForChain(activeChain, curIdx);
                 }
-                if (sol != null && !sol.isEmpty()) {
-                    if (sol.length() <= 8) {
-                        sb.append(sol);
+                if (curAddr != null && !curAddr.isEmpty()) {
+                    if (curAddr.length() <= 12) {
+                        sb.append(curAddr);
                     } else {
-                        sb.append(sol.substring(0, 4));
-                        sb.append("...");
-                        sb.append(sol.substring(sol.length() - 4));
-                    }
-                } else {
-                    sb.append("-");
-                }
-            } else if (isTron) {
-                sb.append("\nTRX: ");
-                String tron = this.mCurrentTronWalletAddress;
-                if (tron == null || tron.isEmpty()) {
-                    tron = FusionWalletHelper.getMasterTronAddress();
-                }
-                if (tron != null && !tron.isEmpty()) {
-                    if (tron.length() <= 8) {
-                        sb.append(tron);
-                    } else {
-                        sb.append(tron.substring(0, 4));
-                        sb.append("...");
-                        sb.append(tron.substring(tron.length() - 4));
-                    }
-                } else {
-                    sb.append("-");
-                }
-            } else if (isSui) {
-                sb.append("\nSUI: ");
-                String sui = this.mCurrentSuiWalletAddress;
-                if (sui == null || sui.isEmpty()) {
-                    sui = FusionWalletHelper.getMasterSuiAddress();
-                }
-                if (sui != null && !sui.isEmpty()) {
-                    if (sui.length() <= 10) {
-                        sb.append(sui);
-                    } else {
-                        sb.append(sui.substring(0, 6));
-                        sb.append("...");
-                        sb.append(sui.substring(sui.length() - 4));
-                    }
-                } else {
-                    sb.append("-");
-                }
-            } else if (isAptos) {
-                sb.append("\nAPT: ");
-                String apt = this.mCurrentAptosWalletAddress;
-                if (apt == null || apt.isEmpty()) {
-                    apt = FusionWalletHelper.getMasterAptosAddress();
-                }
-                if (apt != null && !apt.isEmpty()) {
-                    if (apt.length() <= 10) {
-                        sb.append(apt);
-                    } else {
-                        sb.append(apt.substring(0, 6));
-                        sb.append("...");
-                        sb.append(apt.substring(apt.length() - 4));
-                    }
-                } else {
-                    sb.append("-");
-                }
-            } else if (isIota) {
-                sb.append("\nIOTA: ");
-                String iota = this.mCurrentIotaWalletAddress;
-                if (iota == null || iota.isEmpty()) {
-                    iota = FusionWalletHelper.getMasterIotaAddress();
-                }
-                if (iota != null && !iota.isEmpty()) {
-                    if (iota.length() <= 12) {
-                        sb.append(iota);
-                    } else {
-                        sb.append(iota.substring(0, 8));
-                        sb.append("...");
-                        sb.append(iota.substring(iota.length() - 4));
+                        sb.append(curAddr.substring(0, 6)).append("...").append(curAddr.substring(curAddr.length() - 4));
                     }
                 } else {
                     sb.append("-");
