@@ -510,7 +510,7 @@ print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 for f_cjs in [
     "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "wallet_multichain.cjs", "auto_engine.cjs", "x_native.cjs",
     "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "agy_ganti.cjs", "eso_db.cjs",
-    "termux_webview_mcp_server.cjs", "playwright_mcp_engine.cjs",
+    "termux_webview_mcp_server.cjs", "webview_mcp_engine.cjs", "playwright_mcp_engine.cjs",
     "config_telegram.json", "tele_filter_config.json", "filter_config.json",
     "query_db.json", "module_db.json", "pantau.json", "webview_profiles.json",
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
@@ -532,6 +532,7 @@ os.makedirs(scripts_bundle_dir, exist_ok=True)
 os.makedirs(wallet_scripts_bundle_dir, exist_ok=True)
 
 for us in [
+    "fusion_agent_webview.user.js",
     "fusion_agent_playwright.user.js",
     "ghost_solana.user.js",
     "ghost_substrate.user.js",
@@ -794,6 +795,7 @@ for target in [
     os.path.join(ASSETS_DIR, "9router.cjs"),
     os.path.join(ASSETS_DIR, "pemantautelegram.py"),
     os.path.join(ASSETS_DIR, "termux_webview_mcp_server.cjs"),
+    os.path.join(ASSETS_DIR, "webview_mcp_engine.cjs"),
     os.path.join(ASSETS_DIR, "playwright_mcp_engine.cjs"),
     os.path.join(ASSETS_DIR, "wallets_db.json"),
     os.path.join(ASSETS_DIR, "chains_db.json"),
@@ -856,11 +858,12 @@ for tool in [
         shutil.copy2(src_tool, os.path.join(ASSETS_DIR, tool))
         shutil.copy2(src_tool, os.path.join(FUSION_SETUP_DIR, tool))
 
-# Pastikan userscript fusion_agent_playwright.user.js tersinkron ke assets dan fusion-setup
-pw_us_src = os.path.join(BUNDLE_DIR, "scripts/fusion_agent_playwright.user.js")
-if os.path.exists(pw_us_src):
-    shutil.copy2(pw_us_src, os.path.join(ASSETS_DIR, "fusion_agent_playwright.user.js"))
-    shutil.copy2(pw_us_src, os.path.join(FUSION_SETUP_DIR, "fusion_agent_playwright.user.js"))
+# Pastikan userscript fusion_agent_webview.user.js tersinkron ke assets dan fusion-setup
+for script_name in ["fusion_agent_webview.user.js", "fusion_agent_playwright.user.js"]:
+    us_src = os.path.join(BUNDLE_DIR, "scripts", script_name)
+    if os.path.exists(us_src):
+        shutil.copy2(us_src, os.path.join(ASSETS_DIR, script_name))
+        shutil.copy2(us_src, os.path.join(FUSION_SETUP_DIR, script_name))
 if os.path.exists(os.path.join(BUNDLE_DIR, "bin/agy-switch")):
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-switch"), os.path.join(ASSETS_DIR, "agy-switch"))
     shutil.copy2(os.path.join(BUNDLE_DIR, "bin/agy-switch"), os.path.join(FUSION_SETUP_DIR, "agy-switch"))

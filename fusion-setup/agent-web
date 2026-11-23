@@ -12,6 +12,8 @@ const path = require('path');
 const net = require('net');
 const http = require('http');
 const https = require('https');
+const { ChainResolver, chainResolver } = require('/root/wallet/chain_resolver.cjs');
+const { resolveProxyFilePath } = require('/root/wallet/proxy_manager.cjs');
 
 const GREEN = '\x1b[32m';
 const CYAN = '\x1b[36m';
@@ -252,18 +254,19 @@ function runIpcTab(action, args = []) {
     }
 }
 
-let playwrightBridgeInstance = null;
-function getPlaywrightBridge() {
-    if (!playwrightBridgeInstance) {
+let webviewBridgeInstance = null;
+function getWebviewBridge() {
+    if (!webviewBridgeInstance) {
         try {
-            const { TermuxPlaywrightBridge } = require('/root/wallet/playwright_mcp_engine.cjs');
-            playwrightBridgeInstance = new TermuxPlaywrightBridge();
+            const { TermuxWebviewBridge } = require('/root/wallet/webview_mcp_engine.cjs');
+            webviewBridgeInstance = new TermuxWebviewBridge();
         } catch (_) {}
     }
-    return playwrightBridgeInstance;
+    return webviewBridgeInstance;
 }
+const getPlaywrightBridge = getWebviewBridge;
 
-async function ensureGhostWalletRunning(preferTab = true) {
+async function ensureGhostWalletRunning(preferTab = false) {
     const running = await isPortOpen(3333);
     if (running) {
         console.log(`[GhostWallet] Daemon sudah aktif di port 3333.`);
@@ -271,7 +274,7 @@ async function ensureGhostWalletRunning(preferTab = true) {
     }
 
     const tabName = `ghostwallet_${Date.now().toString().slice(-4)}`;
-    console.log(`[GhostWallet] Daemon belum aktif. Membuka tab baru "${tabName}" via IPC...`);
+    console.log(`[GhostWallet] Daemon belum aktif. Memulai background daemon port 3333 (preferTab=${preferTab})...`);
 
     const walletCmd = 'if command -v wallet >/dev/null 2>&1; then wallet --auto --ghostwallet 3333; else for d in "$FUSION_WALLET_DIR" "$HOME/wallet" /wallet /root/wallet; do if [ -n "$d" ] && [ -d "$d" ]; then cd "$d" && { if [ -f wallet.cjs ]; then node wallet.cjs --auto --ghostwallet 3333; elif [ -f wallet.js ]; then node wallet.js --auto --ghostwallet 3333; fi; } && break; fi; done; fi';
 
@@ -284,7 +287,7 @@ async function ensureGhostWalletRunning(preferTab = true) {
     for (let i = 0; i < 20; i++) {
         await sleep(250);
         if (await isPortOpen(3333)) {
-            console.log(`[GhostWallet] Daemon sukses aktif di port 3333 (Tab: ${tabName}).`);
+            console.log(`[GhostWallet] Daemon sukses aktif di port 3333${preferTab ? ` (Tab: ${tabName})` : ' (Headless background)'}.`);
             return { running: true, spawnedTab: preferTab ? tabName : null };
         }
     }
@@ -1476,15 +1479,26 @@ async function executeSingleProfile(url, extraFlags = []) {
     }
 
     let spawnedWalletTab = null;
-    if (needWallet) {
-        const wRes = await ensureGhostWalletRunning(true);
+    const targetChain = chainResolver.extractChainFromArgs(extraFlags);
+    const resolvedChain = chainResolver.resolve(targetChain, url, targetWallet);
+    const hasGhostFlag = extraFlags.includes('--ghostwallet') || extraFlags.includes('--ghost-wallet') || extraFlags.includes('--ghost') || extraFlags.includes('--daemon');
+    const needDaemon = needWallet && chainResolver.needsGhostDaemon(resolvedChain, {
+        ghostwallet: hasGhostFlag
+    });
+
+    if (needDaemon) {
+        const isHeadless = extraFlags.includes('--headless');
+        const wRes = await ensureGhostWalletRunning(!isHeadless);
         spawnedWalletTab = wRes.spawnedTab;
-        if (!flagsWithoutProfile.includes('--ghost')) {
-            flagsWithoutProfile.push('--ghost');
+        if (!flagsWithoutProfile.includes('--ghostwallet')) {
+            flagsWithoutProfile.push('--ghostwallet');
         }
-        if (targetWallet && !flagsWithoutProfile.some(f => f.startsWith('--wallet'))) {
-            flagsWithoutProfile.push(`--wallet "${targetWallet}"`);
-        }
+    }
+    if (targetWallet && !flagsWithoutProfile.some(f => f.startsWith('--wallet'))) {
+        flagsWithoutProfile.push(`--wallet "${targetWallet}"`);
+    }
+    if (resolvedChain && resolvedChain.chainKey && !flagsWithoutProfile.some(f => f.startsWith('--chain'))) {
+        flagsWithoutProfile.push(`--chain "${resolvedChain.chainKey}"`);
     }
 
     let recipe = null;
@@ -1668,6 +1682,16 @@ async function main() {
         console.log(`  web detach [idx]              (Kirim tab visual ke background / headless mode)`);
         console.log(`  web --kill [idx]              (Tutup tab nomor <idx>, default: tab aktif)`);
         console.log(`  web --kill-all                (Tutup seluruh tab WebView sekaligus)`);
+        console.log(`  web play <resep> [options]    (Putar modul makro via WebView engine)`);
+        console.log(`    --wallet <nama>             (Pilih wallet dari eso.db, misal eso-18)`);
+        console.log(`    --wallets <w1,w2...>        (Batch multi-wallet)`);
+        console.log(`    -p / --parallel [n]         (Eksekusi paralel n-worker, default 2)`);
+        console.log(`    --px / -px                  (Aktifkan proxy sticky/rotasi otomatis)`);
+        console.log(`    --p <file.txt> / --p <nama> (Load file proxy langsung, auto-detect .txt & path)`);
+        console.log(`    -r / --rotate-proxy         (Paksa rotasi ke IP proxy baru)`);
+        console.log(`    --chain <chain>             (Pilih chain: iota, solana, base, bsc, sui, dll.)`);
+        console.log(`    --headless                  (Eksekusi di background tanpa render visual)`);
+        console.log(`    --ghostwallet               (Aktifkan Ghost Daemon port 3333 untuk auto-sign on-chain)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
         console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);
         console.log(`  web --modul <m> --profiles a,b [--parallel] (Putar makro untuk daftar profil tertentu)`);
@@ -2085,6 +2109,75 @@ async function main() {
         process.exit(0);
     }
 
+    if (cmd === 'teleport-save' || cmd === 'freeze') {
+        const activeProf = getActiveProfile();
+        const prof = args[1] || (activeProf !== 'default' ? activeProf : null);
+        if (!prof) {
+            console.log(`${RED}Error: Tentukan profil yang ingin di-FREEZE! Contoh: web freeze shaqilla${RESET}`);
+            process.exit(1);
+        }
+        console.log(`[Teleport Engine] Membekukan full state (Cookies + LocalStorage + SessionStorage + IndexedDB) profil [${prof}]...`);
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.stateTeleportSave(prof);
+            console.log(JSON.stringify(res, null, 2));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'teleport-load' || cmd === 'teleport') {
+        const prof = args[1];
+        if (!prof) {
+            console.log(`${RED}Error: Tentukan profil yang ingin di-TELEPORT! Contoh: web teleport shaqilla${RESET}`);
+            process.exit(1);
+        }
+        console.log(`[Teleport Engine] Melakukan teleportasi ke state penuh profil [${prof}]...`);
+        setActiveProfile(prof);
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.stateTeleportRestore(prof);
+            console.log(JSON.stringify(res, null, 2));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'connect' || cmd === 'connect-dapp') {
+        const preferred = args[1] || 'injected';
+        console.log(`[DApp Handshake] Melakukan auto-connect Web3 wallet (Target: ${preferred})...`);
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.autoConnectDapp(preferred);
+            console.log(JSON.stringify(res, null, 2));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'grid' || cmd === 'tri-wallet' || cmd === 'tri-run') {
+        const targetUrl = args[1];
+        let macro = null;
+        let chain = 'bsc';
+        for (let i = 2; i < args.length; i++) {
+            if (args[i] === '--macro' && args[i + 1]) {
+                macro = args[i + 1];
+                i++;
+            } else if (args[i] === '--chain' && args[i + 1]) {
+                chain = args[i + 1];
+                i++;
+            }
+        }
+        console.log(`[Tri-Wallet Grid] Menjalankan automasi untuk 3 wallet resmi Tuan Eso (eso.ai, eryziggy.ai, erikasopi.ai)...`);
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const res = await pb.triWalletGridRun({ url: targetUrl, macro, chain });
+            console.log(JSON.stringify(res, null, 2));
+            await pb.close();
+        }
+        process.exit(0);
+    }
+
     if (cmd === 'x-post' || cmd === 'post-x' || cmd === 'tweet') {
         let profile = 'shaqilla';
         let textArgs = [];
@@ -2128,6 +2221,243 @@ async function main() {
         process.exit(0);
     }
 
+    if (cmd === 'sniff' || cmd === 'apis' || cmd === 'network') {
+        const filter = args.find((a, i) => i > 0 && !a.startsWith('-')) || '';
+        const includeHeaders = args.includes('--headers') || args.includes('-H');
+        const includeBody = args.includes('--body') || args.includes('-b');
+        const limitArg = args.find(a => a.startsWith('--limit='));
+        const limit = limitArg ? parseInt(limitArg.split('=')[1], 10) : 30;
+
+        const pb = getPlaywrightBridge();
+        const res = await pb.networkInspect(filter, limit, includeHeaders, true);
+        if (!res || !res.success) {
+            console.log(`${RED}Gagal menginspeksi jaringan: ${res?.error || 'Unknown error'}${RESET}`);
+            process.exit(1);
+        }
+
+        const WHITE = '\x1b[97m';
+        console.log(`\n${BOLD}${CYAN}[WEBVIEW API SNIFFER]${RESET} ${WHITE}Menangkap ${res.totalCaptured} request (Menampilkan ${res.returned} request)${filter ? ` | Filter: "${filter}"` : ''}${RESET}\n`);
+
+        if (res.requests.length === 0) {
+            console.log(`  ${YELLOW}Belum ada request yang tertangkap${filter ? ` cocok dengan "${filter}"` : ''}.${RESET}\n`);
+        } else {
+            for (let idx = 0; idx < res.requests.length; idx++) {
+                const req = res.requests[idx];
+                const methodColor = req.method === 'POST' ? YELLOW : (req.method === 'GET' ? GREEN : CYAN);
+                const statusColor = (typeof req.status === 'number' && req.status >= 200 && req.status < 400) ? GREEN : (req.status === '(pending)' ? YELLOW : RED);
+                
+                console.log(`  ${BOLD}${WHITE}${idx + 1}.${RESET} ${methodColor}${req.method.padEnd(6, ' ')}${RESET} ${statusColor}[${req.status}]${RESET} ${WHITE}${req.url}${RESET} ${GRAY}(${req.ageSeconds}s lalu)${RESET}`);
+
+                if (req.postData) {
+                    let displayBody = req.postData;
+                    try {
+                        displayBody = JSON.stringify(JSON.parse(req.postData), null, 2);
+                    } catch (_) {}
+                    console.log(`     ${CYAN}Payload:${RESET} ${GRAY}${displayBody.length > 250 && !includeBody ? displayBody.slice(0, 250) + '...' : displayBody}${RESET}`);
+                }
+
+                if (includeHeaders && req.headers) {
+                    console.log(`     ${CYAN}Headers:${RESET} ${GRAY}${JSON.stringify(req.headers)}${RESET}`);
+                }
+            }
+            console.log('');
+        }
+        await pb.close();
+        process.exit(0);
+    }
+
+    if (cmd === 'play' || cmd === 'replay') {
+        const recipeName = args[1];
+        if (!recipeName || recipeName.startsWith('--')) {
+            console.log(`${RED}Error: Tentukan nama resep! (contoh: web play iota_gives)${RESET}`);
+            process.exit(1);
+        }
+        let wallet = '';
+        const wIdx = args.indexOf('--wallet');
+        if (wIdx !== -1 && args[wIdx + 1]) wallet = args[wIdx + 1];
+        let wallets = '';
+        const wsIdx = args.indexOf('--wallets');
+        if (wsIdx !== -1 && args[wsIdx + 1]) wallets = args[wsIdx + 1];
+        let all = args.includes('--all') || args.includes('-a') || args.includes('--all-wallets');
+        let fromWallet = '';
+        const fIdx = args.findIndex(a => a === '--from' || a === '--start');
+        if (fIdx !== -1 && args[fIdx + 1]) fromWallet = args[fIdx + 1];
+        let loop = 1;
+        const lIdx = args.indexOf('--loop');
+        if (lIdx !== -1 && args[lIdx + 1]) loop = parseInt(args[lIdx + 1], 10) || 1;
+        let headless = args.includes('--headless');
+        let ghostwallet = args.includes('--ghostwallet') || args.includes('--ghost-wallet') || args.includes('--ghost') || args.includes('--daemon') || args.includes('--sign');
+        let url = '';
+        const uIdx = args.indexOf('--url');
+        if (uIdx !== -1 && args[uIdx + 1]) url = args[uIdx + 1];
+        if (!url) {
+            const rawUrl = args.find(a => a.startsWith('http://') || a.startsWith('https://'));
+            if (rawUrl) {
+                url = rawUrl;
+            } else {
+                try {
+                    const recipes = JSON.parse(fs.readFileSync('/root/wallet/recipes_db.json', 'utf8'));
+                    if (recipes[recipeName] && recipes[recipeName].targetUrl) {
+                        url = recipes[recipeName].targetUrl;
+                    }
+                } catch (_) {}
+            }
+        }
+
+        let proxy = '';
+        let proxyFile = '';
+
+        // 1. Ekstraksi flag file proxy langsung (--p, --proxy-file, -pf, --file-proxy)
+        const pFileFlags = ['--p', '--proxy-file', '-pf', '--file-proxy', '--px-file'];
+        for (const flag of pFileFlags) {
+            const idx = args.indexOf(flag);
+            if (idx !== -1) {
+                if (args[idx + 1] && !args[idx + 1].startsWith('-')) {
+                    proxyFile = args[idx + 1];
+                } else {
+                    proxyFile = '/root/proxy.txt';
+                }
+                break;
+            }
+        }
+        if (!proxyFile) {
+            for (const arg of args) {
+                for (const flag of pFileFlags) {
+                    if (arg.startsWith(`${flag}=`)) {
+                        proxyFile = arg.slice(flag.length + 1);
+                        break;
+                    }
+                }
+                if (proxyFile) break;
+            }
+        }
+
+        // 2. Ekstraksi flag proxy umum (--proxy, --px, -px)
+        const pIdx = args.findIndex(a => a === '--proxy' || a === '--px' || a === '-px');
+        if (pIdx !== -1) {
+            const nextArg = args[pIdx + 1];
+            if (nextArg && !nextArg.startsWith('-') && !nextArg.startsWith('http://') && !nextArg.startsWith('https://')) {
+                const rpf = resolveProxyFilePath(nextArg);
+                if (rpf.found) {
+                    proxyFile = rpf.path;
+                    proxy = 'auto';
+                } else if (nextArg.includes(':') || nextArg.includes('@')) {
+                    proxy = nextArg;
+                } else if (['auto', 'direct', 'none', 'off'].includes(nextArg.toLowerCase())) {
+                    proxy = nextArg.toLowerCase();
+                } else {
+                    proxyFile = nextArg;
+                    proxy = 'auto';
+                }
+            } else {
+                proxy = 'auto';
+            }
+        }
+
+        // 3. Ekstraksi flag paralel (-p, --parallel, -c, --par, --threads, -t, --concurrency)
+        let concurrency = 1;
+        const pFlags = ['--parallel', '-p', '-c', '--par', '--threads', '-t', '--concurrency'];
+        for (const flag of pFlags) {
+            const idx = args.indexOf(flag);
+            if (idx !== -1) {
+                const nextArg = args[idx + 1];
+                if (nextArg && /^\d+$/.test(nextArg)) {
+                    concurrency = parseInt(nextArg, 10);
+                } else if (flag === '-p' && nextArg && !nextArg.startsWith('-') && !proxyFile) {
+                    // Jika Tuan mengetik -p tapi diikutkan nama file proxy (misal: -p proxy.txt atau -p p)
+                    const rpf = resolveProxyFilePath(nextArg);
+                    if (rpf.found || nextArg.toLowerCase().endsWith('.txt')) {
+                        proxyFile = nextArg;
+                        concurrency = 1;
+                    } else {
+                        concurrency = 2;
+                    }
+                } else {
+                    concurrency = 2; // Default ke 2 jika Tuan hanya mengetik flag tanpa angka
+                }
+                break;
+            }
+        }
+
+        // 4. Validasi & resolusi file proxy jika ditentukan
+        if (proxyFile) {
+            const rpf = resolveProxyFilePath(proxyFile);
+            if (rpf.found) {
+                proxyFile = rpf.path;
+                if (!proxy) proxy = 'auto';
+            } else {
+                console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mFile proxy "${rpf.raw}" (atau "${rpf.raw}.txt") tidak ditemukan!\x1b[0m`);
+                console.error(`  \x1b[90mPastikan file ada di folder saat ini atau gunakan path lengkap (contoh: /root/proxy.txt atau --p p).\x1b[0m\n`);
+                process.exit(1);
+            }
+        }
+
+        let rotateProxy = args.includes('--rotate-proxy') || args.includes('--rotate') || args.includes('-r');
+
+        const cr = new ChainResolver();
+        const chainArg = cr.extractChainFromArgs(args);
+        const firstW = wallet || (wallets ? (typeof wallets === 'string' ? wallets.split(',')[0].trim() : '') : '');
+        const resolved = cr.resolve(chainArg, url, firstW);
+
+        const pb = getPlaywrightBridge();
+        if (pb) {
+            const isHeadlessStr = headless ? ` | \x1b[36mHEADLESS\x1b[0m` : ` | \x1b[32mVISUAL\x1b[0m`;
+            const isGhostStr = ghostwallet ? ` | \x1b[35mGHOST-DAEMON\x1b[0m` : '';
+            let pxLabel = '';
+            if (proxyFile) {
+                pxLabel = path.basename(proxyFile).toUpperCase();
+            } else if (proxy) {
+                pxLabel = proxy.toUpperCase();
+            }
+            const isProxyStr = pxLabel ? ` | \x1b[35mPROXY: ${pxLabel}\x1b[0m` : '';
+            const isParallelStr = concurrency > 1 ? ` | \x1b[33mPARALEL (x${concurrency})\x1b[0m` : '';
+            let displayWallets = '';
+            if (wallets) {
+                try {
+                    const { expandWalletRanges } = require('/root/wallet/webview_mcp_engine.cjs');
+                    const exp = expandWalletRanges(wallets);
+                    displayWallets = exp.length > 1 ? `${wallets} (${exp.length} Wallets)` : wallets;
+                } catch (_) { displayWallets = wallets; }
+            } else if (wallet) {
+                try {
+                    const { expandWalletRanges } = require('/root/wallet/webview_mcp_engine.cjs');
+                    const exp = expandWalletRanges(wallet);
+                    if (exp.length > 1) displayWallets = `${wallet} (${exp.length} Wallets)`;
+                } catch (_) {}
+            } else if (all || (!wallet && !wallets)) {
+                displayWallets = fromWallet ? `FROM ${fromWallet.toUpperCase()} (Hingga Habis)` : 'ALL (Dari Awal Hingga Habis)';
+            }
+            console.log(`\n\x1b[1m\x1b[36m[INSTANT REPLAY]\x1b[0m \x1b[97mModul: "${recipeName}"${wallet && !displayWallets ? ` | Wallet: ${wallet}${loop > 1 ? ` (x${loop})` : ''}` : ''}${displayWallets ? ` | Wallets: ${displayWallets}` : ''} | Rantai: ${resolved.chainKey.toUpperCase()}${isHeadlessStr}${isGhostStr}${isProxyStr}${isParallelStr}\x1b[0m`);
+
+            const res = await pb.playRecipe(recipeName, { wallet, wallets, loop, chain: resolved.chainKey, headless, url, ghostwallet, proxy, proxyFile, rotateProxy, concurrency, all, from: fromWallet });
+            if (res.error) {
+                console.error(`\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97m${res.error}\x1b[0m`);
+                process.exitCode = 1;
+            } else if (res.results && Array.isArray(res.results)) {
+                console.log(`\n\x1b[1m\x1b[32m[BATCH REPLAY SELESAI]\x1b[0m \x1b[97mTotal: ${res.totalWallets} Wallet | Waktu Total: ${res.totalElapsed}\x1b[0m`);
+                res.results.forEach((r, idx) => {
+                    const modeBadge = r.mode === 'HOT_REPLAY' ? `\x1b[33m[HOT] \x1b[0m` : `\x1b[36m[COLD]\x1b[0m`;
+                    const addrShort = r.address ? `${r.address.slice(0, 10)}...${r.address.slice(-6)}` : '-';
+                    console.log(`  \x1b[1m\x1b[97m${idx + 1}.\x1b[0m ${modeBadge} \x1b[97m${(r.wallet || '-').padEnd(10)} (${addrShort}) -> \x1b[1m\x1b[33m${r.elapsed}\x1b[0m\x1b[97m | \x1b[32m${r.finalStatus}\x1b[0m`);
+                });
+                console.log('');
+            } else {
+                console.log(`\n\x1b[1m\x1b[32m[REPLAY SELESAI]\x1b[0m \x1b[97mWaktu: ${res.elapsed} | Status: OK\x1b[0m`);
+                if (res.address) console.log(`  \x1b[97m${"Alamat:".padEnd(18, " ")}\x1b[32m${res.address}\x1b[0m \x1b[97m(${res.chain})\x1b[0m`);
+                (res.steps || []).forEach((st, idx) => {
+                    const tagCol = `${idx + 1}. [${st.step.toUpperCase()}]`.padEnd(18, ' ');
+                    const skipInfo = st.skipped ? ` \x1b[97m(${st.skipped})\x1b[0m` : '';
+                    const okBadge = st.ok ? `\x1b[32m✓ OK\x1b[0m` : `\x1b[31m✗ GAGAL\x1b[0m`;
+                    const targetPadded = (st.target || '-').padEnd(16, ' ');
+                    console.log(`  \x1b[97m${tagCol}${targetPadded} -> ${okBadge}${skipInfo}\x1b[0m`);
+                });
+                if (res.finalStatus) console.log(`  \x1b[1m\x1b[97m${"Status Akhir:".padEnd(18, " ")}\x1b[32m${res.finalStatus}\x1b[0m\n`);
+            }
+            await pb.close();
+            process.exit(0);
+        }
+    }
+
     // Jika dipanggil oleh Telegram / skrip background dan membawa MAKRO: delegasikan ke tab baru via IPC!
     if (isTelegramCaller && !inWorkerTab && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close'].includes(cmd)) {
         const hasMacro = args.some(a => a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') || a.startsWith('--loop') || a.startsWith('-l'));
@@ -2142,10 +2472,11 @@ async function main() {
         // Jika bukan makro (hanya buka URL biasa / TMA), lanjutkan ke handleOpenUrl tanpa buka tab terminal!
     }
 
-    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost / --ai / --engine)
+    // Deteksi jika pemanggilan berupa URL langsung atau membawa opsi automasi (--modul / --wallet / --recipe / --loop / --stop-if / --all-profiles / --profile / --desktop / --ghost / --ai / --engine / --chain)
     const isUrlOrAutomation = args.some(a => 
         a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') ||
-        a.startsWith('--wallet') || a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
+        a.startsWith('--wallet') || a.startsWith('--chain') || Boolean(chainResolver.extractChainFromArgs([a])) ||
+        a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
         a.startsWith('--ai') || a.startsWith('--engine') ||
         a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--headless') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
@@ -2159,7 +2490,7 @@ async function main() {
         let passFlags = [];
         for (let i = 0; i < args.length; i++) {
             const item = args[i];
-            if (item === '--profile' || item === '--wallet' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine') {
+            if (item === '--profile' || item === '--wallet' || item === '--chain' || item === '--modul' || item === '--macro' || item === '--recipe' || item === '--loop' || item === '-l' || item === '--stop-if' || item === '--stopif' || item === '--stop-not' || item === '--stop-when' || item === '--tab-name' || item === '--profiles' || item === '--pwd' || item === '--password' || item === '--ai' || item === '--engine') {
                 passFlags.push(item);
                 if (args[i + 1] && !args[i + 1].startsWith('--') && !args[i + 1].startsWith('http://') && !args[i + 1].startsWith('https://') && args[i + 1] !== 'home' && args[i + 1] !== 'beranda') {
                     passFlags.push(args[i + 1]);
@@ -2423,6 +2754,38 @@ async function main() {
         const res = evalJs(js);
         if (res) console.log(res);
         process.exit(0);
+    }
+
+    if (cmd === 'emit' || cmd === 'send-event') {
+        const eventName = args[1];
+        const eventData = args.slice(2).join(' ') || '{}';
+        if (!eventName) {
+            console.error('Usage: web emit <event_name> [json_payload]');
+            process.exit(1);
+        }
+        const script = `if(window.__FUSION_DISPATCH_TERMUX_EVENT__){window.__FUSION_DISPATCH_TERMUX_EVENT__('${eventName}', ${JSON.stringify(eventData)});}else if(window.dispatchEvent){window.dispatchEvent(new CustomEvent('termux_${eventName}',{detail:${JSON.stringify(eventData)}}));}`;
+        evalJs(script);
+        console.log(`[Event Emitted] ${eventName} -> WebView`);
+        process.exit(0);
+    }
+
+    if (cmd === 'logs' || cmd === 'log' || cmd === 'console') {
+        const follow = args.includes('-f') || args.includes('--follow');
+        const logPath = '/tmp/webview_console.log';
+        if (!fs.existsSync(logPath)) {
+            console.log('Belum ada log console WebView di ' + logPath);
+            process.exit(0);
+        }
+        if (follow) {
+            const { spawn } = require('child_process');
+            const tail = spawn('tail', ['-f', '-n', '20', logPath], { stdio: 'inherit' });
+            process.on('SIGINT', () => { tail.kill(); process.exit(0); });
+        } else {
+            const lines = execSync(`tail -n 40 "${logPath}" 2>/dev/null || true`).toString();
+            console.log(lines || 'Log kosong.');
+            process.exit(0);
+        }
+        return;
     }
 
     if (cmd === 'kill' || cmd === 'kill-tab' || cmd === 'killtab') {

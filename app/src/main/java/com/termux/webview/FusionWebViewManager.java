@@ -529,6 +529,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
     public FusionWebViewManager(TermuxActivity termuxActivity) {
         this.mActivity = termuxActivity;
+        if (termuxActivity != null) {
+            FusionUserscriptWatcher.startWatching(termuxActivity);
+        }
     }
 
     public static FusionWebViewManager getInstance() {
@@ -542,6 +545,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         } else {
             boolean activityChanged = (fusionWebViewManager.mActivity != termuxActivity);
             fusionWebViewManager.mActivity = termuxActivity;
+            if (termuxActivity != null) {
+                FusionUserscriptWatcher.startWatching(termuxActivity);
+            }
             if (activityChanged && termuxActivity != null) {
                 fusionWebViewManager.mViewsInitialized = false;
                 fusionWebViewManager.mPaneHost = null;
@@ -1098,6 +1104,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         settings.setDatabaseEnabled(true);
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
         settings.setMixedContentMode(0);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setSupportMultipleWindows(true);
@@ -2979,11 +2987,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (iotaAddr != null && !iotaAddr.isEmpty()) {
                 webView.evaluateJavascript("if(window.__FUSION_SET_IOTA_ACCOUNT__){window.__FUSION_SET_IOTA_ACCOUNT__('" + iotaAddr + "');}", null);
             }
-            if (subAddr != null && !subAddr.isEmpty()) {
-                webView.evaluateJavascript("if(window.__FUSION_SET_SUBSTRATE_ACCOUNT__){window.__FUSION_SET_SUBSTRATE_ACCOUNT__('" + subAddr + "');}try{window.dispatchEvent(new CustomEvent('substrateAccountChanged',{detail:'" + subAddr + "'}));}catch(_){}", null);
-            }
-            if (dotAddr != null && !dotAddr.isEmpty()) {
-                webView.evaluateJavascript("if(window.__FUSION_SET_POLKADOT_ACCOUNT__){window.__FUSION_SET_POLKADOT_ACCOUNT__('" + dotAddr + "');}try{window.dispatchEvent(new CustomEvent('polkadotAccountChanged',{detail:'" + dotAddr + "'}));}catch(_){}", null);
+            String curChainKey = FusionChainHelper.getCurrentChainKey();
+            boolean isSubSite = "substrate".equalsIgnoreCase(curChainKey) || "flop".equalsIgnoreCase(curChainKey) || "polkadot".equalsIgnoreCase(curChainKey) || "dot".equalsIgnoreCase(curChainKey);
+            if (isSubSite) {
+                if (subAddr != null && !subAddr.isEmpty()) {
+                    webView.evaluateJavascript("if(window.__FUSION_SET_SUBSTRATE_ACCOUNT__){window.__FUSION_SET_SUBSTRATE_ACCOUNT__('" + subAddr + "');}try{window.dispatchEvent(new CustomEvent('substrateAccountChanged',{detail:'" + subAddr + "'}));}catch(_){}", null);
+                }
+                if (dotAddr != null && !dotAddr.isEmpty()) {
+                    webView.evaluateJavascript("if(window.__FUSION_SET_POLKADOT_ACCOUNT__){window.__FUSION_SET_POLKADOT_ACCOUNT__('" + dotAddr + "');}try{window.dispatchEvent(new CustomEvent('polkadotAccountChanged',{detail:'" + dotAddr + "'}));}catch(_){}", null);
+                }
             }
             if (this.mIsRecording) {
                 webView.evaluateJavascript("if(window.AgyRecorder && window.AgyRecorder.isRecording){window.AgyRecorder.recordEvent({type:'next_wallet',timestamp:Date.now(),text:'Ganti Wallet -> " + address + "'});}", null);

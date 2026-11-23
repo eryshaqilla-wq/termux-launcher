@@ -57,6 +57,26 @@ public class GhostBridgeInterface implements Runnable {
 
             if (address.isEmpty()) return;
 
+            final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if (mgr != null && mgr.mActiveWebView != null) {
+                String curUrl = mgr.mActiveWebView.getUrl();
+                String detected = FusionChainHelper.detectChainFromUrl(curUrl);
+                if (detected != null && !detected.isEmpty()) {
+                    boolean isMatching = detected.equalsIgnoreCase(chain);
+                    if (!isMatching) {
+                        boolean isSubGroupDetected = "substrate".equalsIgnoreCase(detected) || "flop".equalsIgnoreCase(detected) || "polkadot".equalsIgnoreCase(detected) || "dot".equalsIgnoreCase(detected);
+                        boolean isSubGroupIncoming = "substrate".equalsIgnoreCase(chain) || "flop".equalsIgnoreCase(chain) || "polkadot".equalsIgnoreCase(chain) || "dot".equalsIgnoreCase(chain);
+                        if (isSubGroupDetected && isSubGroupIncoming) {
+                            isMatching = true;
+                        }
+                    }
+                    if (!isMatching) {
+                        // Dilarang membajak tool wallet jika chain yang diminta tidak sesuai dengan situs aktif
+                        return;
+                    }
+                }
+            }
+
             sActiveToolChain = chain;
             sActiveToolSymbol = !symbol.isEmpty() ? symbol : chain.toUpperCase();
             sActiveToolAddress = address;
@@ -160,6 +180,22 @@ public class GhostBridgeInterface implements Runnable {
         }
         sLastDetectedDappChainKey = key;
         sLastDetectedDappChainId = id;
+
+        // Reset override tool wallet jika dApp yang terdeteksi berbeda chain
+        if (sActiveToolChain != null && !sActiveToolChain.isEmpty() && !sActiveToolChain.equalsIgnoreCase(key)) {
+            boolean matches = false;
+            boolean isSubGroupKey = "substrate".equalsIgnoreCase(key) || "flop".equalsIgnoreCase(key) || "polkadot".equalsIgnoreCase(key) || "dot".equalsIgnoreCase(key);
+            boolean isSubGroupTool = "substrate".equalsIgnoreCase(sActiveToolChain) || "flop".equalsIgnoreCase(sActiveToolChain) || "polkadot".equalsIgnoreCase(sActiveToolChain) || "dot".equalsIgnoreCase(sActiveToolChain);
+            if (isSubGroupKey && isSubGroupTool) {
+                matches = true;
+            }
+            if (!matches) {
+                sActiveToolChain = "";
+                sActiveToolSymbol = "";
+                sActiveToolAddress = "";
+                sActiveToolWalletName = "";
+            }
+        }
 
         if (id > 0) {
             FusionChainHelper.setChainById(id);
@@ -990,7 +1026,36 @@ public class GhostBridgeInterface implements Runnable {
             JSONArray jSONArrayOptJSONArray = new JSONObject(str).optJSONArray("params");
             if (jSONArrayOptJSONArray != null && jSONArrayOptJSONArray.length() > 0 && (jSONObjectOptJSONObject = jSONArrayOptJSONArray.optJSONObject(0)) != null) {
                 String strOptString = jSONObjectOptJSONObject.optString("chainId", "");
+                String chainName = jSONObjectOptJSONObject.optString("chainName", "");
+                String symbol = "";
+                JSONObject curr = jSONObjectOptJSONObject.optJSONObject("nativeCurrency");
+                if (curr != null) {
+                    symbol = curr.optString("symbol", "");
+                }
+                JSONArray rpcUrlsArr = jSONObjectOptJSONObject.optJSONArray("rpcUrls");
+                String[] rpcPatterns = null;
+                if (rpcUrlsArr != null && rpcUrlsArr.length() > 0) {
+                    java.util.List<String> hosts = new java.util.ArrayList<>();
+                    for (int ri = 0; ri < rpcUrlsArr.length(); ri++) {
+                        String u = rpcUrlsArr.optString(ri, "");
+                        try {
+                            if (!u.isEmpty()) {
+                                java.net.URI uri = new java.net.URI(u);
+                                String host = uri.getHost();
+                                if (host != null && !host.isEmpty()) hosts.add(host.replace("www.", ""));
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    if (!hosts.isEmpty()) rpcPatterns = hosts.toArray(new String[0]);
+                }
                 if (strOptString.length() > 0) {
+                    int chainId = (strOptString.startsWith("0x") || strOptString.startsWith("0X"))
+                            ? (int) Long.parseLong(strOptString.substring(2), 16)
+                            : (int) Long.parseLong(strOptString, 10);
+                    if (!chainName.isEmpty()) {
+                        String key = !symbol.isEmpty() ? symbol.toLowerCase() : ("chain-" + chainId);
+                        FusionChainHelper.registerDynamicChain(key, chainName, !symbol.isEmpty() ? symbol : key.toUpperCase(), chainId, false, rpcPatterns);
+                    }
                     switchChainByHex(strOptString);
                 }
             }
@@ -998,6 +1063,27 @@ public class GhostBridgeInterface implements Runnable {
         }
         forwardToDaemon(str);
         return "{\"result\":null}";
+    }
+
+    @JavascriptInterface
+    public boolean addChainRpc(String chainKey, String rpcUrl) {
+        if (chainKey == null || rpcUrl == null || chainKey.trim().isEmpty() || rpcUrl.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            JSONObject req = new JSONObject();
+            req.put("jsonrpc", "2.0");
+            req.put("id", System.currentTimeMillis());
+            req.put("method", "ghost_addRpc");
+            JSONArray params = new JSONArray();
+            params.put(chainKey.trim().toLowerCase());
+            params.put(rpcUrl.trim());
+            req.put("params", params);
+            postRpc(req.toString());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @JavascriptInterface
@@ -1350,5 +1436,760 @@ public class GhostBridgeInterface implements Runnable {
         if (mgr != null) {
             mgr.showWebNotification(title, body, iconUrl, targetUrl);
         }
+    }
+
+    @JavascriptInterface
+    public String nativeFetch(String targetUrl, String method, String headersJson, String body) {
+        if (targetUrl == null || targetUrl.trim().isEmpty()) {
+            return "{\"ok\":false,\"error\":\"Target URL is required\"}";
+        }
+        try {
+            java.net.URL url = new java.net.URL(targetUrl);
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(30000);
+            conn.setInstanceFollowRedirects(true);
+
+            String httpMethod = (method != null && !method.trim().isEmpty()) ? method.trim().toUpperCase() : "GET";
+            conn.setRequestMethod(httpMethod);
+
+            if (headersJson != null && !headersJson.trim().isEmpty()) {
+                try {
+                    JSONObject hObj = new JSONObject(headersJson);
+                    java.util.Iterator<String> keys = hObj.keys();
+                    while (keys.hasNext()) {
+                        String k = keys.next();
+                        conn.setRequestProperty(k, hObj.getString(k));
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (body != null && !body.isEmpty() && !"GET".equals(httpMethod) && !"HEAD".equals(httpMethod)) {
+                conn.setDoOutput(true);
+                byte[] input = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                java.io.OutputStream os = conn.getOutputStream();
+                os.write(input, 0, input.length);
+                os.flush();
+                os.close();
+            }
+
+            int status = conn.getResponseCode();
+            java.io.InputStream is = (status >= 200 && status < 400) ? conn.getInputStream() : conn.getErrorStream();
+            String responseText = "";
+            if (is != null) {
+                java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+                byte[] data = new byte[4096];
+                int nRead;
+                while ((nRead = is.read(data, 0, data.length)) != -1) {
+                    buffer.write(data, 0, nRead);
+                }
+                buffer.flush();
+                responseText = new String(buffer.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+                is.close();
+            }
+
+            JSONObject resObj = new JSONObject();
+            resObj.put("ok", status >= 200 && status < 400);
+            resObj.put("status", status);
+            resObj.put("statusText", conn.getResponseMessage() != null ? conn.getResponseMessage() : "");
+            resObj.put("data", responseText);
+
+            JSONObject respHeaders = new JSONObject();
+            java.util.Map<String, java.util.List<String>> map = conn.getHeaderFields();
+            if (map != null) {
+                for (java.util.Map.Entry<String, java.util.List<String>> entry : map.entrySet()) {
+                    if (entry.getKey() != null && entry.getValue() != null && !entry.getValue().isEmpty()) {
+                        respHeaders.put(entry.getKey(), entry.getValue().get(0));
+                    }
+                }
+            }
+            resObj.put("headers", respHeaders);
+
+            conn.disconnect();
+            return resObj.toString();
+        } catch (Throwable t) {
+            JSONObject errObj = new JSONObject();
+            try {
+                errObj.put("ok", false);
+                errObj.put("error", t.getMessage() != null ? t.getMessage() : t.toString());
+            } catch (Exception ignored) {}
+            return errObj.toString();
+        }
+    }
+
+    @JavascriptInterface
+    public String getFullCookies(String url) {
+        if (url == null || url.trim().isEmpty()) {
+            FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if (mgr != null && mgr.mActiveWebView != null) {
+                url = mgr.mActiveWebView.getUrl();
+            }
+        }
+        if (url == null || url.trim().isEmpty()) return "";
+        try {
+            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            String cookies = cm.getCookie(url);
+            return cookies != null ? cookies : "";
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
+    @JavascriptInterface
+    public boolean setFullCookie(String url, String cookieValue) {
+        if (url == null || cookieValue == null) return false;
+        try {
+            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            cm.setCookie(url, cookieValue);
+            cm.flush();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public boolean clearAllCookies() {
+        try {
+            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            cm.removeAllCookies(null);
+            cm.flush();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public String execShell(String command) {
+        if (command == null || command.trim().isEmpty()) {
+            return "{\"success\":false,\"error\":\"Empty command\"}";
+        }
+        try {
+            String[] cmdArray;
+            File chrootBash = new File("/data/local/nhsystem/kali-arm64/bin/bash");
+            File termuxBash = new File("/data/data/com.termux/files/usr/bin/bash");
+
+            if (chrootBash.exists()) {
+                cmdArray = new String[]{"su", "-mm", "-c", "chroot /data/local/nhsystem/kali-arm64 /bin/bash -c " + JSONObject.quote(command)};
+            } else if (termuxBash.exists()) {
+                cmdArray = new String[]{"/data/data/com.termux/files/usr/bin/bash", "-c", command};
+            } else {
+                cmdArray = new String[]{"/system/bin/sh", "-c", command};
+            }
+
+            Process process = Runtime.getRuntime().exec(cmdArray);
+
+            java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (output.length() > 0) output.append("\n");
+                output.append(line);
+                if (output.length() > 65536) {
+                    output.append("\n...[output truncated]");
+                    break;
+                }
+            }
+            reader.close();
+
+            java.io.BufferedReader errReader = new java.io.BufferedReader(new java.io.InputStreamReader(process.getErrorStream()));
+            StringBuilder errOutput = new StringBuilder();
+            while ((line = errReader.readLine()) != null) {
+                if (errOutput.length() > 0) errOutput.append("\n");
+                errOutput.append(line);
+            }
+            errReader.close();
+
+            int exitCode = process.waitFor();
+
+            JSONObject res = new JSONObject();
+            res.put("success", exitCode == 0);
+            res.put("exitCode", exitCode);
+            res.put("stdout", output.toString());
+            res.put("stderr", errOutput.toString());
+            return res.toString();
+        } catch (Throwable t) {
+            JSONObject err = new JSONObject();
+            try {
+                err.put("success", false);
+                err.put("error", t.getMessage() != null ? t.getMessage() : t.toString());
+            } catch (Exception ignored) {}
+            return err.toString();
+        }
+    }
+
+    @JavascriptInterface
+    public String callJava(String target, String methodName, String argsJson) {
+        if (target == null || methodName == null) {
+            return "{\"success\":false,\"error\":\"Target and methodName required\"}";
+        }
+        try {
+            Object targetObj = null;
+            Class<?> targetClass = null;
+
+            FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+
+            if ("activity".equalsIgnoreCase(target)) {
+                targetObj = (mgr != null) ? mgr.mActivity : null;
+                targetClass = (targetObj != null) ? targetObj.getClass() : null;
+            } else if ("webview".equalsIgnoreCase(target)) {
+                targetObj = (mgr != null) ? mgr.mActiveWebView : null;
+                targetClass = (targetObj != null) ? targetObj.getClass() : null;
+            } else if ("manager".equalsIgnoreCase(target)) {
+                targetObj = mgr;
+                targetClass = (targetObj != null) ? targetObj.getClass() : null;
+            } else if ("context".equalsIgnoreCase(target)) {
+                targetObj = (mgr != null && mgr.mActivity != null) ? mgr.mActivity.getApplicationContext() : null;
+                targetClass = (targetObj != null) ? targetObj.getClass() : null;
+            } else {
+                targetClass = Class.forName(target);
+            }
+
+            if (targetClass == null) {
+                return "{\"success\":false,\"error\":\"Target not found: " + target + "\"}";
+            }
+
+            JSONArray argsArr = (argsJson != null && !argsJson.trim().isEmpty()) ? new JSONArray(argsJson) : new JSONArray();
+            int argCount = argsArr.length();
+
+            java.lang.reflect.Method matchedMethod = null;
+            for (java.lang.reflect.Method m : targetClass.getMethods()) {
+                if (m.getName().equals(methodName) && m.getParameterTypes().length == argCount) {
+                    matchedMethod = m;
+                    break;
+                }
+            }
+
+            if (matchedMethod == null) {
+                return "{\"success\":false,\"error\":\"Method " + methodName + " with " + argCount + " params not found on " + target + "\"}";
+            }
+
+            matchedMethod.setAccessible(true);
+            Class<?>[] paramTypes = matchedMethod.getParameterTypes();
+            Object[] invokeArgs = new Object[argCount];
+
+            for (int i = 0; i < argCount; i++) {
+                Class<?> pt = paramTypes[i];
+                Object raw = argsArr.opt(i);
+                if (raw == null || raw == JSONObject.NULL) {
+                    invokeArgs[i] = null;
+                } else if (pt == String.class) {
+                    invokeArgs[i] = String.valueOf(raw);
+                } else if (pt == int.class || pt == Integer.class) {
+                    invokeArgs[i] = Integer.parseInt(String.valueOf(raw));
+                } else if (pt == long.class || pt == Long.class) {
+                    invokeArgs[i] = Long.parseLong(String.valueOf(raw));
+                } else if (pt == boolean.class || pt == Boolean.class) {
+                    invokeArgs[i] = Boolean.parseBoolean(String.valueOf(raw));
+                } else if (pt == double.class || pt == Double.class || pt == float.class || pt == Float.class) {
+                    invokeArgs[i] = Double.parseDouble(String.valueOf(raw));
+                } else if (pt == JSONObject.class) {
+                    invokeArgs[i] = (raw instanceof JSONObject) ? raw : new JSONObject(String.valueOf(raw));
+                } else if (pt == JSONArray.class) {
+                    invokeArgs[i] = (raw instanceof JSONArray) ? raw : new JSONArray(String.valueOf(raw));
+                } else if (Context.class.isAssignableFrom(pt) && mgr != null && mgr.mActivity != null) {
+                    invokeArgs[i] = mgr.mActivity;
+                } else {
+                    invokeArgs[i] = raw;
+                }
+            }
+
+            final java.lang.reflect.Method finalMethod = matchedMethod;
+            final Object finalTarget = targetObj;
+            final Object[] finalArgs = invokeArgs;
+
+            Object result = null;
+            try {
+                result = finalMethod.invoke(finalTarget, finalArgs);
+            } catch (java.lang.reflect.InvocationTargetException ite) {
+                Throwable cause = ite.getCause();
+                if (cause != null && cause.getMessage() != null && cause.getMessage().contains("CalledFromWrongThreadException") && mgr != null && mgr.mActivity != null) {
+                    final Object[] asyncResult = new Object[1];
+                    final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                    mgr.mActivity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            try {
+                                asyncResult[0] = finalMethod.invoke(finalTarget, finalArgs);
+                            } catch (Exception e) {
+                                asyncResult[0] = "Error: " + e.getMessage();
+                            } finally {
+                                latch.countDown();
+                            }
+                        }
+                    });
+                    latch.await(3000, java.util.concurrent.TimeUnit.MILLISECONDS);
+                    result = asyncResult[0];
+                } else {
+                    throw (cause != null ? cause : ite);
+                }
+            }
+
+            JSONObject res = new JSONObject();
+            res.put("success", true);
+            if (result == null) {
+                res.put("result", JSONObject.NULL);
+            } else if (result instanceof Number || result instanceof Boolean || result instanceof String) {
+                res.put("result", result);
+            } else if (result instanceof JSONObject || result instanceof JSONArray) {
+                res.put("result", result);
+            } else {
+                res.put("result", result.toString());
+            }
+            return res.toString();
+        } catch (Throwable t) {
+            JSONObject err = new JSONObject();
+            try {
+                err.put("success", false);
+                err.put("error", t.getMessage() != null ? t.getMessage() : t.toString());
+            } catch (Exception ignored) {}
+            return err.toString();
+        }
+    }
+
+    @JavascriptInterface
+    public String listJavaMethods(String target) {
+        try {
+            Class<?> targetClass = null;
+            FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if ("activity".equalsIgnoreCase(target)) targetClass = (mgr != null && mgr.mActivity != null) ? mgr.mActivity.getClass() : null;
+            else if ("webview".equalsIgnoreCase(target)) targetClass = (mgr != null && mgr.mActiveWebView != null) ? mgr.mActiveWebView.getClass() : null;
+            else if ("manager".equalsIgnoreCase(target)) targetClass = (mgr != null) ? mgr.getClass() : null;
+            else targetClass = Class.forName(target);
+
+            if (targetClass == null) return "[]";
+            JSONArray arr = new JSONArray();
+            for (java.lang.reflect.Method m : targetClass.getMethods()) {
+                JSONObject obj = new JSONObject();
+                obj.put("name", m.getName());
+                obj.put("returnType", m.getReturnType().getSimpleName());
+                JSONArray params = new JSONArray();
+                for (Class<?> p : m.getParameterTypes()) params.put(p.getSimpleName());
+                obj.put("params", params);
+                arr.put(obj);
+            }
+            return arr.toString();
+        } catch (Throwable t) {
+            return "[]";
+        }
+    }
+
+    // =========================================================================
+    // ⚡ OMNIPOTENT GOD-MODE SUITE: AI, SQLITE, WIRE MOCK, TAB BUS & NOTIFY
+    // =========================================================================
+
+    @JavascriptInterface
+    public String askAI(String prompt, String optionsJson) {
+        if (prompt == null || prompt.trim().isEmpty()) {
+            return "{\"success\":false,\"error\":\"Empty prompt\"}";
+        }
+        try {
+            JSONObject opts = (optionsJson != null && !optionsJson.trim().isEmpty())
+                    ? new JSONObject(optionsJson)
+                    : new JSONObject();
+
+            String customEndpoint = opts.optString("endpoint", "");
+            if (!customEndpoint.isEmpty()) {
+                String model = opts.optString("model", "deepseek-chat");
+                String systemPrompt = opts.optString("systemPrompt", "You are an expert AI assistant embedded inside Android WebView userscript.");
+                double temperature = opts.optDouble("temperature", 0.3);
+
+                JSONObject body = new JSONObject();
+                body.put("model", model);
+                body.put("temperature", temperature);
+                JSONArray messages = new JSONArray();
+
+                if (!systemPrompt.isEmpty()) {
+                    JSONObject sysMsg = new JSONObject();
+                    sysMsg.put("role", "system");
+                    sysMsg.put("content", systemPrompt);
+                    messages.put(sysMsg);
+                }
+
+                JSONObject userMsg = new JSONObject();
+                userMsg.put("role", "user");
+                userMsg.put("content", prompt);
+                messages.put(userMsg);
+                body.put("messages", messages);
+
+                String resRaw = nativeFetch(customEndpoint, "POST", "{\"Content-Type\":\"application/json\"}", body.toString());
+                JSONObject resJson = new JSONObject(resRaw);
+                if (resJson.optBoolean("ok", false)) {
+                    String respData = resJson.optString("data", "");
+                    try {
+                        JSONObject openaiResp = new JSONObject(respData);
+                        JSONArray choices = openaiResp.optJSONArray("choices");
+                        if (choices != null && choices.length() > 0) {
+                            JSONObject first = choices.getJSONObject(0);
+                            JSONObject msg = first.optJSONObject("message");
+                            if (msg != null) {
+                                String content = msg.optString("content", "");
+                                JSONObject out = new JSONObject();
+                                out.put("success", true);
+                                out.put("result", content);
+                                return out.toString();
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                    JSONObject out = new JSONObject();
+                    out.put("success", true);
+                    out.put("result", respData);
+                    return out.toString();
+                } else {
+                    return "{\"success\":false,\"error\":" + JSONObject.quote(resJson.optString("error", "AI request failed")) + "}";
+                }
+            }
+
+            // ⚡ DEFAULT: PRIORITAS AGY (Google Antigravity Ephemeral Pool)
+            String sysPrompt = opts.optString("systemPrompt", "You are an autonomous Web3 task agent. Answer directly, concisely and accurately.");
+            String nodeScript = "const { queryTriEngineAi } = require('/root/wallet/auto_engine.cjs'); " +
+                    "queryTriEngineAi(" + JSONObject.quote(prompt) + ", " + JSONObject.quote(sysPrompt) + ", 'agy').then(r => { " +
+                    "  console.log(JSON.stringify({ success: true, result: r.text, engine: r.engine })); " +
+                    "}).catch(e => { " +
+                    "  console.log(JSON.stringify({ success: false, error: e.message })); " +
+                    "});";
+
+            String shellCmd = "node -e " + JSONObject.quote(nodeScript);
+            String shellRes = execShell(shellCmd);
+            JSONObject resJson = new JSONObject(shellRes);
+            if (resJson.optBoolean("success", false)) {
+                String stdout = resJson.optString("stdout", "").trim();
+                if (stdout.startsWith("{") && stdout.endsWith("}")) {
+                    return stdout;
+                }
+                JSONObject out = new JSONObject();
+                out.put("success", true);
+                out.put("result", stdout);
+                out.put("engine", "AGY Ephemeral");
+                return out.toString();
+            } else {
+                return "{\"success\":false,\"error\":" + JSONObject.quote(resJson.optString("stderr", "AGY query failed")) + "}";
+            }
+        } catch (Throwable t) {
+            return "{\"success\":false,\"error\":" + JSONObject.quote(t.getMessage() != null ? t.getMessage() : t.toString()) + "}";
+        }
+    }
+
+    private String resolveDefaultDbPath() {
+        String[] cands = new String[] {
+            "/data/data/com.termux/files/home/wallet/eso.db",
+            "/root/wallet/eso.db",
+            "/data/local/nhsystem/kali-arm64/root/wallet/eso.db"
+        };
+        for (String c : cands) {
+            File f = new File(c);
+            if (f.exists() && f.isFile()) return c;
+        }
+        return "/data/data/com.termux/files/home/wallet/eso.db";
+    }
+
+    @JavascriptInterface
+    public String dbQuery(String sql, String paramsJson, String dbPath) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return "{\"success\":false,\"error\":\"Empty SQL query\"}";
+        }
+        android.database.sqlite.SQLiteDatabase db = null;
+        android.database.Cursor cursor = null;
+        try {
+            String path = (dbPath != null && !dbPath.trim().isEmpty()) ? dbPath.trim() : resolveDefaultDbPath();
+            File f = new File(path);
+            if (!f.exists()) {
+                return "{\"success\":false,\"error\":\"Database file not found: " + path + "\"}";
+            }
+            db = android.database.sqlite.SQLiteDatabase.openDatabase(path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY);
+            String[] args = null;
+            if (paramsJson != null && !paramsJson.trim().isEmpty() && !paramsJson.trim().equals("[]")) {
+                JSONArray arr = new JSONArray(paramsJson);
+                args = new String[arr.length()];
+                for (int i = 0; i < arr.length(); i++) {
+                    args[i] = arr.optString(i);
+                }
+            }
+            cursor = db.rawQuery(sql, args);
+            JSONArray rows = new JSONArray();
+            String[] colNames = cursor.getColumnNames();
+            while (cursor.moveToNext()) {
+                JSONObject row = new JSONObject();
+                for (int c = 0; c < colNames.length; c++) {
+                    int type = cursor.getType(c);
+                    String name = colNames[c];
+                    if (type == android.database.Cursor.FIELD_TYPE_NULL) {
+                        row.put(name, JSONObject.NULL);
+                    } else if (type == android.database.Cursor.FIELD_TYPE_INTEGER) {
+                        row.put(name, cursor.getLong(c));
+                    } else if (type == android.database.Cursor.FIELD_TYPE_FLOAT) {
+                        row.put(name, cursor.getDouble(c));
+                    } else if (type == android.database.Cursor.FIELD_TYPE_STRING) {
+                        row.put(name, cursor.getString(c));
+                    } else if (type == android.database.Cursor.FIELD_TYPE_BLOB) {
+                        byte[] blob = cursor.getBlob(c);
+                        row.put(name, android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP));
+                    }
+                }
+                rows.put(row);
+            }
+            JSONObject res = new JSONObject();
+            res.put("success", true);
+            res.put("count", rows.length());
+            res.put("rows", rows);
+            return res.toString();
+        } catch (Throwable t) {
+            JSONObject err = new JSONObject();
+            try {
+                err.put("success", false);
+                err.put("error", t.getMessage() != null ? t.getMessage() : t.toString());
+            } catch (Exception ignored) {}
+            return err.toString();
+        } finally {
+            if (cursor != null) try { cursor.close(); } catch (Exception ignored) {}
+            if (db != null) try { db.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    @JavascriptInterface
+    public String dbExec(String sql, String paramsJson, String dbPath) {
+        if (sql == null || sql.trim().isEmpty()) {
+            return "{\"success\":false,\"error\":\"Empty SQL statement\"}";
+        }
+        android.database.sqlite.SQLiteDatabase db = null;
+        try {
+            String path = (dbPath != null && !dbPath.trim().isEmpty()) ? dbPath.trim() : resolveDefaultDbPath();
+            File f = new File(path);
+            if (!f.exists()) {
+                return "{\"success\":false,\"error\":\"Database file not found: " + path + "\"}";
+            }
+            db = android.database.sqlite.SQLiteDatabase.openDatabase(path, null, android.database.sqlite.SQLiteDatabase.OPEN_READWRITE);
+            Object[] bindArgs = null;
+            if (paramsJson != null && !paramsJson.trim().isEmpty() && !paramsJson.trim().equals("[]")) {
+                JSONArray arr = new JSONArray(paramsJson);
+                bindArgs = new Object[arr.length()];
+                for (int i = 0; i < arr.length(); i++) {
+                    bindArgs[i] = arr.get(i);
+                }
+            }
+            if (bindArgs != null) {
+                db.execSQL(sql, bindArgs);
+            } else {
+                db.execSQL(sql);
+            }
+            JSONObject res = new JSONObject();
+            res.put("success", true);
+            return res.toString();
+        } catch (Throwable t) {
+            JSONObject err = new JSONObject();
+            try {
+                err.put("success", false);
+                err.put("error", t.getMessage() != null ? t.getMessage() : t.toString());
+            } catch (Exception ignored) {}
+            return err.toString();
+        } finally {
+            if (db != null) try { db.close(); } catch (Exception ignored) {}
+        }
+    }
+
+    @JavascriptInterface
+    public boolean mockNetwork(String pattern, String responseBody, int statusCode, String mimeType, String headersJson) {
+        return FusionNetworkInterceptor.addMockRule(pattern, responseBody, statusCode, mimeType, headersJson);
+    }
+
+    @JavascriptInterface
+    public boolean blockNetwork(String pattern) {
+        return FusionNetworkInterceptor.addBlockRule(pattern);
+    }
+
+    @JavascriptInterface
+    public boolean clearNetworkRules() {
+        FusionNetworkInterceptor.clearRules();
+        return true;
+    }
+
+    @JavascriptInterface
+    public boolean broadcastTab(String channel, String message) {
+        if (channel == null) return false;
+        try {
+            final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if (mgr == null || mgr.mActivity == null) return false;
+
+            final String safeMsg = (message != null) ? JSONObject.quote(message) : "null";
+            final String safeChannel = JSONObject.quote(channel);
+            final String script = "(function() { try {\n" +
+                    "  if (window.__FUSION_DISPATCH_TAB_MSG__) window.__FUSION_DISPATCH_TAB_MSG__(" + safeChannel + ", " + safeMsg + ");\n" +
+                    "} catch(e) {} })();";
+
+            mgr.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        java.util.List<FusionTab> tabs = mgr.getTabList();
+                        if (tabs != null) {
+                            for (FusionTab t : tabs) {
+                                if (t != null && t.mWebView != null) {
+                                    t.mWebView.evaluateJavascript(script, null);
+                                }
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+            });
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public boolean notify(String title, String message) {
+        if (title == null) title = "Fusion WebView";
+        if (message == null) message = "";
+        try {
+            FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            Context ctx = (mgr != null && mgr.mActivity != null) ? mgr.mActivity : null;
+            if (ctx == null) return false;
+
+            String channelId = "fusion_webview_notify";
+            android.app.NotificationManager nm = (android.app.NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm == null) return false;
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                android.app.NotificationChannel chan = new android.app.NotificationChannel(
+                        channelId,
+                        "Fusion WebView Notifications",
+                        android.app.NotificationManager.IMPORTANCE_DEFAULT
+                );
+                chan.setDescription("Notifications triggered by WebView userscripts and dApp automation");
+                nm.createNotificationChannel(chan);
+            }
+
+            android.app.Notification.Builder builder;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                builder = new android.app.Notification.Builder(ctx, channelId);
+            } else {
+                builder = new android.app.Notification.Builder(ctx);
+            }
+
+            int icon = ctx.getApplicationInfo().icon;
+            builder.setSmallIcon(icon != 0 ? icon : android.R.drawable.ic_dialog_info)
+                   .setContentTitle(title)
+                   .setContentText(message)
+                   .setAutoCancel(true)
+                   .setWhen(System.currentTimeMillis());
+
+            nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
+            return true;
+        } catch (Throwable t) {
+            android.util.Log.e("GhostBridge", "Error in notify", t);
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public boolean reloadUserscripts() {
+        try {
+            final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+            if (mgr == null || mgr.mActivity == null || mgr.mActiveWebView == null) return false;
+            mgr.mActivity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        FusionUserscriptHelper.injectMatchingScripts(mgr.mActiveWebView, mgr.mActiveWebView.getUrl());
+                    } catch (Throwable ignored) {}
+                }
+            });
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public String getTabsJson() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        return mgr != null ? mgr.getTabsJson() : "[]";
+    }
+
+    @JavascriptInterface
+    public boolean closeTab(final int tabIndex) {
+        final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr == null || mgr.mActivity == null) return false;
+        mgr.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mgr.killTabDirect(tabIndex);
+                } catch (Throwable ignored) {}
+            }
+        });
+        return true;
+    }
+
+    @JavascriptInterface
+    public boolean evalTab(final int tabIndex, final String jsCode) {
+        if (jsCode == null) return false;
+        final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr == null || mgr.mActivity == null) return false;
+        mgr.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    java.util.List<FusionTab> tabs = mgr.getTabList();
+                    if (tabs != null && tabIndex >= 0 && tabIndex < tabs.size()) {
+                        FusionTab t = tabs.get(tabIndex);
+                        if (t != null && t.mWebView != null) {
+                            t.mWebView.evaluateJavascript(jsCode, null);
+                        }
+                    }
+                } catch (Throwable ignored) {}
+            }
+        });
+        return true;
+    }
+
+    @JavascriptInterface
+    public boolean emitTermuxEvent(String eventName, String eventData) {
+        if (eventName == null) return false;
+        try {
+            String safeEvent = eventName.trim();
+            String safeData = (eventData != null) ? eventData : "{}";
+            JSONObject obj = new JSONObject();
+            obj.put("timestamp", System.currentTimeMillis());
+            obj.put("event", safeEvent);
+            obj.put("data", safeData);
+
+            // 1. Log to Linux event stream in /tmp/fusion_events.jsonl
+            File f = new File("/tmp/fusion_events.jsonl");
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f, true)) {
+                fos.write((obj.toString() + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (Throwable ignored) {}
+
+            // 2. Broadcast across tabs so any other tab can react
+            broadcastTab("termux_" + safeEvent, safeData);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public boolean setUserAgent(final String ua) {
+        if (ua == null || ua.trim().isEmpty()) return false;
+        final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr == null || mgr.mActivity == null || mgr.mActiveWebView == null) return false;
+        mgr.mActivity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    mgr.mActiveWebView.getSettings().setUserAgentString(ua.trim());
+                } catch (Throwable ignored) {}
+            }
+        });
+        return true;
+    }
+
+    @JavascriptInterface
+    public String getUserAgent() {
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr == null || mgr.mActiveWebView == null) return "";
+        return mgr.mActiveWebView.getSettings().getUserAgentString();
     }
 }

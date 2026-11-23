@@ -1228,13 +1228,18 @@ async function main() {
         return;
     }
 
-    if (cmd === 'ai' || cmd === 'query') {
-        const promptText = args.slice(1).join(' ').trim();
+    if (cmd === 'ai' || cmd === 'query' || cmd === 'ask') {
+        const agyFlag = args.includes('--agy');
+        const deepseekFlag = args.includes('--deepseek');
+        const nineRouterFlag = args.includes('--9router');
+        const cleanArgs = args.slice(1).filter(a => a !== '--agy' && a !== '--deepseek' && a !== '--9router' && a !== '--json');
+        const promptText = cleanArgs.join(' ').trim();
         if (!promptText) {
             console.error('Error: Masukkan prompt AI. Contoh: auto-engine ai "Analisa link airdrop ini"');
             process.exit(1);
         }
-        const res = await queryTriEngineAi(promptText);
+        let preferred = agyFlag ? 'agy' : (deepseekFlag ? 'deepseek' : (nineRouterFlag ? '9router' : null));
+        const res = await queryTriEngineAi(promptText, undefined, preferred);
         if (args.includes('--json')) {
             console.log(JSON.stringify(res, null, 2));
         } else {
@@ -1398,14 +1403,16 @@ Usage:
     }
 
     // Smart fallback: Jika input mengandung kata kunci airdrop/whitelist & link, otomatis jalankan Dynamic Alpha Quest!
-    const fullQuery = args.join(' ').trim();
+    const agyFlag = args.includes('--agy');
+    const cleanArgs = args.filter(a => a !== '--agy' && a !== '--json');
+    const fullQuery = cleanArgs.join(' ').trim();
     if (fullQuery) {
         if (fullQuery.match(/whitelist|airdrop|register:|🪂|faucet/i) && fullQuery.includes('http')) {
             console.log('[AI Auto-Detector] Terdeteksi postingan tugas airdrop/whitelist! Menjalankan Dynamic Alpha Quest...');
             await executeDynamicAlphaQuest(fullQuery);
             return;
         }
-        const res = await queryTriEngineAi(fullQuery);
+        const res = await queryTriEngineAi(fullQuery, undefined, agyFlag ? 'agy' : null);
         if (args.includes('--json')) {
             console.log(JSON.stringify(res, null, 2));
         } else {

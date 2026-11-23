@@ -223,6 +223,18 @@ public class FusionUserscriptHelper {
                 "    var method = details.method || 'GET';\n" +
                 "    var headers = details.headers || {};\n" +
                 "    var data = details.data || null;\n" +
+                "    if (window.GhostBridge && window.GhostBridge.nativeFetch) {\n" +
+                "      try {\n" +
+                "        var raw = window.GhostBridge.nativeFetch(url, method, JSON.stringify(headers), data || '');\n" +
+                "        var res = JSON.parse(raw);\n" +
+                "        if (res.ok) {\n" +
+                "          if (details.onload) details.onload({ status: res.status, statusText: res.statusText, responseText: res.data, responseHeaders: JSON.stringify(res.headers || {}) });\n" +
+                "        } else {\n" +
+                "          if (details.onerror) details.onerror(new Error(res.error || 'nativeFetch error'));\n" +
+                "        }\n" +
+                "        return;\n" +
+                "      } catch(e) { if (details.onerror) details.onerror(e); return; }\n" +
+                "    }\n" +
                 "    try {\n" +
                 "      fetch(url, {\n" +
                 "        method: method,\n" +
@@ -243,6 +255,148 @@ public class FusionUserscriptHelper {
                 "        if (details.onerror) details.onerror(err);\n" +
                 "      });\n" +
                 "    } catch(e) { if (details.onerror) details.onerror(e); }\n" +
+                "  };\n" +
+                "  window.callJava = function(target, method, args) {\n" +
+                "    if (window.GhostBridge && window.GhostBridge.callJava) {\n" +
+                "      try {\n" +
+                "        var raw = window.GhostBridge.callJava(target, method, JSON.stringify(args || []));\n" +
+                "        var r = JSON.parse(raw);\n" +
+                "        return r.success ? r.result : Promise.reject(new Error(r.error));\n" +
+                "      } catch(e) { return Promise.reject(e); }\n" +
+                "    }\n" +
+                "    return Promise.reject(new Error('callJava not available'));\n" +
+                "  };\n" +
+                "  window.execShell = function(cmd) {\n" +
+                "    if (window.GhostBridge && window.GhostBridge.execShell) {\n" +
+                "      try { return JSON.parse(window.GhostBridge.execShell(cmd)); } catch(e) { return { success: false, error: e.message }; }\n" +
+                "    }\n" +
+                "    return { success: false, error: 'execShell not available' };\n" +
+                "  };\n" +
+                "  window.askAI = function(prompt, options) {\n" +
+                "    if (window.GhostBridge && window.GhostBridge.askAI) {\n" +
+                "      try {\n" +
+                "        var raw = window.GhostBridge.askAI(prompt, JSON.stringify(options || {}));\n" +
+                "        var r = JSON.parse(raw);\n" +
+                "        return r.success ? Promise.resolve(r.result) : Promise.reject(new Error(r.error));\n" +
+                "      } catch(e) { return Promise.reject(e); }\n" +
+                "    }\n" +
+                "    return Promise.reject(new Error('askAI not available'));\n" +
+                "  };\n" +
+                "  window.db = {\n" +
+                "    query: function(sql, params, dbPath) {\n" +
+                "      if (window.GhostBridge && window.GhostBridge.dbQuery) {\n" +
+                "        try {\n" +
+                "          var raw = window.GhostBridge.dbQuery(sql, JSON.stringify(params || []), dbPath || '');\n" +
+                "          var r = JSON.parse(raw);\n" +
+                "          return r.success ? Promise.resolve(r.rows) : Promise.reject(new Error(r.error));\n" +
+                "        } catch(e) { return Promise.reject(e); }\n" +
+                "      }\n" +
+                "      return Promise.reject(new Error('dbQuery not available'));\n" +
+                "    },\n" +
+                "    exec: function(sql, params, dbPath) {\n" +
+                "      if (window.GhostBridge && window.GhostBridge.dbExec) {\n" +
+                "        try {\n" +
+                "          var raw = window.GhostBridge.dbExec(sql, JSON.stringify(params || []), dbPath || '');\n" +
+                "          var r = JSON.parse(raw);\n" +
+                "          return r.success ? Promise.resolve(true) : Promise.reject(new Error(r.error));\n" +
+                "        } catch(e) { return Promise.reject(e); }\n" +
+                "      }\n" +
+                "      return Promise.reject(new Error('dbExec not available'));\n" +
+                "    }\n" +
+                "  };\n" +
+                "  window.mockNetwork = function(pattern, responseBody, statusCode, mimeType, headers) {\n" +
+                "    if (window.GhostBridge && window.GhostBridge.mockNetwork) {\n" +
+                "      var bodyStr = typeof responseBody === 'object' ? JSON.stringify(responseBody) : String(responseBody || '');\n" +
+                "      var hdrs = typeof headers === 'object' ? JSON.stringify(headers) : '{}';\n" +
+                "      return window.GhostBridge.mockNetwork(pattern, bodyStr, statusCode || 200, mimeType || 'application/json', hdrs);\n" +
+                "    }\n" +
+                "    return false;\n" +
+                "  };\n" +
+                "  window.blockNetwork = function(pattern) {\n" +
+                "    return (window.GhostBridge && window.GhostBridge.blockNetwork) ? window.GhostBridge.blockNetwork(pattern) : false;\n" +
+                "  };\n" +
+                "  window.clearNetworkRules = function() {\n" +
+                "    return (window.GhostBridge && window.GhostBridge.clearNetworkRules) ? window.GhostBridge.clearNetworkRules() : false;\n" +
+                "  };\n" +
+                "  window.broadcastTab = function(channel, message) {\n" +
+                "    if (window.GhostBridge && window.GhostBridge.broadcastTab) {\n" +
+                "      var msg = typeof message === 'object' ? JSON.stringify(message) : String(message || '');\n" +
+                "      return window.GhostBridge.broadcastTab(channel, msg);\n" +
+                "    }\n" +
+                "    return false;\n" +
+                "  };\n" +
+                "  if (!window.__FUSION_TAB_BUS__) {\n" +
+                "    window.__FUSION_TAB_BUS__ = new Map();\n" +
+                "    window.__FUSION_DISPATCH_TAB_MSG__ = function(channel, msg) {\n" +
+                "      var listeners = window.__FUSION_TAB_BUS__.get(channel);\n" +
+                "      if (listeners) {\n" +
+                "        var data = msg;\n" +
+                "        try { data = JSON.parse(msg); } catch(_) {}\n" +
+                "        listeners.forEach(function(cb) { try { cb(data); } catch(err) { console.error(err); } });\n" +
+                "      }\n" +
+                "    };\n" +
+                "  }\n" +
+                "  window.onTabMessage = function(channel, cb) {\n" +
+                "    if (!window.__FUSION_TAB_BUS__.has(channel)) window.__FUSION_TAB_BUS__.set(channel, new Set());\n" +
+                "    window.__FUSION_TAB_BUS__.get(channel).add(cb);\n" +
+                "    return function() { window.__FUSION_TAB_BUS__.get(channel).delete(cb); };\n" +
+                "  };\n" +
+                "  window.notify = function(title, message) {\n" +
+                "    return (window.GhostBridge && window.GhostBridge.notify) ? window.GhostBridge.notify(title, message) : false;\n" +
+                "  };\n" +
+                "  if (!window.__FUSION_TERMUX_EVENTS__) {\n" +
+                "    window.__FUSION_TERMUX_EVENTS__ = new Map();\n" +
+                "    window.__FUSION_DISPATCH_TERMUX_EVENT__ = function(eventName, data) {\n" +
+                "      var parsed = data;\n" +
+                "      try { parsed = JSON.parse(data); } catch(_) {}\n" +
+                "      var listeners = window.__FUSION_TERMUX_EVENTS__.get(eventName);\n" +
+                "      if (listeners) {\n" +
+                "        listeners.forEach(function(cb) { try { cb(parsed); } catch(err) { console.error(err); } });\n" +
+                "      }\n" +
+                "      try { window.dispatchEvent(new CustomEvent('termux_' + eventName, { detail: parsed })); } catch(_) {}\n" +
+                "    };\n" +
+                "  }\n" +
+                "  window.onTermuxEvent = function(eventName, callback) {\n" +
+                "    if (!window.__FUSION_TERMUX_EVENTS__.has(eventName)) window.__FUSION_TERMUX_EVENTS__.set(eventName, new Set());\n" +
+                "    window.__FUSION_TERMUX_EVENTS__.get(eventName).add(callback);\n" +
+                "    return function() { window.__FUSION_TERMUX_EVENTS__.get(eventName).delete(callback); };\n" +
+                "  };\n" +
+                "  window.emitTermux = function(eventName, payload) {\n" +
+                "    var str = typeof payload === 'object' ? JSON.stringify(payload) : String(payload || '');\n" +
+                "    return (window.GhostBridge && window.GhostBridge.emitTermuxEvent) ? window.GhostBridge.emitTermuxEvent(eventName, str) : false;\n" +
+                "  };\n" +
+                "  window.shadowQueryAll = function(selector, root) {\n" +
+                "    var r = root || document;\n" +
+                "    var res = Array.from(r.querySelectorAll ? r.querySelectorAll(selector) : []);\n" +
+                "    var pushNested = function(t) {\n" +
+                "      window.shadowQueryAll(selector, t).forEach(function(el) { if (res.indexOf(el) === -1) res.push(el); });\n" +
+                "    };\n" +
+                "    if (r.shadowRoot) pushNested(r.shadowRoot);\n" +
+                "    var all = r.querySelectorAll ? r.querySelectorAll('*') : [];\n" +
+                "    for (var i = 0; i < all.length; i++) { if (all[i].shadowRoot) pushNested(all[i].shadowRoot); }\n" +
+                "    return res;\n" +
+                "  };\n" +
+                "  window.shadowQuery = function(selector, root) {\n" +
+                "    var all = window.shadowQueryAll(selector, root);\n" +
+                "    return all.length > 0 ? all[0] : null;\n" +
+                "  };\n" +
+                "  window.autoSolveTurnstile = async function(timeoutMs) {\n" +
+                "    var timeout = timeoutMs || 15000;\n" +
+                "    var start = Date.now();\n" +
+                "    while (Date.now() - start < timeout) {\n" +
+                "      var iframe = document.querySelector('iframe[src*=\"challenges.cloudflare.com\"], iframe[src*=\"turnstile\"]') || window.shadowQuery('iframe[src*=\"challenges.cloudflare.com\"]');\n" +
+                "      if (iframe) {\n" +
+                "        var rect = iframe.getBoundingClientRect();\n" +
+                "        if (rect.width > 0 && rect.height > 0 && window.GhostBridge && window.GhostBridge.dispatchTouch) {\n" +
+                "          var cx = Math.round(rect.left + 32);\n" +
+                "          var cy = Math.round(rect.top + rect.height / 2);\n" +
+                "          window.GhostBridge.dispatchTouch(cx, cy);\n" +
+                "          return { success: true, x: cx, y: cy };\n" +
+                "        }\n" +
+                "      }\n" +
+                "      await new Promise(function(r) { setTimeout(r, 600); });\n" +
+                "    }\n" +
+                "    return { success: false, error: 'Turnstile not found' };\n" +
                 "  };\n" +
                 "  window.GM = {\n" +
                 "    setValue: function(k, v) { return Promise.resolve(window.GM_setValue(k, v)); },\n" +

@@ -200,6 +200,12 @@ public class FusionWebViewClient extends WebViewClient {
             return super.shouldInterceptRequest(webView, webResourceRequest);
         }
         try {
+            String reqUrl = webResourceRequest.getUrl().toString();
+            WebResourceResponse wireMock = FusionNetworkInterceptor.intercept(reqUrl);
+            if (wireMock != null) {
+                return wireMock;
+            }
+
             Context context = (this.mManager != null && this.mManager.mActivity != null)
                     ? this.mManager.mActivity
                     : webView.getContext();

@@ -147,7 +147,18 @@ public class FusionWebChromeClient extends WebChromeClient {
     @Override // android.webkit.WebChromeClient
     public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
         if (consoleMessage != null && consoleMessage.message() != null) {
-            Log.d("FusionJS", "[" + consoleMessage.messageLevel() + "] " + consoleMessage.message() + " (" + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + ")");
+            String msg = "[" + consoleMessage.messageLevel() + "] " + consoleMessage.message();
+            Log.d("FusionJS", msg + " (" + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + ")");
+            try {
+                java.io.File logFile = new java.io.File("/tmp/webview_console.log");
+                if (logFile.exists() && logFile.length() > 5 * 1024 * 1024) {
+                    logFile.delete();
+                }
+                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(logFile, true)) {
+                    String line = System.currentTimeMillis() + " " + msg + "\n";
+                    fos.write(line.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            } catch (Throwable ignored) {}
         }
         return true;
     }
