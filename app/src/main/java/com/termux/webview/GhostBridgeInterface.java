@@ -1,5 +1,6 @@
 package com.termux.webview;
 
+import android.content.Context;
 import android.webkit.JavascriptInterface;
 import com.termux.app.TermuxActivity;
 import com.termux.app.TermuxIpcServer;
@@ -88,7 +89,6 @@ public class GhostBridgeInterface implements Runnable {
                 FusionWalletHelper.setDynamicWallet(chain, walletName, address, true);
             }
 
-            final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
             if (mgr != null && mgr.mActivity != null) {
                 mgr.mActivity.runOnUiThread(new Runnable() {
                     @Override
