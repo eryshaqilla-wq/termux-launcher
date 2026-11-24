@@ -12,7 +12,7 @@
 (() => {
     'use strict';
 
-    const FUSION_ENGINE_VERSION = "2.2.0";
+    const FUSION_ENGINE_VERSION = "2.3.0";
     if (window.__FUSION_AGENT_ENGINE__ && window.__FUSION_AGENT_ENGINE__.version === FUSION_ENGINE_VERSION) return;
 
     // --- 1. WebRTC STUN Leak Protection (Stealth WebRTC) ---
@@ -204,6 +204,76 @@
                         return buffer;
                     });
                 };
+            }
+        } catch (_) {}
+
+        // 7. Context-Aware Font Cloaking & Metric Alignment (Breaking Font Mismatch)
+        try {
+            const isDesktopWin = () => (navigator.userAgent && navigator.userAgent.includes('Windows'));
+            const winFonts = new Set([
+                'segoe ui', 'tahoma', 'arial', 'times new roman', 'consolas', 'calibri',
+                'cambria', 'verdana', 'trebuchet ms', 'georgia', 'comic sans ms', 'impact'
+            ]);
+
+            if (document.fonts && document.fonts.check) {
+                const origFontsCheck = document.fonts.check.bind(document.fonts);
+                document.fonts.check = function(font, text) {
+                    if (isDesktopWin()) {
+                        const lower = String(font || '').toLowerCase();
+                        for (const f of winFonts) {
+                            if (lower.includes(f)) return true;
+                        }
+                    }
+                    return origFontsCheck(font, text);
+                };
+            }
+
+            const origMeasure = CanvasRenderingContext2D.prototype.measureText;
+            CanvasRenderingContext2D.prototype.measureText = function(text) {
+                const m = origMeasure.apply(this, arguments);
+                try {
+                    if (isDesktopWin() && this.font) {
+                        const fontLower = this.font.toLowerCase();
+                        for (const f of winFonts) {
+                            if (fontLower.includes(f) && !fontLower.includes('roboto')) {
+                                const originalWidth = m.width;
+                                const fakeWidth = originalWidth * 1.042 + 0.35;
+                                return new Proxy(m, {
+                                    get(target, prop) {
+                                        if (prop === 'width') return fakeWidth;
+                                        return target[prop];
+                                    }
+                                });
+                            }
+                        }
+                    }
+                } catch (_) {}
+                return m;
+            };
+        } catch (_) {}
+
+        // 8. Hardware Concurrency, Device Memory & Platform Consistency
+        try {
+            const isDesktop = (navigator.userAgent && (navigator.userAgent.includes('Windows') || navigator.userAgent.includes('Macintosh')));
+            Object.defineProperty(navigator, 'hardwareConcurrency', {
+                get: () => 8,
+                configurable: true
+            });
+            Object.defineProperty(navigator, 'deviceMemory', {
+                get: () => 8,
+                configurable: true
+            });
+            if (isDesktop) {
+                const isMac = navigator.userAgent.includes('Macintosh');
+                Object.defineProperty(navigator, 'platform', {
+                    get: () => isMac ? 'MacIntel' : 'Win32',
+                    configurable: true
+                });
+            } else {
+                Object.defineProperty(navigator, 'platform', {
+                    get: () => 'Linux armv8l',
+                    configurable: true
+                });
             }
         } catch (_) {}
     })();
@@ -929,15 +999,27 @@
             const found = root.querySelector(selector);
             if (found) return found;
         } catch (_) {}
-        const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-        let curr = walker.nextNode();
-        while (curr) {
-            if (curr.shadowRoot) {
-                const deepFound = querySelectorDeep(selector, curr.shadowRoot);
-                if (deepFound) return deepFound;
+        try {
+            const doc = root.ownerDocument || (root.nodeType === 9 ? root : document);
+            const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+            let curr = walker.nextNode();
+            while (curr) {
+                if (curr.shadowRoot) {
+                    const deepFound = querySelectorDeep(selector, curr.shadowRoot);
+                    if (deepFound) return deepFound;
+                }
+                if (curr.tagName === 'IFRAME') {
+                    try {
+                        const idoc = curr.contentDocument || (curr.contentWindow && curr.contentWindow.document);
+                        if (idoc) {
+                            const deepFound = querySelectorDeep(selector, idoc);
+                            if (deepFound) return deepFound;
+                        }
+                    } catch (_) {}
+                }
+                curr = walker.nextNode();
             }
-            curr = walker.nextNode();
-        }
+        } catch (_) {}
         return null;
     }
 
@@ -948,7 +1030,7 @@
         const cleanRef = str.startsWith('e') ? str : ('e' + str);
         if (window.__FUSION_ELEMENT_REFS__.has(cleanRef)) {
             const el = window.__FUSION_ELEMENT_REFS__.get(cleanRef);
-            if (el && document.contains(el)) return el;
+            if (el && (document.contains(el) || el.ownerDocument.contains(el))) return el;
         }
 
         const byAttr = querySelectorDeep('[data-agy-ref="' + cleanRef + '"]') || querySelectorDeep('[data-agy-ref="' + str + '"]');
@@ -959,7 +1041,18 @@
             if (bySelector) return bySelector;
         } catch (_) {}
 
-        const candidates = Array.from(document.querySelectorAll('button, a, input[type=button], input[type=submit], [role=button]'));
+        function collectAllCandidates(base = document) {
+            let list = Array.from(base.querySelectorAll('button, a, input[type=button], input[type=submit], [role=button]'));
+            const frames = base.querySelectorAll('iframe');
+            for (const f of frames) {
+                try {
+                    const idoc = f.contentDocument || (f.contentWindow && f.contentWindow.document);
+                    if (idoc) list = list.concat(collectAllCandidates(idoc));
+                } catch (_) {}
+            }
+            return list;
+        }
+        const candidates = collectAllCandidates(document);
         // 1. Exact match
         for (const c of candidates) {
             const txt = (c.innerText || c.value || c.getAttribute('aria-label') || '').trim();
