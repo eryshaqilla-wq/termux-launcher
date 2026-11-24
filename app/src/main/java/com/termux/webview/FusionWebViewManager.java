@@ -1323,7 +1323,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
 
             if (tab.mProxyItem != null && tab.mIsProxyEnabled) {
-                FusionProxyHelper.setProxyForTab(this, tab, tab.mProxyItem.raw);
+                FusionProxyHelper.applyProxyToEngine(tab);
+                FusionProxyHelper.updateProxyIndicator(this, tab);
             }
 
             if (tab.mUrl != null && !tab.mUrl.isEmpty()) {

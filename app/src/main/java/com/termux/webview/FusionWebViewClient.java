@@ -180,7 +180,7 @@ public class FusionWebViewClient extends WebViewClient {
                             if (tab != null && sAutoResurrectEnabled && count <= maxRetries) {
                                 android.util.Log.w("FusionWebViewClient", "🛡️ Phoenix Recovery triggered for tab #" + tab.mId + " (crash count: " + count + ")");
                                 mManager.resurrectTab(tab);
-                                FusionToast.makeText((Context) mManager.mActivity, (CharSequence) "🛡️ Phoenix Recovery: Tab #" + tab.mId + " pulih otomatis", 0).show();
+                                FusionToast.makeText((Context) mManager.mActivity, (CharSequence) ("🛡️ Phoenix Recovery: Tab #" + tab.mId + " pulih otomatis"), 0).show();
                                 return;
                             }
 
