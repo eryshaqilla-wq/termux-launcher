@@ -11,6 +11,7 @@ import android.os.Process;
 import android.os.StrictMode;
 import android.os.PowerManager;
 import android.os.Build;
+import android.net.wifi.WifiManager;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -138,6 +139,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public int mNextTabId = 1;
     public boolean mIsDevMode = true;
     public PowerManager.WakeLock mMacroWakeLock;
+    public WifiManager.WifiLock mMacroWifiLock;
 
     public static class AutoSignClick implements View.OnClickListener {
         public final FusionWebViewManager mManager;
@@ -1110,6 +1112,21 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(true);
+
+        // ⚡ Fusion Low-Latency Performance & Engine Turbo Settings
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+        settings.setSaveFormData(false);
+        settings.setSavePassword(false);
+        settings.setGeolocationEnabled(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            settings.setSafeBrowsingEnabled(false); // Eliminate Google Safe Browsing DNS/HTTP latency overhead
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            settings.setOffscreenPreRaster(true); // Pre-raster offscreen/headless DOM tiles for instant layout/click
+        }
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null); // Force GPU hardware acceleration layer
+
         if (isDesktop) {
             applyDesktopSettingsToWebView(webView);
         }
@@ -1130,6 +1147,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.setDownloadListener(new FusionDownloadListener((this.mActivity != null) ? this.mActivity : webView.getContext()));
         webView.addJavascriptInterface(new GhostBridgeInterface(), "GhostBridge");
         webView.addJavascriptInterface(new FusionExtensionHelper.FusionExtensionBridge((this.mActivity != null) ? this.mActivity : webView.getContext(), webView), "__FusionExtensionBridge__");
+        webView.addJavascriptInterface(new FusionNativeBridge(this, webView), "__FUSION_NATIVE__");
+        webView.addJavascriptInterface(new FusionNativeBridge(this, webView), "FusionNative");
         FusionExtensionHelper.setupWebView(webView);
         return webView;
     }
@@ -1230,6 +1249,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 View.MeasureSpec.makeMeasureSpec(virtH, View.MeasureSpec.EXACTLY)
             );
             webView.layout(0, 0, virtW, virtH);
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             webView.setVisibility(View.VISIBLE);
             webView.resumeTimers();
             acquireWakeLock();
@@ -1257,6 +1277,62 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         this.mTabList.add(fusionTab);
         return fusionTab;
+    }
+
+    /**
+     * 🛡️ Phoenix Auto-Healing: Resurrects a crashed or OOM-killed WebView tab
+     * automatically without closing the tab or breaking the session.
+     */
+    public void resurrectTab(FusionTab tab) {
+        if (tab == null || this.mActivity == null) return;
+        try {
+            WebView oldWv = tab.mWebView;
+            if (oldWv != null) {
+                ViewParent parent = oldWv.getParent();
+                if (parent instanceof ViewGroup) {
+                    ((ViewGroup) parent).removeView(oldWv);
+                }
+                try { oldWv.destroy(); } catch (Throwable ignored) {}
+            }
+
+            WebView newWv = createNewConfiguredWebView(tab.mProfile, tab.mIsDesktop);
+            if (newWv == null) return;
+
+            tab.mWebView = newWv;
+            if (this.mPaneHost != null) {
+                this.mPaneHost.addView(newWv, new FrameLayout.LayoutParams(-1, -1));
+            }
+
+            if (tab.mIsHeadless) {
+                tab.mIsMinimized = true;
+                int virtW = tab.mIsDesktop ? 1280 : 1080;
+                int virtH = tab.mIsDesktop ? 720 : 1920;
+                newWv.measure(
+                    View.MeasureSpec.makeMeasureSpec(virtW, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(virtH, View.MeasureSpec.EXACTLY)
+                );
+                newWv.layout(0, 0, virtW, virtH);
+                newWv.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                newWv.setVisibility(View.VISIBLE);
+                newWv.resumeTimers();
+                acquireWakeLock();
+            }
+
+            if (this.mActiveWebView == oldWv) {
+                this.mActiveWebView = newWv;
+            }
+
+            if (tab.mProxyItem != null && tab.mIsProxyEnabled) {
+                FusionProxyHelper.setProxyForTab(this, tab, tab.mProxyItem.raw);
+            }
+
+            if (tab.mUrl != null && !tab.mUrl.isEmpty()) {
+                newWv.loadUrl(tab.mUrl);
+            }
+            Log.i("FusionWebViewManager", "🛡️ Phoenix Auto-Healing: Tab #" + tab.mId + " successfully resurrected for URL: " + tab.mUrl);
+        } catch (Throwable t) {
+            Log.e("FusionWebViewManager", "Failed to resurrect tab #" + tab.mId, t);
+        }
     }
 
     public void cycleOpacity() {
@@ -2558,6 +2634,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     if (mMacroWakeLock != null && !mMacroWakeLock.isHeld()) {
                         mMacroWakeLock.acquire(4 * 60 * 60_000L);
                     }
+                    if (mMacroWifiLock == null) {
+                        WifiManager wm = (WifiManager) act.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                        if (wm != null) {
+                            mMacroWifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "termux:fusion-macro-wifi");
+                        }
+                    }
+                    if (mMacroWifiLock != null && !mMacroWifiLock.isHeld()) {
+                        mMacroWifiLock.acquire();
+                    }
                 } catch (Exception unused) {
                 }
             }
@@ -2573,6 +2658,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 try {
                     if (mMacroWakeLock != null && mMacroWakeLock.isHeld()) {
                         mMacroWakeLock.release();
+                    }
+                    if (mMacroWifiLock != null && mMacroWifiLock.isHeld()) {
+                        mMacroWifiLock.release();
                     }
                 } catch (Exception unused) {
                 }

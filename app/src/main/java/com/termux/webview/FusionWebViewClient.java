@@ -15,8 +15,10 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import com.termux.app.FusionToast;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.util.Collections;
 import java.util.Map;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
@@ -149,6 +151,13 @@ public class FusionWebViewClient extends WebViewClient {
         }
     }
 
+    public static volatile int sMaxPhoenixRetries = 3;
+    public static volatile long sPhoenixCooldownMs = 15000;
+    public static volatile boolean sAutoResurrectEnabled = true;
+
+    private static final Map<Integer, Integer> sCrashCountMap = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<Integer, Long> sLastCrashTimeMap = new java.util.concurrent.ConcurrentHashMap<>();
+
     @Override // android.webkit.WebViewClient
     public boolean onRenderProcessGone(WebView webView, RenderProcessGoneDetail renderProcessGoneDetail) {
         if (this.mManager != null && this.mManager.mActivity != null) {
@@ -157,6 +166,25 @@ public class FusionWebViewClient extends WebViewClient {
                 public void run() {
                     try {
                         if (mManager != null) {
+                            FusionTab tab = mManager.getTabForWebView(webView);
+                            int tabId = tab != null ? tab.mId : -1;
+                            long now = System.currentTimeMillis();
+                            long lastCrash = sLastCrashTimeMap.containsKey(tabId) ? sLastCrashTimeMap.get(tabId) : 0;
+                            long cooldown = sPhoenixCooldownMs;
+                            int maxRetries = sMaxPhoenixRetries;
+                            int count = (now - lastCrash < cooldown && sCrashCountMap.containsKey(tabId)) ? sCrashCountMap.get(tabId) + 1 : 1;
+                            sLastCrashTimeMap.put(tabId, now);
+                            sCrashCountMap.put(tabId, count);
+
+                            // 🛡️ Phoenix Recovery: Auto-resurrect up to maxRetries before graceful shutdown
+                            if (tab != null && sAutoResurrectEnabled && count <= maxRetries) {
+                                android.util.Log.w("FusionWebViewClient", "🛡️ Phoenix Recovery triggered for tab #" + tab.mId + " (crash count: " + count + ")");
+                                mManager.resurrectTab(tab);
+                                FusionToast.makeText((Context) mManager.mActivity, (CharSequence) "🛡️ Phoenix Recovery: Tab #" + tab.mId + " pulih otomatis", 0).show();
+                                return;
+                            }
+
+                            // If crash loop persists > 3x: Graceful close
                             mManager.closeWebViewInternal();
                             if (mManager.mTerminalPaneHost != null) {
                                 mManager.mTerminalPaneHost.setVisibility(View.VISIBLE);
@@ -164,7 +192,7 @@ public class FusionWebViewClient extends WebViewClient {
                             if (mManager.mActivity != null) {
                                 mManager.mActivity.endWebViewExternalTextInput();
                                 mManager.mActivity.refreshTerminalWindowBar();
-                                FusionToast.makeText((Context) mManager.mActivity, (CharSequence) "⚠️ WebView render process terminated / recovered", 0).show();
+                                FusionToast.makeText((Context) mManager.mActivity, (CharSequence) "⚠️ WebView render process terminated (limit reached)", 0).show();
                             }
                         }
                     } catch (Exception ignored) {
@@ -194,6 +222,21 @@ public class FusionWebViewClient extends WebViewClient {
         return "application/octet-stream";
     }
 
+    private static boolean isKnownTrackerOrTelemetry(String url) {
+        if (url == null || url.length() < 10) return false;
+        String lower = url.toLowerCase();
+        return lower.contains("google-analytics.com") ||
+               lower.contains("googletagmanager.com") ||
+               lower.contains("doubleclick.net") ||
+               lower.contains("sentry.io") ||
+               lower.contains("mixpanel.com") ||
+               lower.contains("clarity.ms") ||
+               lower.contains("hotjar.com") ||
+               lower.contains("datadoghq.com") ||
+               lower.contains("segment.io") ||
+               lower.contains("amplitude.com");
+    }
+
     @Override // android.webkit.WebViewClient
     public WebResourceResponse shouldInterceptRequest(WebView webView, WebResourceRequest webResourceRequest) {
         if (webResourceRequest == null || webResourceRequest.getUrl() == null) {
@@ -201,6 +244,12 @@ public class FusionWebViewClient extends WebViewClient {
         }
         try {
             String reqUrl = webResourceRequest.getUrl().toString();
+
+            // ⚡ Native Fast-Path: Blackhole tracking, analytics & telemetry directly in Java memory (0ms)
+            if (isKnownTrackerOrTelemetry(reqUrl)) {
+                return new WebResourceResponse("text/plain", "UTF-8", 204, "No Content", Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
+            }
+
             WebResourceResponse wireMock = FusionNetworkInterceptor.intercept(reqUrl);
             if (wireMock != null) {
                 return wireMock;

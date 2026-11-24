@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Fusion WebView Macro Recipe Specification & Template",
+  "version": "2.0.0",
+  "doctrine": {
+    "priority": "API-First (Direct API Claim via in-page fetch / browser_api_call)",
+    "execution_engine": "In-Memory V8 JIT Single-Shot (0ms delay, Zero-Reload between wallets)",
+    "formatting": {
+      "banner": "3-Line Structured & Symmetrical (Header, Wallets/Email, WebView/Engine)",
+      "provider_log": "Clean '[PROVIDER] Injeksi: eso-X' (no sliced address, no chain tag)",
+      "status_log": "Clean '✓ [STATUS] SUKSES: Terkonfirmasi (+X TKN) (Durasi: Ys)' (no duplicate tx hash)",
+      "sanitization": "Zero technical jargon: strip '(Zero-Reload)', '(0ms roundtrip)', '(Bypass UI)'",
+      "email_context": "Display email info in banner ONLY if recipe uses {{EMAIL}}, {{OTP}}, wait_otp, or explicit CLI flag"
+    },
+    "placeholders": [
+      "{{WALLET_ADDRESS}}",
+      "{{WALLET_NAME}}",
+      "{{TARGET_URL}}",
+      "{{EMAIL}}",
+      "{{EMAIL_USER}}",
+      "{{EMAIL_DOMAIN}}",
+      "{{OTP}}"
+    ]
+  },
+  "templates": {
+    "direct_api_claim": {
+      "name": "template_direct_api",
+      "createdAt": 1795396600000,
+      "targetUrl": "https://example-dapp.com/claim",
+      "rules": {
+        "action": "API Claim",
+        "reward": {
+          "amount": 0.1,
+          "symbol": "TOKEN"
+        },
+        "alreadyClaimed": [
+          "already claimed",
+          "anda telah menerima hadiah",
+          "already opened",
+          "you have already claimed"
+        ],
+        "soldOut": [
+          "0 tersisa",
+          "kuota habis",
+          "sold out",
+          "no gifts available",
+          "limit reached"
+        ],
+        "success": [
+          "success",
+          "claimed",
+          "txDigest",
+          "sukses",
+          "ok",
+          "terkonfirmasi"
+        ],
+        "error": [
+          "error",
+          "failed",
+          "rejected"
+        ],
+        "autoClose": true
+      },
+      "events": [
+        {
+          "type": "api_call",
+          "desc": "Direct API Claim",
+          "script": "const address = wallet.address; const targetUrl = window.location.href; const res = await fetch('/api/v1/claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ address, ref: 'eso' }) }); const data = await res.json(); return { success: res.ok, tx: data.txHash || data.txDigest, reward: { amount: 0.1, symbol: 'TOKEN' }, ...data };"
+        }
+      ]
+    },
+    "api_with_email_otp": {
+      "name": "template_email_otp",
+      "createdAt": 1795396600000,
+      "targetUrl": "https://example-airdrop.com/register",
+      "rules": {
+        "action": "Email OTP Register",
+        "reward": {
+          "amount": 100,
+          "symbol": "PTS"
+        },
+        "alreadyClaimed": [
+          "already registered",
+          "email exists"
+        ],
+        "soldOut": [
+          "campaign ended",
+          "quota full"
+        ],
+        "success": [
+          "registered",
+          "success",
+          "verified"
+        ],
+        "error": [
+          "invalid code",
+          "failed"
+        ],
+        "autoClose": true
+      },
+      "events": [
+        {
+          "type": "api_call",
+          "desc": "Request Email Verification Code",
+          "script": "const res = await fetch('/api/send_otp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: '{{EMAIL}}' }) }); return await res.json();"
+        },
+        {
+          "type": "wait_otp",
+          "desc": "Wait OTP from Cloud-Mail / email.txt pool",
+          "timeout": 45000,
+          "target": "input[name='otp_code']"
+        },
+        {
+          "type": "api_call",
+          "desc": "Submit OTP & Claim Reward",
+          "script": "const res = await fetch('/api/verify_claim', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: '{{EMAIL}}', code: '{{OTP}}', address: wallet.address }) }); const data = await res.json(); return { success: res.ok, reward: { amount: 100, symbol: 'PTS' }, ...data };"
+        }
+      ]
+    },
+    "hybrid_visual_fallback": {
+      "name": "template_hybrid_visual",
+      "createdAt": 1795396600000,
+      "targetUrl": "https://example-quest.com/task",
+      "rules": {
+        "action": "Visual Task & Claim",
+        "reward": {
+          "amount": 1,
+          "symbol": "NFT"
+        },
+        "alreadyClaimed": ["completed", "owned"],
+        "soldOut": ["sold out", "finished"],
+        "success": ["minted", "success", "approved"],
+        "error": ["failed", "reverted"],
+        "autoClose": true
+      },
+      "events": [
+        {
+          "type": "click",
+          "desc": "Click Connect Wallet button",
+          "selector": "button[data-testid='connect-btn']"
+        },
+        {
+          "type": "wait",
+          "duration": 1500
+        },
+        {
+          "type": "click",
+          "desc": "Click Claim button",
+          "selector": "button.claim-reward-action"
+        },
+        {
+          "type": "wait",
+          "duration": 3000
+        }
+      ]
+    }
+  }
+}

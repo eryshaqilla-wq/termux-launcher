@@ -29,6 +29,9 @@ public class FusionUserscriptHelper {
         String[] candidatePaths = new String[] {
             "/data/data/com.termux/files/home/.fusion/scripts",
             "/data/local/nhsystem/kali-arm64/root/.fusion/scripts",
+            "/data/local/nhsystem/kali-arm64/root/wallet/scripts",
+            "/data/local/Droidspaces/Containers/ubuntu/rootfs/root/wallet/scripts",
+            "/data/local/Droidspaces/Containers/debian/rootfs/root/wallet/scripts",
             "/root/.fusion/scripts",
             "/data/data/com.termux/files/home/wallet/scripts",
             "/root/wallet/scripts"
@@ -63,6 +66,9 @@ public class FusionUserscriptHelper {
         String[] candidatePaths = new String[] {
             "/data/data/com.termux/files/home/.fusion/scripts",
             "/data/local/nhsystem/kali-arm64/root/.fusion/scripts",
+            "/data/local/nhsystem/kali-arm64/root/wallet/scripts",
+            "/data/local/Droidspaces/Containers/ubuntu/rootfs/root/wallet/scripts",
+            "/data/local/Droidspaces/Containers/debian/rootfs/root/wallet/scripts",
             "/root/.fusion/scripts",
             "/data/data/com.termux/files/home/wallet/scripts",
             "/root/wallet/scripts"

@@ -992,15 +992,156 @@ async function handleSynthesizeRecipe(url, extraFlags = []) {
     }
 }
 
+async function handleSniperCommand(rawUrl, watchArgs = []) {
+    const url = rawUrl.startsWith('http://') || rawUrl.startsWith('https://') ? rawUrl : `https://${rawUrl}`;
+    let selector = '';
+    let text = '';
+    let timeoutSec = 300;
+    let fireCmd = '';
+    let playModul = '';
+    let isHeadless = watchArgs.includes('--headless');
+    let notifyTele = watchArgs.includes('--tele') || watchArgs.includes('--notify');
+
+    for (let i = 0; i < watchArgs.length; i++) {
+        const a = watchArgs[i];
+        if ((a === '--selector' || a === '-s') && watchArgs[i + 1]) selector = watchArgs[++i];
+        else if ((a === '--text' || a === '-t') && watchArgs[i + 1]) text = watchArgs[++i];
+        else if ((a === '--timeout' || a === '-to') && watchArgs[i + 1]) timeoutSec = parseInt(watchArgs[++i], 10) || 300;
+        else if (a === '--fire' && watchArgs[i + 1]) fireCmd = watchArgs[++i];
+        else if (a === '--play' && watchArgs[i + 1]) playModul = watchArgs[++i];
+    }
+
+    if (!selector && !text) {
+        console.error('\x1b[31mError: Wajib menentukan minimal --selector <css> atau --text <kata_kunci> untuk dipantau.\x1b[0m');
+        console.log('Contoh: web sniper https://iota.gives --selector "button" --text "Claim" --fire "web play iota --turbo"');
+        process.exit(1);
+    }
+
+    console.log(`\n\x1b[1m\x1b[36m[ALPHA DOM SNIPER]\x1b[0m`);
+    console.log(`├─ \x1b[36mTarget URL :\x1b[0m \x1b[97m${url}\x1b[0m`);
+    console.log(`├─ \x1b[36mTarget DOM :\x1b[0m \x1b[97m${selector ? `selector="${selector}" ` : ''}${text ? `text="${text}"` : ''}\x1b[0m`);
+    console.log(`├─ \x1b[36mMode & Max :\x1b[0m \x1b[97m${isHeadless ? 'HEADLESS' : 'VISUAL'} | Timeout: ${timeoutSec}s\x1b[0m`);
+    if (playModul) console.log(`├─ \x1b[36mAuto-Play  :\x1b[0m \x1b[32mweb play ${playModul}\x1b[0m`);
+    if (fireCmd)   console.log(`├─ \x1b[36mAuto-Fire  :\x1b[0m \x1b[33m${fireCmd}\x1b[0m`);
+    console.log(`└─ \x1b[33m⏳ Membuka halaman dan membidik target DOM...\x1b[0m\n`);
+
+    if (isHeadless) {
+        runIpc(`--headless ${url}`);
+    } else {
+        runIpc(`${url}`);
+    }
+    await sleep(1500);
+
+    const pb = getPlaywrightBridge();
+    if (!pb) {
+        console.error('\x1b[31mGagal menghubungkan ke browser bridge.\x1b[0m');
+        process.exit(1);
+    }
+
+    const page = await pb.getPage(true, url);
+    if (!page) {
+        console.error('\x1b[31mGagal mengaitkan ke halaman target.\x1b[0m');
+        process.exit(1);
+    }
+
+    const startTime = Date.now();
+    const maxWaitMs = timeoutSec * 1000;
+    let matched = false;
+    let matchDetails = null;
+
+    while (Date.now() - startTime < maxWaitMs) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        try {
+            const check = await page.evaluate(({ sel, txt }) => {
+                let foundEl = false;
+                let foundTxt = false;
+                let elDesc = '';
+                if (sel) {
+                    const el = document.querySelector(sel);
+                    if (el && el.offsetParent !== null) {
+                        foundEl = true;
+                        elDesc = `<${el.tagName.toLowerCase()}> ${el.innerText.trim().slice(0, 40)}`;
+                    }
+                }
+                if (txt) {
+                    if (document.body && document.body.innerText && document.body.innerText.includes(txt)) {
+                        foundTxt = true;
+                    }
+                }
+                if ((sel && txt && foundEl && foundTxt) || (sel && !txt && foundEl) || (!sel && txt && foundTxt)) {
+                    return { ok: true, elDesc, txt };
+                }
+                return { ok: false };
+            }, { sel: selector, txt: text });
+
+            if (check && check.ok) {
+                matched = true;
+                matchDetails = check;
+                break;
+            }
+        } catch (_) {}
+
+        process.stdout.write(`\r  \x1b[33m⏳ [SNIPER] Membidik perubahan DOM... (${elapsed}s / ${timeoutSec}s)\x1b[0m`);
+        await sleep(600);
+    }
+    console.log();
+
+    if (matched) {
+        const dur = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`\n\x1b[1m\x1b[32m✓ [SNIPER TRIGGER] TARGET TERDETEKSI DALAM ${dur}s!\x1b[0m`);
+        if (matchDetails.elDesc) console.log(`  \x1b[36mElemen  :\x1b[0m \x1b[97m${matchDetails.elDesc}\x1b[0m`);
+        if (matchDetails.txt)    console.log(`  \x1b[36mTeks    :\x1b[0m \x1b[97m"${matchDetails.txt}"\x1b[0m`);
+
+        try { runIpc('toast ALPHA SNIPER TERDETEKSI!'); } catch (_) {}
+
+        if (notifyTele) {
+            try {
+                const { execSync } = require('child_process');
+                execSync(`node -e "try { const t = require('/root/wallet/telegram.cjs'); t.sendMessage && t.sendMessage('🚨 ALPHA SNIPER TRIGGER: Target DOM ditemukan di ${url}! Durasi: ${dur}s'); } catch(_){}" 2>/dev/null || true`);
+                console.log(`  \x1b[32m✓ Notifikasi Telegram terkirim ke Kantor Tuan Eso.\x1b[0m`);
+            } catch (_) {}
+        }
+
+        if (playModul) {
+            console.log(`\n\x1b[1m\x1b[33m⚡ Menembakkan modul makro "web play ${playModul}" seketika...\x1b[0m\n`);
+            const playArgs = ['play', playModul, ...watchArgs.filter(a => !['--selector', '-s', '--text', '-t', '--timeout', '-to', '--fire', '--play', '--tele', '--notify'].includes(a) && a !== playModul && a !== selector && a !== text)];
+            const pbNew = getPlaywrightBridge();
+            if (pbNew) {
+                await pbNew.playRecipe(playModul, { url, turbo: true });
+            }
+        } else if (fireCmd) {
+            console.log(`\n\x1b[1m\x1b[33m⚡ Menjalankan perintah aksi: "${fireCmd}"...\x1b[0m\n`);
+            const { execSync } = require('child_process');
+            execSync(fireCmd, { stdio: 'inherit' });
+        }
+        process.exit(0);
+    } else {
+        console.log(`\n\x1b[31m✗ [TIMEOUT] Target DOM tidak terdeteksi setelah ${timeoutSec} detik.\x1b[0m\n`);
+        process.exit(1);
+    }
+}
+
 function runIpc(ipcArgs) {
     const ipcBin = fs.existsSync('/usr/local/bin/termux-ipc') 
         ? '/usr/local/bin/termux-ipc' 
         : (fs.existsSync('/usr/local/termux-shims/termux-ipc') ? '/usr/local/termux-shims/termux-ipc' : 'termux-ipc');
     try {
+        if (ipcArgs.startsWith('clip-') || ipcArgs.startsWith('toast')) {
+            return execSync(`${ipcBin} ${ipcArgs}`, { encoding: 'utf8' }).trim();
+        }
         return execSync(`${ipcBin} webview ${ipcArgs}`, { encoding: 'utf8' }).trim();
     } catch (e) {
         return e.stdout ? e.stdout.trim() : `Error: ${e.message}`;
     }
+}
+
+function runIpcToast(msg) {
+    const ipcBin = fs.existsSync('/usr/local/bin/termux-ipc') 
+        ? '/usr/local/bin/termux-ipc' 
+        : (fs.existsSync('/usr/local/termux-shims/termux-ipc') ? '/usr/local/termux-shims/termux-ipc' : 'termux-ipc');
+    try {
+        execSync(`${ipcBin} toast "${String(msg).replace(/"/g, '\\"')}"`, { encoding: 'utf8', timeout: 2000 });
+    } catch (_) {}
 }
 
 function evalJs(code) {
@@ -1021,6 +1162,13 @@ async function ensurePortForward() {
 }
 
 async function clearCdpCookies() {
+    try {
+        const bridge = getWebviewBridge();
+        if (bridge && typeof bridge.clearCookies === 'function') {
+            const res = await bridge.clearCookies();
+            if (res && res.success) return true;
+        }
+    } catch (_) {}
     try {
         const forwarded = await ensurePortForward();
         if (!forwarded) return false;
@@ -1331,7 +1479,19 @@ async function handleOpenUrl(url, extraFlags = []) {
             for (let i = 0; i < multiProfiles.length; i++) {
                 const currentProfile = multiProfiles[i];
                 const shortProf = currentProfile.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
-                const workerTab = `w_${shortProf}`.slice(0, 14);
+                let modulName = '';
+                for (let k = 0; k < cleanFlags.length; k++) {
+                    const f = cleanFlags[k];
+                    if (['--modul', '--recipe', '--macro', 'play'].includes(f) && cleanFlags[k + 1] && !cleanFlags[k + 1].startsWith('-')) {
+                        modulName = cleanFlags[k + 1];
+                        break;
+                    }
+                    if (f.startsWith('--modul=')) { modulName = f.split('=')[1]; break; }
+                    if (f.startsWith('--recipe=')) { modulName = f.split('=')[1]; break; }
+                }
+                const workerTab = modulName 
+                    ? (multiProfiles.length > 1 ? `${modulName}-${shortProf}`.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 20) : modulName.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 20))
+                    : `w_${shortProf}`.slice(0, 14);
                 const profileFlags = ['--profile', currentProfile, ...(hasMacro ? ['--in-worker-tab', '--tab-name', workerTab] : []), ...cleanFlags.filter(f => !f.startsWith('--profile'))];
                 const baseWebCmd = `web ${profileFlags.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')} ${url || ''}`.trim();
                 const launchCmd = hasMacro
@@ -1620,16 +1780,23 @@ async function executeSingleProfile(url, extraFlags = []) {
         } catch (_) {}
     }
 
-    // Cleanup: Hanya tutup tab worker & webview jika ini adalah sesi makro/automasi (--modul / recipe)
-    if (isWorkerTab && recipe) {
+    // Cleanup: Jika menjalankan modul makro, selalu tutup WebView setelah selesai agar RAM lega
+    if (recipe || modulQuery) {
         if (targetProfile && targetProfile !== 'default' && targetProfile !== 'list') {
-            try {
-                runIpc(`save-session ${targetProfile}`);
-            } catch (_) {}
+            try { runIpc(`save-session ${targetProfile}`); } catch (_) {}
         }
+        const shouldKeepOpen = extraFlags.includes('--keep-open') || extraFlags.includes('--no-close');
+        if (!shouldKeepOpen) {
+            console.log(`[WebView] Makro selesai. Menutup tab WebView & membebaskan RAM...`);
+            await sleep(300);
+            try { runIpc('kill-all'); } catch (_) {}
+        }
+    }
+
+    // Cleanup: Hanya tutup tab worker jika ini adalah worker tab IPC
+    if (isWorkerTab && recipe) {
         console.log(`[WebView Worker] Makro selesai. Menutup tab worker "${workerTabName || 'selesai'}"...`);
-        await sleep(500);
-        runIpc('close');
+        await sleep(300);
         if (workerTabName) {
             runIpcTab('close', [workerTabName]);
             if (workerTabName.length > 14) {
@@ -1640,7 +1807,31 @@ async function executeSingleProfile(url, extraFlags = []) {
 }
 
 async function main() {
-    const args = process.argv.slice(2);
+    let args = process.argv.slice(2);
+
+    // ⚡ AUTO-BRIDGE: Alihkan "web --modul <resep>" langsung ke engine mutakhir "web play <resep> --turbo"
+    if (args.includes('--modul') || args.some(a => a.startsWith('--modul='))) {
+        let mName = '';
+        for (let i = 0; i < args.length; i++) {
+            if (args[i] === '--modul' && args[i + 1] && !args[i + 1].startsWith('-')) {
+                mName = args[i + 1];
+                args.splice(i, 2);
+                break;
+            } else if (args[i].startsWith('--modul=')) {
+                mName = args[i].split('=')[1];
+                args.splice(i, 1);
+                break;
+            }
+        }
+        if (mName) {
+            args = ['play', mName, ...args];
+            if (!args.includes('--turbo')) args.push('--turbo');
+            if (!args.includes('--headless') && !args.includes('--visual') && !args.includes('--headed')) {
+                args.push('--headless');
+            }
+        }
+    }
+
     const cmd = args[0] ? args[0].toLowerCase() : '';
 
     // 🔥 AUTO-DETECT & IMPORT CODE REKAMAN VIA CLI (web <coderekaman> atau web import <code/url>)
@@ -1678,6 +1869,22 @@ async function main() {
         console.log(`  web --headless --new-tab <url> (Buka URL di tab baru background / paralel)`);
         console.log(`  web --desktop <url>           (Buka URL dengan tampilan mode Desktop 1280px)`);
         console.log(`  web list [--json]             (Lihat daftar semua WebView aktif: Headless & Visual)`);
+        console.log(`  web show / pop [idx]          (Bawa tab background/headless ke layar untuk dipantau langsung)`);
+        console.log(`  web hide / push [idx]         (Kirim tab visual ke background / headless mode)`);
+        console.log(`  web snap [nama_profil]        (Bekukan sesi aktif: cookies, localStorage & sessionStorage ke file teleport)`);
+        console.log(`  web restore [nama_profil]     (Pulihkan sesi aktif 0ms: bypass login & sign message seketika)`);
+        console.log(`  web sessions / snaps          (Lihat daftar seluruh sesi & snapshot teleport yang tersimpan)`);
+        console.log(`  web snap-clear [nama|all]     (Hapus snapshot sesi teleport)`);
+        console.log(`  web cache [list]              (Daftar slot mirror offline modul yang tersimpan di disk)`);
+        console.log(`  web cache clear [modul|all]   (Bersihkan slot mirror offline modul tertentu atau seluruhnya)`);
+        console.log(`  web gc [--all] / clean-ram    (V8 Heap Purge & Memory GC: bebaskan puluhan MB RAM Chromium seketika)`);
+        console.log(`  web sniper <url> [options]    (Alpha DOM Sniper: pantau perubahan elemen dApp & auto-fire makro)`);
+        console.log(`    --selector / -s <css>       (CSS selector elemen yang dipantau)`);
+        console.log(`    --text / -t <teks>          (Kata kunci teks yang ditunggu kemunculannya)`);
+        console.log(`    --timeout / -to <detik>     (Batas waktu pantau, default: 300s)`);
+        console.log(`    --fire "<perintah>"         (Perintah shell yang ditembakkan seketika saat target muncul)`);
+        console.log(`    --play <modul>              (Modul makro yang langsung diputar saat target muncul)`);
+        console.log(`    --tele / --notify           (Kirim notifikasi radar instan ke Telegram Tuan Eso)`);
         console.log(`  web attach [idx]              (Bawa tab headless ke layar untuk dipantau langsung)`);
         console.log(`  web detach [idx]              (Kirim tab visual ke background / headless mode)`);
         console.log(`  web --kill [idx]              (Tutup tab nomor <idx>, default: tab aktif)`);
@@ -1692,6 +1899,18 @@ async function main() {
         console.log(`    --chain <chain>             (Pilih chain: iota, solana, base, bsc, sui, dll.)`);
         console.log(`    --headless                  (Eksekusi di background tanpa render visual)`);
         console.log(`    --ghostwallet               (Aktifkan Ghost Daemon port 3333 untuk auto-sign on-chain)`);
+        console.log(`    --turbo                     (Turbo mode: wire-level drop asset + JIT in-page runner otomatis)`);
+        console.log(`    --snap                      (Auto-snapshot sesi teleport dompet setelah klaim sukses)`);
+        console.log(`    --restore                   (Auto-restore sesi teleport dompet sebelum klaim, bypass login 0ms)`);
+        console.log(`    --wire                      (Dual-Form Pure-Wire Mode: transmutasi eksekusi ke concurrent wire burst)`);
+        console.log(`    --burst [n] / -b [n]        (In-page concurrent burst: tembak n-wallet serentak per kloter, default 3)`);
+        console.log(`    --no-jit                    (Matikan JIT runner saat mode turbo aktif, untuk step debugging)`);
+        console.log(`    --sniff / -v / --debug      (Tampilkan rincian payload & response seluruh panggilan API)`);
+        console.log(`    --email <addr>              (Gunakan alamat email tertentu untuk pendaftaran/form)`);
+        console.log(`    --emails <e1,e2...>         (Daftar email statis untuk multi-wallet replay)`);
+        console.log(`    --email-file <path>         (Load daftar email dari berkas, default: /root/wallet/email.txt)`);
+        console.log(`    --cloud-mail / --mail       (Mode email dinamis: generate email sementara via Cloudflare D1)`);
+        console.log(`  web email [pool|add|otp|link] (Manajemen pool email.txt & autonomous OTP extraction)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
         console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);
         console.log(`  web --modul <m> --profiles a,b [--parallel] (Putar makro untuk daftar profil tertentu)`);
@@ -1701,6 +1920,7 @@ async function main() {
         console.log(`  web --stop-not "kata"         (Auto-stop loop jika teks hilang dari DOM)`);
         console.log(`  web <coderekaman>             (Import resep otomatis)`);
         console.log(`  web load <profil>             (Load profil & pasang sesi cookies ke browser)`);
+        console.log(`  web passkey [list|rm|status]  (Kelola virtual passkey / WebAuthn di eso.db & vault)`);
         console.log(`  web eject                     (Simpan sesi profil aktif & unmount/bersihkan browser)`);
         console.log(`  web save-session [nama]       (Simpan sesi website ke profil)`);
         console.log(`  web x-post "teks" [--profile] (Post tweet ke X)`);
@@ -1822,37 +2042,137 @@ async function main() {
         process.exit(0);
     }
 
+    if (cmd === 'snap' || cmd === 'save-snap' || cmd === 'session-snap') {
+        const profile = (args[1] && !args[1].startsWith('-')) ? args[1] : 'default';
+        const pb = getPlaywrightBridge();
+        if (!pb) { console.error('Gagal menghubungkan ke WebView bridge.'); process.exit(1); }
+        const res = await pb.stateTeleportSave(profile);
+        if (res && res.success) {
+            console.log(`\n\x1b[1m\x1b[32m✓ [SESSION SNAP] Berhasil dibekukan:\x1b[0m \x1b[97m"${res.profile}"\x1b[0m`);
+            console.log(`  \x1b[36mOrigin  :\x1b[0m \x1b[97m${res.origin || '-'}\x1b[0m`);
+            console.log(`  \x1b[36mCookies :\x1b[0m \x1b[97m${res.cookiesCount}\x1b[0m | \x1b[36mStorage Keys:\x1b[0m \x1b[97m${res.localStorageKeys} (local) / ${res.sessionStorageKeys} (session)\x1b[0m`);
+            console.log(`  \x1b[36mLokasi  :\x1b[0m \x1b[97m${res.filePath}\x1b[0m\n`);
+        } else {
+            console.error(`\x1b[31m✗ Gagal membekukan sesi: ${res?.error || 'Unknown error'}\x1b[0m`);
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'restore' || cmd === 'load-snap' || cmd === 'session-restore') {
+        const profile = (args[1] && !args[1].startsWith('-')) ? args[1] : 'default';
+        const pb = getPlaywrightBridge();
+        if (!pb) { console.error('Gagal menghubungkan ke WebView bridge.'); process.exit(1); }
+        const res = await pb.stateTeleportRestore(profile);
+        if (res && res.success) {
+            console.log(`\n\x1b[1m\x1b[32m✓ [SESSION RESTORE] Berhasil dipulihkan:\x1b[0m \x1b[97m"${res.profile}"\x1b[0m`);
+            console.log(`  \x1b[36mOrigin  :\x1b[0m \x1b[97m${res.origin || '-'}\x1b[0m`);
+            console.log(`  \x1b[36mStatus  :\x1b[0m \x1b[97m${res.cookiesInjected} cookies disuntikkan, storage state aktif\x1b[0m\n`);
+        } else {
+            console.error(`\x1b[31m✗ Gagal memulihkan sesi: ${res?.error || 'Unknown error'}\x1b[0m`);
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'sessions' || cmd === 'snaps') {
+        const pb = getPlaywrightBridge();
+        const list = pb ? pb.listTeleportSessions() : [];
+        console.log(`\n\x1b[1m\x1b[36m[FUSION SESSION SNAPSHOTS]\x1b[0m \x1b[97m(Total: ${list.length} sesi tersimpan)\x1b[0m`);
+        if (list.length === 0) {
+            console.log(`  \x1b[33mBelum ada sesi yang dibekukan. Gunakan: web snap [nama_profil]\x1b[0m\n`);
+        } else {
+            list.forEach((s, idx) => {
+                const ageStr = s.ageSeconds < 60 ? `${s.ageSeconds}s lalu` : (s.ageSeconds < 3600 ? `${Math.floor(s.ageSeconds/60)}m lalu` : `${Math.floor(s.ageSeconds/3600)}j lalu`);
+                console.log(`  \x1b[1m\x1b[97m${idx + 1}.\x1b[0m \x1b[32m${s.profile.padEnd(14)}\x1b[0m \x1b[97m${s.origin || s.url || '-'}\x1b[0m \x1b[36m(${s.cookiesCount} cookies, ${s.storageKeys} keys)\x1b[0m \x1b[33m[${ageStr}]\x1b[0m`);
+            });
+            console.log();
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'snap-clear' || cmd === 'session-clear') {
+        const target = args[1] || 'default';
+        const pb = getPlaywrightBridge();
+        const res = pb ? pb.clearTeleportSession(target) : { success: false };
+        console.log(`\n\x1b[1m\x1b[32m✓ [SESSION CLEAR]\x1b[0m \x1b[97mSnapshot "${target}" berhasil dihapus (${res.deletedFiles || 0} file dibersihkan).\x1b[0m\n`);
+        process.exit(0);
+    }
+
+    if (cmd === 'cache' || cmd === 'offline') {
+        const sub = (args[1] || 'list').toLowerCase();
+        const pb = getPlaywrightBridge();
+        if (sub === 'clear' || sub === 'rm' || sub === 'clean') {
+            const modTarget = args[2] || 'all';
+            const res = pb ? pb.clearModuleOfflineCache(modTarget) : { success: false };
+            console.log(`\n\x1b[1m\x1b[32m✓ [OFFLINE CACHE CLEAR]\x1b[0m \x1b[97mSlot cache modul "${modTarget}" berhasil dibersihkan (${res.deletedCount || 0} slot dihapus).\x1b[0m\n`);
+            process.exit(0);
+        } else {
+            const list = pb ? pb.listModuleOfflineCaches() : [];
+            console.log(`\n\x1b[1m\x1b[36m[FUSION OFFLINE MODULE MIRRORS]\x1b[0m \x1b[97m(Total: ${list.length} modul tersimpan di disk lokal)\x1b[0m`);
+            if (list.length === 0) {
+                console.log(`  \x1b[33mBelum ada slot modul offline. Dibuat otomatis saat menjalankan: web play <modul> --turbo\x1b[0m\n`);
+            } else {
+                list.forEach((m, idx) => {
+                    const sizeMb = (m.totalSizeBytes / (1024 * 1024)).toFixed(1);
+                    const ageStr = m.ageSeconds < 60 ? `${m.ageSeconds}s lalu` : (m.ageSeconds < 3600 ? `${Math.floor(m.ageSeconds/60)}m lalu` : `${Math.floor(m.ageSeconds/3600)}j lalu`);
+                    console.log(`  \x1b[1m\x1b[97m${idx + 1}.\x1b[0m \x1b[32m${m.module.padEnd(16)}\x1b[0m \x1b[97m${(m.targetUrl || '-').padEnd(30)}\x1b[0m \x1b[36m(${m.assetsCount} chunks, ${sizeMb} MB)\x1b[0m \x1b[33m[${ageStr}]\x1b[0m`);
+                });
+                console.log(`\n  \x1b[90mTips: Hapus slot offline dengan "web cache clear <nama_modul>" atau "web cache clear all".\x1b[0m\n`);
+            }
+            process.exit(0);
+        }
+    }
+
     const isAttachCmd = (
         cmd === 'attach' ||
-        cmd === '--attach'
+        cmd === '--attach' ||
+        cmd === 'show' ||
+        cmd === 'pop'
     );
 
     if (isAttachCmd) {
-        const targetIdx = args[1] !== undefined ? args[1] : '0';
+        const targetIdx = args[1] !== undefined && /^\d+$/.test(args[1]) ? args[1] : '0';
         const output = runIpc(`attach ${targetIdx}`);
+        try { runIpc('toast Tab WebView Ditampilkan ke Layar'); } catch (_) {}
+        console.log(`\n\x1b[1m\x1b[32m✓ [WEBVIEW SHOW]\x1b[0m \x1b[97mTab #${targetIdx} dilampirkan ke layar visual (Visual Mode Aktif).\x1b[0m`);
         if (output) console.log(output);
+        console.log();
         process.exit(0);
     }
 
     const isDetachCmd = (
         cmd === 'detach' ||
-        cmd === '--detach'
+        cmd === '--detach' ||
+        cmd === 'hide' ||
+        cmd === 'push'
     );
 
     if (isDetachCmd) {
-        const targetIdx = args[1] !== undefined ? args[1] : '-1';
+        const targetIdx = args[1] !== undefined && /^\d+$/.test(args[1]) ? args[1] : '-1';
         const output = runIpc(`detach ${targetIdx}`);
+        try { runIpc('toast Tab WebView Dikirim ke Background'); } catch (_) {}
+        console.log(`\n\x1b[1m\x1b[36m✓ [WEBVIEW HIDE]\x1b[0m \x1b[97mTab dikirim ke latar belakang (Headless Mode Aktif, Terminal Bersih).\x1b[0m`);
         if (output) console.log(output);
+        console.log();
         process.exit(0);
+    }
+
+    if (cmd === 'sniper' || cmd === '--sniper' || cmd === 'watch' || cmd === '--watch') {
+        const targetUrl = args.find((a, i) => i > 0 && !a.startsWith('-'));
+        if (targetUrl) {
+            await handleSniperCommand(targetUrl, args.filter(a => a !== cmd && a !== targetUrl));
+            process.exit(0);
+        } else {
+            console.log(`\n\x1b[1m\x1b[36m[ALPHA DOM SNIPER]\x1b[0m`);
+            console.log(`\x1b[33mPenggunaan: web sniper <url> [--selector <css>] [--text <teks>] [--timeout <detik>] [--fire <perintah>] [--play <modul>] [--tele] [--headless]\x1b[0m\n`);
+            process.exit(1);
+        }
     }
 
     const isMonitorCmd = (
         cmd === 'monitor' ||
         cmd === '--monitor' ||
         cmd === 'monitor-control' ||
-        cmd === '--monitor-control' ||
-        cmd === 'watch' ||
-        cmd === '--watch'
+        cmd === '--monitor-control'
     );
 
     const hasTargetUrl = args.some(a => 
@@ -1896,7 +2216,82 @@ async function main() {
     if (isKillCmd) {
         const targetIdx = args[1] && !args[1].startsWith('-') ? args[1] : '';
         const output = runIpc(targetIdx ? `kill-tab ${targetIdx}` : 'kill-tab');
+        runIpcToast('Tab WebView ditutup');
         if (output) console.log(output);
+        process.exit(0);
+    }
+
+    const isPasskeyCmd = (
+        cmd === 'passkey' ||
+        cmd === 'passkeys' ||
+        cmd === 'pk' ||
+        cmd === '--passkey' ||
+        cmd === '--passkeys'
+    );
+
+    if (isPasskeyCmd) {
+        const sub = (args[1] || 'list').toLowerCase();
+        const { passkeyVault } = require('/root/wallet/passkey_vault.cjs');
+
+        if (sub === 'list' || sub === 'ls') {
+            const prof = args[2] && !args[2].startsWith('-') ? args[2] : '';
+            const list = passkeyVault.listPasskeys(prof || null);
+            if (args.includes('--json')) {
+                console.log(JSON.stringify(list, null, 2));
+            } else {
+                console.log(`\n\x1b[1m\x1b[36m[FUSION VIRTUAL PASSKEYS]\x1b[0m \x1b[97mTotal: ${list.length} Kunci Tersimpan\x1b[0m\n`);
+                if (list.length === 0) {
+                    console.log(`  \x1b[90mBelum ada Passkey tersimpan di eso.db / passkeys_vault.json.\x1b[0m`);
+                    console.log(`  \x1b[90mPasskey otomatis dibuat & tersimpan saat dApp memanggil navigator.credentials.create().\x1b[0m\n`);
+                } else {
+                    list.forEach((p, idx) => {
+                        console.log(`  \x1b[1m\x1b[97m${idx + 1}.\x1b[0m \x1b[32m[${p.profile || 'default'}]\x1b[0m \x1b[1m${p.rpId}\x1b[0m (${p.userName || '-'})`);
+                        console.log(`     ID: \x1b[90m${p.credentialId.slice(0, 24)}...\x1b[0m | Signs: \x1b[33m${p.signCount || 0}\x1b[0m | Dibuat: \x1b[90m${p.createdAt || '-'}\x1b[0m`);
+                    });
+                    console.log('');
+                }
+            }
+            process.exit(0);
+        }
+
+        if (sub === 'rm' || sub === 'del' || sub === 'remove' || sub === 'delete') {
+            const targetId = args[2];
+            if (!targetId) {
+                console.error(`\x1b[31mError: Masukkan credential_id yang ingin dihapus!\x1b[0m`);
+                process.exit(1);
+            }
+            const ok = passkeyVault.removePasskey(targetId);
+            if (ok) {
+                console.log(`\x1b[32m✓ Passkey "${targetId}" berhasil dihapus dari vault & eso.db.\x1b[0m`);
+            } else {
+                console.log(`\x1b[33mPasskey dengan ID tersebut tidak ditemukan.\x1b[0m`);
+            }
+            process.exit(0);
+        }
+
+        if (sub === 'export') {
+            const prof = args[2] && !args[2].startsWith('-') ? args[2] : '';
+            const list = passkeyVault.exportJson(prof || null);
+            console.log(JSON.stringify(list, null, 2));
+            process.exit(0);
+        }
+
+        if (sub === 'status') {
+            const list = passkeyVault.listPasskeys();
+            console.log(`\n\x1b[1m\x1b[32m[FUSION VIRTUAL PASSKEY STATUS]\x1b[0m`);
+            console.log(`  Engine             : W3C WebAuthn Level 3 Virtual Platform Authenticator`);
+            console.log(`  Platform Auth      : AKTIF (Bypass Android Biometric Prompt)`);
+            console.log(`  Algoritma Kunci    : ECDSA P-256 (secp256r1) ES256 (-7)`);
+            console.log(`  Total Passkey      : ${list.length} Akun Tersimpan`);
+            console.log(`  Database Storage   : /root/wallet/eso.db & /root/wallet/passkeys_vault.json\n`);
+            process.exit(0);
+        }
+
+        console.log(`\nPenggunaan: web passkey <subcommand> [opsi]`);
+        console.log(`  web passkey list [--profile <p>] [--json]   (Lihat seluruh passkey tersimpan)`);
+        console.log(`  web passkey rm <credential_id>              (Hapus passkey tertentu)`);
+        console.log(`  web passkey export [--profile <p>]          (Export passkey ke format JSON)`);
+        console.log(`  web passkey status                          (Cek status engine platform authenticator)\n`);
         process.exit(0);
     }
 
@@ -2266,12 +2661,155 @@ async function main() {
         process.exit(0);
     }
 
+    if (cmd === 'email' || cmd === 'mail') {
+        const sub = args[1] || 'pool';
+        const { DEFAULT_EMAIL_FILE, EmailPoolManager } = require('/root/wallet/email_pool_manager.cjs');
+        if (sub === 'pool' || sub === 'list') {
+            const manager = new EmailPoolManager();
+            const summary = manager.getPoolSummary();
+            console.log(`\n\x1b[1m\x1b[36m[EMAIL POOL STATUS]\x1b[0m \x1b[97mBerkas: ${DEFAULT_EMAIL_FILE}\x1b[0m`);
+            console.log(`  \x1b[33mMode\x1b[0m         : \x1b[97m${summary.mode}\x1b[0m`);
+            console.log(`  \x1b[33mTotal Akun\x1b[0m   : \x1b[32m${summary.staticCount} Akun\x1b[0m`);
+            if (summary.staticEmails.length > 0) {
+                console.log(`\n  \x1b[1m\x1b[90mDaftar Akun Static:\x1b[0m`);
+                summary.staticEmails.forEach((em, i) => {
+                    console.log(`   ${i + 1}. \x1b[97m${em}\x1b[0m`);
+                });
+            }
+            console.log(`\n  \x1b[90mTips: Tambah email via "web email add <alamat>", atau jalankan "web play <resep> --cloud-mail" untuk email dinamis.\x1b[0m\n`);
+            process.exit(0);
+        } else if (sub === 'add') {
+            const newEmail = args[2];
+            if (!newEmail || !newEmail.includes('@')) {
+                console.log(`\x1b[31mError: Masukkan format email yang valid! (contoh: web email add akun@gmail.com)\x1b[0m`);
+                process.exit(1);
+            }
+            fs.appendFileSync(DEFAULT_EMAIL_FILE, `${newEmail.trim()}\n`, 'utf8');
+            console.log(`\x1b[32m✔ Email "${newEmail.trim()}" berhasil ditambahkan ke pool ${DEFAULT_EMAIL_FILE}\x1b[0m`);
+            process.exit(0);
+        } else if (sub === 'otp') {
+            const target = args[2] || '';
+            const timeout = parseInt(args[3], 10) || 45;
+            const manager = new EmailPoolManager();
+            console.log(`\x1b[36mStandby menunggu OTP untuk "${target || 'email terakhir'}" (${timeout}s)...\x1b[0m`);
+            const res = await manager.waitOtp(target, timeout);
+            if (res.success) {
+                console.log(`\x1b[32m✔ OTP Diterima: \x1b[1m\x1b[97m${res.otp}\x1b[0m (Dari: ${res.from || 'unknown'})\x1b[0m`);
+            } else {
+                console.log(`\x1b[31m✗ ${res.error}\x1b[0m`);
+                process.exit(1);
+            }
+            process.exit(0);
+        } else if (sub === 'link') {
+            const target = args[2] || '';
+            const timeout = parseInt(args[3], 10) || 60;
+            const manager = new EmailPoolManager();
+            console.log(`\x1b[36mStandby menunggu link verifikasi untuk "${target || 'email terakhir'}" (${timeout}s)...\x1b[0m`);
+            const res = await manager.waitLink(target, timeout);
+            if (res.success) {
+                console.log(`\x1b[32m✔ Link Diterima: \x1b[1m\x1b[36m${res.link}\x1b[0m\x1b[0m`);
+            } else {
+                console.log(`\x1b[31m✗ ${res.error}\x1b[0m`);
+                process.exit(1);
+            }
+            process.exit(0);
+        }
+    }
+
     if (cmd === 'play' || cmd === 'replay') {
         const recipeName = args[1];
+        if (recipeName === '--help' || recipeName === '-h' || args.includes('--help') || args.includes('-h')) {
+            console.log(`\n\x1b[1m\x1b[36mWEB PLAY CONTROLLER (Instant Replay Engine)\x1b[0m`);
+            console.log(`Penggunaan: web play <nama_resep> [target_url / kode] [opsi]\n`);
+            console.log(`Opsi Dompet:`);
+            console.log(`  --wallet <nama>             Pilih 1 dompet dari eso.db (contoh: eso-1)`);
+            console.log(`  --wallets <w1,w2 / w1..w2>  Daftar dompet atau rentang (contoh: eso-1..10)`);
+            console.log(`  --all                       Putar seluruh 1.000 dompet di eso.db hingga kuota habis`);
+            console.log(`  --from <nama>               Mulai auto-run dari dompet tertentu (contoh: --from eso-43)`);
+            console.log(`  --chain <chainKey>          Paksa spesifik chain (iota, solana, base, bsc, sui, dll.)`);
+            console.log(`\nOpsi Eksekusi:`);
+            console.log(`  --turbo                     Mode turbo: wire-level asset drop + local cache + JIT runner`);
+            console.log(`  --burst [n] / -b [n]        In-page concurrent burst (tembak n-wallet serentak per kloter, default 3)`);
+            console.log(`  -p [n] / --parallel [n]     Eksekusi multi-tab paralel n-worker`);
+            console.log(`  --px / --proxy <proxy>      Aktifkan proxy sticky/rotasi otomatis`);
+            console.log(`  --p <file>                  Load file proxy langsung (contoh: --p p atau --p proxy.txt)`);
+            console.log(`  -r / --rotate-proxy         Paksa rotasi ke proxy baru tiap wallet`);
+            console.log(`  --headless                  Eksekusi di background tanpa render visual`);
+            console.log(`  --snap / --restore          Sesi teleport: simpan/pulihkan cookies & storage state`);
+            console.log(`  --stop-if "<teks>"          Auto-stop loop seketika jika teks terdeteksi di DOM`);
+            console.log(`  -v / --sniff / --debug      Tampilkan rincian payload & respons API\n`);
+            process.exit(0);
+        }
+
         if (!recipeName || recipeName.startsWith('--')) {
-            console.log(`${RED}Error: Tentukan nama resep! (contoh: web play iota_gives)${RESET}`);
+            console.error(`\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mTentukan nama resep! (contoh: web play iota)\x1b[0m`);
             process.exit(1);
         }
+
+        // 1. Validasi keberadaan resep di recipes_db.json
+        const recipesPath = '/root/wallet/recipes_db.json';
+        let availableRecipes = [];
+        try {
+            const db = JSON.parse(fs.readFileSync(recipesPath, 'utf8'));
+            availableRecipes = Object.keys(db);
+        } catch (_) {}
+        if (availableRecipes.length > 0 && !availableRecipes.includes(recipeName)) {
+            console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mModul/resep "${recipeName}" tidak ditemukan di database!\x1b[0m`);
+            console.error(`  \x1b[90mDaftar resep tersedia: ${availableRecipes.slice(0, 10).join(', ')}${availableRecipes.length > 10 ? '...' : ''}\x1b[0m\n`);
+            process.exit(1);
+        }
+
+        // 2. Validasi whitelist flag/argumen yang diizinkan untuk "web play"
+        const ALLOWED_PLAY_FLAGS = new Set([
+            '--wallet', '--wallets', '--chain', '--loop',
+            '--p', '--proxy-file', '-pf', '--file-proxy', '--px-file',
+            '--proxy', '--px', '-px',
+            '--from', '--start',
+            '--url', '--code',
+            '--stop-if', '--stop-not',
+            '-p', '--parallel',
+            '--burst', '-b',
+            '--profile', '--profiles',
+            '--email', '--emails', '--email-file', '--emails-file',
+            '--all', '-a', '--all-wallets',
+            '--headless', '--visual', '--headed',
+            '--ghostwallet', '--ghost-wallet', '--ghost', '--daemon', '--sign',
+            '--turbo', '--no-jit', '--jit', '--wire', '--doze',
+            '--snap', '--session-save', '--restore', '--session-load',
+            '-r', '--rotate-proxy', '--rotate',
+            '-v', '--verbose', '--sniff', '--debug', '--show-sniff',
+            '--all-rows', '--detail',
+            '--keep-open', '--no-close',
+            '--cloud-mail', '--temp-mail', '--mail',
+            '--direct',
+            '--help', '-h'
+        ]);
+
+        const invalidFlags = [];
+        for (const a of args.slice(2)) {
+            if (a.startsWith('-')) {
+                const flagName = a.split('=')[0];
+                if (!ALLOWED_PLAY_FLAGS.has(flagName)) {
+                    invalidFlags.push(flagName);
+                }
+            }
+        }
+        if (invalidFlags.length > 0) {
+            console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mArgumen/flag tidak valid: "${invalidFlags.join(', ')}"\x1b[0m`);
+            console.error(`  \x1b[90mKetik "web play --help" atau "web help" untuk melihat daftar opsi yang didukung.\x1b[0m\n`);
+            process.exit(1);
+        }
+
+        // 3. Validasi nilai flag wajib (tidak boleh kosong atau langsung diikuti flag lain)
+        const VALUED_PLAY_FLAGS = ['--wallet', '--wallets', '--chain', '--loop', '--from', '--start', '--url', '--stop-if', '--profile', '--profiles', '--code', '--email', '--emails', '--email-file', '--emails-file'];
+        for (const vf of VALUED_PLAY_FLAGS) {
+            const idx = args.indexOf(vf);
+            if (idx !== -1 && (!args[idx + 1] || args[idx + 1].startsWith('-'))) {
+                console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mFlag ${vf} membutuhkan nilai/argumen!\x1b[0m\n`);
+                process.exit(1);
+            }
+        }
+
         let wallet = '';
         const wIdx = args.indexOf('--wallet');
         if (wIdx !== -1 && args[wIdx + 1]) wallet = args[wIdx + 1];
@@ -2287,6 +2825,16 @@ async function main() {
         if (lIdx !== -1 && args[lIdx + 1]) loop = parseInt(args[lIdx + 1], 10) || 1;
         let headless = args.includes('--headless');
         let ghostwallet = args.includes('--ghostwallet') || args.includes('--ghost-wallet') || args.includes('--ghost') || args.includes('--daemon') || args.includes('--sign');
+        let email = '';
+        const emIdx = args.indexOf('--email');
+        if (emIdx !== -1 && args[emIdx + 1]) email = args[emIdx + 1];
+        let emails = '';
+        const emsIdx = args.indexOf('--emails');
+        if (emsIdx !== -1 && args[emsIdx + 1]) emails = args[emsIdx + 1];
+        let emailFile = '';
+        const efIdx = args.findIndex(a => a === '--email-file' || a === '--emails-file');
+        if (efIdx !== -1 && args[efIdx + 1]) emailFile = args[efIdx + 1];
+        let cloudMail = args.includes('--cloud-mail') || args.includes('--temp-mail');
         let url = '';
         const uIdx = args.indexOf('--url');
         if (uIdx !== -1 && args[uIdx + 1]) url = args[uIdx + 1];
@@ -2295,13 +2843,39 @@ async function main() {
             if (rawUrl) {
                 url = rawUrl;
             } else {
+                let recipeBase = '';
                 try {
                     const recipes = JSON.parse(fs.readFileSync('/root/wallet/recipes_db.json', 'utf8'));
                     if (recipes[recipeName] && recipes[recipeName].targetUrl) {
-                        url = recipes[recipeName].targetUrl;
+                        recipeBase = recipes[recipeName].targetUrl;
                     }
                 } catch (_) {}
+
+                // Cek argumen kode/link non-flag (misal: web play iota 6x9OGUhB)
+                const valuedFlags = new Set(['--wallet', '--wallets', '--chain', '--loop', '--p', '--proxy-file', '-pf', '--file-proxy', '--from', '--start', '--url', '--stop-if', '-p', '--parallel', '--profile', '--profiles', '--code', '--burst', '-b', '--email', '--emails', '--email-file', '--emails-file']);
+                const flaggedValues = new Set();
+                for (let i = 0; i < args.length; i++) {
+                    const a = args[i];
+                    if (valuedFlags.has(a) && args[i + 1] && !args[i + 1].startsWith('-')) {
+                        flaggedValues.add(args[i + 1]);
+                    }
+                }
+                const nonFlagArgs = args.slice(2).filter(a => !a.startsWith('-') && !flaggedValues.has(a));
+                const potentialCode = nonFlagArgs[0];
+
+                if (potentialCode && recipeBase) {
+                    url = `${recipeBase.replace(/\/+$/, '')}/${potentialCode}`;
+                } else {
+                    url = recipeBase;
+                }
             }
+        }
+
+        if (url === 'https://iota.gives' || url === 'https://iota.gives/') {
+            console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mModul "${recipeName}" membutuhkan link atau kode klaim dari Telegram/X!\x1b[0m`);
+            console.error(`  \x1b[90mContoh Full Link:\x1b[0m \x1b[36mweb play ${recipeName} https://iota.gives/<kode_klaim>\x1b[0m`);
+            console.error(`  \x1b[90mContoh Kode     :\x1b[0m \x1b[36mweb play ${recipeName} <kode_klaim>\x1b[0m\n`);
+            process.exit(1);
         }
 
         let proxy = '';
@@ -2393,11 +2967,72 @@ async function main() {
         }
 
         let rotateProxy = args.includes('--rotate-proxy') || args.includes('--rotate') || args.includes('-r');
+        let showSniff = args.includes('--sniff') || args.includes('-v') || args.includes('--verbose') || args.includes('--debug');
+        let turbo = args.includes('--turbo');
+        let noJit = args.includes('--no-jit');
+        let jit = args.includes('--jit') || (turbo && !noJit);
+        let wire = args.includes('--wire');
+        let doze = args.includes('--doze');
+        let snap = args.includes('--snap') || args.includes('--session-save');
+        let restore = args.includes('--restore') || args.includes('--session-load');
+        let burst = 1;
+        const bIdx = args.findIndex(a => a === '--burst' || a === '-b');
+        if (bIdx !== -1) {
+            const nextVal = args[bIdx + 1];
+            burst = (nextVal && /^\d+$/.test(nextVal)) ? parseInt(nextVal, 10) : 3;
+        } else if (wire) {
+            burst = 3;
+        }
+
+        // ⚡ Burst mengadopsi arsitektur multi-tab parallel (-p) secara default untuk isolasi DOM & reCAPTCHA sempurna
+        if (burst > 1 && concurrency === 1) {
+            concurrency = burst;
+        }
+
+        const showAllRows = args.includes('--all-rows') || args.includes('-v') || args.includes('--verbose') || args.includes('--detail');
 
         const cr = new ChainResolver();
         const chainArg = cr.extractChainFromArgs(args);
         const firstW = wallet || (wallets ? (typeof wallets === 'string' ? wallets.split(',')[0].trim() : '') : '');
         const resolved = cr.resolve(chainArg, url, firstW);
+
+        // 4. Validasi keberadaan wallet di database eso.db sebelum mengeksekusi browser
+        const walletsToCheck = [];
+        if (wallets) {
+            try {
+                const { expandWalletRanges } = require('/root/wallet/webview_mcp_engine.cjs');
+                walletsToCheck.push(...expandWalletRanges(wallets));
+            } catch (_) {
+                walletsToCheck.push(...String(wallets).split(',').map(s => s.trim()));
+            }
+        } else if (wallet) {
+            try {
+                const { expandWalletRanges } = require('/root/wallet/webview_mcp_engine.cjs');
+                walletsToCheck.push(...expandWalletRanges(wallet));
+            } catch (_) {
+                walletsToCheck.push(wallet);
+            }
+        }
+        if (fromWallet) {
+            walletsToCheck.push(fromWallet);
+        }
+
+        if (walletsToCheck.length > 0) {
+            const invalidWallets = [];
+            for (const w of walletsToCheck) {
+                if (!w) continue;
+                const row = cr.getWallet(w, resolved);
+                if (!row || !row.address) {
+                    invalidWallets.push(w);
+                }
+            }
+            if (invalidWallets.length > 0) {
+                const invStr = invalidWallets.slice(0, 5).join(', ') + (invalidWallets.length > 5 ? ` (+${invalidWallets.length - 5} lainnya)` : '');
+                console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mWallet "${invStr}" tidak ditemukan di database eso.db untuk rantai ${resolved.chainKey.toUpperCase()}!\x1b[0m`);
+                console.error(`  \x1b[90mPastikan nama dompet terdaftar di eso.db (misal: eso-1 s/d eso-1000).\x1b[0m\n`);
+                process.exit(1);
+            }
+        }
 
         const pb = getPlaywrightBridge();
         if (pb) {
@@ -2410,7 +3045,12 @@ async function main() {
                 pxLabel = proxy.toUpperCase();
             }
             const isProxyStr = pxLabel ? ` | \x1b[35mPROXY: ${pxLabel}\x1b[0m` : '';
-            const isParallelStr = concurrency > 1 ? ` | \x1b[33mPARALEL (x${concurrency})\x1b[0m` : '';
+            const isParallelStr = (concurrency > 1 && burst <= 1) ? ` | \x1b[33mPARALEL (x${concurrency})\x1b[0m` : '';
+            const isTurboStr = turbo ? ` | \x1b[36mTURBO${noJit ? ' (NO-JIT)' : ' (JIT)'}\x1b[0m` : (jit ? ` | \x1b[33mJIT\x1b[0m` : '');
+            const isWireStr = wire ? ` | \x1b[36mWIRE\x1b[0m` : '';
+            const isBurstStr = burst > 1 ? ` | \x1b[35mBURST (x${burst} Tab Paralel)\x1b[0m` : '';
+            const isDozeStr = doze ? ` | \x1b[35mDOZE\x1b[0m` : '';
+            const isSniffStr = showSniff ? ` | \x1b[36mSNIFF: VERBOSE\x1b[0m` : '';
             let displayWallets = '';
             if (wallets) {
                 try {
@@ -2427,20 +3067,149 @@ async function main() {
             } else if (all || (!wallet && !wallets)) {
                 displayWallets = fromWallet ? `FROM ${fromWallet.toUpperCase()} (Hingga Habis)` : 'ALL (Dari Awal Hingga Habis)';
             }
-            console.log(`\n\x1b[1m\x1b[36m[INSTANT REPLAY]\x1b[0m \x1b[97mModul: "${recipeName}"${wallet && !displayWallets ? ` | Wallet: ${wallet}${loop > 1 ? ` (x${loop})` : ''}` : ''}${displayWallets ? ` | Wallets: ${displayWallets}` : ''} | Rantai: ${resolved.chainKey.toUpperCase()}${isHeadlessStr}${isGhostStr}${isProxyStr}${isParallelStr}\x1b[0m`);
 
-            const res = await pb.playRecipe(recipeName, { wallet, wallets, loop, chain: resolved.chainKey, headless, url, ghostwallet, proxy, proxyFile, rotateProxy, concurrency, all, from: fromWallet });
+            let recipeUsesEmail = false;
+            try {
+                const recipes = JSON.parse(fs.readFileSync('/root/wallet/recipes_db.json', 'utf8'));
+                const rec = recipes[recipeName];
+                if (rec) {
+                    const recStr = JSON.stringify(rec);
+                    recipeUsesEmail = recStr.includes('{{EMAIL') ||
+                                      recStr.includes('{{OTP') ||
+                                      Boolean(rec.events && rec.events.some(e => e.type === 'wait_otp' || e.type === 'otp' || e.type === 'wait_link' || (e.selector && e.selector.includes('email'))));
+                }
+            } catch (_) {}
+
+            let isEmailStr = '';
+            const hasExplicitEmail = Boolean(email || emails || cloudMail || emailFile);
+            if (hasExplicitEmail || recipeUsesEmail) {
+                if (cloudMail) {
+                    isEmailStr = ` | Email: \x1b[36mCloud-Mail (Dynamic TLD)\x1b[0m`;
+                } else if (email) {
+                    isEmailStr = ` | Email: \x1b[32m${email}\x1b[0m`;
+                } else if (emails) {
+                    isEmailStr = ` | Emails: \x1b[32m${emails}\x1b[0m`;
+                } else if (fs.existsSync('/root/wallet/email.txt')) {
+                    try {
+                        const { EmailPoolManager } = require('/root/wallet/email_pool_manager.cjs');
+                        const ep = new EmailPoolManager({ emailFile: emailFile || '/root/wallet/email.txt' });
+                        const summ = ep.getPoolSummary();
+                        if (summ.staticCount > 0) {
+                            isEmailStr = ` | Email: \x1b[32mStatic Pool (${summ.staticCount} Akun: ${summ.staticEmails.slice(0, 2).join(', ')}${summ.staticCount > 2 ? '...' : ''})\x1b[0m`;
+                        }
+                    } catch (_) {}
+                }
+            }
+
+            // Baris 1: Info Modul & Chain
+            const headerLine = `\x1b[1m\x1b[36m[INSTANT REPLAY]\x1b[0m \x1b[97mModul: "${recipeName}" | Rantai: \x1b[1m\x1b[32m${resolved.chainKey.toUpperCase()}\x1b[0m`;
+
+            // Baris 2: Info Wallets / Target Akun (dan Email jika ada)
+            let walletLabel = 'Wallets';
+            let walletDetail = '';
+            if (displayWallets) {
+                walletDetail = displayWallets;
+                if (!displayWallets.includes('(') && !displayWallets.includes('FROM') && !displayWallets.includes('ALL')) {
+                    walletLabel = 'Wallet';
+                }
+            } else if (wallet) {
+                walletLabel = 'Wallet';
+                walletDetail = wallet + (loop > 1 ? ` (Loop: ${loop}x)` : '');
+            } else {
+                walletDetail = 'Default (eso.db)';
+            }
+            const walletLine = `  \x1b[33m${walletLabel.padEnd(7, ' ')}\x1b[0m : \x1b[97m${walletDetail}\x1b[0m${isEmailStr}`;
+
+            // Baris 3: Info WebView & Execution Mode
+            const webviewParts = [
+                headless ? '\x1b[36mHEADLESS\x1b[0m' : '\x1b[32mVISUAL\x1b[0m',
+                turbo ? `\x1b[36mTURBO${noJit ? ' (NO-JIT)' : ' (JIT)'}\x1b[0m` : (jit ? '\x1b[33mJIT\x1b[0m' : ''),
+                (concurrency > 1 && burst <= 1) ? `\x1b[33mPARALEL (x${concurrency})\x1b[0m` : '',
+                burst > 1 ? `\x1b[35mBURST (x${burst} Tab Paralel)\x1b[0m` : '',
+                pxLabel ? `\x1b[35mPROXY: ${pxLabel}\x1b[0m` : '',
+                ghostwallet ? '\x1b[35mGHOST-DAEMON\x1b[0m' : '',
+                wire ? '\x1b[36mWIRE\x1b[0m' : '',
+                doze ? '\x1b[35mDOZE\x1b[0m' : '',
+                snap ? '\x1b[36mSNAP\x1b[0m' : '',
+                restore ? '\x1b[32mRESTORE\x1b[0m' : '',
+                showSniff ? '\x1b[36mSNIFF: VERBOSE\x1b[0m' : ''
+            ].filter(Boolean);
+            const webviewLine = `  \x1b[36mWebView\x1b[0m : ${webviewParts.join(' | ')}`;
+
+            console.log(`\n${headerLine}\n${walletLine}\n${webviewLine}`);
+
+            const res = await pb.playRecipe(recipeName, { wallet, wallets, loop, chain: resolved.chainKey, headless, url, ghostwallet, proxy, proxyFile, rotateProxy, concurrency, all, from: fromWallet, showSniff, turbo, jit, noJit, wire, burst, doze, email, emails, emailFile, cloudMail, snap, restore });
             if (res.error) {
                 console.error(`\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97m${res.error}\x1b[0m`);
                 process.exitCode = 1;
             } else if (res.results && Array.isArray(res.results)) {
-                console.log(`\n\x1b[1m\x1b[32m[BATCH REPLAY SELESAI]\x1b[0m \x1b[97mTotal: ${res.totalWallets} Wallet | Waktu Total: ${res.totalElapsed}\x1b[0m`);
-                res.results.forEach((r, idx) => {
-                    const modeBadge = r.mode === 'HOT_REPLAY' ? `\x1b[33m[HOT] \x1b[0m` : `\x1b[36m[COLD]\x1b[0m`;
-                    const addrShort = r.address ? `${r.address.slice(0, 10)}...${r.address.slice(-6)}` : '-';
-                    console.log(`  \x1b[1m\x1b[97m${idx + 1}.\x1b[0m ${modeBadge} \x1b[97m${(r.wallet || '-').padEnd(10)} (${addrShort}) -> \x1b[1m\x1b[33m${r.elapsed}\x1b[0m\x1b[97m | \x1b[32m${r.finalStatus}\x1b[0m`);
+                const totalWallets = res.totalWallets || res.results.length;
+                const successList = res.results.filter(r => (r.finalStatus || '').startsWith('SUKSES') || r.isSuccess);
+                const failList = res.results.filter(r => (r.finalStatus || '').startsWith('GAGAL') || (r.finalStatus || '').startsWith('ERROR'));
+                const claimedList = res.results.filter(r => (r.finalStatus || '').startsWith('SUDAH KLAIM') || r.isAlreadyClaimed);
+                const soldOutList = res.results.filter(r => (r.finalStatus || '').startsWith('HABIS') || r.isSoldOut);
+                const successRate = totalWallets > 0 ? ((successList.length / totalWallets) * 100).toFixed(1) : '0.0';
+
+                // Hitung total akumulasi reward per token/poin
+                const rewardTotals = {};
+                for (const r of successList) {
+                    if (r.reward && r.reward.amount) {
+                        const sym = r.reward.symbol || 'Reward';
+                        rewardTotals[sym] = (rewardTotals[sym] || 0) + Number(r.reward.amount);
+                    } else if (typeof r.reward === 'string') {
+                        rewardTotals[r.reward] = (rewardTotals[r.reward] || 0) + 1;
+                    }
+                }
+                const rewardParts = Object.entries(rewardTotals).map(([sym, amt]) => {
+                    const displayAmt = (amt % 1 !== 0) ? parseFloat(amt.toFixed(6)) : amt;
+                    return `\x1b[1m\x1b[32m+${displayAmt} ${sym}\x1b[0m`;
                 });
-                console.log('');
+                const totalRewardStr = rewardParts.length > 0 ? rewardParts.join(', ') : '';
+
+                console.log(`\n\x1b[1m\x1b[32m[BATCH REPLAY SELESAI]\x1b[0m \x1b[97mTotal: ${totalWallets} Wallet | Waktu Total: ${res.totalElapsed}\x1b[0m`);
+
+                // Jika akun sedikit (<= 5) atau user minta --all-rows: tampilkan detail per-wallet
+                if (res.results.length <= 5 || showAllRows) {
+                    res.results.forEach((r, idx) => {
+                        const modeBadge = (r.mode && r.mode.includes('BURST')) ? `\x1b[35m[BURST]\x1b[0m` : (r.mode === 'HOT_REPLAY' ? `\x1b[33m[HOT]  \x1b[0m` : `\x1b[36m[COLD] \x1b[0m`);
+                        const addrShort = r.address ? `${r.address.slice(0, 10)}...${r.address.slice(-6)}` : '-';
+                        console.log(`  \x1b[1m\x1b[97m${idx + 1}.\x1b[0m ${modeBadge} \x1b[97m${(r.wallet || '-').padEnd(10)} (${addrShort}) -> \x1b[1m\x1b[33m${r.elapsed}\x1b[0m\x1b[97m | \x1b[32m${r.finalStatus}\x1b[0m`);
+                    });
+                }
+
+                // Ringkasan bersih tanpa garis (borderless clean)
+                const rateColor = Number(successRate) >= 80 ? '\x1b[32m' : (Number(successRate) >= 50 ? '\x1b[33m' : '\x1b[31m');
+                let resultParts = [`\x1b[32m✓ ${successList.length} Sukses\x1b[0m`];
+                if (failList.length > 0) resultParts.push(`\x1b[31m✗ ${failList.length} Gagal\x1b[0m`);
+                if (claimedList.length > 0) resultParts.push(`\x1b[36mℹ ${claimedList.length} Sudah Klaim\x1b[0m`);
+                if (soldOutList.length > 0) resultParts.push(`\x1b[33m⚠ ${soldOutList.length} Kuota Habis\x1b[0m`);
+
+                console.log(`  \x1b[1m\x1b[97m${"Hasil:".padEnd(18, " ")}\x1b[0m${resultParts.join(' | ')} (${rateColor}${successRate}% Rate\x1b[0m)`);
+                if (totalRewardStr) {
+                    console.log(`  \x1b[1m\x1b[97m${"Total Reward:".padEnd(18, " ")}\x1b[0m${totalRewardStr}`);
+                }
+                const avgSec = (parseFloat(res.totalElapsed) / (totalWallets || 1)).toFixed(1);
+                console.log(`  \x1b[1m\x1b[97m${"Rata-rata Waktu:".padEnd(18, " ")}\x1b[0m\x1b[33m${avgSec}s / wallet\x1b[0m`);
+
+                // Jika ada yang gagal, tampilkan daftar error audit agar Tuan bisa langsung retry tanpa scrolling panjang
+                if (failList.length > 0) {
+                    console.log(`\n  \x1b[1m\x1b[31mGagal / Perlu Retry (${failList.length} Wallet):\x1b[0m`);
+                    failList.slice(0, 10).forEach(f => {
+                        const wName = f.wallet || 'Unknown';
+                        const wAddr = f.address ? `(${f.address.slice(0, 8)}...${f.address.slice(-6)})` : '';
+                        console.log(`    \x1b[31m-\x1b[0m \x1b[97m${wName} ${wAddr} -> \x1b[31m${f.finalStatus || 'Gagal'}\x1b[0m`);
+                    });
+                    if (failList.length > 10) {
+                        console.log(`    \x1b[90m... dan ${failList.length - 10} wallet gagal lainnya\x1b[0m`);
+                    }
+                    const retryList = failList.map(f => f.wallet).filter(Boolean).slice(0, 15).join(',');
+                    if (retryList) {
+                        console.log(`    \x1b[90mTips retry instan: web play ${recipeName} --wallets ${retryList}\x1b[0m`);
+                    }
+                }
+
+                runIpcToast('Tab WebView ditutup');
+                console.log(`  \x1b[1m\x1b[97m${"Tab WebView:".padEnd(18, " ")}\x1b[0m\x1b[32m✓ Ditutup\x1b[0m\n`);
             } else {
                 console.log(`\n\x1b[1m\x1b[32m[REPLAY SELESAI]\x1b[0m \x1b[97mWaktu: ${res.elapsed} | Status: OK\x1b[0m`);
                 if (res.address) console.log(`  \x1b[97m${"Alamat:".padEnd(18, " ")}\x1b[32m${res.address}\x1b[0m \x1b[97m(${res.chain})\x1b[0m`);
@@ -2451,7 +3220,10 @@ async function main() {
                     const targetPadded = (st.target || '-').padEnd(16, ' ');
                     console.log(`  \x1b[97m${tagCol}${targetPadded} -> ${okBadge}${skipInfo}\x1b[0m`);
                 });
-                if (res.finalStatus) console.log(`  \x1b[1m\x1b[97m${"Status Akhir:".padEnd(18, " ")}\x1b[32m${res.finalStatus}\x1b[0m\n`);
+                if (res.finalStatus) console.log(`  \x1b[1m\x1b[97m${"Status Akhir:".padEnd(18, " ")}\x1b[32m${res.finalStatus}\x1b[0m`);
+                if (res.reward && res.reward.formatted) console.log(`  \x1b[1m\x1b[97m${"Reward:".padEnd(18, " ")}\x1b[1m\x1b[32m${res.reward.formatted}\x1b[0m`);
+                runIpcToast('Tab WebView ditutup');
+                console.log(`  \x1b[1m\x1b[97m${"Tab WebView:".padEnd(18, " ")}\x1b[0m\x1b[32m✓ Ditutup\x1b[0m\n`);
             }
             await pb.close();
             process.exit(0);
@@ -2460,11 +3232,22 @@ async function main() {
 
     // Jika dipanggil oleh Telegram / skrip background dan membawa MAKRO: delegasikan ke tab baru via IPC!
     if (isTelegramCaller && !inWorkerTab && !['prompt', 'click', 'type', 'fill', 'snapshot', 'dom', 'eval', 'close'].includes(cmd)) {
-        const hasMacro = args.some(a => a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') || a.startsWith('--loop') || a.startsWith('-l'));
+        const hasMacro = args.some(a => a.startsWith('--modul') || a.startsWith('--macro') || a.startsWith('--recipe') || a.startsWith('--loop') || a.startsWith('-l') || a === 'play');
         if (hasMacro) {
-            const workerTab = ('w_' + Date.now().toString().slice(-8)).slice(0, 14);
+            let modulName = '';
+            for (let i = 0; i < args.length; i++) {
+                const a = args[i];
+                if (['--modul', '--recipe', '--macro', 'play'].includes(a) && args[i + 1] && !args[i + 1].startsWith('-')) {
+                    modulName = args[i + 1];
+                    break;
+                }
+                if (a.startsWith('--modul=')) { modulName = a.split('=')[1]; break; }
+                if (a.startsWith('--recipe=')) { modulName = a.split('=')[1]; break; }
+                if (a.startsWith('--macro=')) { modulName = a.split('=')[1]; break; }
+            }
+            const workerTab = modulName ? modulName.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 20) : ('w_' + Date.now().toString().slice(-8)).slice(0, 14);
             const cleanArgs = args.filter(a => a !== '--telegram' && a !== '--new-tab');
-            const delegatedCmd = `web --in-worker-tab --tab-name ${workerTab} ${cleanArgs.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}; sleep 1; termux-ipc tab close "${workerTab}" 2>/dev/null || true`;
+            const delegatedCmd = `web --in-worker-tab --tab-name "${workerTab}" ${cleanArgs.map(a => (a.includes(' ') || a.includes('&') || a.includes('#')) ? `"${a.replace(/"/g, '\\"')}"` : a).join(' ')}; sleep 1; termux-ipc tab close "${workerTab}" 2>/dev/null || true`;
             console.log(`[Agent-Web] Panggilan background/Telegram dengan makro terdeteksi. Membuka tab baru "${workerTab}" via IPC...`);
             runIpcTab('new', [workerTab, delegatedCmd]);
             process.exit(0);
@@ -2791,6 +3574,7 @@ async function main() {
     if (cmd === 'kill' || cmd === 'kill-tab' || cmd === 'killtab') {
         const killArg = args[1] && !args[1].startsWith('-') ? `kill-tab ${args[1]}` : 'kill-tab';
         runIpc(killArg);
+        runIpcToast('Tab WebView ditutup');
         console.log(`Tab WebView ditutup.`);
         process.exit(0);
     }
@@ -2807,15 +3591,77 @@ async function main() {
         process.exit(0);
     }
 
+    const isGcCmd = (
+        cmd === 'gc' ||
+        cmd === 'clean-ram' ||
+        cmd === 'purge' ||
+        cmd === 'mem' ||
+        cmd === 'free-ram' ||
+        cmd === 'garbage-collect'
+    );
+
+    if (isGcCmd) {
+        const allTabs = args.includes('--all') || args.includes('-a');
+        const asJson = args.includes('--json') || args.includes('-j');
+        const pb = getWebviewBridge();
+        if (!pb) {
+            console.error('\x1b[31mGagal menginisialisasi WebView bridge.\x1b[0m');
+            process.exit(1);
+        }
+
+        const res = await pb.collectGarbage({ allTabs });
+        if (asJson) {
+            console.log(JSON.stringify(res, null, 2));
+            process.exit(res.success ? 0 : 1);
+        }
+
+        if (!res.success) {
+            console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97m${res.error || 'Gagal menjalankan V8 Garbage Collection'}\x1b[0m\n`);
+            process.exit(1);
+        }
+
+        const tabDesc = res.allTabs ? `${res.tabsPurged} tab (Seluruh Tab)` : `1 tab (${res.totalTargets > 1 ? 'Tab Utama, ' + res.totalTargets + ' total' : 'Utama'})`;
+        console.log(`\n\x1b[1m\x1b[32m✓\x1b[0m \x1b[1m[MEMORY PURGE]\x1b[0m \x1b[97mV8 Heap Garbage Collection Berhasil\x1b[0m`);
+        console.log(`  \x1b[90mTab Diproses  :\x1b[0m \x1b[97m${tabDesc}\x1b[0m`);
+        console.log(`  \x1b[90mV8 Heap Awal  :\x1b[0m \x1b[97m${res.heapBeforeMb} MB\x1b[0m`);
+        console.log(`  \x1b[90mV8 Heap Akhir :\x1b[0m \x1b[97m${res.heapAfterMb} MB\x1b[0m`);
+        console.log(`  \x1b[90mRAM Bebas     :\x1b[0m \x1b[1m\x1b[32m${res.freedMb} MB\x1b[0m \x1b[90m(Durasi: ${res.durationMs}ms)\x1b[0m\n`);
+        process.exit(0);
+    }
+
     if (cmd === 'close') {
         runIpc('close');
         console.log(`WebView ditutup.`);
         process.exit(0);
     }
 
-    // Default: teruskan ke termux-ipc webview
-    const output = runIpc(args.join(' '));
-    if (output) console.log(output);
+    // Validasi input default sebelum diteruskan ke termux-ipc webview
+    const firstArg = args[0] ? args[0].trim() : '';
+    const isUrl = firstArg.startsWith('http://') ||
+                  firstArg.startsWith('https://') ||
+                  firstArg.startsWith('file://') ||
+                  firstArg.startsWith('about:') ||
+                  firstArg.startsWith('content://') ||
+                  firstArg.startsWith('www.') ||
+                  firstArg === 'home' ||
+                  firstArg === 'beranda';
+
+    const isLocalFile = fs.existsSync(firstArg);
+    const isIpcFlag = firstArg.startsWith('--') && [
+        '--headless', '--new-tab', '--incognito', '--clear-cache', '--devtools',
+        '--proxy', '--user-agent', '--url', '--window', '--zoom'
+    ].some(f => firstArg.startsWith(f));
+
+    if (args.length === 0 || isUrl || isLocalFile || isIpcFlag) {
+        const output = runIpc(args.join(' '));
+        if (output) console.log(output);
+        process.exit(0);
+    }
+
+    // Jika perintah tidak dikenali sama sekali: Tolak dan hentikan seketika (Anti-Eksekusi Liar)
+    console.error(`\n\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97mPerintah atau URL "${firstArg}" tidak valid!\x1b[0m`);
+    console.error(`  \x1b[90mKetik "web help" untuk melihat daftar perintah dan opsi yang didukung.\x1b[0m\n`);
+    process.exit(1);
 }
 
 main().catch(err => {

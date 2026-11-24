@@ -279,15 +279,11 @@ public class FusionProfileManager {
      */
     public static String getEffectiveUserAgent(DeviceProfile device, boolean isDesktop) {
         if (isDesktop) {
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Phantom/24.1.0/";
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
         }
-        String ua = (device != null && device.userAgent != null && !device.userAgent.isEmpty())
+        return (device != null && device.userAgent != null && !device.userAgent.isEmpty())
                 ? device.userAgent
                 : "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36";
-        if (!ua.contains("Phantom/")) {
-            ua = ua + " Phantom/24.1.0/";
-        }
-        return ua;
     }
 
     public static void setupProfileForWebView(WebView webView, String profileName, boolean isDesktop) {

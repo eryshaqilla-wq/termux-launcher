@@ -501,6 +501,10 @@ elif os.path.exists("/project/termux-launcher/fusion-setup/eso"):
     shutil.copy2("/project/termux-launcher/fusion-setup/eso", os.path.join(BUNDLE_DIR, "bin/eso"))
 if os.path.exists("/usr/local/bin/pwd-vault"):
     shutil.copy2("/usr/local/bin/pwd-vault", os.path.join(BUNDLE_DIR, "bin/pwd-vault"))
+if os.path.exists("/usr/local/bin/termux-telegram-mcp"):
+    shutil.copy2("/usr/local/bin/termux-telegram-mcp", os.path.join(BUNDLE_DIR, "bin/termux-telegram-mcp"))
+if os.path.exists("/usr/local/bin/termux-x-mcp"):
+    shutil.copy2("/usr/local/bin/termux-x-mcp", os.path.join(BUNDLE_DIR, "bin/termux-x-mcp"))
 
 for b in os.listdir(os.path.join(BUNDLE_DIR, "bin")):
     os.chmod(os.path.join(BUNDLE_DIR, "bin", b), 0o755)
@@ -509,8 +513,11 @@ print("--- 2. Menyiapkan Wallet, Sniper & Configs ke bundle/wallet ---")
 # 1. Salin Standalone CJS & Code Suite beserta Template Konfigurasi
 for f_cjs in [
     "wallet.cjs", "wallet_ui_server.cjs", "wallet_ui.html", "wallet_solana.cjs", "wallet_multichain.cjs", "auto_engine.cjs", "x_native.cjs",
-    "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "agy_ganti.cjs", "eso_db.cjs",
+    "x_webview.cjs", "pemantau.cjs", "telegram.cjs", "9router.cjs", "agy_ganti.cjs", "eso_db.cjs", "eso_mail.cjs",
     "termux_webview_mcp_server.cjs", "webview_mcp_engine.cjs", "playwright_mcp_engine.cjs",
+    "proxy_manager.cjs", "chain_resolver.cjs", "passkey_vault.cjs", "recipes_db.json", "recipe_template.json",
+    "email_pool_manager.cjs", "email.txt",
+    "telegram_mcp_engine.cjs", "x_mcp_engine.cjs",
     "config_telegram.json", "tele_filter_config.json", "filter_config.json",
     "query_db.json", "module_db.json", "pantau.json", "webview_profiles.json",
     "ai_config.json", "ai_selectors.json", "pembantu_avatar.jpg", "blacklists.json",
@@ -533,7 +540,7 @@ os.makedirs(wallet_scripts_bundle_dir, exist_ok=True)
 
 for us in [
     "fusion_agent_webview.user.js",
-    "fusion_agent_playwright.user.js",
+    "fusion_virtual_passkey.js",
     "ghost_solana.user.js",
     "ghost_substrate.user.js",
     "ghost_sui.user.js"
@@ -858,8 +865,8 @@ for tool in [
         shutil.copy2(src_tool, os.path.join(ASSETS_DIR, tool))
         shutil.copy2(src_tool, os.path.join(FUSION_SETUP_DIR, tool))
 
-# Pastikan userscript fusion_agent_webview.user.js tersinkron ke assets dan fusion-setup
-for script_name in ["fusion_agent_webview.user.js", "fusion_agent_playwright.user.js"]:
+# Pastikan userscript fusion_agent_webview.user.js & passkey tersinkron ke assets dan fusion-setup
+for script_name in ["fusion_agent_webview.user.js", "fusion_virtual_passkey.js"]:
     us_src = os.path.join(BUNDLE_DIR, "scripts", script_name)
     if os.path.exists(us_src):
         shutil.copy2(us_src, os.path.join(ASSETS_DIR, script_name))
