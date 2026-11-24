@@ -12,7 +12,7 @@
 (() => {
     'use strict';
 
-    const FUSION_ENGINE_VERSION = '1.2.0';
+    const FUSION_ENGINE_VERSION = "2.2.0";
     if (window.__FUSION_AGENT_ENGINE__ && window.__FUSION_AGENT_ENGINE__.version === FUSION_ENGINE_VERSION) return;
 
     // --- 1. WebRTC STUN Leak Protection (Stealth WebRTC) ---
@@ -130,16 +130,36 @@
             HTMLCanvasElement.prototype.toDataURL = function(type, encoderOptions) {
                 try {
                     const ctx = this.getContext('2d');
-                    if (ctx && this.width > 0 && this.height > 0 && this.width <= 300 && this.height <= 300) {
+                    if (ctx && this.width > 0 && this.height > 0) {
                         const seed = getWalletSeed();
-                        const pX = this.width - 1;
-                        const pY = this.height - 1;
+                        const pX = (seed % this.width);
+                        const pY = ((seed >>> 8) % this.height);
                         const px = ctx.getImageData(pX, pY, 1, 1);
-                        px.data[0] = Math.min(255, Math.max(0, px.data[0] + ((seed & 1) ? 1 : -1)));
+                        const shift = ((seed % 5) + 1);
+                        px.data[0] = (px.data[0] + shift) % 256;
+                        px.data[3] = Math.max(1, px.data[3]);
                         ctx.putImageData(px, pX, pY);
                     }
                 } catch (_) {}
                 return origToDataURL.apply(this, arguments);
+            };
+
+            const origToBlob = HTMLCanvasElement.prototype.toBlob;
+            HTMLCanvasElement.prototype.toBlob = function(callback, type, quality) {
+                try {
+                    const ctx = this.getContext('2d');
+                    if (ctx && this.width > 0 && this.height > 0) {
+                        const seed = getWalletSeed();
+                        const pX = (seed % this.width);
+                        const pY = ((seed >>> 8) % this.height);
+                        const px = ctx.getImageData(pX, pY, 1, 1);
+                        const shift = ((seed % 5) + 1);
+                        px.data[0] = (px.data[0] + shift) % 256;
+                        px.data[3] = Math.max(1, px.data[3]);
+                        ctx.putImageData(px, pX, pY);
+                    }
+                } catch (_) {}
+                return origToBlob.apply(this, arguments);
             };
         } catch (_) {}
 
@@ -1313,7 +1333,7 @@
     // ==========================================
     // ⚡ NATIVE GOD-MODE BRIDGE SHORTCUTS
     // ==========================================
-    window.__FUSION_NATIVE__ = {
+    const _legacyGhostBridge = {
         ipc: (cmd) => window.GhostBridge && window.GhostBridge.dispatchIpc ? window.GhostBridge.dispatchIpc(cmd) : false,
         touch: (x, y) => window.GhostBridge && window.GhostBridge.dispatchTouch ? window.GhostBridge.dispatchTouch(x, y) : false,
         swipe: (x1, y1, x2, y2, dur = 300) => window.GhostBridge && window.GhostBridge.dispatchSwipe ? window.GhostBridge.dispatchSwipe(x1, y1, x2, y2, dur) : false,
@@ -1424,6 +1444,16 @@
             return window.GhostBridge && window.GhostBridge.reloadUserscripts ? window.GhostBridge.reloadUserscripts() : false;
         }
     };
+
+    if (window.__FUSION_NATIVE__ && typeof window.__FUSION_NATIVE__.reflect === 'function') {
+        for (const k in _legacyGhostBridge) {
+            if (typeof window.__FUSION_NATIVE__[k] === 'undefined') {
+                window.__FUSION_NATIVE__[k] = _legacyGhostBridge[k];
+            }
+        }
+    } else {
+        window.__FUSION_NATIVE__ = Object.assign({}, _legacyGhostBridge);
+    }
 
     // ==========================================
     // 📬 CLOUD MAIL & OTP IN-PAGE BRIDGE
@@ -2162,43 +2192,13 @@
     }
     const WALLET_SEED = getWalletNoiseSeed();
 
-    // Canvas Micro-Noise (Per-Wallet Fingerprint Isolation)
-    if (HTMLCanvasElement.prototype.toDataURL) {
-        const origToDataURL = HTMLCanvasElement.prototype.toDataURL;
-        HTMLCanvasElement.prototype.toDataURL = function(...args) {
-            try {
-                const ctx = this.getContext('2d');
-                if (ctx && this.width > 0 && this.height > 0) {
-                    const img = ctx.getImageData(0, 0, 1, 1);
-                    const shift = (WALLET_SEED % 3) - 1;
-                    img.data[0] = Math.max(0, Math.min(255, img.data[0] + shift));
-                    ctx.putImageData(img, 0, 0);
-                }
-            } catch (_) {}
-            return origToDataURL.apply(this, args);
-        };
-    }
-    if (CanvasRenderingContext2D.prototype.getImageData) {
-        const origGetImageData = CanvasRenderingContext2D.prototype.getImageData;
-        CanvasRenderingContext2D.prototype.getImageData = function(...args) {
-            const data = origGetImageData.apply(this, args);
-            try {
-                if (data && data.data && data.data.length > 4) {
-                    const idx = (WALLET_SEED % (data.data.length / 4)) * 4;
-                    const shift = (WALLET_SEED % 3) - 1;
-                    data.data[idx] = Math.max(0, Math.min(255, data.data[idx] + shift));
-                }
-            } catch (_) {}
-            return data;
-        };
-    }
-
     // AudioContext Noise (Deterministic per-wallet)
     if (window.AudioBuffer && AudioBuffer.prototype.getChannelData) {
         const origGetChannelData = AudioBuffer.prototype.getChannelData;
         AudioBuffer.prototype.getChannelData = function(...args) {
             const channel = origGetChannelData.apply(this, args);
-            const factor = ((WALLET_SEED % 100) / 100000000);
+            const seed = getWalletNoiseSeed();
+            const factor = ((seed % 100) / 100000000);
             for (let i = 0; i < Math.min(channel.length, 32); i += 4) {
                 channel[i] += factor;
             }
@@ -2246,7 +2246,7 @@
     window.Fusion = {
         reflect: (className, methodName, args = []) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 const raw = bridge.reflect(className, methodName, JSON.stringify(args));
                 return raw ? JSON.parse(raw) : null;
@@ -2256,7 +2256,7 @@
         },
         settings: (opts) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.applySettings(JSON.stringify(opts)));
             } catch (e) {
@@ -2265,7 +2265,7 @@
         },
         blackhole: (patterns) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 const list = Array.isArray(patterns) ? patterns : [patterns];
                 return JSON.parse(bridge.setBlackholes(JSON.stringify(list)));
@@ -2275,7 +2275,7 @@
         },
         mock: (pattern, body = '', statusCode = 200, mimeType = 'application/json', headers = {}) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.setMockRules(JSON.stringify([{
                     pattern,
@@ -2290,7 +2290,7 @@
         },
         clearNetworkRules: () => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.clearNetworkRules());
             } catch (e) {
@@ -2299,7 +2299,7 @@
         },
         phoenix: (policy) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.setPhoenixPolicy(JSON.stringify(policy)));
             } catch (e) {
@@ -2308,7 +2308,7 @@
         },
         performance: (opts) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.setPerformanceMode(JSON.stringify(opts)));
             } catch (e) {
@@ -2317,7 +2317,7 @@
         },
         deviceInfo: () => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.getDeviceInfo());
             } catch (e) {
@@ -2329,7 +2329,7 @@
         },
         ipc: (cmd) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.execIpc(cmd));
             } catch (e) {
@@ -2338,69 +2338,69 @@
         },
         setCookie: (url, cookie) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.setCookie(url, cookie));
             } catch (e) { return { success: false, error: e.message }; }
         },
         getCookie: (url) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.getCookie(url));
             } catch (e) { return { success: false, error: e.message }; }
         },
         clearCookies: () => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.clearCookies());
             } catch (e) { return { success: false, error: e.message }; }
         },
         getClipboard: () => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.getClipboard());
             } catch (e) { return { success: false, error: e.message }; }
         },
         setClipboard: (text) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.setClipboard(text));
             } catch (e) { return { success: false, error: e.message }; }
         },
         toast: (message) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (bridge) bridge.showToast(message);
             } catch (_) {}
         },
         getLastDownload: () => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false, error: 'FusionNative bridge not injected' };
                 return JSON.parse(bridge.getLastDownloadedFile());
             } catch (e) { return { success: false, error: e.message }; }
         },
         listTabs: () => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return [];
                 return JSON.parse(bridge.listTabs());
             } catch (e) { return []; }
         },
         switchTab: (index) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false };
                 return JSON.parse(bridge.switchTab(index));
             } catch (e) { return { success: false, error: e.message }; }
         },
         closeTab: (index) => {
             try {
-                const bridge = window.__FUSION_NATIVE__ || window.FusionNative;
+                const bridge = window.FusionNative || window.__FUSION_NATIVE__;
                 if (!bridge) return { success: false };
                 return JSON.parse(bridge.closeTab(index));
             } catch (e) { return { success: false, error: e.message }; }
