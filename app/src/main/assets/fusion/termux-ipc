@@ -4,6 +4,7 @@
 # Client CLI untuk berkomunikasi dengan Termux IPC Server
 # Sesuai dengan spesifikasi APK terinstall (FusionWebViewDispatcher)
 
+ORIG_ACTION="$1"
 ACTION="$(echo "$1" | tr '[:upper:]' '[:lower:]' | tr '_' '-')"
 shift
 
@@ -801,6 +802,75 @@ for t in tabs:
             send_cmd "WEBVIEW_PERMISSIONS $*"
             return 0
             ;;
+        wifi-on)
+            shift
+            send_cmd "WEBVIEW_WIFI_ON $*"
+            return 0
+            ;;
+        wifi-off)
+            send_cmd "WEBVIEW_WIFI_OFF"
+            return 0
+            ;;
+        wifi-status)
+            send_cmd "WEBVIEW_WIFI_STATUS"
+            return 0
+            ;;
+        wifi-autostart)
+            shift
+            send_cmd "WEBVIEW_WIFI_AUTOSTART ${1:-status}"
+            return 0
+            ;;
+        wifi-cdp)
+            shift
+            send_cmd "WEBVIEW_WIFI_CDP ${1:-on}"
+            return 0
+            ;;
+        wifi-cdp-autostart)
+            shift
+            send_cmd "WEBVIEW_WIFI_CDP_AUTOSTART ${1:-status}"
+            return 0
+            ;;
+        cdp-on)
+            send_cmd "WEBVIEW_CDP_ON"
+            return 0
+            ;;
+        cdp-off)
+            send_cmd "WEBVIEW_CDP_OFF"
+            return 0
+            ;;
+        cdp-info)
+            send_cmd "WEBVIEW_CDP_INFO"
+            return 0
+            ;;
+        wallet-daemon)
+            shift
+            send_cmd "WEBVIEW_WALLET_DAEMON ${1:-local}"
+            return 0
+            ;;
+        wallet-tab)
+            shift
+            send_cmd "WEBVIEW_WALLET_TAB $*"
+            return 0
+            ;;
+        profile-clear)
+            shift
+            send_cmd "WEBVIEW_PROFILE_CLEAR $*"
+            return 0
+            ;;
+        profile-wipe)
+            shift
+            send_cmd "WEBVIEW_PROFILE_WIPE $*"
+            return 0
+            ;;
+        engine-reload)
+            send_cmd "WEBVIEW_ENGINE_RELOAD"
+            return 0
+            ;;
+        strict-ssl)
+            shift
+            send_cmd "WEBVIEW_STRICT_SSL ${1:-off}"
+            return 0
+            ;;
         tg-join|telegram-join|join-tg|--tg-join)
             shift
             local TG_TARGET="$1"
@@ -977,17 +1047,33 @@ for t in tabs:
         URL="https://$URL"
     fi
 
-    # Auto-Resolve Wallet: 1 Wallet = 1 Telegram Account + 1 WebView Profile
+    # Auto-Resolve Wallet (Non-Interactive Read-Only lookup for headless/scripts; interactive only on visual single-tab TTY)
     if [ -z "$WALLET" ] && [ -n "$PROFILE" ] && [ "$PROFILE" != "default" ]; then
-        local BIND_SCRIPT=""
-        for cand in "${FUSION_WALLET_DIR:-}/wallet_binding.cjs" "$HOME/wallet/wallet_binding.cjs" "/wallet/wallet_binding.cjs" "/root/wallet/wallet_binding.cjs" "/data/data/com.termux/files/home/wallet/wallet_binding.cjs" "/project/node2cjs/wallet_binding.cjs"; do
-            if [ -n "$cand" ] && [ -f "$cand" ]; then
-                BIND_SCRIPT="$cand"
-                break
+        if [ -t 0 ] && [ "$IS_HEADLESS" = "0" ] && [ "$IS_NEW_TAB" = "0" ] && [[ "$PROFILE" != worker_* ]] && [[ "$PROFILE" != fresh_* ]]; then
+            local BIND_SCRIPT=""
+            for cand in "${FUSION_WALLET_DIR:-}/wallet_binding.cjs" "$HOME/wallet/wallet_binding.cjs" "/wallet/wallet_binding.cjs" "/root/wallet/wallet_binding.cjs" "/data/data/com.termux/files/home/wallet/wallet_binding.cjs" "/project/node2cjs/wallet_binding.cjs"; do
+                if [ -n "$cand" ] && [ -f "$cand" ]; then
+                    BIND_SCRIPT="$cand"
+                    break
+                fi
+            done
+            if [ -n "$BIND_SCRIPT" ] && command -v node >/dev/null 2>&1; then
+                WALLET="$(node "$BIND_SCRIPT" resolve-webview "$PROFILE" 2>/dev/null)"
             fi
-        done
-        if [ -n "$BIND_SCRIPT" ] && command -v node >/dev/null 2>&1; then
-            WALLET="$(node "$BIND_SCRIPT" resolve-webview "$PROFILE" 2>/dev/null)"
+        elif command -v python3 >/dev/null 2>&1; then
+            WALLET=$(python3 -c "
+import json, os, sys
+prof = sys.argv[1].lower()
+for p in [os.path.expanduser('~/wallet/wallets_db.json'), '/root/wallet/wallets_db.json', '/project/node2cjs/wallets_db.json']:
+    if os.path.exists(p):
+        try:
+            for w in json.load(open(p)).get('wallets', []):
+                if str(w.get('webview_profile','')).lower() == prof:
+                    print(w.get('name',''))
+                    sys.exit(0)
+        except Exception:
+            pass
+" "$PROFILE" 2>/dev/null)
         fi
     fi
 
@@ -1021,8 +1107,6 @@ print(json.dumps(data))
     if [ "$RESP" = "OK" ]; then
         if [ "$IS_HEADLESS" = "1" ]; then
             echo "Meluncurkan $URL di background (headless)"
-            sleep 0.2
-            send_cmd "WEBVIEW_DETACH" >/dev/null 2>&1 || true
         else
             echo "Meluncurkan $URL di tab baru"
         fi
@@ -1302,10 +1386,17 @@ sys.exit(res.returncode)
                 ;;
         esac
         ;;
+    raw)
+        send_cmd "$*"
+        ;;
     *)
-        echo "Aksi tidak dikenal: $ACTION"
-        echo "Pilihan yang tersedia: toast, vibrate, clip-get, clip-set, run, input, mouse-on, mouse-off, keyboard-disable (disable), keyboard-enable (enable), keyboard-hide (hide), keyboard-show (show), webview, api, x11-start, x11-stop, x11-launch, x11-audio, ping"
-        echo "Untuk kontrol WebView: termux-ipc webview --help"
-        exit 1
+        if [[ "$ORIG_ACTION" == WEBVIEW_* ]] || [[ "$ORIG_ACTION" == TAB_* ]] || [[ "$ORIG_ACTION" == LAUNCHERCTL_* ]] || [[ "$ORIG_ACTION" == LEFT_CANVAS* ]]; then
+            send_cmd "$ORIG_ACTION $*"
+        else
+            echo "Aksi tidak dikenal: $ACTION"
+            echo "Pilihan yang tersedia: toast, vibrate, clip-get, clip-set, run, input, mouse-on, mouse-off, keyboard-disable (disable), keyboard-enable (enable), keyboard-hide (hide), keyboard-show (show), webview, api, x11-start, x11-stop, x11-launch, x11-audio, raw, ping"
+            echo "Untuk kontrol WebView: termux-ipc webview --help"
+            exit 1
+        fi
         ;;
 esac

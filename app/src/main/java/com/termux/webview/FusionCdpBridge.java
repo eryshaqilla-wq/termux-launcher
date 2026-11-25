@@ -213,6 +213,9 @@ public class FusionCdpBridge {
             String rewrittenReq = rawReq
                     .replaceAll("(?im)^Host:[^\\r\\n]*\\r\\n", "Host: localhost:9222\r\n")
                     .replaceAll("(?im)^Origin:[^\\r\\n]*\\r\\n", "");
+            if (!isWebSocket) {
+                rewrittenReq = rewrittenReq.replaceAll("(?im)^Connection:[^\\r\\n]*\\r\\n", "Connection: close\r\n");
+            }
 
             localSocket = new LocalSocket();
             localSocket.connect(new LocalSocketAddress(abstractName, LocalSocketAddress.Namespace.ABSTRACT));
@@ -252,6 +255,11 @@ public class FusionCdpBridge {
                             .replace("ws://127.0.0.1/", wsTarget);
                     byte[] bodyBytes = fixedBody.getBytes(StandardCharsets.UTF_8);
                     String fixedHdr = hdrPart.replaceAll("(?im)^Content-Length:\\s*\\d+", "Content-Length: " + bodyBytes.length);
+                    if (!fixedHdr.toLowerCase(java.util.Locale.ROOT).contains("connection:")) {
+                        fixedHdr = fixedHdr + "\r\nConnection: close";
+                    } else {
+                        fixedHdr = fixedHdr.replaceAll("(?im)^Connection:[^\\r\\n]*", "Connection: close");
+                    }
                     tcpOut.write((fixedHdr + "\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
                     tcpOut.write(bodyBytes);
                     tcpOut.flush();

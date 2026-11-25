@@ -36,6 +36,8 @@ public class FusionProfileManager {
     private static final String TAG = "FusionProfileManager";
     private static String sCurrentActiveProfile = "default";
     private static final Set<String> sInitializedProfiles = new HashSet<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, CookieManager> sProfileCookieManagers = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<WebView, String> sWebViewProfileCache = Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     public static class DeviceProfile {
         public final String name;
@@ -418,6 +420,7 @@ public class FusionProfileManager {
         }
 
         // 1. Native Chromium Multi-Profile Isolation
+        sWebViewProfileCache.put(webView, profileName);
         if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
             try {
                 ProfileStore store = ProfileStore.getInstance();
@@ -429,6 +432,7 @@ public class FusionProfileManager {
                 try {
                     CookieManager cm = profile.getCookieManager();
                     if (cm != null) {
+                        sProfileCookieManagers.put(profileName, cm);
                         cm.setAcceptCookie(true);
                         cm.setAcceptThirdPartyCookies(webView, true);
                     }
@@ -554,21 +558,60 @@ public class FusionProfileManager {
         }
     }
 
+    private static CookieManager resolveProfileCookieManagerBlocking(final String profileName) {
+        if (profileName == null || profileName.trim().isEmpty() || "default".equalsIgnoreCase(profileName.trim())) {
+            return CookieManager.getInstance();
+        }
+        final String p = profileName.trim();
+        CookieManager cached = sProfileCookieManagers.get(p);
+        if (cached != null) return cached;
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            return CookieManager.getInstance();
+        }
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            try {
+                Profile prof = ProfileStore.getInstance().getOrCreateProfile(p);
+                CookieManager cm = (prof != null) ? prof.getCookieManager() : null;
+                if (cm != null) {
+                    sProfileCookieManagers.put(p, cm);
+                    return cm;
+                }
+            } catch (Throwable ignored) {}
+            return CookieManager.getInstance();
+        }
+        final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.atomic.AtomicReference<CookieManager> ref = new java.util.concurrent.atomic.AtomicReference<>(null);
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            try {
+                Profile prof = ProfileStore.getInstance().getOrCreateProfile(p);
+                CookieManager cm = (prof != null) ? prof.getCookieManager() : null;
+                if (cm != null) {
+                    sProfileCookieManagers.put(p, cm);
+                    ref.set(cm);
+                }
+            } catch (Throwable ignored) {
+            } finally {
+                latch.countDown();
+            }
+        });
+        try { latch.await(2000, java.util.concurrent.TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+        return ref.get() != null ? ref.get() : CookieManager.getInstance();
+    }
+
     /**
-     * Mengembalikan CookieManager milik profil WebView ini (terisolasi per tab jika MULTI_PROFILE aktif).
+     * Mengembalikan CookieManager milik profil WebView ini (aman dipanggil dari thread JavaBridge maupun UI).
      */
     public static CookieManager getCookieManagerForWebView(WebView webView) {
         try {
             if (webView != null && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
-                FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-                FusionTab tab = (mgr != null) ? mgr.getTabForWebView(webView) : null;
-                String profileName = (tab != null && tab.mProfile != null && !tab.mProfile.trim().isEmpty())
-                        ? tab.mProfile.trim() : null;
-                if (profileName != null && !"default".equalsIgnoreCase(profileName)) {
-                    Profile profile = ProfileStore.getInstance().getOrCreateProfile(profileName);
-                    if (profile != null && profile.getCookieManager() != null) {
-                        return profile.getCookieManager();
-                    }
+                String profileName = sWebViewProfileCache.get(webView);
+                if (profileName == null || profileName.trim().isEmpty()) {
+                    FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                    FusionTab tab = (mgr != null) ? mgr.getTabForWebView(webView) : null;
+                    profileName = (tab != null) ? tab.mProfile : null;
+                }
+                if (profileName != null && !"default".equalsIgnoreCase(profileName.trim())) {
+                    return resolveProfileCookieManagerBlocking(profileName.trim());
                 }
             }
         } catch (Throwable ignored) {}
@@ -586,11 +629,10 @@ public class FusionProfileManager {
         String p = profileName.trim();
         if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
             try {
-                ProfileStore store = ProfileStore.getInstance();
-                Profile profile = store.getOrCreateProfile(p);
-                if (profile != null && profile.getCookieManager() != null) {
-                    profile.getCookieManager().removeAllCookies(null);
-                    profile.getCookieManager().flush();
+                CookieManager cm = resolveProfileCookieManagerBlocking(p);
+                if (cm != null) {
+                    cm.removeAllCookies(null);
+                    cm.flush();
                 }
                 if (context != null) {
                     try {
