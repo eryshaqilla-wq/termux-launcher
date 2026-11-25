@@ -1724,8 +1724,13 @@ async function executeSingleProfile(url, extraFlags = []) {
     } else {
         displayUrl = (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('file://')) ? url : `https://${url}`;
     }
+    const hasFreshFlag = extraFlags.includes('--fresh') || extraFlags.includes('--incognito');
     let statusMsg = `Membuka ${displayUrl}`;
-    if (targetProfile && targetProfile !== 'default') statusMsg += ` (profil: ${targetProfile}) [Auto-Session: Aktif]`;
+    if (hasFreshFlag) {
+        statusMsg += ` (profil: fresh-ephemeral) [Identitas Acak + Cookie Bersih]`;
+    } else if (targetProfile && targetProfile !== 'default') {
+        statusMsg += ` (profil: ${targetProfile}) [Auto-Session: Aktif]`;
+    }
     if (needWallet) statusMsg += ` [GhostWallet: ${targetWallet ? targetWallet : 'Auto-Daemon'}]`;
     console.log(statusMsg);
 
@@ -2863,6 +2868,7 @@ async function main() {
             '--all-rows', '--detail',
             '--keep-open', '--no-close',
             '--cloud-mail', '--temp-mail', '--mail',
+            '--fresh', '--incognito',
             '--direct', '--remote',
             '--help', '-h'
         ]);
@@ -2905,6 +2911,7 @@ async function main() {
         let loop = 1;
         const lIdx = args.indexOf('--loop');
         if (lIdx !== -1 && args[lIdx + 1]) loop = parseInt(args[lIdx + 1], 10) || 1;
+        let fresh = args.includes('--fresh') || args.includes('--incognito');
         let headless = args.includes('--headless');
         let ghostwallet = args.includes('--ghostwallet') || args.includes('--ghost-wallet') || args.includes('--ghost') || args.includes('--daemon') || args.includes('--sign');
         let email = '';
@@ -3146,6 +3153,8 @@ async function main() {
                     const exp = expandWalletRanges(wallet);
                     if (exp.length > 1) displayWallets = `${wallet} (${exp.length} Wallets)`;
                 } catch (_) {}
+            } else if (fresh && !wallet && !wallets && !all) {
+                displayWallets = `FRESH (${loop}x Identitas Acak Tanpa Wallet)`;
             } else if (all || (!wallet && !wallets)) {
                 displayWallets = fromWallet ? `FROM ${fromWallet.toUpperCase()} (Hingga Habis)` : 'ALL (Dari Awal Hingga Habis)';
             }
@@ -3214,13 +3223,14 @@ async function main() {
                 doze ? '\x1b[35mDOZE\x1b[0m' : '',
                 snap ? '\x1b[36mSNAP\x1b[0m' : '',
                 restore ? '\x1b[32mRESTORE\x1b[0m' : '',
+                fresh ? '\x1b[36mFRESH-ID\x1b[0m' : '',
                 showSniff ? '\x1b[36mSNIFF: VERBOSE\x1b[0m' : ''
             ].filter(Boolean);
             const webviewLine = `  \x1b[36mWebView\x1b[0m : ${webviewParts.join(' | ')}`;
 
             console.log(`\n${headerLine}\n${walletLine}\n${webviewLine}`);
 
-            const res = await pb.playRecipe(recipeName, { wallet, wallets, loop, chain: resolved.chainKey, headless, url, ghostwallet, proxy, proxyFile, rotateProxy, concurrency, all, from: fromWallet, showSniff, turbo, jit, noJit, wire, burst, doze, email, emails, emailFile, cloudMail, snap, restore });
+            const res = await pb.playRecipe(recipeName, { wallet, wallets, loop, chain: resolved.chainKey, headless, url, ghostwallet, proxy, proxyFile, rotateProxy, concurrency, all, from: fromWallet, showSniff, turbo, jit, noJit, wire, burst, doze, email, emails, emailFile, cloudMail, snap, restore, fresh });
             if (res.error) {
                 console.error(`\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97m${res.error}\x1b[0m`);
                 process.exitCode = 1;
@@ -3343,7 +3353,7 @@ async function main() {
         a.startsWith('--wallet') || a.startsWith('--chain') || Boolean(chainResolver.extractChainFromArgs([a])) ||
         a.startsWith('--stop-if') || a.startsWith('--stop-not') || a.startsWith('--stopif') ||
         a.startsWith('--ai') || a.startsWith('--engine') ||
-        a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--desktop') || a.startsWith('--headless') || a.startsWith('--ghost') ||
+        a.startsWith('--pwd') || a.startsWith('--password') || a.startsWith('--profile') || a.startsWith('--fresh') || a.startsWith('--incognito') || a.startsWith('--desktop') || a.startsWith('--headless') || a.startsWith('--ghost') ||
         a.startsWith('--all-profiles') || a.startsWith('--allprofiles') || a.startsWith('--profiles') || a.startsWith('--parallel') ||
         a === 'home' || a === 'beranda' ||
         a.startsWith('http://') || a.startsWith('https://') ||

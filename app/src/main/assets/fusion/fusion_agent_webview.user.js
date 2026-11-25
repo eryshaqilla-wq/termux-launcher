@@ -1804,13 +1804,15 @@
             });
         }
 
-        // 1. Scrub navigator.webdriver
-        try {
-            Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined,
-                configurable: true
-            });
-            delete Navigator.prototype.webdriver;
+        // 1. Scrub navigator.webdriver (skip jika document_start engine sudah membersihkan prototype + native toString mask)
+        if (!window.__FUSION_FINGERPRINT_INJECTED__) try {
+            try { delete navigator.webdriver; } catch (_) {}
+            if (window.Navigator && Navigator.prototype) {
+                Object.defineProperty(Navigator.prototype, 'webdriver', {
+                    get: () => false,
+                    configurable: true
+                });
+            }
         } catch (_) {}
 
         // 2. Full Chrome Runtime Parity

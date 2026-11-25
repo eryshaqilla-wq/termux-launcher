@@ -464,6 +464,9 @@ public class FusionProfileManager {
                 Log.e(TAG, "Failed to inject document-start script: " + e.getMessage());
             }
         }
+
+        // 3. Internal C++ Chromium Client Hints Override via LocalSocket CDP (Sec-CH-UA = Google Chrome)
+        FusionCdpBridge.applyUserAgentOverrideAsync(ctx, profileName, device, isDesktop);
     }
 
     public static String getFingerprintFakerScript(Context context, String profileName, DeviceProfile dev) {

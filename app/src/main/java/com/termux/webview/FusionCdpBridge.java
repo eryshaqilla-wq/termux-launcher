@@ -330,4 +330,209 @@ public class FusionCdpBridge {
             try { new File(p).delete(); } catch (Throwable ignored) {}
         }
     }
+
+    private static final java.util.concurrent.ConcurrentHashMap<String, String> sAppliedTargetKeys = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.concurrent.ConcurrentHashMap<String, LocalSocket> sPersistentUaSockets = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Mengirim Emulation.setUserAgentOverride + userAgentMetadata langsung melalui Chromium DevTools
+     * LocalSocket internal dan menjaga koneksi socket tetap hidup selama tab aktif agar override
+     * C++ Sec-CH-UA* & Critical-CH tidak di-reset oleh Chromium EmulationHandler::Disable().
+     */
+    public static void applyUserAgentOverrideAsync(final android.content.Context ctx, final String profileName,
+                                                   final FusionProfileManager.DeviceProfile dev, final boolean isDesktop) {
+        final String prof = (profileName != null && !profileName.isEmpty()) ? profileName : "default";
+        final String socketName = "webview_devtools_remote_" + android.os.Process.myPid();
+        Thread t = new Thread(() -> {
+            try {
+                String chromeVer = FusionProfileManager.getSystemChromeVersion(ctx);
+                String chromeMajor = chromeVer.contains(".") ? chromeVer.substring(0, chromeVer.indexOf('.')) : chromeVer;
+                String ua = FusionProfileManager.getEffectiveUserAgent(ctx, dev, isDesktop);
+                boolean isMac = ua != null && ua.contains("Macintosh");
+                String model = isDesktop ? "" : ((dev != null && dev.model != null && !dev.model.isEmpty()) ? dev.model : "SM-S928B");
+                String applyKey = prof + "|" + chromeVer + "|" + (isDesktop ? (isMac ? "mac" : "win") : model);
+
+                org.json.JSONArray targets = null;
+                for (int attempt = 0; attempt < 10; attempt++) {
+                    targets = fetchLocalJsonTargets(socketName);
+                    if (targets != null && targets.length() > 0) break;
+                    Thread.sleep(200);
+                }
+                if (targets == null || targets.length() == 0) return;
+
+                String cmdPayload = buildSetUserAgentOverrideJson(ua, chromeVer, chromeMajor, model, isDesktop, isMac);
+                for (int i = 0; i < targets.length(); i++) {
+                    org.json.JSONObject item = targets.optJSONObject(i);
+                    if (item == null) continue;
+                    String type = item.optString("type", "");
+                    if (!"page".equals(type)) continue;
+                    String targetId = item.optString("id", "");
+                    String wsUrl = item.optString("webSocketDebuggerUrl", "");
+                    if (targetId.isEmpty() || wsUrl.isEmpty()) continue;
+
+                    LocalSocket existing = sPersistentUaSockets.get(targetId);
+                    if (applyKey.equals(sAppliedTargetKeys.get(targetId)) && existing != null) continue;
+                    if (existing != null) {
+                        try { existing.close(); } catch (Throwable ignored) {}
+                        sPersistentUaSockets.remove(targetId);
+                    }
+
+                    String wsPath = wsUrl;
+                    int slashIdx = wsUrl.indexOf("/devtools/");
+                    if (slashIdx >= 0) wsPath = wsUrl.substring(slashIdx);
+                    startPersistentCdpUaSession(socketName, targetId, wsPath, cmdPayload, applyKey);
+                }
+            } catch (Throwable ignored) {}
+        }, "FusionCdpUaOverride");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private static org.json.JSONArray fetchLocalJsonTargets(String socketName) {
+        LocalSocket ls = null;
+        try {
+            ls = new LocalSocket();
+            ls.connect(new LocalSocketAddress(socketName, LocalSocketAddress.Namespace.ABSTRACT));
+            ls.setSoTimeout(1500);
+            OutputStream out = ls.getOutputStream();
+            out.write("GET /json/list HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+
+            InputStream in = ls.getInputStream();
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) != -1) {
+                baos.write(buf, 0, n);
+            }
+            String resp = new String(baos.toByteArray(), StandardCharsets.UTF_8);
+            int idx = resp.indexOf("\r\n\r\n");
+            if (idx < 0) return null;
+            String body = resp.substring(idx + 4).trim();
+            if (!body.startsWith("[")) return null;
+            return new org.json.JSONArray(body);
+        } catch (Throwable ignored) {
+            return null;
+        } finally {
+            if (ls != null) {
+                try { ls.close(); } catch (Throwable ignored) {}
+            }
+        }
+    }
+
+    private static String buildSetUserAgentOverrideJson(String ua, String chromeVer, String chromeMajor,
+                                                        String model, boolean isDesktop, boolean isMac) throws org.json.JSONException {
+        org.json.JSONArray brands = new org.json.JSONArray();
+        brands.put(new org.json.JSONObject().put("brand", "Chromium").put("version", chromeMajor));
+        brands.put(new org.json.JSONObject().put("brand", "Google Chrome").put("version", chromeMajor));
+        brands.put(new org.json.JSONObject().put("brand", "Not_A Brand").put("version", "24"));
+
+        org.json.JSONArray fullList = new org.json.JSONArray();
+        fullList.put(new org.json.JSONObject().put("brand", "Chromium").put("version", chromeVer));
+        fullList.put(new org.json.JSONObject().put("brand", "Google Chrome").put("version", chromeVer));
+        fullList.put(new org.json.JSONObject().put("brand", "Not_A Brand").put("version", "24.0.0.0"));
+
+        org.json.JSONObject meta = new org.json.JSONObject();
+        meta.put("brands", brands);
+        meta.put("fullVersionList", fullList);
+        meta.put("platform", isDesktop ? (isMac ? "macOS" : "Windows") : "Android");
+        meta.put("platformVersion", isDesktop ? (isMac ? "14.0.0" : "10.0.0") : "14.0.0");
+        meta.put("architecture", isDesktop ? "x86" : "arm");
+        meta.put("model", isDesktop ? "" : model);
+        meta.put("mobile", !isDesktop);
+        meta.put("bitness", "64");
+
+        org.json.JSONObject params = new org.json.JSONObject();
+        params.put("userAgent", ua);
+        params.put("acceptLanguage", "id-ID,id,en-US");
+        params.put("platform", isDesktop ? (isMac ? "MacIntel" : "Win32") : "Linux armv8l");
+        params.put("userAgentMetadata", meta);
+
+        return new org.json.JSONObject()
+                .put("id", 1)
+                .put("method", "Emulation.setUserAgentOverride")
+                .put("params", params)
+                .toString();
+    }
+
+    private static void startPersistentCdpUaSession(final String socketName, final String targetId,
+                                                    final String wsPath, final String jsonPayload, final String applyKey) {
+        LocalSocket ls = null;
+        try {
+            ls = new LocalSocket();
+            ls.connect(new LocalSocketAddress(socketName, LocalSocketAddress.Namespace.ABSTRACT));
+            ls.setSoTimeout(2000);
+            OutputStream out = ls.getOutputStream();
+            InputStream in = ls.getInputStream();
+
+            byte[] keyRaw = new byte[16];
+            new java.security.SecureRandom().nextBytes(keyRaw);
+            String wsKey = android.util.Base64.encodeToString(keyRaw, android.util.Base64.NO_WRAP);
+            String hs = "GET " + wsPath + " HTTP/1.1\r\n" +
+                    "Host: localhost\r\n" +
+                    "Upgrade: websocket\r\n" +
+                    "Connection: Upgrade\r\n" +
+                    "Sec-WebSocket-Key: " + wsKey + "\r\n" +
+                    "Sec-WebSocket-Version: 13\r\n\r\n";
+            out.write(hs.getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+
+            java.io.ByteArrayOutputStream hdr = new java.io.ByteArrayOutputStream();
+            int p3 = 0, p2 = 0, p1 = 0, cur;
+            while (hdr.size() < 8192 && (cur = in.read()) != -1) {
+                hdr.write(cur);
+                if (p3 == '\r' && p2 == '\n' && p1 == '\r' && cur == '\n') break;
+                p3 = p2; p2 = p1; p1 = cur;
+            }
+            String hsResp = new String(hdr.toByteArray(), StandardCharsets.US_ASCII);
+            if (!hsResp.contains("101")) {
+                try { ls.close(); } catch (Throwable ignored) {}
+                return;
+            }
+
+            byte[] data = jsonPayload.getBytes(StandardCharsets.UTF_8);
+            byte[] mask = new byte[4];
+            new java.security.SecureRandom().nextBytes(mask);
+            java.io.ByteArrayOutputStream frame = new java.io.ByteArrayOutputStream();
+            frame.write(0x81);
+            if (data.length <= 125) {
+                frame.write(0x80 | data.length);
+            } else {
+                frame.write(0x80 | 126);
+                frame.write((data.length >> 8) & 0xFF);
+                frame.write(data.length & 0xFF);
+            }
+            frame.write(mask);
+            for (int i = 0; i < data.length; i++) {
+                frame.write(data[i] ^ mask[i & 3]);
+            }
+            out.write(frame.toByteArray());
+            out.flush();
+            try { in.read(new byte[512]); } catch (Throwable ignored) {}
+
+            // Tahan koneksi WebSocket CDP tetap terbuka dalam daemon thread ringan sampai tab target ditutup
+            ls.setSoTimeout(0);
+            sPersistentUaSockets.put(targetId, ls);
+            sAppliedTargetKeys.put(targetId, applyKey);
+            final LocalSocket keepLs = ls;
+            final InputStream keepIn = in;
+            Thread keeper = new Thread(() -> {
+                byte[] sink = new byte[1024];
+                try {
+                    while (keepIn.read(sink) != -1) {}
+                } catch (Throwable ignored) {
+                } finally {
+                    sPersistentUaSockets.remove(targetId, keepLs);
+                    sAppliedTargetKeys.remove(targetId, applyKey);
+                    try { keepLs.close(); } catch (Throwable ignored) {}
+                }
+            }, "CdpUaKeepalive");
+            keeper.setDaemon(true);
+            keeper.start();
+        } catch (Throwable ignored) {
+            if (ls != null) {
+                try { ls.close(); } catch (Throwable ignored2) {}
+            }
+        }
+    }
 }

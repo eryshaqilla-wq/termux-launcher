@@ -1,75 +1,9 @@
 (function() {
     if (window.__FUSION_FINGERPRINT_INJECTED__) return;
-    window.__FUSION_FINGERPRINT_INJECTED__ = true;
-
-    // 1. Scrub navigator.webdriver at document_start before any <head> script runs
-    try {
-        Object.defineProperty(navigator, 'webdriver', { get: function() { return undefined; }, configurable: true });
-        if (window.Navigator && Navigator.prototype && 'webdriver' in Navigator.prototype) {
-            try { delete Navigator.prototype.webdriver; } catch(_) {}
-        }
-    } catch(_) {}
-
-    // 2. WebRTC STUN / mDNS Leak Protection (RTCPeerConnection & webkitRTCPeerConnection)
-    try {
-        window.__FUSION_WEBRTC_STEALTH__ = true;
-        var wrapRtc = function(OrigRtc) {
-            if (!OrigRtc) return OrigRtc;
-            var Wrapped = function(config, constraints) {
-                if (window.__FUSION_WEBRTC_STEALTH__ && config && config.iceServers) {
-                    config = Object.assign({}, config, { iceServers: [] });
-                }
-                return new OrigRtc(config, constraints);
-            };
-            Wrapped.prototype = OrigRtc.prototype;
-            return Wrapped;
-        };
-        if (window.RTCPeerConnection) window.RTCPeerConnection = wrapRtc(window.RTCPeerConnection);
-        if (window.webkitRTCPeerConnection) window.webkitRTCPeerConnection = wrapRtc(window.webkitRTCPeerConnection);
-    } catch(_) {}
-
-    // 3. Chrome Runtime / LoadTimes / CSI Parity
-    try {
-        if (!window.chrome) window.chrome = {};
-        if (!window.chrome.runtime) {
-            window.chrome.runtime = {
-                OnInstalledReason: { CHROME_UPDATE: "chrome_update", INSTALL: "install", SHARED_MODULE_UPDATE: "shared_module_update", UPDATE: "update" },
-                OnRestartRequiredReason: { APP_UPDATE: "app_update", OS_UPDATE: "os_update", PERIODIC: "periodic" },
-                PlatformArch: { ARM: "arm", ARM64: "arm64", MIPS: "mips", MIPS64: "mips64", X86_32: "x86-32", X86_64: "x86-64" },
-                PlatformNaclArch: { ARM: "arm", MIPS: "mips", MIPS64: "mips64", X86_32: "x86-32", X86_64: "x86-64" },
-                PlatformOs: { ANDROID: "android", CROS: "cros", LINUX: "linux", MAC: "mac", OPENBSD: "openbsd", WIN: "win" },
-                RequestUpdateCheckStatus: { NO_UPDATE: "no_update", THROTTLED: "throttled", UPDATE_AVAILABLE: "update_available" },
-                connect: function() { return { onDisconnect: { addListener: function() {} }, onMessage: { addListener: function() {} }, postMessage: function() {} }; },
-                sendMessage: function(extId, msg, opt, cb) { if (typeof opt === 'function') cb = opt; if (cb) cb(); }
-            };
-        }
-        if (!window.chrome.loadTimes) {
-            window.chrome.loadTimes = function() {
-                var t = (window.performance && window.performance.timing) || {};
-                var start = (t.navigationStart || Date.now()) / 1000;
-                return {
-                    requestTime: start,
-                    startLoadTime: start,
-                    commitLoadTime: (t.responseStart || Date.now()) / 1000,
-                    finishDocumentLoadTime: (t.domContentLoadedEventEnd || Date.now()) / 1000,
-                    finishLoadTime: (t.loadEventEnd || Date.now()) / 1000,
-                    firstPaintTime: (t.domInteractive || Date.now()) / 1000,
-                    navigationType: "Other"
-                };
-            };
-        }
-        if (!window.chrome.csi) {
-            window.chrome.csi = function() {
-                var t = (window.performance && window.performance.timing) || {};
-                var s = t.navigationStart || Date.now();
-                var e = t.loadEventEnd || Date.now();
-                return { startE: s, onloadT: e, pageT: e - s, tran: 15 };
-            };
-        }
-    } catch(_) {}
 
     var profileSeed = window.__FUSION_PROFILE__ || window.__FUSION_ACTIVE_WALLET_NAME__ || "default";
     var isDesktop = Boolean(window.__FUSION_IS_DESKTOP__) || (navigator.userAgent && (navigator.userAgent.indexOf("Windows") !== -1 || navigator.userAgent.indexOf("Macintosh") !== -1));
+    var isMac = Boolean(navigator.userAgent && navigator.userAgent.indexOf("Macintosh") !== -1);
     var chromeVer = window.__FUSION_CHROME_VERSION__ || ((navigator.userAgent || "").match(/Chrome\/([0-9.]+)/) || [])[1] || "130.0.6723.102";
     var chromeMajor = chromeVer.split(".")[0] || "130";
 
@@ -87,7 +21,46 @@
         pixelRatio: 3.0
     };
 
-    // Hash deterministik per profil/wallet agar sidik jari stabil 100% konsisten tiap reload
+    var effectiveUa = (dev && dev.userAgent) || navigator.userAgent || "";
+    var effectiveAppVer = effectiveUa.indexOf("/") !== -1 ? effectiveUa.substring(effectiveUa.indexOf("/") + 1) : effectiveUa;
+    var effectivePlatform = isDesktop ? (isMac ? "MacIntel" : "Win32") : (dev.platform || "Linux armv8l");
+    var effectiveMemory = isDesktop ? 8 : (dev.memory || 8);
+    var effectiveCores = dev.cores || 8;
+    var effectiveVendor = isDesktop ? "Google Inc. (NVIDIA)" : (dev.vendor || "Qualcomm");
+    var effectiveRenderer = isDesktop ? "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)" : (dev.renderer || "Adreno (TM) 750");
+
+    // Registry untuk menyamarkan Function.prototype.toString seluruh fungsi/getter yang di-hook agar identik [native code]
+    var nativeStringMap = typeof WeakMap === "function" ? new WeakMap() : null;
+    function markNative(fn, nameOrOrig) {
+        if (!nativeStringMap || typeof fn !== "function") return fn;
+        try {
+            var str = typeof nameOrOrig === "function"
+                ? Function.prototype.toString.call(nameOrOrig)
+                : ("function " + (nameOrOrig || fn.name || "") + "() { [native code] }");
+            nativeStringMap.set(fn, str);
+        } catch(_) {}
+        return fn;
+    }
+    function hookFunctionToString(win) {
+        try {
+            if (!nativeStringMap || !win.Function || !win.Function.prototype) return;
+            var origToStr = win.Function.prototype.toString;
+            if (origToStr.__FUSION_TS__) return;
+            var wrapped = function() {
+                if (nativeStringMap.has(this)) return nativeStringMap.get(this);
+                return origToStr.apply(this, arguments);
+            };
+            wrapped.__FUSION_TS__ = true;
+            nativeStringMap.set(wrapped, origToStr.call(origToStr));
+            Object.defineProperty(win.Function.prototype, "toString", {
+                value: wrapped,
+                writable: true,
+                configurable: true
+            });
+        } catch(_) {}
+    }
+
+    // Hash deterministik per profil/wallet agar sidik jari stabil 100% konsisten tiap reload, worker & iframe
     var hash = 0x811c9dc5;
     for (var i = 0; i < profileSeed.length; i++) {
         hash = Math.imul(hash ^ profileSeed.charCodeAt(i), 0x01000193);
@@ -95,101 +68,610 @@
     hash = hash >>> 0;
     var noise = ((hash % 10) + 1) * 0.0001;
 
-    // 4. Hardware Concurrency, Device Memory, Platform & UserAgentData Parity
-    try {
-        Object.defineProperty(navigator, 'hardwareConcurrency', { get: function() { return dev.cores || 8; }, configurable: true });
-        Object.defineProperty(navigator, 'deviceMemory', { get: function() { return isDesktop ? 8 : (dev.memory || 8); }, configurable: true });
-        Object.defineProperty(navigator, 'platform', {
-            get: function() {
-                if (isDesktop) return (navigator.userAgent && navigator.userAgent.indexOf('Macintosh') !== -1) ? 'MacIntel' : 'Win32';
-                return dev.platform || 'Linux armv8l';
-            },
-            configurable: true
-        });
-        if (isDesktop) {
-            Object.defineProperty(screen, 'width', { get: function() { return 1920; }, configurable: true });
-            Object.defineProperty(screen, 'height', { get: function() { return 1080; }, configurable: true });
-            Object.defineProperty(screen, 'availWidth', { get: function() { return 1920; }, configurable: true });
-            Object.defineProperty(screen, 'availHeight', { get: function() { return 1040; }, configurable: true });
-            Object.defineProperty(window, 'devicePixelRatio', { get: function() { return 1; }, configurable: true });
-        }
-        if (navigator.userAgentData) {
-            var fakeBrands = [
-                { brand: "Chromium", version: chromeMajor },
-                { brand: "Google Chrome", version: chromeMajor },
-                { brand: "Not_A Brand", version: "24" }
-            ];
-            try { Object.defineProperty(navigator.userAgentData, 'brands', { get: function() { return fakeBrands; }, configurable: true }); } catch(_) {}
-            try { Object.defineProperty(navigator.userAgentData, 'mobile', { get: function() { return !isDesktop; }, configurable: true }); } catch(_) {}
-            try { Object.defineProperty(navigator.userAgentData, 'platform', { get: function() { return isDesktop ? 'Windows' : 'Android'; }, configurable: true }); } catch(_) {}
-            navigator.userAgentData.getHighEntropyValues = function() {
-                return Promise.resolve({
-                    architecture: isDesktop ? 'x86' : 'arm64',
-                    bitness: '64',
-                    brands: fakeBrands,
-                    fullVersionList: fakeBrands.map(function(b) { return { brand: b.brand, version: chromeVer }; }),
-                    mobile: !isDesktop,
-                    model: isDesktop ? '' : (dev.model || 'SM-S928B'),
-                    platform: isDesktop ? 'Windows' : 'Android',
-                    platformVersion: isDesktop ? '10.0.0' : '14.0.0',
-                    uaFullVersion: chromeVer
-                });
-            };
-        }
-    } catch(e) {}
-
-    // 5. Canvas Noise Faker (Single-pass deterministic sub-pixel shift)
-    if (profileSeed !== "default") {
-        window.__FUSION_CANVAS_STEALTH__ = true;
-        try {
-            var originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-            HTMLCanvasElement.prototype.toDataURL = function() {
-                var ctx = this.getContext('2d');
-                if (ctx && this.width > 0 && this.height > 0) {
-                    try {
-                        var pX = hash % this.width;
-                        var pY = (hash >>> 8) % this.height;
-                        var px = ctx.getImageData(pX, pY, 1, 1);
-                        var shift = (hash % 5) + 1;
-                        px.data[0] = (px.data[0] + shift) % 256;
-                        px.data[3] = Math.max(1, px.data[3]);
-                        ctx.putImageData(px, pX, pY);
-                    } catch(e) {}
-                }
-                return originalToDataURL.apply(this, arguments);
-            };
-        } catch(e) {}
-
-        // 6. AudioContext Jitter Faker
-        try {
-            if (window.AudioBuffer) {
-                var origGetChannelData = AudioBuffer.prototype.getChannelData;
-                AudioBuffer.prototype.getChannelData = function() {
-                    var channelData = origGetChannelData.apply(this, arguments);
-                    if (channelData && channelData.length > 10) {
-                        var idx = hash % Math.min(channelData.length, 20);
-                        channelData[idx] += noise;
-                    }
-                    return channelData;
-                };
-            }
-        } catch(e) {}
+    function buildBrands() {
+        return [
+            { brand: "Chromium", version: chromeMajor },
+            { brand: "Google Chrome", version: chromeMajor },
+            { brand: "Not_A Brand", version: "24" }
+        ];
     }
 
-    // 7. Context-Aware WebGL Vendor & Renderer Spoofing (WebGL 1 & WebGL 2)
-    window.__FUSION_WEBGL_STEALTH__ = true;
-    function hookWebGL(proto) {
-        if (!proto || !proto.getParameter) return;
-        var origGetParam = proto.getParameter;
-        proto.getParameter = function(param) {
-            if (param === 37445) return isDesktop ? 'Google Inc. (NVIDIA)' : (dev.vendor || "Qualcomm");
-            if (param === 37446) return isDesktop ? 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)' : (dev.renderer || "Adreno (TM) 750");
-            return origGetParam.apply(this, arguments);
+    function buildHighEntropyValues() {
+        var brands = buildBrands();
+        return {
+            architecture: isDesktop ? "x86" : "arm64",
+            bitness: "64",
+            brands: brands,
+            fullVersionList: brands.map(function(b) { return { brand: b.brand, version: chromeVer }; }),
+            mobile: !isDesktop,
+            model: isDesktop ? "" : (dev.model || "SM-S928B"),
+            platform: isDesktop ? (isMac ? "macOS" : "Windows") : "Android",
+            platformVersion: isDesktop ? (isMac ? "14.0.0" : "10.0.0") : "14.0.0",
+            uaFullVersion: chromeVer
         };
     }
 
-    try {
-        if (window.WebGLRenderingContext) hookWebGL(WebGLRenderingContext.prototype);
-        if (window.WebGL2RenderingContext) hookWebGL(WebGL2RenderingContext.prototype);
-    } catch(e) {}
+    function applyDesktopPlugins(win) {
+        if (!isDesktop) return;
+        try {
+            var NavProto = (win.Navigator && win.Navigator.prototype) || win.navigator;
+            var PluginArrayProto = win.PluginArray && win.PluginArray.prototype;
+            var PluginProto = win.Plugin && win.Plugin.prototype;
+            var MimeArrayProto = win.MimeTypeArray && win.MimeTypeArray.prototype;
+            var MimeProto = win.MimeType && win.MimeType.prototype;
+            if (!PluginArrayProto || !PluginProto) return;
+
+            var defs = [
+                { name: "PDF Viewer", filename: "internal-pdf-viewer", description: "Portable Document Format" },
+                { name: "Chrome PDF Viewer", filename: "internal-pdf-viewer", description: "Portable Document Format" },
+                { name: "Chromium PDF Viewer", filename: "internal-pdf-viewer", description: "Portable Document Format" },
+                { name: "Microsoft Edge PDF Viewer", filename: "internal-pdf-viewer", description: "Portable Document Format" },
+                { name: "WebKit built-in PDF", filename: "internal-pdf-viewer", description: "Portable Document Format" }
+            ];
+
+            var mimeTypesArr = [];
+            var pluginObjs = defs.map(function(d) {
+                var p = Object.create(PluginProto);
+                var m1 = MimeProto ? Object.create(MimeProto) : {};
+                var m2 = MimeProto ? Object.create(MimeProto) : {};
+                Object.defineProperties(m1, {
+                    type: { value: "application/pdf", enumerable: true },
+                    suffixes: { value: "pdf", enumerable: true },
+                    description: { value: "Portable Document Format", enumerable: true },
+                    enabledPlugin: { value: p, enumerable: true }
+                });
+                Object.defineProperties(m2, {
+                    type: { value: "text/pdf", enumerable: true },
+                    suffixes: { value: "pdf", enumerable: true },
+                    description: { value: "Portable Document Format", enumerable: true },
+                    enabledPlugin: { value: p, enumerable: true }
+                });
+                mimeTypesArr.push(m1, m2);
+                Object.defineProperties(p, {
+                    name: { value: d.name, enumerable: true },
+                    filename: { value: d.filename, enumerable: true },
+                    description: { value: d.description, enumerable: true },
+                    length: { value: 2, enumerable: true },
+                    0: { value: m1, enumerable: true },
+                    1: { value: m2, enumerable: true }
+                });
+                p.item = function(idx) { return this[idx] || null; };
+                p.namedItem = function(n) { return n === "application/pdf" ? m1 : (n === "text/pdf" ? m2 : null); };
+                return p;
+            });
+
+            var fakePlugins = Object.create(PluginArrayProto);
+            pluginObjs.forEach(function(p, idx) {
+                Object.defineProperty(fakePlugins, idx, { value: p, enumerable: true });
+                Object.defineProperty(fakePlugins, p.name, { value: p, enumerable: false });
+            });
+            Object.defineProperty(fakePlugins, "length", { value: pluginObjs.length, enumerable: true });
+            fakePlugins.item = function(idx) { return this[idx] || null; };
+            fakePlugins.namedItem = function(n) { return this[n] || null; };
+            fakePlugins.refresh = function() {};
+
+            try { delete win.navigator.plugins; } catch(_) {}
+            Object.defineProperty(NavProto, "plugins", { get: function() { return fakePlugins; }, configurable: true });
+
+            if (MimeArrayProto) {
+                var fakeMimes = Object.create(MimeArrayProto);
+                var m0 = mimeTypesArr[0];
+                var m1 = mimeTypesArr[1];
+                Object.defineProperty(fakeMimes, 0, { value: m0, enumerable: true });
+                Object.defineProperty(fakeMimes, 1, { value: m1, enumerable: true });
+                Object.defineProperty(fakeMimes, "application/pdf", { value: m0, enumerable: false });
+                Object.defineProperty(fakeMimes, "text/pdf", { value: m1, enumerable: false });
+                Object.defineProperty(fakeMimes, "length", { value: 2, enumerable: true });
+                fakeMimes.item = function(idx) { return this[idx] || null; };
+                fakeMimes.namedItem = function(n) { return this[n] || null; };
+                try { delete win.navigator.mimeTypes; } catch(_) {}
+                Object.defineProperty(NavProto, "mimeTypes", { get: function() { return fakeMimes; }, configurable: true });
+            }
+        } catch(_) {}
+    }
+
+    function hookWebGLOnScope(scope) {
+        if (!scope) return;
+        scope.__FUSION_WEBGL_STEALTH__ = true;
+        var hookWebGL = function(proto) {
+            if (!proto || !proto.getParameter) return;
+            var origGetParam = proto.getParameter;
+            proto.getParameter = markNative(function(param) {
+                if (param === 37445) return effectiveVendor;
+                if (param === 37446) return effectiveRenderer;
+                return origGetParam.apply(this, arguments);
+            }, origGetParam);
+        };
+        try {
+            if (scope.WebGLRenderingContext) hookWebGL(scope.WebGLRenderingContext.prototype);
+            if (scope.WebGL2RenderingContext) hookWebGL(scope.WebGL2RenderingContext.prototype);
+        } catch(_) {}
+    }
+
+    function hookWebRtcOnWindow(win) {
+        try {
+            win.__FUSION_WEBRTC_STEALTH__ = true;
+            var isPrivateOrHostCandidate = function(candStr) {
+                if (!candStr) return false;
+                var s = String(candStr);
+                if (s.indexOf("typ host") !== -1) return true;
+                return /(^|[\s:])(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|169\.254\.\d+\.\d+|127\.\d+\.\d+\.\d+|fe80::|fd[0-9a-f]{2}:)/i.test(s);
+            };
+            var scrubSdp = function(desc) {
+                if (!desc || !desc.sdp) return desc;
+                var cleaned = String(desc.sdp).split(/\r?\n/).filter(function(line) {
+                    if (line.indexOf("a=candidate:") === 0 && isPrivateOrHostCandidate(line)) return false;
+                    return true;
+                }).join("\r\n");
+                try { return { type: desc.type, sdp: cleaned }; } catch(_) { return desc; }
+            };
+
+            var wrapRtc = function(OrigRtc) {
+                if (!OrigRtc) return OrigRtc;
+                var Wrapped = function(config, constraints) {
+                    var cfg = config ? Object.assign({}, config) : {};
+                    if (win.__FUSION_WEBRTC_STEALTH__) {
+                        cfg.iceServers = [];
+                        cfg.iceTransportPolicy = "relay";
+                    }
+                    var pc = new OrigRtc(cfg, constraints);
+                    if (!win.__FUSION_WEBRTC_STEALTH__) return pc;
+
+                    var origAddEL = pc.addEventListener.bind(pc);
+                    pc.addEventListener = function(type, listener, opts) {
+                        if (type === "icecandidate" && typeof listener === "function") {
+                            var wrappedListener = function(ev) {
+                                if (ev && ev.candidate && isPrivateOrHostCandidate(ev.candidate.candidate)) {
+                                    try {
+                                        var emptyEv = typeof win.RTCPeerConnectionIceEvent === "function"
+                                            ? new win.RTCPeerConnectionIceEvent("icecandidate", { candidate: null })
+                                            : ev;
+                                        listener.call(this, emptyEv);
+                                    } catch(_) {}
+                                    return;
+                                }
+                                return listener.apply(this, arguments);
+                            };
+                            return origAddEL(type, wrappedListener, opts);
+                        }
+                        return origAddEL(type, listener, opts);
+                    };
+
+                    var userOnIce = null;
+                    var iceListenerAttached = false;
+                    try {
+                        Object.defineProperty(pc, "onicecandidate", {
+                            get: function() { return userOnIce; },
+                            set: function(fn) {
+                                userOnIce = fn;
+                                if (!iceListenerAttached) {
+                                    iceListenerAttached = true;
+                                    pc.addEventListener("icecandidate", function(ev) {
+                                        if (typeof userOnIce === "function") userOnIce.call(pc, ev);
+                                    });
+                                }
+                            },
+                            configurable: true
+                        });
+                    } catch(_) {}
+
+                    var origCreateOffer = pc.createOffer.bind(pc);
+                    pc.createOffer = function() {
+                        return origCreateOffer.apply(pc, arguments).then(scrubSdp);
+                    };
+                    var origCreateAnswer = pc.createAnswer.bind(pc);
+                    pc.createAnswer = function() {
+                        return origCreateAnswer.apply(pc, arguments).then(scrubSdp);
+                    };
+                    return pc;
+                };
+                Wrapped.prototype = OrigRtc.prototype;
+                return Wrapped;
+            };
+            if (win.RTCPeerConnection) win.RTCPeerConnection = wrapRtc(win.RTCPeerConnection);
+            if (win.webkitRTCPeerConnection) win.webkitRTCPeerConnection = wrapRtc(win.webkitRTCPeerConnection);
+        } catch(_) {}
+    }
+
+    function createSpoofedUAData(heValues, baseUAData) {
+        var brands = heValues.brands;
+        var obj = {};
+        try {
+            if (typeof NavigatorUAData !== "undefined" && NavigatorUAData.prototype) {
+                obj = Object.create(NavigatorUAData.prototype);
+            } else if (baseUAData && Object.getPrototypeOf(baseUAData)) {
+                obj = Object.create(Object.getPrototypeOf(baseUAData));
+            }
+        } catch(_) {}
+        Object.defineProperties(obj, {
+            brands: { get: function() { return brands; }, enumerable: true, configurable: true },
+            mobile: { get: function() { return heValues.mobile; }, enumerable: true, configurable: true },
+            platform: { get: function() { return heValues.platform; }, enumerable: true, configurable: true },
+            getHighEntropyValues: {
+                value: function(hints) {
+                    if (!Array.isArray(hints) || hints.length === 0) return Promise.resolve(heValues);
+                    var out = { brands: brands, mobile: heValues.mobile, platform: heValues.platform };
+                    hints.forEach(function(h) { if (h in heValues) out[h] = heValues[h]; });
+                    return Promise.resolve(out);
+                },
+                enumerable: true,
+                configurable: true
+            },
+            toJSON: {
+                value: function() { return { brands: brands, mobile: heValues.mobile, platform: heValues.platform }; },
+                enumerable: true,
+                configurable: true
+            }
+        });
+        return obj;
+    }
+
+    function buildWorkerStealthHeader() {
+        var cfg = {
+            ua: effectiveUa,
+            appVer: effectiveAppVer,
+            platform: effectivePlatform,
+            cores: effectiveCores,
+            memory: effectiveMemory,
+            vendor: effectiveVendor,
+            renderer: effectiveRenderer,
+            isDesktop: isDesktop,
+            he: buildHighEntropyValues()
+        };
+        return "(function(){try{" +
+            "var C=" + JSON.stringify(cfg) + ";" +
+            "var np=(self.WorkerNavigator&&self.WorkerNavigator.prototype)||self.navigator;" +
+            "if(np&&self.navigator){" +
+            "try{delete self.navigator.webdriver;}catch(_){}" +
+            "var def=function(k,v){try{Object.defineProperty(np,k,{get:function(){return v;},configurable:true});}catch(_){}};" +
+            "def('webdriver',false);" +
+            "if(C.ua){def('userAgent',C.ua);def('appVersion',C.appVer);}" +
+            "def('platform',C.platform);" +
+            "def('hardwareConcurrency',C.cores);" +
+            "def('deviceMemory',C.memory);" +
+            "if(self.navigator.userAgentData){" +
+            "var fakeUAD={brands:C.he.brands,mobile:!C.isDesktop,platform:C.he.platform,getHighEntropyValues:function(){return Promise.resolve(C.he);},toJSON:function(){return{brands:C.he.brands,mobile:!C.isDesktop,platform:C.he.platform};}};" +
+            "def('userAgentData',fakeUAD);" +
+            "}}" +
+            "var hw=function(p){if(!p||!p.getParameter)return;var o=p.getParameter;p.getParameter=function(k){if(k===37445)return C.vendor;if(k===37446)return C.renderer;return o.apply(this,arguments);};};" +
+            "if(self.WebGLRenderingContext)hw(self.WebGLRenderingContext.prototype);" +
+            "if(self.WebGL2RenderingContext)hw(self.WebGL2RenderingContext.prototype);" +
+            "}catch(_){}})();";
+    }
+
+    function hookWorkersAndServiceWorker(win) {
+        try {
+            var workerHeader = buildWorkerStealthHeader();
+            var blobRegistry = new Map();
+            if (win.URL && typeof win.URL.createObjectURL === "function" && !win.URL.createObjectURL.__FUSION_BLOB_TRACK__) {
+                var origCreateObjUrl = win.URL.createObjectURL.bind(win.URL);
+                var trackedCreateObjUrl = markNative(function(obj) {
+                    var res = origCreateObjUrl(obj);
+                    try {
+                        if (obj && typeof win.Blob === "function" && obj instanceof win.Blob) {
+                            if (blobRegistry.size > 64) blobRegistry.clear();
+                            blobRegistry.set(res, obj);
+                        }
+                    } catch(_) {}
+                    return res;
+                }, win.URL.createObjectURL);
+                trackedCreateObjUrl.__FUSION_BLOB_TRACK__ = true;
+                win.URL.createObjectURL = trackedCreateObjUrl;
+            }
+
+            var wrapWorkerCtor = function(OrigCtor) {
+                if (!OrigCtor || OrigCtor.__FUSION_WRAPPED__) return OrigCtor;
+                var WrappedWorker = markNative(function(scriptUrl, options) {
+                    try {
+                        var urlStr = String(scriptUrl);
+                        var isModule = options && options.type === "module";
+                        var recordedBlob = blobRegistry.get(urlStr);
+                        if (recordedBlob && !isModule) {
+                            // Gabungkan header stealth langsung ke Blob tunggal tanpa importScripts agar aman 100% di strict CSP & revokeObjectURL
+                            var merged = new win.Blob([workerHeader + "\n", recordedBlob], {
+                                type: recordedBlob.type || "application/javascript"
+                            });
+                            var mergedUrl = win.URL.createObjectURL(merged);
+                            var inst = new OrigCtor(mergedUrl, options);
+                            setTimeout(function() { try { win.URL.revokeObjectURL(mergedUrl); } catch(_) {} }, 5000);
+                            return inst;
+                        }
+                    } catch(_) {}
+                    return new OrigCtor(scriptUrl, options);
+                }, OrigCtor);
+                WrappedWorker.prototype = OrigCtor.prototype;
+                WrappedWorker.__FUSION_WRAPPED__ = true;
+                return WrappedWorker;
+            };
+            if (win.Worker) win.Worker = wrapWorkerCtor(win.Worker);
+            if (win.SharedWorker) win.SharedWorker = wrapWorkerCtor(win.SharedWorker);
+        } catch(_) {}
+    }
+
+    function applyStealthToWindow(win) {
+        if (!win) return;
+        try {
+            if (win.__FUSION_FINGERPRINT_INJECTED__) return;
+            win.__FUSION_FINGERPRINT_INJECTED__ = true;
+        } catch(_) {
+            return;
+        }
+        hookFunctionToString(win);
+
+        // 1. Scrub navigator.webdriver on prototype only (zero own-property trace for _.has(navigator, "webdriver"))
+        try {
+            try { delete win.navigator.webdriver; } catch(_) {}
+            if (win.Navigator && win.Navigator.prototype) {
+                Object.defineProperty(win.Navigator.prototype, 'webdriver', {
+                    get: markNative(function() { return false; }, 'get webdriver'),
+                    configurable: true
+                });
+            }
+        } catch(_) {}
+
+        // 2. WebRTC STUN + LAN/Host IP Leak Protection
+        hookWebRtcOnWindow(win);
+
+        // 3. Chrome Runtime / LoadTimes / CSI Parity
+        try {
+            if (!win.chrome) win.chrome = {};
+            if (!win.chrome.runtime) {
+                win.chrome.runtime = {
+                    OnInstalledReason: { CHROME_UPDATE: "chrome_update", INSTALL: "install", SHARED_MODULE_UPDATE: "shared_module_update", UPDATE: "update" },
+                    OnRestartRequiredReason: { APP_UPDATE: "app_update", OS_UPDATE: "os_update", PERIODIC: "periodic" },
+                    PlatformArch: { ARM: "arm", ARM64: "arm64", MIPS: "mips", MIPS64: "mips64", X86_32: "x86-32", X86_64: "x86-64" },
+                    PlatformNaclArch: { ARM: "arm", MIPS: "mips", MIPS64: "mips64", X86_32: "x86-32", X86_64: "x86-64" },
+                    PlatformOs: { ANDROID: "android", CROS: "cros", LINUX: "linux", MAC: "mac", OPENBSD: "openbsd", WIN: "win" },
+                    RequestUpdateCheckStatus: { NO_UPDATE: "no_update", THROTTLED: "throttled", UPDATE_AVAILABLE: "update_available" },
+                    connect: function() { return { onDisconnect: { addListener: function() {} }, onMessage: { addListener: function() {} }, postMessage: function() {} }; },
+                    sendMessage: function(extId, msg, opt, cb) { if (typeof opt === 'function') cb = opt; if (cb) cb(); }
+                };
+            }
+            if (!win.chrome.loadTimes) {
+                win.chrome.loadTimes = function() {
+                    var t = (win.performance && win.performance.timing) || {};
+                    var start = (t.navigationStart || Date.now()) / 1000;
+                    return {
+                        requestTime: start,
+                        startLoadTime: start,
+                        commitLoadTime: (t.responseStart || Date.now()) / 1000,
+                        finishDocumentLoadTime: (t.domContentLoadedEventEnd || Date.now()) / 1000,
+                        finishLoadTime: (t.loadEventEnd || Date.now()) / 1000,
+                        firstPaintTime: (t.domInteractive || Date.now()) / 1000,
+                        navigationType: "Other"
+                    };
+                };
+            }
+            if (!win.chrome.csi) {
+                win.chrome.csi = function() {
+                    var t = (win.performance && win.performance.timing) || {};
+                    var s = t.navigationStart || Date.now();
+                    var e = t.loadEventEnd || Date.now();
+                    return { startE: s, onloadT: e, pageT: e - s, tran: 15 };
+                };
+            }
+        } catch(_) {}
+
+        // 4. Hardware Concurrency, Device Memory, Platform, Touch, Window Dimensions, Plugins & UserAgentData Parity
+        try {
+            var navProto = (win.Navigator && win.Navigator.prototype) || win.navigator;
+            var defNav = function(prop, getter) {
+                try { delete win.navigator[prop]; } catch(_) {}
+                try { Object.defineProperty(navProto, prop, { get: getter, configurable: true }); } catch(_) {}
+            };
+            defNav('hardwareConcurrency', function() { return effectiveCores; });
+            defNav('deviceMemory', function() { return effectiveMemory; });
+            defNav('platform', function() { return effectivePlatform; });
+            if (isDesktop) {
+                defNav('maxTouchPoints', function() { return 0; });
+            }
+            applyDesktopPlugins(win);
+
+            // Headless outerWidth/outerHeight fix (native WebView headless returns 0, triggering 33% headless)
+            if (!win.outerWidth || win.outerWidth === 0) {
+                Object.defineProperty(win, 'outerWidth', {
+                    get: function() { return win.innerWidth || (isDesktop ? 1920 : (dev.screenWidth || 480)); },
+                    configurable: true
+                });
+            }
+            if (!win.outerHeight || win.outerHeight === 0) {
+                Object.defineProperty(win, 'outerHeight', {
+                    get: function() {
+                        var h = win.innerHeight || (isDesktop ? 1000 : (dev.screenHeight || 1067));
+                        return isDesktop ? (h + 85) : h;
+                    },
+                    configurable: true
+                });
+            }
+
+            if (isDesktop && win.screen) {
+                Object.defineProperty(win.screen, 'width', { get: function() { return 1920; }, configurable: true });
+                Object.defineProperty(win.screen, 'height', { get: function() { return 1080; }, configurable: true });
+                Object.defineProperty(win.screen, 'availWidth', { get: function() { return 1920; }, configurable: true });
+                Object.defineProperty(win.screen, 'availHeight', { get: function() { return 1040; }, configurable: true });
+                Object.defineProperty(win, 'devicePixelRatio', { get: function() { return 1; }, configurable: true });
+                if (win.screen.orientation) {
+                    try { Object.defineProperty(win.screen.orientation, 'type', { get: function() { return 'landscape-primary'; }, configurable: true }); } catch(_) {}
+                    try { Object.defineProperty(win.screen.orientation, 'angle', { get: function() { return 0; }, configurable: true }); } catch(_) {}
+                }
+            }
+            if (win.navigator.userAgentData) {
+                var fakeUAD = createSpoofedUAData(buildHighEntropyValues(), win.navigator.userAgentData);
+                defNav('userAgentData', function() { return fakeUAD; });
+            }
+        } catch(e) {}
+
+        // 5. Canvas Noise Faker (Deterministic, non-mutating scratch pass, consistent top & iframe)
+        if (profileSeed !== "default" && win.HTMLCanvasElement) {
+            win.__FUSION_CANVAS_STEALTH__ = true;
+            try {
+                var originalToDataURL = win.HTMLCanvasElement.prototype.toDataURL;
+                var originalToBlob = win.HTMLCanvasElement.prototype.toBlob;
+                var withCanvasNoise = function(canvas, origFn, args) {
+                    var ctx = canvas.getContext('2d');
+                    if (ctx && canvas.width > 0 && canvas.height > 0) {
+                        try {
+                            var pX = hash % canvas.width;
+                            var pY = (hash >>> 8) % canvas.height;
+                            var origPx = ctx.getImageData(pX, pY, 1, 1);
+                            var modPx = ctx.getImageData(pX, pY, 1, 1);
+                            var shift = (hash % 5) + 1;
+                            modPx.data[0] = (modPx.data[0] + shift) % 256;
+                            modPx.data[3] = Math.max(1, modPx.data[3]);
+                            ctx.putImageData(modPx, pX, pY);
+                            try {
+                                return origFn.apply(canvas, args);
+                            } finally {
+                                ctx.putImageData(origPx, pX, pY);
+                            }
+                        } catch(e) {}
+                    }
+                    return origFn.apply(canvas, args);
+                };
+                win.HTMLCanvasElement.prototype.toDataURL = markNative(function() {
+                    return withCanvasNoise(this, originalToDataURL, arguments);
+                }, originalToDataURL);
+                if (originalToBlob) {
+                    win.HTMLCanvasElement.prototype.toBlob = markNative(function() {
+                        return withCanvasNoise(this, originalToBlob, arguments);
+                    }, originalToBlob);
+                }
+            } catch(e) {}
+
+            // 6. AudioContext Jitter Faker
+            try {
+                if (win.AudioBuffer) {
+                    var origGetChannelData = win.AudioBuffer.prototype.getChannelData;
+                    win.AudioBuffer.prototype.getChannelData = markNative(function() {
+                        var channelData = origGetChannelData.apply(this, arguments);
+                        if (channelData && channelData.length > 10) {
+                            var idx = hash % Math.min(channelData.length, 20);
+                            channelData[idx] += noise;
+                        }
+                        return channelData;
+                    }, origGetChannelData);
+                }
+            } catch(e) {}
+        }
+
+        // 7. Context-Aware WebGL Vendor & Renderer Spoofing (WebGL 1 & WebGL 2)
+        hookWebGLOnScope(win);
+
+        // 8. Worker & ServiceWorker Stealth Propagation (prevents native ; wv / Mali GPU leak across threads)
+        hookWorkersAndServiceWorker(win);
+
+        // 9. Same-Origin Iframe Stealth Propagation (contentWindow, contentDocument, DocumentFragment, innerHTML & frames sweep)
+        try {
+            var sweepFrames = function() {
+                try {
+                    var flen = win.frames ? win.frames.length : 0;
+                    for (var fi = 0; fi < flen; fi++) {
+                        try {
+                            var fw = win.frames[fi];
+                            if (fw && !fw.__FUSION_FINGERPRINT_INJECTED__ && fw.navigator) {
+                                applyStealthToWindow(fw);
+                            }
+                        } catch(_) {}
+                    }
+                } catch(_) {}
+            };
+            var patchIframeNode = function(node, container) {
+                if (node && node.nodeType === 1) {
+                    if (node.tagName === 'IFRAME') {
+                        try {
+                            var cw = origCwGetter ? origCwGetter.call(node) : node.contentWindow;
+                            if (cw && cw.navigator) applyStealthToWindow(cw);
+                        } catch(_) {}
+                    } else if (node.querySelectorAll) {
+                        try {
+                            var frames = node.querySelectorAll('iframe');
+                            for (var k = 0; k < frames.length; k++) patchIframeNode(frames[k], null);
+                        } catch(_) {}
+                    }
+                } else if (node && node.nodeType === 11) {
+                    // DocumentFragment: children move into container after DOM attach
+                    if (container && container.querySelectorAll) {
+                        try {
+                            var cframes = container.querySelectorAll('iframe');
+                            for (var c = 0; c < cframes.length; c++) patchIframeNode(cframes[c], null);
+                        } catch(_) {}
+                    }
+                    sweepFrames();
+                }
+            };
+            var origCwGetter = null;
+            if (win.HTMLIFrameElement && win.HTMLIFrameElement.prototype) {
+                var iframeProto = win.HTMLIFrameElement.prototype;
+                var origCwDesc = Object.getOwnPropertyDescriptor(iframeProto, 'contentWindow');
+                if (origCwDesc && origCwDesc.get) {
+                    origCwGetter = origCwDesc.get;
+                    Object.defineProperty(iframeProto, 'contentWindow', {
+                        get: markNative(function() {
+                            var cw = origCwDesc.get.call(this);
+                            if (cw) {
+                                try { if (cw.navigator) applyStealthToWindow(cw); } catch(_) {}
+                            }
+                            return cw;
+                        }, origCwDesc.get),
+                        configurable: true
+                    });
+                }
+                var origCdDesc = Object.getOwnPropertyDescriptor(iframeProto, 'contentDocument');
+                if (origCdDesc && origCdDesc.get) {
+                    Object.defineProperty(iframeProto, 'contentDocument', {
+                        get: markNative(function() {
+                            var cd = origCdDesc.get.call(this);
+                            if (cd) {
+                                try {
+                                    var cw = cd.defaultView;
+                                    if (cw && cw.navigator) applyStealthToWindow(cw);
+                                } catch(_) {}
+                            }
+                            return cd;
+                        }, origCdDesc.get),
+                        configurable: true
+                    });
+                }
+            }
+            if (win.Node && win.Node.prototype) {
+                ['appendChild', 'insertBefore', 'replaceChild'].forEach(function(m) {
+                    var orig = win.Node.prototype[m];
+                    if (typeof orig === 'function') {
+                        win.Node.prototype[m] = markNative(function(newNode) {
+                            var res = orig.apply(this, arguments);
+                            patchIframeNode(newNode, this);
+                            return res;
+                        }, orig);
+                    }
+                });
+            }
+            if (win.Element && win.Element.prototype) {
+                ['append', 'prepend', 'after', 'before', 'replaceWith'].forEach(function(m) {
+                    var orig = win.Element.prototype[m];
+                    if (typeof orig === 'function') {
+                        win.Element.prototype[m] = markNative(function() {
+                            var res = orig.apply(this, arguments);
+                            sweepFrames();
+                            return res;
+                        }, orig);
+                    }
+                });
+                var innerDesc = Object.getOwnPropertyDescriptor(win.Element.prototype, 'innerHTML');
+                if (innerDesc && innerDesc.set) {
+                    Object.defineProperty(win.Element.prototype, 'innerHTML', {
+                        get: innerDesc.get,
+                        set: markNative(function(val) {
+                            innerDesc.set.call(this, val);
+                            if (typeof val === 'string' && val.toLowerCase().indexOf('iframe') !== -1) {
+                                sweepFrames();
+                            }
+                        }, innerDesc.set),
+                        configurable: true
+                    });
+                }
+            }
+        } catch(_) {}
+    }
+
+    applyStealthToWindow(window);
 })();

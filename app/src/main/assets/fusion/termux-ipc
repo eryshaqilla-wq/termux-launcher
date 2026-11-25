@@ -957,7 +957,7 @@ for t in tabs:
                 IS_GHOST=1
                 ;;
             --fresh|--incognito)
-                PROFILE="fresh_$(date +%s)"
+                PROFILE="fresh_$(date +%s)_$$_${RANDOM}"
                 shift
                 ;;
             --desktop)
