@@ -353,10 +353,10 @@ public class FusionCdpBridge {
                 String applyKey = prof + "|" + chromeVer + "|" + (isDesktop ? (isMac ? "mac" : "win") : model);
 
                 org.json.JSONArray targets = null;
-                for (int attempt = 0; attempt < 10; attempt++) {
+                for (int attempt = 0; attempt < 15; attempt++) {
                     targets = fetchLocalJsonTargets(socketName);
                     if (targets != null && targets.length() > 0) break;
-                    Thread.sleep(200);
+                    Thread.sleep(40);
                 }
                 if (targets == null || targets.length() == 0) return;
 
@@ -371,8 +371,10 @@ public class FusionCdpBridge {
                     if (targetId.isEmpty() || wsUrl.isEmpty()) continue;
 
                     LocalSocket existing = sPersistentUaSockets.get(targetId);
-                    if (applyKey.equals(sAppliedTargetKeys.get(targetId)) && existing != null) continue;
-                    if (existing != null) {
+                    if (existing != null && sAppliedTargetKeys.containsKey(targetId)) {
+                        if (applyKey.equals(sAppliedTargetKeys.get(targetId)) || targets.length() > 1) {
+                            continue;
+                        }
                         try { existing.close(); } catch (Throwable ignored) {}
                         sPersistentUaSockets.remove(targetId);
                     }
@@ -402,13 +404,32 @@ public class FusionCdpBridge {
             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
             byte[] buf = new byte[4096];
             int n;
+            int expectedLen = -1;
+            int bodyOffset = -1;
             while ((n = in.read(buf)) != -1) {
                 baos.write(buf, 0, n);
+                if (bodyOffset < 0) {
+                    String soFar = new String(baos.toByteArray(), StandardCharsets.ISO_8859_1);
+                    int hdrEnd = soFar.indexOf("\r\n\r\n");
+                    if (hdrEnd > 0) {
+                        bodyOffset = hdrEnd + 4;
+                        String hdrPart = soFar.substring(0, hdrEnd);
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?im)^Content-Length:\\s*(\\d+)").matcher(hdrPart);
+                        if (m.find()) {
+                            expectedLen = Integer.parseInt(m.group(1));
+                        }
+                    }
+                }
+                if (bodyOffset >= 0 && expectedLen >= 0 && baos.size() >= bodyOffset + expectedLen) {
+                    break;
+                }
             }
-            String resp = new String(baos.toByteArray(), StandardCharsets.UTF_8);
-            int idx = resp.indexOf("\r\n\r\n");
-            if (idx < 0) return null;
-            String body = resp.substring(idx + 4).trim();
+            if (bodyOffset < 0) return null;
+            byte[] all = baos.toByteArray();
+            int bodyLen = (expectedLen >= 0 && bodyOffset + expectedLen <= all.length)
+                    ? expectedLen
+                    : (all.length - bodyOffset);
+            String body = new String(all, bodyOffset, Math.max(0, bodyLen), StandardCharsets.UTF_8).trim();
             if (!body.startsWith("[")) return null;
             return new org.json.JSONArray(body);
         } catch (Throwable ignored) {

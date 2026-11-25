@@ -521,6 +521,7 @@ public class FusionProfileManager {
             if (webView != null) {
                 WebSettings settings = webView.getSettings();
                 settings.setUserAgentString(getEffectiveUserAgent(webView.getContext(), device, isDesktop));
+                FusionCdpBridge.applyUserAgentOverrideAsync(webView.getContext(), targetProfile, device, isDesktop);
             }
             return;
         }
