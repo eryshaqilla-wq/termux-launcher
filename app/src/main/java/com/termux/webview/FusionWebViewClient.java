@@ -13,6 +13,9 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import androidx.webkit.ServiceWorkerClientCompat;
+import androidx.webkit.ServiceWorkerControllerCompat;
+import androidx.webkit.WebViewFeature;
 import com.termux.app.FusionToast;
 
 import java.io.ByteArrayInputStream;
@@ -49,23 +52,38 @@ public class FusionWebViewClient extends WebViewClient {
         this.mCurrentUrl = url;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
-            if (!fusionWebViewManager.isWebViewOpen() || fusionWebViewManager.mActiveWebView != webView) {
-                return;
+            FusionTab ownerTab = fusionWebViewManager.getTabForWebView(webView);
+            if (ownerTab != null && url != null && !url.isEmpty()) {
+                ownerTab.mUrl = url;
             }
+            boolean isActiveVisual = fusionWebViewManager.isWebViewOpen() && fusionWebViewManager.mActiveWebView == webView;
             String autoChain = FusionChainHelper.detectChainFromUrl(url);
             if (autoChain != null) {
-                GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+                if (ownerTab != null) {
+                    ownerTab.mChainKey = autoChain;
+                    int cid = FusionChainHelper.getChainIdByKey(autoChain);
+                    if (cid > 0) ownerTab.mChainId = cid;
+                }
+                if (isActiveVisual) {
+                    GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+                }
             } else if (FusionChainHelper.isNonEvm() && !FusionChainHelper.isNonEvmUrl(url)) {
                 String evm = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
                 int evmId = FusionChainHelper.sLastEvmChainId > 0 ? FusionChainHelper.sLastEvmChainId : 56;
-                GhostBridgeInterface.handleDappChainDetected(evm, evmId);
+                if (ownerTab != null && FusionChainHelper.isNonEvmKey(ownerTab.mChainKey)) {
+                    ownerTab.mChainKey = evm;
+                    ownerTab.mChainId = evmId;
+                }
+                if (isActiveVisual) {
+                    GhostBridgeInterface.handleDappChainDetected(evm, evmId);
+                }
             }
+            // Selalu injeksikan script untuk semua tab (termasuk headless & background multi-worker)
             fusionWebViewManager.injectScripts(webView);
             FusionExtensionHelper.injectMatchingScripts(webView, url, "document_start");
 
-            // Injeksi viewport desktop sejak awal load jika tab aktif dalam mode desktop
-            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
-            boolean isDesktop = (activeTab != null && activeTab.mIsDesktop) || fusionWebViewManager.mIsDesktopMode;
+            // Injeksi viewport desktop sejak awal load jika tab dalam mode desktop
+            boolean isDesktop = (ownerTab != null && ownerTab.mIsDesktop) || (isActiveVisual && fusionWebViewManager.mIsDesktopMode);
             if (isDesktop && webView != null) {
                 String desktopViewportJs =
                     "(function() {" +
@@ -90,30 +108,46 @@ public class FusionWebViewClient extends WebViewClient {
         this.mCurrentUrl = str;
         FusionWebViewManager fusionWebViewManager = this.mManager;
         if (fusionWebViewManager != null) {
-            if (!fusionWebViewManager.isWebViewOpen() || fusionWebViewManager.mActiveWebView != webView) {
-                return;
+            FusionTab ownerTab = fusionWebViewManager.getTabForWebView(webView);
+            if (ownerTab != null && str != null && !str.isEmpty()) {
+                ownerTab.mUrl = str;
             }
+            boolean isActiveVisual = fusionWebViewManager.isWebViewOpen() && fusionWebViewManager.mActiveWebView == webView;
             String autoChain = FusionChainHelper.detectChainFromUrl(str);
             if (autoChain != null) {
-                GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+                if (ownerTab != null) {
+                    ownerTab.mChainKey = autoChain;
+                    int cid = FusionChainHelper.getChainIdByKey(autoChain);
+                    if (cid > 0) ownerTab.mChainId = cid;
+                }
+                if (isActiveVisual) {
+                    GhostBridgeInterface.handleDappChainDetected(autoChain, 0);
+                }
             } else if (FusionChainHelper.isNonEvm() && !FusionChainHelper.isNonEvmUrl(str)) {
                 String evm = (FusionChainHelper.sLastEvmChainKey != null && !FusionChainHelper.sLastEvmChainKey.isEmpty()) ? FusionChainHelper.sLastEvmChainKey : "bsc";
                 int evmId = FusionChainHelper.sLastEvmChainId > 0 ? FusionChainHelper.sLastEvmChainId : 56;
-                GhostBridgeInterface.handleDappChainDetected(evm, evmId);
+                if (ownerTab != null && FusionChainHelper.isNonEvmKey(ownerTab.mChainKey)) {
+                    ownerTab.mChainKey = evm;
+                    ownerTab.mChainId = evmId;
+                }
+                if (isActiveVisual) {
+                    GhostBridgeInterface.handleDappChainDetected(evm, evmId);
+                }
             }
             fusionWebViewManager.injectScripts(webView);
-            fusionWebViewManager.onTabUrlLoaded(webView, str);
-            FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
-            if (activeTab == null || !activeTab.mIsHeadless) {
-                FusionToolPillHelper.showToolPill(fusionWebViewManager);
-                FusionToolPillHelper.bringToFront();
-            } else {
-                FusionToolPillHelper.hideToolPill(fusionWebViewManager);
+            if (isActiveVisual) {
+                fusionWebViewManager.onTabUrlLoaded(webView, str);
+                if (ownerTab == null || !ownerTab.mIsHeadless) {
+                    FusionToolPillHelper.showToolPill(fusionWebViewManager);
+                    FusionToolPillHelper.bringToFront();
+                } else {
+                    FusionToolPillHelper.hideToolPill(fusionWebViewManager);
+                }
             }
             FusionExtensionHelper.injectMatchingScripts(webView, str, "document_idle");
 
-            // Injeksi viewport desktop jika tab aktif dalam mode desktop
-            boolean isDesktop = (activeTab != null && activeTab.mIsDesktop) || fusionWebViewManager.mIsDesktopMode;
+            // Injeksi viewport desktop jika tab dalam mode desktop
+            boolean isDesktop = (ownerTab != null && ownerTab.mIsDesktop) || (isActiveVisual && fusionWebViewManager.mIsDesktopMode);
             if (isDesktop && webView != null) {
                 String desktopViewportJs =
                     "(function() {" +
@@ -135,20 +169,33 @@ public class FusionWebViewClient extends WebViewClient {
     @Override // android.webkit.WebViewClient
     public void onReceivedHttpAuthRequest(WebView webView, HttpAuthHandler handler, String host, String realm) {
         if (this.mManager != null) {
-            FusionTab activeTab = FusionTabStateHelper.getActiveTab(this.mManager);
-            if (activeTab != null && activeTab.mIsProxyEnabled && activeTab.mProxyItem != null && activeTab.mProxyItem.hasAuth()) {
-                handler.proceed(activeTab.mProxyItem.user, activeTab.mProxyItem.pass);
+            FusionTab targetTab = this.mManager.getTabForWebView(webView);
+            if (targetTab == null) {
+                targetTab = FusionTabStateHelper.getActiveTab(this.mManager);
+            }
+            if (targetTab != null && targetTab.mIsProxyEnabled && targetTab.mProxyItem != null && targetTab.mProxyItem.hasAuth()) {
+                handler.proceed(targetTab.mProxyItem.user, targetTab.mProxyItem.pass);
                 return;
             }
         }
         super.onReceivedHttpAuthRequest(webView, handler, host, realm);
     }
 
+    public static volatile boolean sStrictSslCheck = false;
+
     @Override // android.webkit.WebViewClient
     public void onReceivedSslError(WebView webView, SslErrorHandler sslErrorHandler, SslError sslError) {
-        if (sslErrorHandler != null) {
-            sslErrorHandler.proceed();
+        if (sslErrorHandler == null) return;
+        if (sStrictSslCheck) {
+            String url = (sslError != null) ? sslError.getUrl() : null;
+            boolean isLocal = url != null && (url.contains("://127.0.0.1") || url.contains("://localhost"));
+            if (!isLocal) {
+                android.util.Log.w("FusionWebViewClient", "Strict SSL blocked certificate error for: " + url);
+                sslErrorHandler.cancel();
+                return;
+            }
         }
+        sslErrorHandler.proceed();
     }
 
     public static volatile int sMaxPhoenixRetries = 3;
@@ -184,7 +231,15 @@ public class FusionWebViewClient extends WebViewClient {
                                 return;
                             }
 
-                            // If crash loop persists > 3x: Graceful close
+                            // If crash loop persists > 3x: hanya tutup tab yang bermasalah bila tab worker/non-aktif
+                            FusionTab activeFg = FusionTabStateHelper.getActiveTab(mManager);
+                            if (tab != null && activeFg != null && activeFg.mId != tab.mId) {
+                                mManager.killTabById(tab.mId);
+                                if (mManager.mActivity != null) {
+                                    FusionToast.makeText((Context) mManager.mActivity, (CharSequence) ("⚠️ Worker Tab #" + tab.mId + " crash > batas & ditutup aman"), 0).show();
+                                }
+                                return;
+                            }
                             mManager.closeWebViewInternal();
                             if (mManager.mTerminalPaneHost != null) {
                                 mManager.mTerminalPaneHost.setVisibility(View.VISIBLE);
@@ -222,8 +277,32 @@ public class FusionWebViewClient extends WebViewClient {
         return "application/octet-stream";
     }
 
+    public static volatile boolean sEnableBuiltinTrackerBlock = true;
+    private static final java.util.concurrent.atomic.AtomicBoolean sServiceWorkerHooked = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    public static void ensureServiceWorkerHooked() {
+        if (!sServiceWorkerHooked.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_BASIC_USAGE)) {
+                ServiceWorkerControllerCompat.getInstance().setServiceWorkerClient(new ServiceWorkerClientCompat() {
+                    @Override
+                    public WebResourceResponse shouldInterceptRequest(WebResourceRequest request) {
+                        if (request == null || request.getUrl() == null) return null;
+                        String reqUrl = request.getUrl().toString();
+                        if (isKnownTrackerOrTelemetry(reqUrl)) {
+                            return new WebResourceResponse("text/plain", "UTF-8", 204, "No Content", Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
+                        }
+                        return FusionNetworkInterceptor.intercept(reqUrl);
+                    }
+                });
+            }
+        } catch (Throwable ignored) {}
+    }
+
     private static boolean isKnownTrackerOrTelemetry(String url) {
-        if (url == null || url.length() < 10) return false;
+        if (!sEnableBuiltinTrackerBlock || url == null || url.length() < 10) return false;
         String lower = url.toLowerCase();
         return lower.contains("google-analytics.com") ||
                lower.contains("googletagmanager.com") ||

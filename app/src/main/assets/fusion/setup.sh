@@ -696,6 +696,30 @@ if [ -d "$FUSION_HOME/scripts" ]; then
     cp -rf "$FUSION_HOME/scripts/"* "$HOME/wallet/scripts/" 2>/dev/null || true
 fi
 
+# Pasang Dokumentasi Kapabilitas WebView & Skills AI Agent (.md) ke Termux Host
+if [ -d "$FUSION_HOME/docs" ]; then
+    mkdir -p "$HOME/.fusion/docs" 2>/dev/null || true
+    cp -rf "$FUSION_HOME/docs/"* "$HOME/.fusion/docs/" 2>/dev/null || true
+fi
+if [ -d "$FUSION_HOME/skills" ]; then
+    mkdir -p "$HOME/.agents/skills" 2>/dev/null || true
+    cp -rf "$FUSION_HOME/skills/"* "$HOME/.agents/skills/" 2>/dev/null || true
+fi
+if [ -f "$HOME/.fusion/docs/WEBVIEW_MASTER_CAPABILITIES.md" ]; then
+    for md_target in "$HOME/.gemini/GEMINI.md" "$HOME/AGENTS.md"; do
+        mkdir -p "$(dirname "$md_target")" 2>/dev/null || true
+        [ ! -f "$md_target" ] && touch "$md_target"
+        if ! grep -q "FUSION_WEBVIEW_CAPABILITIES_REF" "$md_target" 2>/dev/null; then
+            cat << 'EOF_WV_MD' >> "$md_target"
+
+<!-- FUSION_WEBVIEW_CAPABILITIES_REF -->
+## Project Fusion WebView & Multi-Akun Capabilities
+- Seluruh kemampuan native Android WebView (multi-profile isolation, per-tab wallet/proxy, multi-tunnel SOCKS5, anti-detect `144` device & Chromium sync, external hot-override `~/.fusion/engine/`, CDP without ADB, permission guard `termux-ipc webview perm`, Wi-Fi remote control tanpa token port `8765`/`9223`, dan MCP `webview_mcp` + `browser_remote_set`) terdokumentasi lengkap di `~/.fusion/docs/WEBVIEW_MASTER_CAPABILITIES.md`, `~/.agents/skills/playwright-webview/SKILL.md`, dan `~/.agents/skills/project-fusion/SKILL.md`.
+EOF_WV_MD
+        fi
+    done
+fi
+
 # Pastikan termux-ipc menggunakan shebang Termux
 if [ -f "$PREFIX/bin/termux-ipc" ]; then
     sed -i '1s|.*|#!/data/data/com.termux/files/usr/bin/bash|' "$PREFIX/bin/termux-ipc" 2>/dev/null || true
@@ -1717,6 +1741,9 @@ if [ $IS_ROOT -eq 1 ] && [ "$TARGET_WALLET_DIR" != "$HOME/wallet" ] && [ -n "$CO
     su -c "mkdir -p '$TARGET_WALLET_DIR'" 2>/dev/null || true
     [ -d "$HOME/wallet" ] && su -c "cp -rf '$HOME/wallet/'* '$TARGET_WALLET_DIR/'" 2>/dev/null || true
     [ -d "$HOME/.fusion/scripts" ] && su -c "mkdir -p '$CONTAINER_ROOTFS/root/.fusion/scripts' && cp -rf '$HOME/.fusion/scripts/'* '$CONTAINER_ROOTFS/root/.fusion/scripts/'" 2>/dev/null || true
+    [ -d "$HOME/.fusion/docs" ] && su -c "mkdir -p '$CONTAINER_ROOTFS/root/.fusion/docs' && cp -rf '$HOME/.fusion/docs/'* '$CONTAINER_ROOTFS/root/.fusion/docs/'" 2>/dev/null || true
+    [ -d "$HOME/.agents/skills" ] && su -c "mkdir -p '$CONTAINER_ROOTFS/root/.agents/skills' && cp -rf '$HOME/.agents/skills/'* '$CONTAINER_ROOTFS/root/.agents/skills/'" 2>/dev/null || true
+    [ -f "$HOME/.fusion/docs/WEBVIEW_MASTER_CAPABILITIES.md" ] && su -c "mkdir -p '$CONTAINER_ROOTFS/root/.gemini' && cp -f '$HOME/.fusion/docs/WEBVIEW_MASTER_CAPABILITIES.md' '$CONTAINER_ROOTFS/root/.fusion/docs/WEBVIEW_MASTER_CAPABILITIES.md' && (grep -q 'FUSION_WEBVIEW_CAPABILITIES_REF' '$CONTAINER_ROOTFS/root/.gemini/GEMINI.md' 2>/dev/null || printf '\n<!-- FUSION_WEBVIEW_CAPABILITIES_REF -->\n## Project Fusion WebView & Multi-Akun Capabilities\n- Panduan lengkap WebView, IPC, Wi-Fi Remote & MCP tersedia di /root/.fusion/docs/WEBVIEW_MASTER_CAPABILITIES.md dan /root/.agents/skills/playwright-webview/SKILL.md.\n' >> '$CONTAINER_ROOTFS/root/.gemini/GEMINI.md')" 2>/dev/null || true
     [ -f "$HOME/.fusion_env" ] && su -c "cp -f '$HOME/.fusion_env' '$CONTAINER_ROOTFS/root/.fusion_env'" 2>/dev/null || true
 fi
 

@@ -19,6 +19,12 @@ import java.io.File;
 public class FusionWebChromeClient extends WebChromeClient {
     public static ValueCallback<Uri[]> sPendingFileChooser = null;
     public static String sPendingUploadFilePath = null;
+    public static volatile boolean sAllowGeolocation = false;
+    public static volatile boolean sAllowSensitivePermissions = false;
+    public static volatile boolean sAllowDrmId = false;
+    public static volatile boolean sAllowCamera = false;
+    public static volatile boolean sAllowMic = false;
+    private static final java.util.concurrent.ExecutorService sConsoleLogExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
 
     @Override
     public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, WebChromeClient.FileChooserParams fileChooserParams) {
@@ -77,13 +83,30 @@ public class FusionWebChromeClient extends WebChromeClient {
             }
         }
 
-        // 2. Untuk window.open() atau popup dynamic javascript, sambungkan langsung ke Tab WebView baru
+        // 2. Untuk window.open() atau popup dynamic javascript, sambungkan langsung ke Tab WebView baru (mewarisi profile, chain & wallet induk)
         if (manager != null && manager.mActivity != null) {
             try {
                 WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
                 if (transport != null) {
-                    FusionTab newTab = manager.createTabInternal("about:blank", "default", "Popup", "bsc", true, false, false, "");
+                    FusionTab parentTab = manager.getTabForWebView(view);
+                    String pProfile = (parentTab != null && parentTab.mProfile != null && !parentTab.mProfile.isEmpty()) ? parentTab.mProfile : "default";
+                    String pChain = (parentTab != null && parentTab.mChainKey != null && !parentTab.mChainKey.isEmpty()) ? parentTab.mChainKey : "bsc";
+                    boolean pGhost = parentTab != null ? parentTab.mIsGhost : true;
+                    boolean pDesktop = parentTab != null && parentTab.mIsDesktop;
+                    boolean pAuto = parentTab != null && parentTab.mIsAuto;
+                    FusionTab newTab = manager.createTabInternal("about:blank", pProfile, "Popup", pChain, pGhost, pDesktop, pAuto, "");
                     if (newTab != null && newTab.mWebView != null) {
+                        if (parentTab != null) {
+                            newTab.mWalletName = parentTab.mWalletName;
+                            newTab.mWalletAddress = parentTab.mWalletAddress;
+                            newTab.mIotaWalletName = parentTab.mIotaWalletName;
+                            newTab.mIotaWalletAddress = parentTab.mIotaWalletAddress;
+                            newTab.mSolWalletName = parentTab.mSolWalletName;
+                            newTab.mSolWalletAddress = parentTab.mSolWalletAddress;
+                            newTab.mProxyItem = parentTab.mProxyItem;
+                            newTab.mIsProxyEnabled = parentTab.mIsProxyEnabled;
+                            newTab.mChainId = parentTab.mChainId;
+                        }
                         transport.setWebView(newTab.mWebView);
                         resultMsg.sendToTarget();
                         manager.switchTab(manager.mTabList.size() - 1);
@@ -147,18 +170,21 @@ public class FusionWebChromeClient extends WebChromeClient {
     @Override // android.webkit.WebChromeClient
     public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
         if (consoleMessage != null && consoleMessage.message() != null) {
-            String msg = "[" + consoleMessage.messageLevel() + "] " + consoleMessage.message();
+            final String msg = "[" + consoleMessage.messageLevel() + "] " + consoleMessage.message();
             Log.d("FusionJS", msg + " (" + consoleMessage.sourceId() + ":" + consoleMessage.lineNumber() + ")");
-            try {
-                java.io.File logFile = new java.io.File("/tmp/webview_console.log");
-                if (logFile.exists() && logFile.length() > 5 * 1024 * 1024) {
-                    logFile.delete();
-                }
-                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(logFile, true)) {
-                    String line = System.currentTimeMillis() + " " + msg + "\n";
-                    fos.write(line.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                }
-            } catch (Throwable ignored) {}
+            final long ts = System.currentTimeMillis();
+            sConsoleLogExecutor.execute(() -> {
+                try {
+                    java.io.File logFile = new java.io.File("/tmp/webview_console.log");
+                    if (logFile.exists() && logFile.length() > 5 * 1024 * 1024) {
+                        logFile.delete();
+                    }
+                    try (java.io.FileOutputStream fos = new java.io.FileOutputStream(logFile, true)) {
+                        String line = ts + " " + msg + "\n";
+                        fos.write(line.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                } catch (Throwable ignored) {}
+            });
         }
         return true;
     }
@@ -166,7 +192,7 @@ public class FusionWebChromeClient extends WebChromeClient {
     @Override // android.webkit.WebChromeClient
     public void onGeolocationPermissionsShowPrompt(String str, GeolocationPermissions.Callback callback) {
         if (callback != null) {
-            callback.invoke(str, true, false);
+            callback.invoke(str, sAllowGeolocation, false);
         }
     }
 
@@ -208,8 +234,32 @@ public class FusionWebChromeClient extends WebChromeClient {
 
     @Override // android.webkit.WebChromeClient
     public void onPermissionRequest(PermissionRequest permissionRequest) {
-        if (permissionRequest != null) {
+        if (permissionRequest == null) return;
+        if (sAllowSensitivePermissions) {
             permissionRequest.grant(permissionRequest.getResources());
+            return;
+        }
+        String[] resources = permissionRequest.getResources();
+        if (resources == null || resources.length == 0) {
+            permissionRequest.deny();
+            return;
+        }
+        java.util.List<String> allowed = new java.util.ArrayList<>();
+        for (String r : resources) {
+            if (PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID.equals(r)) {
+                if (sAllowDrmId) allowed.add(r);
+            } else if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r)) {
+                if (sAllowCamera) allowed.add(r);
+            } else if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r)) {
+                if (sAllowMic) allowed.add(r);
+            } else {
+                allowed.add(r);
+            }
+        }
+        if (allowed.isEmpty()) {
+            permissionRequest.deny();
+        } else {
+            permissionRequest.grant(allowed.toArray(new String[0]));
         }
     }
 

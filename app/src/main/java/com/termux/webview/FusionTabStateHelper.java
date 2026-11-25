@@ -186,6 +186,13 @@ public class FusionTabStateHelper {
         if (str != null) {
             fusionWebViewManager.mCurrentProfile = str;
         }
+        if (fusionTab.mWalletName != null && !fusionTab.mWalletName.isEmpty()) {
+            fusionWebViewManager.mCurrentWalletName = fusionTab.mWalletName;
+        }
+        if (fusionTab.mWalletAddress != null && !fusionTab.mWalletAddress.isEmpty()) {
+            fusionWebViewManager.mCurrentWalletAddress = fusionTab.mWalletAddress;
+        }
+        FusionProxyHelper.updateProxyIndicator(fusionWebViewManager, fusionTab);
         if (fusionTab.mChainKey != null && !fusionTab.mChainKey.isEmpty()) {
             if (fusionTab.mChainId > 0) {
                 FusionChainHelper.setChainById(fusionTab.mChainId);
@@ -229,9 +236,11 @@ public class FusionTabStateHelper {
         fusionWebViewManager.mIsDesktopMode = z;
 
         WebSettings settings = webView.getSettings();
+        String profName = (activeTab != null && activeTab.mProfile != null && !activeTab.mProfile.isEmpty()) ? activeTab.mProfile : fusionWebViewManager.mCurrentProfile;
+        FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(profName);
         if (z) {
-            // Windows 10 Chrome Desktop UA - Universal compatibility
-            settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+            // Windows Chrome Desktop UA disinkronkan dengan versi Chromium WebView aktual
+            settings.setUserAgentString(FusionProfileManager.getEffectiveUserAgent(webView.getContext(), dev, true));
             settings.setUseWideViewPort(true);
             settings.setLoadWithOverviewMode(true);
             settings.setSupportZoom(true);
@@ -254,8 +263,8 @@ public class FusionTabStateHelper {
                 "})();";
             webView.evaluateJavascript(desktopViewportJs, null);
         } else {
-            // Reset ke default Mobile UA
-            settings.setUserAgentString(null);
+            // Kembalikan ke UA Mobile milik profil aktif (disinkronkan ke versi WebView aktual)
+            settings.setUserAgentString(FusionProfileManager.getEffectiveUserAgent(webView.getContext(), dev, false));
             settings.setUseWideViewPort(false);
             settings.setLoadWithOverviewMode(false);
             settings.setCacheMode(WebSettings.LOAD_DEFAULT);

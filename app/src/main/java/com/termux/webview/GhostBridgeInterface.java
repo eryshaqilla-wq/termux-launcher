@@ -1,7 +1,9 @@
 package com.termux.webview;
 
 import android.content.Context;
+import android.util.Base64;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebView;
 import com.termux.app.TermuxActivity;
 import com.termux.app.TermuxIpcServer;
 import java.io.ByteArrayOutputStream;
@@ -42,6 +44,45 @@ public class GhostBridgeInterface implements Runnable {
     public static int sLastDetectedDappChainId = 0;
     private static long sLastRpcCheckTime = 0;
     private static boolean sLastRpcCheckResult = false;
+    public static volatile boolean sRestrictDangerousBridge = true;
+    public static volatile String sWalletDaemonHost = "127.0.0.1";
+    public static volatile int sWalletDaemonPort = 3333;
+
+    public static void setWalletDaemonEndpoint(String host, int port) {
+        sWalletDaemonHost = (host != null && !host.trim().isEmpty()) ? host.trim() : "127.0.0.1";
+        sWalletDaemonPort = (port > 0 && port <= 65535) ? port : 3333;
+        sLastRpcCheckTime = 0;
+    }
+
+    private final FusionWebViewManager mManager;
+    private final WebView mWebView;
+
+    public GhostBridgeInterface() {
+        this(null, null);
+    }
+
+    public GhostBridgeInterface(FusionWebViewManager manager, WebView webView) {
+        this.mManager = manager;
+        this.mWebView = webView;
+    }
+
+    private FusionTab getOwnerTab() {
+        FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
+        if (mgr != null && this.mWebView != null) {
+            return mgr.getTabForWebView(this.mWebView);
+        }
+        return null;
+    }
+
+    private boolean isDangerousClassBlocked(String className) {
+        if (!sRestrictDangerousBridge || className == null) return false;
+        String c = className.trim();
+        return "java.lang.Runtime".equals(c)
+                || "java.lang.ProcessBuilder".equals(c)
+                || "java.lang.System".equals(c)
+                || "dalvik.system.DexClassLoader".equals(c)
+                || "dalvik.system.PathClassLoader".equals(c);
+    }
 
     @JavascriptInterface
     public void setToolWallet(final String jsonStr) {
@@ -241,7 +282,7 @@ public class GhostBridgeInterface implements Runnable {
         sLastRpcCheckTime = now;
         try {
             Socket socket = new Socket();
-            socket.connect(new InetSocketAddress("127.0.0.1", 3333), 500);
+            socket.connect(new InetSocketAddress(sWalletDaemonHost, sWalletDaemonPort), 500);
             socket.close();
             sLastRpcCheckResult = true;
             return true;
@@ -256,7 +297,7 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"error\":\"Empty payload\"}";
         }
         try {
-            HttpURLConnection httpURLConnection = (HttpURLConnection) new URL("http://127.0.0.1:3333").openConnection();
+            HttpURLConnection httpURLConnection = (HttpURLConnection) new URL("http://" + sWalletDaemonHost + ":" + sWalletDaemonPort).openConnection();
             httpURLConnection.setRequestMethod("POST");
             httpURLConnection.setRequestProperty("Content-Type", "application/json");
             httpURLConnection.setDoOutput(true);
@@ -578,10 +619,14 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getWalletAddress() {
+        FusionTab owner = getOwnerTab();
+        if (owner != null && owner.mWalletAddress != null && !owner.mWalletAddress.isEmpty()) {
+            return owner.mWalletAddress;
+        }
         if (sCurrentWalletAddress != null && !sCurrentWalletAddress.isEmpty()) {
             return sCurrentWalletAddress;
         }
-        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
         if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty()) {
             return mgr.mCurrentWalletAddress;
         }
@@ -590,10 +635,14 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getWalletName() {
+        FusionTab owner = getOwnerTab();
+        if (owner != null && owner.mWalletName != null && !owner.mWalletName.isEmpty()) {
+            return owner.mWalletName;
+        }
         if (sCurrentWalletName != null && !sCurrentWalletName.isEmpty()) {
             return sCurrentWalletName;
         }
-        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
         if (mgr != null && mgr.mCurrentWalletName != null && !mgr.mCurrentWalletName.isEmpty()) {
             return mgr.mCurrentWalletName;
         }
@@ -953,7 +1002,9 @@ public class GhostBridgeInterface implements Runnable {
             }
         }
         if (str.contains("eth_requestAccounts")) {
-            if (checkRpcAlive()) {
+            FusionTab owner = getOwnerTab();
+            String ownerAddr = (owner != null && owner.mWalletAddress != null && !owner.mWalletAddress.isEmpty()) ? owner.mWalletAddress : null;
+            if (ownerAddr == null && checkRpcAlive()) {
                 String daemonResp = forwardToDaemon(str);
                 if (daemonResp != null && !daemonResp.contains("\"error\"")) {
                     try {
@@ -966,9 +1017,9 @@ public class GhostBridgeInterface implements Runnable {
                     return daemonResp;
                 }
             }
-            String ethAddr = sCurrentWalletAddress;
+            String ethAddr = (ownerAddr != null) ? ownerAddr : sCurrentWalletAddress;
             if (ethAddr == null || ethAddr.isEmpty()) {
-                FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
                 if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty()) {
                     ethAddr = mgr.mCurrentWalletAddress;
                 }
@@ -982,9 +1033,10 @@ public class GhostBridgeInterface implements Runnable {
             return "{\"result\":[\"0x79E0EE08c6516d1204821f083285Ab65660c26E4\"]}";
         }
         if (str.contains("eth_accounts")) {
-            String ethAddr = sCurrentWalletAddress;
+            FusionTab owner = getOwnerTab();
+            String ethAddr = (owner != null && owner.mWalletAddress != null && !owner.mWalletAddress.isEmpty()) ? owner.mWalletAddress : sCurrentWalletAddress;
             if (ethAddr == null || ethAddr.isEmpty()) {
-                FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
                 if (mgr != null && mgr.mCurrentWalletAddress != null && !mgr.mCurrentWalletAddress.isEmpty()) {
                     ethAddr = mgr.mCurrentWalletAddress;
                 }
@@ -1249,10 +1301,14 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getIotaWalletAddress() {
+        FusionTab owner = getOwnerTab();
+        if (owner != null && owner.mIotaWalletAddress != null && !owner.mIotaWalletAddress.isEmpty()) {
+            return owner.mIotaWalletAddress;
+        }
         if (sCurrentIotaWalletAddress != null && !sCurrentIotaWalletAddress.isEmpty()) {
             return sCurrentIotaWalletAddress;
         }
-        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
         if (mgr != null && mgr.mCurrentIotaWalletAddress != null && !mgr.mCurrentIotaWalletAddress.isEmpty()) {
             return mgr.mCurrentIotaWalletAddress;
         }
@@ -1266,10 +1322,14 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public String getIotaWalletName() {
+        FusionTab owner = getOwnerTab();
+        if (owner != null && owner.mIotaWalletName != null && !owner.mIotaWalletName.isEmpty()) {
+            return owner.mIotaWalletName;
+        }
         if (sCurrentIotaWalletName != null && !sCurrentIotaWalletName.isEmpty()) {
             return sCurrentIotaWalletName;
         }
-        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
         if (mgr != null && mgr.mCurrentIotaWalletName != null && !mgr.mCurrentIotaWalletName.isEmpty()) {
             return mgr.mCurrentIotaWalletName;
         }
@@ -1288,6 +1348,12 @@ public class GhostBridgeInterface implements Runnable {
 
     @JavascriptInterface
     public void setIotaWalletDirect(String str, String str2) {
+        FusionTab owner = getOwnerTab();
+        if (owner != null) {
+            owner.mIotaWalletName = str != null ? str : "";
+            owner.mIotaWalletAddress = str2 != null ? str2 : "";
+            return;
+        }
         setIotaWallet(str, str2);
     }
 
@@ -1445,7 +1511,22 @@ public class GhostBridgeInterface implements Runnable {
         }
         try {
             java.net.URL url = new java.net.URL(targetUrl);
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+            FusionTab owner = getOwnerTab();
+            java.net.HttpURLConnection conn;
+            FusionProxyHelper.ProxyItem tabProxy = (owner != null && owner.mIsProxyEnabled && owner.mProxyItem != null && owner.mProxyItem.isValid())
+                    ? owner.mProxyItem : null;
+            if (tabProxy != null) {
+                java.net.Proxy.Type pType = "socks5".equalsIgnoreCase(tabProxy.scheme) ? java.net.Proxy.Type.SOCKS : java.net.Proxy.Type.HTTP;
+                java.net.Proxy javaProxy = new java.net.Proxy(pType, new InetSocketAddress(tabProxy.host, tabProxy.port));
+                conn = (java.net.HttpURLConnection) url.openConnection(javaProxy);
+                if (tabProxy.hasAuth() && pType == java.net.Proxy.Type.HTTP) {
+                    String creds = tabProxy.user + ":" + tabProxy.pass;
+                    String b64 = Base64.encodeToString(creds.getBytes(java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
+                    conn.setRequestProperty("Proxy-Authorization", "Basic " + b64);
+                }
+            } else {
+                conn = (java.net.HttpURLConnection) url.openConnection();
+            }
             conn.setConnectTimeout(15000);
             conn.setReadTimeout(30000);
             conn.setInstanceFollowRedirects(true);
@@ -1527,7 +1608,7 @@ public class GhostBridgeInterface implements Runnable {
         }
         if (url == null || url.trim().isEmpty()) return "";
         try {
-            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            android.webkit.CookieManager cm = FusionProfileManager.getCookieManagerForWebView(this.mWebView);
             String cookies = cm.getCookie(url);
             return cookies != null ? cookies : "";
         } catch (Throwable t) {
@@ -1539,7 +1620,7 @@ public class GhostBridgeInterface implements Runnable {
     public boolean setFullCookie(String url, String cookieValue) {
         if (url == null || cookieValue == null) return false;
         try {
-            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            android.webkit.CookieManager cm = FusionProfileManager.getCookieManagerForWebView(this.mWebView);
             cm.setCookie(url, cookieValue);
             cm.flush();
             return true;
@@ -1551,7 +1632,7 @@ public class GhostBridgeInterface implements Runnable {
     @JavascriptInterface
     public boolean clearAllCookies() {
         try {
-            android.webkit.CookieManager cm = android.webkit.CookieManager.getInstance();
+            android.webkit.CookieManager cm = FusionProfileManager.getCookieManagerForWebView(this.mWebView);
             cm.removeAllCookies(null);
             cm.flush();
             return true;
@@ -1643,6 +1724,9 @@ public class GhostBridgeInterface implements Runnable {
                 targetObj = (mgr != null && mgr.mActivity != null) ? mgr.mActivity.getApplicationContext() : null;
                 targetClass = (targetObj != null) ? targetObj.getClass() : null;
             } else {
+                if (isDangerousClassBlocked(target)) {
+                    return "{\"success\":false,\"error\":\"Blocked dangerous reflection class: " + target + "\"}";
+                }
                 targetClass = Class.forName(target);
             }
 

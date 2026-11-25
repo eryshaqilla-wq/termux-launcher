@@ -849,12 +849,25 @@ public class FusionProxyHelper {
 
         try {
             if (tab != null && tab.mIsProxyEnabled && tab.mProxyItem != null && tab.mProxyItem.isValid()) {
+                String proxyRule = tab.mProxyItem.toProxyRule();
+                if ("socks5".equalsIgnoreCase(tab.mProxyItem.scheme) && tab.mProxyItem.hasAuth()) {
+                    int localPort = FusionSocksTunnel.ensureTunnel(
+                            tab.mProxyItem.host,
+                            tab.mProxyItem.port,
+                            tab.mProxyItem.user,
+                            tab.mProxyItem.pass
+                    );
+                    if (localPort > 0) {
+                        proxyRule = "127.0.0.1:" + localPort;
+                    }
+                }
                 ProxyConfig config = new ProxyConfig.Builder()
-                        .addProxyRule(tab.mProxyItem.toProxyRule())
+                        .addProxyRule(proxyRule)
                         .build();
 
+                final String appliedRule = proxyRule;
                 ProxyController.getInstance().setProxyOverride(config, sDirectExecutor, () -> {
-                    Log.i(TAG, "ProxyOverride aktif untuk tab " + tab.mId + ": " + tab.mProxyItem.toProxyRule());
+                    Log.i(TAG, "ProxyOverride aktif untuk tab " + tab.mId + ": " + appliedRule);
                 });
             } else {
                 ProxyController.getInstance().clearProxyOverride(sDirectExecutor, () -> {

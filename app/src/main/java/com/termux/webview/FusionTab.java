@@ -16,6 +16,7 @@ public class FusionTab {
     public String mTitle = "New Tab";
     public boolean mIsMinimized = false;
     public boolean mIsHeadless = false;
+    public boolean mKeepAliveBackground = false;
     public boolean mIsPillCollapsed = false;
     public boolean mIsToolPillCollapsed = true;
     public boolean mHasFormFocus = false;
@@ -27,6 +28,19 @@ public class FusionTab {
     public long mLastProxyRotatedTime = 0;
     public String mChainKey = "bsc";
     public int mChainId = 56;
+    public String mWalletName = "";
+    public String mWalletAddress = "";
+    public String mSolWalletName = "";
+    public String mSolWalletAddress = "";
+    public String mTronWalletName = "";
+    public String mTronWalletAddress = "";
+    public String mSuiWalletName = "";
+    public String mSuiWalletAddress = "";
+    public String mAptosWalletName = "";
+    public String mAptosWalletAddress = "";
+    public String mIotaWalletName = "";
+    public String mIotaWalletAddress = "";
+    public final String mBridgeToken = java.util.UUID.randomUUID().toString();
 
     public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3, boolean isHeadless) {
         this.mId = i;

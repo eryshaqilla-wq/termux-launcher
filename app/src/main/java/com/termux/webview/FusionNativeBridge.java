@@ -81,7 +81,17 @@ public class FusionNativeBridge {
             }
 
             if (targetClass == null) {
-                targetClass = Class.forName(className.trim());
+                String trimmed = className.trim();
+                if ("java.lang.Runtime".equals(trimmed)
+                        || "java.lang.ProcessBuilder".equals(trimmed)
+                        || "java.lang.System".equals(trimmed)
+                        || "dalvik.system.DexClassLoader".equals(trimmed)
+                        || "dalvik.system.PathClassLoader".equals(trimmed)) {
+                    resp.put("success", false);
+                    resp.put("error", "Blocked dangerous reflection class: " + trimmed);
+                    return resp.toString();
+                }
+                targetClass = Class.forName(trimmed);
             }
 
             // 2. Parse arguments
@@ -274,11 +284,26 @@ public class FusionNativeBridge {
     }
 
     /**
-     * ⚡ Clear All Interception Rules:
+     * ⚡ Clear All Interception Rules & Reload External Engine Scripts:
      */
     @JavascriptInterface
     public String clearNetworkRules() {
         FusionNetworkInterceptor.clearRules();
+        return "{\"success\":true}";
+    }
+
+    @JavascriptInterface
+    public String addLocalMirror(String urlPattern, String localDirPath) {
+        boolean ok = FusionNetworkInterceptor.addLocalMirrorRule(urlPattern, localDirPath);
+        return ok ? "{\"success\":true}" : "{\"success\":false}";
+    }
+
+    @JavascriptInterface
+    public String reloadEngineScripts() {
+        FusionWebViewManager.clearAssetScriptCache();
+        if (mManager != null && mManager.mActivity != null && mWebView != null) {
+            mManager.mActivity.runOnUiThread(() -> mManager.injectScripts(mWebView));
+        }
         return "{\"success\":true}";
     }
 
@@ -300,10 +325,38 @@ public class FusionNativeBridge {
             if (obj.has("autoResurrect")) {
                 FusionWebViewClient.sAutoResurrectEnabled = obj.getBoolean("autoResurrect");
             }
+            if (obj.has("strictSsl")) {
+                FusionWebViewClient.sStrictSslCheck = obj.getBoolean("strictSsl");
+            }
+            if (obj.has("builtinTrackerBlock")) {
+                FusionWebViewClient.sEnableBuiltinTrackerBlock = obj.getBoolean("builtinTrackerBlock");
+            }
+            if (obj.has("allowGeolocation")) {
+                FusionWebChromeClient.sAllowGeolocation = obj.getBoolean("allowGeolocation");
+            }
+            if (obj.has("allowSensitivePermissions")) {
+                FusionWebChromeClient.sAllowSensitivePermissions = obj.getBoolean("allowSensitivePermissions");
+            }
+            if (obj.has("allowDrmId")) {
+                FusionWebChromeClient.sAllowDrmId = obj.getBoolean("allowDrmId");
+            }
+            if (obj.has("allowCamera")) {
+                FusionWebChromeClient.sAllowCamera = obj.getBoolean("allowCamera");
+            }
+            if (obj.has("allowMic")) {
+                FusionWebChromeClient.sAllowMic = obj.getBoolean("allowMic");
+            }
             resp.put("success", true);
             resp.put("maxRetries", FusionWebViewClient.sMaxPhoenixRetries);
             resp.put("cooldownMs", FusionWebViewClient.sPhoenixCooldownMs);
             resp.put("autoResurrect", FusionWebViewClient.sAutoResurrectEnabled);
+            resp.put("strictSsl", FusionWebViewClient.sStrictSslCheck);
+            resp.put("builtinTrackerBlock", FusionWebViewClient.sEnableBuiltinTrackerBlock);
+            resp.put("allowGeolocation", FusionWebChromeClient.sAllowGeolocation);
+            resp.put("allowSensitivePermissions", FusionWebChromeClient.sAllowSensitivePermissions);
+            resp.put("allowDrmId", FusionWebChromeClient.sAllowDrmId);
+            resp.put("allowCamera", FusionWebChromeClient.sAllowCamera);
+            resp.put("allowMic", FusionWebChromeClient.sAllowMic);
         } catch (Throwable t) {
             try {
                 resp.put("success", false);
@@ -419,7 +472,7 @@ public class FusionNativeBridge {
     @JavascriptInterface
     public String setCookie(String url, String cookie) {
         try {
-            CookieManager cm = CookieManager.getInstance();
+            CookieManager cm = FusionProfileManager.getCookieManagerForWebView(this.mWebView);
             cm.setCookie(url, cookie);
             cm.flush();
             return "{\"success\":true}";
@@ -431,7 +484,8 @@ public class FusionNativeBridge {
     @JavascriptInterface
     public String getCookie(String url) {
         try {
-            String c = CookieManager.getInstance().getCookie(url);
+            CookieManager cm = FusionProfileManager.getCookieManagerForWebView(this.mWebView);
+            String c = cm.getCookie(url);
             JSONObject resp = new JSONObject();
             resp.put("success", true);
             resp.put("cookie", (c != null) ? c : "");
@@ -444,7 +498,7 @@ public class FusionNativeBridge {
     @JavascriptInterface
     public String clearCookies() {
         try {
-            CookieManager cm = CookieManager.getInstance();
+            CookieManager cm = FusionProfileManager.getCookieManagerForWebView(this.mWebView);
             cm.removeAllCookies(null);
             cm.flush();
             return "{\"success\":true}";

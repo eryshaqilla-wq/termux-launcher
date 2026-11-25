@@ -1,6 +1,7 @@
 package com.termux.webview;
 
 import android.content.Context;
+import android.content.pm.PackageInfo;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
@@ -12,6 +13,7 @@ import android.webkit.WebView;
 
 import androidx.webkit.Profile;
 import androidx.webkit.ProfileStore;
+import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -230,9 +232,76 @@ public class FusionProfileManager {
         }
     }
 
+    private static volatile String sCachedDevicesFileKey = "";
+    private static volatile long sCachedDevicesLastMod = -1L;
+    private static volatile DeviceProfile[] sExternalDevicePool = null;
+
+    /**
+     * Mencari file engine eksternal untuk Hot-Override tanpa perlu rebuild APK.
+     */
+    public static File resolveExternalEngineFile(String fileName) {
+        if (fileName == null || fileName.trim().isEmpty()) return null;
+        String envDir = System.getenv("FUSION_ENGINE_DIR");
+        String[] dirs = new String[] {
+            envDir,
+            "/data/data/com.termux/files/home/.fusion/engine",
+            "/root/.fusion/engine",
+            "/root/wallet/webview_engine",
+            "/data/local/nhsystem/kali-arm64/root/.fusion/engine",
+            "/data/data/com.termux/files/home/.fusion",
+            "/root/.fusion",
+            "/root/wallet"
+        };
+        for (String d : dirs) {
+            if (d == null || d.isEmpty()) continue;
+            try {
+                File f = new File(d, fileName);
+                if (f.exists() && f.isFile() && f.length() > 0) {
+                    return f;
+                }
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
+    private static DeviceProfile[] getEffectiveDevicePool() {
+        try {
+            File ext = resolveExternalEngineFile("devices.json");
+            if (ext != null) {
+                long mod = ext.lastModified();
+                String key = ext.getAbsolutePath();
+                if (sExternalDevicePool != null && key.equals(sCachedDevicesFileKey) && mod == sCachedDevicesLastMod) {
+                    return sExternalDevicePool;
+                }
+                byte[] buf = new byte[(int) ext.length()];
+                try (FileInputStream fis = new FileInputStream(ext)) {
+                    int total = 0;
+                    while (total < buf.length) {
+                        int r = fis.read(buf, total, buf.length - total);
+                        if (r <= 0) break;
+                        total += r;
+                    }
+                }
+                JSONArray arr = new JSONArray(new String(buf, StandardCharsets.UTF_8));
+                if (arr.length() > 0) {
+                    DeviceProfile[] custom = new DeviceProfile[arr.length()];
+                    for (int i = 0; i < arr.length(); i++) {
+                        custom[i] = DeviceProfile.fromJsonObject(arr.getJSONObject(i));
+                    }
+                    sExternalDevicePool = custom;
+                    sCachedDevicesFileKey = key;
+                    sCachedDevicesLastMod = mod;
+                    return custom;
+                }
+            }
+        } catch (Throwable ignored) {}
+        return DEVICE_POOL;
+    }
+
     public static DeviceProfile getDeviceForProfile(String profile) {
+        DeviceProfile[] pool = getEffectiveDevicePool();
         if (profile == null || profile.isEmpty() || profile.equals("default")) {
-            return DEVICE_POOL[0];
+            return pool[0];
         }
         String p = profile.toLowerCase().trim();
 
@@ -242,7 +311,12 @@ public class FusionProfileManager {
             try {
                 FileInputStream fis = new FileInputStream(devFile);
                 byte[] b = new byte[(int) devFile.length()];
-                fis.read(b);
+                int total = 0;
+                while (total < b.length) {
+                    int r = fis.read(b, total, b.length - total);
+                    if (r <= 0) break;
+                    total += r;
+                }
                 fis.close();
                 JSONObject json = new JSONObject(new String(b, StandardCharsets.UTF_8));
                 return DeviceProfile.fromJsonObject(json);
@@ -254,18 +328,18 @@ public class FusionProfileManager {
         // 2. Pemetaan Eksklusif untuk Core Wallet Tuan Eso & Fallback Pool Luas
         DeviceProfile dev;
         if ("shaqilla".equals(p)) {
-            dev = DEVICE_POOL[0]; // Samsung Galaxy S24 Ultra
-        } else if ("eryziggy".equals(p)) {
-            dev = DEVICE_POOL[1]; // Google Pixel 8 Pro
-        } else if ("0xjamrud".equals(p)) {
-            dev = DEVICE_POOL[3]; // OnePlus 12
-        } else if ("wallet_1".equals(p)) {
-            dev = DEVICE_POOL[2]; // Xiaomi 14 Pro
+            dev = pool[0]; // Samsung Galaxy S24 Ultra
+        } else if ("eryziggy".equals(p) && pool.length > 1) {
+            dev = pool[1]; // Google Pixel 8 Pro
+        } else if ("0xjamrud".equals(p) && pool.length > 3) {
+            dev = pool[3]; // OnePlus 12
+        } else if ("wallet_1".equals(p) && pool.length > 2) {
+            dev = pool[2]; // Xiaomi 14 Pro
         } else {
-            // Untuk semua profil baru, pilih model secara deterministik dari 16 pool flagship
+            // Untuk semua profil baru, pilih model secara deterministik dari pool flagship
             int hash = Math.abs(p.hashCode());
-            int index = hash % DEVICE_POOL.length;
-            dev = DEVICE_POOL[index];
+            int index = hash % pool.length;
+            dev = pool[index];
         }
 
         // 3. Kunci dan simpan identitas ke disk agar permanen selamanya
@@ -273,17 +347,56 @@ public class FusionProfileManager {
         return dev;
     }
 
+    private static volatile String sCachedChromeVersion = null;
+
+    /**
+     * Mendeteksi versi Chromium WebView terpasang secara dinamis agar User-Agent & TLS/Sec-CH-UA selalu sinkron 100%.
+     */
+    public static String getSystemChromeVersion(Context context) {
+        if (sCachedChromeVersion != null && !sCachedChromeVersion.isEmpty()) {
+            return sCachedChromeVersion;
+        }
+        try {
+            if (context != null) {
+                PackageInfo pkg = WebViewCompat.getCurrentWebViewPackage(context);
+                if (pkg != null && pkg.versionName != null && !pkg.versionName.trim().isEmpty()) {
+                    sCachedChromeVersion = pkg.versionName.trim();
+                    return sCachedChromeVersion;
+                }
+            }
+        } catch (Throwable ignored) {}
+        return "130.0.6723.102";
+    }
+
+    public static String getSystemChromeMajorVersion(Context context) {
+        String full = getSystemChromeVersion(context);
+        int dot = full.indexOf('.');
+        return (dot > 0) ? full.substring(0, dot) : full;
+    }
+
+    private static String normalizeUaChromeVersion(String ua, Context context) {
+        if (ua == null || ua.isEmpty()) return ua;
+        String actualVer = getSystemChromeVersion(context);
+        return ua.replaceAll("Chrome/[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+", "Chrome/" + actualVer);
+    }
+
     /**
      * Konfigurasi WebView dengan Native Chromium Profile & Document Start Stealth Script.
      * Harus dipanggil tepat saat WebView baru dibuat (sebelum navigasi URL).
      */
     public static String getEffectiveUserAgent(DeviceProfile device, boolean isDesktop) {
+        return getEffectiveUserAgent(null, device, isDesktop);
+    }
+
+    public static String getEffectiveUserAgent(Context context, DeviceProfile device, boolean isDesktop) {
+        String actualVer = getSystemChromeVersion(context);
         if (isDesktop) {
-            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
+            return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/" + actualVer + " Safari/537.36";
         }
-        return (device != null && device.userAgent != null && !device.userAgent.isEmpty())
+        String baseUa = (device != null && device.userAgent != null && !device.userAgent.isEmpty())
                 ? device.userAgent
-                : "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.6723.102 Mobile Safari/537.36";
+                : "Mozilla/5.0 (Linux; Android 14; SM-S928B; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/" + actualVer + " Mobile Safari/537.36";
+        return normalizeUaChromeVersion(baseUa, context);
     }
 
     public static void setupProfileForWebView(WebView webView, String profileName, boolean isDesktop) {
@@ -292,9 +405,17 @@ public class FusionProfileManager {
             profileName = "default";
         }
 
+        Context ctx = webView.getContext();
         DeviceProfile device = getDeviceForProfile(profileName);
         WebSettings settings = webView.getSettings();
-        settings.setUserAgentString(getEffectiveUserAgent(device, isDesktop));
+        settings.setUserAgentString(getEffectiveUserAgent(ctx, device, isDesktop));
+
+        // 0. Hilangkan header X-Requested-With (mencegah bocor package name com.termux)
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+            try {
+                WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, Collections.emptySet());
+            } catch (Throwable ignored) {}
+        }
 
         // 1. Native Chromium Multi-Profile Isolation
         if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
@@ -332,7 +453,7 @@ public class FusionProfileManager {
         // 2. Document Start Script Injection (100% Anti-Bot & Anti-Cloudflare Stealth)
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             try {
-                String fakerScript = getFingerprintFakerScript(webView.getContext(), profileName, device);
+                String fakerScript = getFingerprintFakerScript(ctx, profileName, device, isDesktop);
                 WebViewCompat.addDocumentStartJavaScript(webView, fakerScript, Collections.singleton("*"));
                 Log.i(TAG, "Injected document-start stealth script for: " + profileName);
             } catch (Exception e) {
@@ -342,11 +463,29 @@ public class FusionProfileManager {
     }
 
     public static String getFingerprintFakerScript(Context context, String profileName, DeviceProfile dev) {
+        return getFingerprintFakerScript(context, profileName, dev, false);
+    }
+
+    public static String getFingerprintFakerScript(Context context, String profileName, DeviceProfile dev, boolean isDesktop) {
         StringBuilder sb = new StringBuilder();
-        sb.append("window.__FUSION_PROFILE__ = '").append(profileName).append("';\n");
-        sb.append("window.__FUSION_DEVICE__ = ").append(dev.toJsonString()).append(";\n");
+        String chromeVer = getSystemChromeVersion(context);
+        String effectiveUa = getEffectiveUserAgent(context, dev, isDesktop);
+        sb.append("window.__FUSION_PROFILE__ = ").append(JSONObject.quote(profileName != null ? profileName : "default")).append(";\n");
+        sb.append("window.__FUSION_ACTIVE_PROFILE__ = ").append(JSONObject.quote(profileName != null ? profileName : "default")).append(";\n");
+        sb.append("window.__FUSION_CHROME_VERSION__ = ").append(JSONObject.quote(chromeVer)).append(";\n");
+        sb.append("window.__FUSION_IS_DESKTOP__ = ").append(isDesktop ? "true" : "false").append(";\n");
         try {
-            InputStream is = context.getAssets().open("webview_engine/fingerprint_faker.js");
+            JSONObject devObj = new JSONObject(dev.toJsonString());
+            devObj.put("userAgent", effectiveUa);
+            sb.append("window.__FUSION_DEVICE__ = ").append(devObj.toString()).append(";\n");
+        } catch (Throwable ignored) {
+            sb.append("window.__FUSION_DEVICE__ = ").append(dev.toJsonString()).append(";\n");
+        }
+        try {
+            File externalFaker = resolveExternalEngineFile("fingerprint_faker.js");
+            InputStream is = (externalFaker != null)
+                    ? new FileInputStream(externalFaker)
+                    : context.getAssets().open("webview_engine/fingerprint_faker.js");
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             byte[] buf = new byte[4096];
             int read;
@@ -374,7 +513,7 @@ public class FusionProfileManager {
             DeviceProfile device = getDeviceForProfile(targetProfile);
             if (webView != null) {
                 WebSettings settings = webView.getSettings();
-                settings.setUserAgentString(getEffectiveUserAgent(device, isDesktop));
+                settings.setUserAgentString(getEffectiveUserAgent(webView.getContext(), device, isDesktop));
             }
             return;
         }
@@ -413,6 +552,78 @@ public class FusionProfileManager {
         } catch (Exception e) {
             Log.e(TAG, "Error clearing cookies: " + e.getMessage());
         }
+    }
+
+    /**
+     * Mengembalikan CookieManager milik profil WebView ini (terisolasi per tab jika MULTI_PROFILE aktif).
+     */
+    public static CookieManager getCookieManagerForWebView(WebView webView) {
+        try {
+            if (webView != null && WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+                FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+                FusionTab tab = (mgr != null) ? mgr.getTabForWebView(webView) : null;
+                String profileName = (tab != null && tab.mProfile != null && !tab.mProfile.trim().isEmpty())
+                        ? tab.mProfile.trim() : null;
+                if (profileName != null && !"default".equalsIgnoreCase(profileName)) {
+                    Profile profile = ProfileStore.getInstance().getOrCreateProfile(profileName);
+                    if (profile != null && profile.getCookieManager() != null) {
+                        return profile.getCookieManager();
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        return CookieManager.getInstance();
+    }
+
+    /**
+     * Membersihkan cookies milik 1 profil spesifik tanpa mengganggu sesi profil lain (MULTI_PROFILE).
+     */
+    public static void clearProfileData(Context context, String profileName) {
+        if (profileName == null || profileName.trim().isEmpty() || "default".equalsIgnoreCase(profileName.trim())) {
+            clearAllCookiesAndStorage();
+            return;
+        }
+        String p = profileName.trim();
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.MULTI_PROFILE)) {
+            try {
+                ProfileStore store = ProfileStore.getInstance();
+                Profile profile = store.getOrCreateProfile(p);
+                if (profile != null && profile.getCookieManager() != null) {
+                    profile.getCookieManager().removeAllCookies(null);
+                    profile.getCookieManager().flush();
+                }
+                if (context != null) {
+                    try {
+                        android.webkit.WebViewDatabase.getInstance(context).clearHttpAuthUsernamePassword();
+                    } catch (Throwable ignored) {}
+                }
+                Log.i(TAG, "Cleared isolated cookies for profile: " + p);
+                return;
+            } catch (Throwable e) {
+                Log.w(TAG, "Failed isolated clear for " + p + ": " + e.getMessage());
+            }
+        }
+        clearAllCookiesAndStorage();
+    }
+
+    /**
+     * Hard wipe penuh: hapus cookies, cache HTTP auth, serta file sesi & device profil agar slot worker bersih 100%.
+     */
+    public static void wipeProfileCompletely(Context context, String profileName) {
+        clearProfileData(context, profileName);
+        if (profileName == null || profileName.trim().isEmpty() || "default".equalsIgnoreCase(profileName.trim())) {
+            return;
+        }
+        String p = profileName.trim();
+        sInitializedProfiles.remove(p);
+        try {
+            File sess = getSessionFile(p);
+            if (sess.exists()) sess.delete();
+        } catch (Throwable ignored) {}
+        try {
+            File dev = getDeviceFile(p);
+            if (dev.exists()) dev.delete();
+        } catch (Throwable ignored) {}
     }
 
     public static void restoreCookiesFromSession(File sessionFile) {

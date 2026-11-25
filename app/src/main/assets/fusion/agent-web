@@ -1809,6 +1809,19 @@ async function executeSingleProfile(url, extraFlags = []) {
 async function main() {
     let args = process.argv.slice(2);
 
+    // Ekstraksi global --remote <ip[:port]> untuk mengendalikan WebView perangkat lain via Wi-Fi LAN
+    for (let i = 0; i < args.length; i++) {
+        if (args[i] === '--remote' && args[i + 1] && !args[i + 1].startsWith('-')) {
+            process.env.FUSION_REMOTE = args[i + 1].trim();
+            args.splice(i, 2);
+            break;
+        } else if (args[i].startsWith('--remote=')) {
+            process.env.FUSION_REMOTE = args[i].split('=')[1].trim();
+            args.splice(i, 1);
+            break;
+        }
+    }
+
     // ⚡ AUTO-BRIDGE: Alihkan "web --modul <resep>" langsung ke engine mutakhir "web play <resep> --turbo"
     if (args.includes('--modul') || args.some(a => a.startsWith('--modul='))) {
         let mName = '';
@@ -1910,7 +1923,9 @@ async function main() {
         console.log(`    --emails <e1,e2...>         (Daftar email statis untuk multi-wallet replay)`);
         console.log(`    --email-file <path>         (Load daftar email dari berkas, default: /root/wallet/email.txt)`);
         console.log(`    --cloud-mail / --mail       (Mode email dinamis: generate email sementara via Cloudflare D1)`);
-        console.log(`  web email [pool|add|otp|link] (Manajemen pool email.txt & autonomous OTP extraction)`);
+        console.log(`  web export <resep> [--js|--py] [-o <file>] (Ekspor resep ke Playwright standalone PC)
+  web import <file.js|py> [--name <nama>]     (Impor script Playwright PC ke resep WebView)
+  web email [pool|add|otp|link] (Manajemen pool email.txt & autonomous OTP extraction)`);
         console.log(`  web --modul <makro> <url>     (Auto-play resep makro on-load)`);
         console.log(`  web --modul <m> --all-profiles [--parallel] (Putar makro untuk 3 wallet utama: 1/1 atau Paralel)`);
         console.log(`  web --modul <m> --profiles a,b [--parallel] (Putar makro untuk daftar profil tertentu)`);
@@ -2716,6 +2731,73 @@ async function main() {
         }
     }
 
+    if (cmd === 'export' || cmd === 'export-playwright') {
+        const recipeName = args[1];
+        if (!recipeName || recipeName === '--help' || recipeName === '-h') {
+            console.log(`\n\x1b[1m\x1b[36mWEB EXPORT CONTROLLER (Fusion WebView ➔ Playwright PC)\x1b[0m`);
+            console.log(`Ekspor resep WebView menjadi script Playwright standalone 100% kompatibel PC.\n`);
+            console.log(`Penggunaan: web export <nama_resep> [--js | --py] [-o <output_file>]\n`);
+            console.log(`Opsi:`);
+            console.log(`  --js                        Format JavaScript Playwright (default)`);
+            console.log(`  --py                        Format Python Playwright (sync)`);
+            console.log(`  -o, --output <file>         Simpan langsung ke berkas target\n`);
+            process.exit(0);
+        }
+
+        const isPy = args.includes('--py') || args.includes('-py');
+        const lang = isPy ? 'py' : 'js';
+        let outputPath = '';
+        const oIdx = args.indexOf('-o') !== -1 ? args.indexOf('-o') : args.indexOf('--output');
+        if (oIdx !== -1 && args[oIdx + 1]) outputPath = args[oIdx + 1];
+
+        const { exportRecipe } = require('/root/wallet/playwright_converter.cjs');
+        const res = exportRecipe(recipeName, { lang, outputPath });
+        if (!res.success) {
+            console.error(`\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97m${res.error}\x1b[0m`);
+            process.exit(1);
+        }
+
+        if (outputPath) {
+            console.log(`\n\x1b[1m\x1b[32m✓ [EXPORT SUKSES]\x1b[0m Resep \x1b[36m"${recipeName}"\x1b[0m berhasil diekspor ke:`);
+            console.log(`  \x1b[97m${outputPath}\x1b[0m (${lang.toUpperCase()} Standalone Playwright)`);
+            console.log(`  \x1b[90mFitur spesifik WebView (touch x,y, Android shims) telah dibersihkan secara otomatis.\x1b[0m\n`);
+        } else {
+            console.log(res.code);
+        }
+        process.exit(0);
+    }
+
+    if (cmd === 'import' || cmd === 'import-playwright') {
+        const filePath = args[1];
+        if (!filePath || filePath === '--help' || filePath === '-h') {
+            console.log(`\n\x1b[1m\x1b[36mWEB IMPORT CONTROLLER (Playwright PC ➔ Fusion WebView)\x1b[0m`);
+            console.log(`Impor script Playwright (JS / Python) dari PC ke resep makro WebView.\n`);
+            console.log(`Penggunaan: web import <path/file.js | file.py> [--name <nama_resep>]\n`);
+            console.log(`Opsi:`);
+            console.log(`  --name <nama>               Nama resep di recipes_db.json (default: nama berkas)\n`);
+            process.exit(0);
+        }
+
+        let recipeName = '';
+        const nIdx = args.indexOf('--name');
+        if (nIdx !== -1 && args[nIdx + 1]) recipeName = args[nIdx + 1];
+
+        const { importRecipe } = require('/root/wallet/playwright_converter.cjs');
+        const res = importRecipe(filePath, { name: recipeName });
+        if (!res.success) {
+            console.error(`\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97m${res.error}\x1b[0m`);
+            process.exit(1);
+        }
+
+        console.log(`\n\x1b[1m\x1b[32m✓ [IMPORT SUKSES]\x1b[0m Script Playwright berhasil diimpor:`);
+        console.log(`  \x1b[36mModul       :\x1b[0m \x1b[97m${res.recipeName}\x1b[0m`);
+        console.log(`  \x1b[36mTarget URL  :\x1b[0m \x1b[97m${res.targetUrl}\x1b[0m`);
+        console.log(`  \x1b[36mTotal Step  :\x1b[0m \x1b[97m${res.totalEvents} langkah\x1b[0m`);
+        console.log(`  \x1b[36mDatabase    :\x1b[0m \x1b[90m${res.savedTo}\x1b[0m`);
+        console.log(`  \x1b[33mSiap diputar:\x1b[0m \x1b[32mweb play ${res.recipeName} --wallets eso-1..10\x1b[0m\n`);
+        process.exit(0);
+    }
+
     if (cmd === 'play' || cmd === 'replay') {
         const recipeName = args[1];
         if (recipeName === '--help' || recipeName === '-h' || args.includes('--help') || args.includes('-h')) {
@@ -2781,7 +2863,7 @@ async function main() {
             '--all-rows', '--detail',
             '--keep-open', '--no-close',
             '--cloud-mail', '--temp-mail', '--mail',
-            '--direct',
+            '--direct', '--remote',
             '--help', '-h'
         ]);
 
@@ -2801,7 +2883,7 @@ async function main() {
         }
 
         // 3. Validasi nilai flag wajib (tidak boleh kosong atau langsung diikuti flag lain)
-        const VALUED_PLAY_FLAGS = ['--wallet', '--wallets', '--chain', '--loop', '--from', '--start', '--url', '--stop-if', '--profile', '--profiles', '--code', '--email', '--emails', '--email-file', '--emails-file'];
+        const VALUED_PLAY_FLAGS = ['--wallet', '--wallets', '--chain', '--loop', '--from', '--start', '--url', '--stop-if', '--profile', '--profiles', '--code', '--email', '--emails', '--email-file', '--emails-file', '--remote'];
         for (const vf of VALUED_PLAY_FLAGS) {
             const idx = args.indexOf(vf);
             if (idx !== -1 && (!args[idx + 1] || args[idx + 1].startsWith('-'))) {

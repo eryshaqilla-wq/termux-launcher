@@ -5,7 +5,10 @@ import android.util.Log;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -62,6 +65,16 @@ public class FusionNetworkInterceptor {
 
     private static final Map<String, MockRule> sMockRules = new ConcurrentHashMap<>();
     private static final Map<String, BlockRule> sBlockRules = new ConcurrentHashMap<>();
+    private static final Map<String, String> sLocalMirrorDirs = new ConcurrentHashMap<>();
+
+    public static boolean addLocalMirrorRule(String urlPattern, String localDirPath) {
+        if (urlPattern == null || urlPattern.trim().isEmpty() || localDirPath == null || localDirPath.trim().isEmpty()) {
+            return false;
+        }
+        sLocalMirrorDirs.put(urlPattern.trim(), localDirPath.trim());
+        Log.i(TAG, "Added local mirror dir for " + urlPattern + " -> " + localDirPath);
+        return true;
+    }
 
     private static Pattern compilePattern(String globOrRegex) {
         if (globOrRegex == null || globOrRegex.isEmpty()) return Pattern.compile(".*");
@@ -105,7 +118,22 @@ public class FusionNetworkInterceptor {
     public static void clearRules() {
         sMockRules.clear();
         sBlockRules.clear();
+        sLocalMirrorDirs.clear();
         Log.i(TAG, "Cleared all network interception rules");
+    }
+
+    private static String sha256Prefix16(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] dig = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 8 && i < dig.length; i++) {
+                sb.append(String.format("%02x", dig[i] & 0xff));
+            }
+            return sb.toString();
+        } catch (Throwable t) {
+            return "";
+        }
     }
 
     public static WebResourceResponse intercept(String url) {
@@ -124,6 +152,32 @@ public class FusionNetworkInterceptor {
             if (mr.regex.matcher(url).find()) {
                 Log.i(TAG, "Mocked wire request: " + url + " by rule " + mr.patternStr);
                 return new WebResourceResponse(mr.mimeType, "UTF-8", mr.statusCode, "OK", mr.headers, new ByteArrayInputStream(mr.body));
+            }
+        }
+
+        // 3. Check native disk mirror rules (0ms offline static serving)
+        if (!sLocalMirrorDirs.isEmpty()) {
+            String low = url.toLowerCase();
+            if (!low.contains("/api/") && !low.contains("claim") && !low.contains("rpc") && !low.contains("graphql") && !low.contains("turnstile") && !low.contains("recaptcha")) {
+                for (Map.Entry<String, String> entry : sLocalMirrorDirs.entrySet()) {
+                    if (url.contains(entry.getKey())) {
+                        try {
+                            android.net.Uri u = android.net.Uri.parse(url);
+                            String path = u.getPath();
+                            String baseName = (path != null && path.contains("/")) ? path.substring(path.lastIndexOf('/') + 1) : "chunk.js";
+                            if (baseName.isEmpty()) baseName = "chunk.js";
+                            String hash = sha256Prefix16(url);
+                            File cached = new File(entry.getValue(), hash + "_" + baseName);
+                            if (cached.exists() && cached.isFile() && cached.length() > 0) {
+                                Map<String, String> hdrs = new HashMap<>();
+                                hdrs.put("Access-Control-Allow-Origin", "*");
+                                hdrs.put("X-Fusion-Native-Mirror", "HIT");
+                                String mime = baseName.endsWith(".css") ? "text/css" : "application/javascript";
+                                return new WebResourceResponse(mime, "UTF-8", 200, "OK", hdrs, new FileInputStream(cached));
+                            }
+                        } catch (Throwable ignored) {}
+                    }
+                }
             }
         }
 

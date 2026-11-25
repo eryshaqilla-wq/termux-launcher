@@ -13,7 +13,7 @@ os.makedirs(os.path.join(BUNDLE_DIR, "configs"), exist_ok=True)
 print("--- 1. Menyiapkan Binary & Tools ke bundle/bin ---")
 # Cari termux-ipc
 ipc_source = None
-for candidate in ["/project/termux-launcher/app/src/main/assets/fusion/termux-ipc", "/usr/local/bin/termux-ipc", "/project/termux-launcher/fusion-setup/termux-ipc", "/project/termux-ipc"]:
+for candidate in ["/usr/local/bin/termux-ipc", "/project/termux-launcher/fusion-setup/termux-ipc", "/project/termux-launcher/app/src/main/assets/fusion/termux-ipc", "/project/termux-ipc"]:
     if os.path.exists(candidate):
         ipc_source = candidate
         break
@@ -38,7 +38,7 @@ if os.path.exists(bashnh_src):
 
 # Wrapper browser & web (Universal Autonomous Web Controller)
 agent_web_src = None
-for candidate in ["/project/termux-launcher/app/src/main/assets/fusion/agent-web", "/usr/local/bin/agent-web", "/project/termux-launcher/fusion-setup/agent-web"]:
+for candidate in ["/usr/local/bin/agent-web", "/project/termux-launcher/fusion-setup/agent-web", "/project/termux-launcher/app/src/main/assets/fusion/agent-web"]:
     if os.path.exists(candidate):
         agent_web_src = candidate
         break
@@ -718,6 +718,30 @@ if os.path.exists(preset_eso_src):
     for p_item in os.listdir(preset_eso_src):
         shutil.copy2(os.path.join(preset_eso_src, p_item), os.path.join(dest_preset, p_item))
     print("✓ Added Tuan Eso preset (Nerd Font, Base16 Isotope, UI Preferences) to bundle")
+
+print("--- 2f. Menyiapkan Dokumentasi & Agent Skills Markdown (.md) ke bundle ---")
+docs_bundle_dir = os.path.join(BUNDLE_DIR, "docs")
+skills_bundle_dir = os.path.join(BUNDLE_DIR, "skills")
+os.makedirs(docs_bundle_dir, exist_ok=True)
+os.makedirs(skills_bundle_dir, exist_ok=True)
+
+docs_src_dir = "/project/termux-launcher/fusion-setup/docs"
+if os.path.isdir(docs_src_dir):
+    for md_name in os.listdir(docs_src_dir):
+        if md_name.endswith(".md"):
+            shutil.copy2(os.path.join(docs_src_dir, md_name), os.path.join(docs_bundle_dir, md_name))
+            print(f"✓ Added doc {md_name} to bundle/docs")
+
+for skill_name in ["playwright-webview", "project-fusion"]:
+    skill_md = f"/root/.agents/skills/{skill_name}/SKILL.md"
+    if os.path.exists(skill_md):
+        dst_skill_dir = os.path.join(skills_bundle_dir, skill_name)
+        os.makedirs(dst_skill_dir, exist_ok=True)
+        shutil.copy2(skill_md, os.path.join(dst_skill_dir, "SKILL.md"))
+        print(f"✓ Added skill {skill_name}/SKILL.md to bundle/skills")
+
+if os.path.exists(os.path.join(docs_src_dir, "WEBVIEW_MASTER_CAPABILITIES.md")):
+    shutil.copy2(os.path.join(docs_src_dir, "WEBVIEW_MASTER_CAPABILITIES.md"), os.path.join(BUNDLE_DIR, "WEBVIEW_MASTER_CAPABILITIES.md"))
 
 print("--- 3. Mengemas menjadi fusion_payload.tar.gz ---")
 with tarfile.open(OUTPUT_TAR, "w:gz") as tar:

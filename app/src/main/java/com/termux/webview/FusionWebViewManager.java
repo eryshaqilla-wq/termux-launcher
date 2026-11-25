@@ -59,6 +59,7 @@ import android.os.SystemClock;
 import android.view.inputmethod.InputMethodManager;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -685,6 +686,125 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         return false;
     }
 
+    private void applyWalletToTab(FusionTab tab, String cleanName, String cleanAddr, String activeChain, boolean updateGlobals) {
+        if (updateGlobals) {
+            this.mCurrentWalletName = cleanName;
+            GhostBridgeInterface.sActiveToolWalletName = cleanName;
+            GhostBridgeInterface.sActiveToolAddress = cleanAddr;
+            if ("sol".equals(activeChain) || "solana".equals(activeChain)) {
+                this.mCurrentSolWalletName = cleanName;
+                this.mCurrentSolWalletAddress = cleanAddr;
+                GhostBridgeInterface.sCurrentSolWalletName = cleanName;
+                GhostBridgeInterface.sCurrentSolWalletAddress = cleanAddr;
+            } else if ("tron".equals(activeChain) || "trx".equals(activeChain)) {
+                this.mCurrentTronWalletName = cleanName;
+                this.mCurrentTronWalletAddress = cleanAddr;
+                GhostBridgeInterface.sCurrentTronWalletName = cleanName;
+                GhostBridgeInterface.sCurrentTronWalletAddress = cleanAddr;
+            } else if ("sui".equals(activeChain)) {
+                this.mCurrentSuiWalletName = cleanName;
+                this.mCurrentSuiWalletAddress = cleanAddr;
+                GhostBridgeInterface.sCurrentSuiWalletName = cleanName;
+                GhostBridgeInterface.sCurrentSuiWalletAddress = cleanAddr;
+            } else if ("aptos".equals(activeChain) || "apt".equals(activeChain)) {
+                this.mCurrentAptosWalletName = cleanName;
+                this.mCurrentAptosWalletAddress = cleanAddr;
+                GhostBridgeInterface.sCurrentAptosWalletName = cleanName;
+                GhostBridgeInterface.sCurrentAptosWalletAddress = cleanAddr;
+            } else if ("iota".equals(activeChain)) {
+                this.mCurrentIotaWalletName = cleanName;
+                this.mCurrentIotaWalletAddress = cleanAddr;
+                GhostBridgeInterface.sCurrentIotaWalletName = cleanName;
+                GhostBridgeInterface.sCurrentIotaWalletAddress = cleanAddr;
+            } else {
+                this.mCurrentWalletAddress = cleanAddr;
+                GhostBridgeInterface.sCurrentWalletName = cleanName;
+                GhostBridgeInterface.sCurrentWalletAddress = cleanAddr;
+            }
+        }
+        if (tab != null) {
+            tab.mWalletName = cleanName;
+            if ("iota".equals(activeChain)) {
+                tab.mIotaWalletName = cleanName;
+                tab.mIotaWalletAddress = cleanAddr;
+            } else if ("sol".equals(activeChain) || "solana".equals(activeChain)) {
+                tab.mSolWalletName = cleanName;
+                tab.mSolWalletAddress = cleanAddr;
+            } else if ("sui".equals(activeChain)) {
+                tab.mSuiWalletName = cleanName;
+                tab.mSuiWalletAddress = cleanAddr;
+            } else if ("aptos".equals(activeChain) || "apt".equals(activeChain)) {
+                tab.mAptosWalletName = cleanName;
+                tab.mAptosWalletAddress = cleanAddr;
+            } else if ("tron".equals(activeChain) || "trx".equals(activeChain)) {
+                tab.mTronWalletName = cleanName;
+                tab.mTronWalletAddress = cleanAddr;
+            } else {
+                tab.mWalletAddress = cleanAddr;
+            }
+        }
+    }
+
+    private void pushWalletJsToWebView(final WebView wv, final String cleanName, final String cleanAddr) {
+        if (this.mActivity == null || wv == null) return;
+        this.mActivity.runOnUiThread(() -> {
+            String qAddr = JSONObject.quote(cleanAddr);
+            String qName = JSONObject.quote(cleanName);
+            wv.evaluateJavascript(
+                "(function(){window.__FUSION_WALLET_NAME__=" + qName + ";window.__FUSION_ACTIVE_WALLET_NAME__=" + qName + ";window.__FUSION_WALLET_ADDRESS__=" + qAddr + ";window.__FUSION_ADDRESS__=" + qAddr + ";try{if(window.ethereum&&window.ethereum.emit){window.ethereum.selectedAddress=" + qAddr + ";window.ethereum.emit('accountsChanged',[" + qAddr + "]);}}catch(e){}})();",
+                null
+            );
+        });
+    }
+
+    public boolean switchWalletDirect(String targetName, String address, String chainKey) {
+        if (address == null || address.trim().isEmpty()) {
+            return switchWalletByName(targetName);
+        }
+        String cleanName = (targetName != null && !targetName.trim().isEmpty()) ? targetName.trim() : "remote";
+        String cleanAddr = address.trim();
+        String activeChain = (chainKey != null && !chainKey.trim().isEmpty()) ? chainKey.trim().toLowerCase() : FusionChainHelper.getCurrentChainKey();
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+        applyWalletToTab(activeTab, cleanName, cleanAddr, activeChain, true);
+        if (this.mActivity != null) {
+            this.mActivity.runOnUiThread(() -> {
+                updateMenuTexts();
+                FusionToolPillHelper.updateToolPillUi(FusionWebViewManager.this);
+            });
+            pushWalletJsToWebView(this.mActiveWebView, cleanName, cleanAddr);
+        }
+        return true;
+    }
+
+    public boolean switchWalletDirectOnTab(int tabId, String targetName, String address, String chainKey) {
+        if (address == null || address.trim().isEmpty()) return false;
+        FusionTab targetTab = null;
+        if (this.mTabList != null) {
+            for (int i = 0; i < this.mTabList.size(); i++) {
+                FusionTab t = (FusionTab) this.mTabList.get(i);
+                if (t != null && t.mId == tabId) {
+                    targetTab = t;
+                    break;
+                }
+            }
+        }
+        if (targetTab == null) return false;
+        String cleanName = (targetName != null && !targetName.trim().isEmpty()) ? targetName.trim() : "worker";
+        String cleanAddr = address.trim();
+        String activeChain = (chainKey != null && !chainKey.trim().isEmpty()) ? chainKey.trim().toLowerCase() : (targetTab.mChainKey != null ? targetTab.mChainKey : FusionChainHelper.getCurrentChainKey());
+        FusionTab fg = FusionTabStateHelper.getActiveTab(this);
+        boolean isFg = (fg != null && fg.mId == tabId);
+        applyWalletToTab(targetTab, cleanName, cleanAddr, activeChain, isFg);
+        if (isFg && this.mActivity != null) {
+            this.mActivity.runOnUiThread(() -> {
+                updateMenuTexts();
+                FusionToolPillHelper.updateToolPillUi(FusionWebViewManager.this);
+            });
+        }
+        pushWalletJsToWebView(targetTab.mWebView, cleanName, cleanAddr);
+        return true;
+    }
+
     public boolean switchChainByKey(String chainKey) {
         if (chainKey == null || chainKey.trim().isEmpty()) return false;
         FusionChainHelper.setChain(chainKey.trim());
@@ -714,16 +834,82 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
     public boolean dispatchNativeTouch(final float x, final float y) {
         if (this.mActivity == null || this.mActiveWebView == null) return false;
+        return dispatchNativeTouchOnWebView(this.mActiveWebView, x, y);
+    }
+
+    public boolean dispatchNativeTouchOnTab(final int tabId, final float x, final float y) {
+        WebView target = findWebViewByTabId(tabId);
+        if (this.mActivity == null || target == null) return false;
+        return dispatchNativeTouchOnWebView(target, x, y);
+    }
+
+    private WebView findWebViewByTabId(int tabId) {
+        if (this.mTabList == null) return null;
+        for (int i = 0; i < this.mTabList.size(); i++) {
+            FusionTab t = (FusionTab) this.mTabList.get(i);
+            if (t != null && t.mId == tabId) {
+                return t.mWebView;
+            }
+        }
+        return null;
+    }
+
+    public boolean setTabKeepAlive(int tabId, boolean keepAlive) {
+        if (this.mTabList == null) return false;
+        for (int i = 0; i < this.mTabList.size(); i++) {
+            FusionTab t = (FusionTab) this.mTabList.get(i);
+            if (t != null && t.mId == tabId) {
+                t.mKeepAliveBackground = keepAlive;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public String captureTabScreenshot(final int tabId, final String outPath) {
+        final WebView target = (tabId < 0) ? this.mActiveWebView : findWebViewByTabId(tabId);
+        if (this.mActivity == null || target == null || outPath == null || outPath.trim().isEmpty()) {
+            return null;
+        }
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicReference<String> resRef = new AtomicReference<>(null);
+        this.mActivity.runOnUiThread(() -> {
+            try {
+                int w = target.getWidth() > 0 ? target.getWidth() : 1080;
+                int h = target.getHeight() > 0 ? target.getHeight() : 1920;
+                Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                android.graphics.Canvas canvas = new android.graphics.Canvas(bmp);
+                target.draw(canvas);
+                File outFile = new File(outPath.trim());
+                if (outFile.getParentFile() != null && !outFile.getParentFile().exists()) {
+                    outFile.getParentFile().mkdirs();
+                }
+                try (FileOutputStream fos = new FileOutputStream(outFile)) {
+                    bmp.compress(Bitmap.CompressFormat.PNG, 92, fos);
+                    fos.flush();
+                }
+                bmp.recycle();
+                resRef.set(outFile.getAbsolutePath());
+            } catch (Throwable ignored) {
+            } finally {
+                latch.countDown();
+            }
+        });
+        try { latch.await(5000, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+        return resRef.get();
+    }
+
+    private boolean dispatchNativeTouchOnWebView(final WebView targetWv, final float x, final float y) {
+        if (this.mActivity == null || targetWv == null) return false;
         this.mActivity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (mActiveWebView == null) return;
                 long now = SystemClock.uptimeMillis();
                 MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
-                mActiveWebView.dispatchTouchEvent(down);
+                targetWv.dispatchTouchEvent(down);
                 down.recycle();
                 MotionEvent up = MotionEvent.obtain(now, now + 40, MotionEvent.ACTION_UP, x, y, 0);
-                mActiveWebView.dispatchTouchEvent(up);
+                targetWv.dispatchTouchEvent(up);
                 up.recycle();
             }
         });
@@ -731,7 +917,16 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public boolean dispatchNativeSwipe(final float x1, final float y1, final float x2, final float y2, final int durationMs) {
-        if (this.mActivity == null || this.mActiveWebView == null) return false;
+        return dispatchNativeSwipeOnWebView(this.mActiveWebView, x1, y1, x2, y2, durationMs);
+    }
+
+    public boolean dispatchNativeSwipeOnTab(final int tabId, final float x1, final float y1, final float x2, final float y2, final int durationMs) {
+        WebView target = (tabId < 0) ? this.mActiveWebView : findWebViewByTabId(tabId);
+        return dispatchNativeSwipeOnWebView(target, x1, y1, x2, y2, durationMs);
+    }
+
+    private boolean dispatchNativeSwipeOnWebView(final WebView targetWv, final float x1, final float y1, final float x2, final float y2, final int durationMs) {
+        if (this.mActivity == null || targetWv == null) return false;
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -743,9 +938,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     mActivity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (mActiveWebView == null) return;
                             MotionEvent down = MotionEvent.obtain(startTime, startTime, MotionEvent.ACTION_DOWN, x1, y1, 0);
-                            mActiveWebView.dispatchTouchEvent(down);
+                            targetWv.dispatchTouchEvent(down);
                             down.recycle();
                         }
                     });
@@ -759,9 +953,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         mActivity.runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                if (mActiveWebView == null) return;
                                 MotionEvent move = MotionEvent.obtain(startTime, curTime, MotionEvent.ACTION_MOVE, curX, curY, 0);
-                                mActiveWebView.dispatchTouchEvent(move);
+                                targetWv.dispatchTouchEvent(move);
                                 move.recycle();
                             }
                         });
@@ -771,9 +964,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     mActivity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (mActiveWebView == null) return;
                             MotionEvent up = MotionEvent.obtain(startTime, endTime, MotionEvent.ACTION_UP, x2, y2, 0);
-                            mActiveWebView.dispatchTouchEvent(up);
+                            targetWv.dispatchTouchEvent(up);
                             up.recycle();
                         }
                     });
@@ -781,6 +973,37 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
         }).start();
         return true;
+    }
+
+    public boolean navigateTabAction(final int tabId, final String action, final String url) {
+        final WebView target = (tabId < 0) ? this.mActiveWebView : findWebViewByTabId(tabId);
+        if (this.mActivity == null || target == null || action == null) return false;
+        final String act = action.trim().toLowerCase();
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicBoolean result = new AtomicBoolean(true);
+        this.mActivity.runOnUiThread(() -> {
+            try {
+                if ("back".equals(act)) {
+                    if (target.canGoBack()) target.goBack();
+                    else result.set(false);
+                } else if ("forward".equals(act)) {
+                    if (target.canGoForward()) target.goForward();
+                    else result.set(false);
+                } else if ("reload".equals(act) || "refresh".equals(act)) {
+                    target.reload();
+                } else if ("url".equals(act) && url != null && !url.trim().isEmpty()) {
+                    target.loadUrl(url.trim());
+                } else {
+                    result.set(false);
+                }
+            } catch (Throwable ignored) {
+                result.set(false);
+            } finally {
+                latch.countDown();
+            }
+        });
+        try { latch.await(3000, TimeUnit.MILLISECONDS); } catch (InterruptedException ignored) {}
+        return result.get();
     }
 
     public boolean dispatchNativeLongPress(final float x, final float y, final int durationMs) {
@@ -842,7 +1065,26 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public String evaluateJsSync(final String str, long timeoutMs) {
-        if (this.mActivity == null || this.mActiveWebView == null) {
+        return evaluateJsOnWebViewSync(this.mActiveWebView, str, timeoutMs);
+    }
+
+    public String evaluateJsOnTabSync(int tabId, final String str, long timeoutMs) {
+        WebView targetWv = null;
+        if (this.mTabList != null) {
+            for (int i = 0; i < this.mTabList.size(); i++) {
+                FusionTab t = (FusionTab) this.mTabList.get(i);
+                if (t != null && t.mId == tabId) {
+                    targetWv = t.mWebView;
+                    break;
+                }
+            }
+        }
+        if (targetWv == null) return null;
+        return evaluateJsOnWebViewSync(targetWv, str, timeoutMs);
+    }
+
+    private String evaluateJsOnWebViewSync(final WebView targetWv, final String str, long timeoutMs) {
+        if (this.mActivity == null || targetWv == null) {
             return null;
         }
         final CountDownLatch latch = new CountDownLatch(1);
@@ -850,17 +1092,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mActivity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                if (mActiveWebView != null) {
-                    mActiveWebView.evaluateJavascript(str, new ValueCallback<String>() {
-                        @Override
-                        public void onReceiveValue(String value) {
-                            resRef.set(value);
-                            latch.countDown();
-                        }
-                    });
-                } else {
-                    latch.countDown();
-                }
+                targetWv.evaluateJavascript(str, new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        resRef.set(value);
+                        latch.countDown();
+                    }
+                });
             }
         });
         try {
@@ -919,7 +1157,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     @Override
                     public void run() {
                         if (mActiveWebView != null) {
-                            mActiveWebView.getSettings().setUserAgentString(FusionProfileManager.getEffectiveUserAgent(dev, false));
+                            mActiveWebView.getSettings().setUserAgentString(FusionProfileManager.getEffectiveUserAgent(appCompatActivity, dev, false));
                             mActiveWebView.evaluateJavascript(
                                 "window.__FUSION_DEVICE__ = " + dev.toJsonString() + ";" +
                                 "if(window.__applyFingerprintFaker) window.__applyFingerprintFaker();", null
@@ -1086,7 +1324,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (webView == null) return;
         WebSettings settings = webView.getSettings();
         if (settings == null) return;
-        settings.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36");
+        settings.setUserAgentString(FusionProfileManager.getEffectiveUserAgent(webView.getContext(), null, true));
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setSupportZoom(true);
@@ -1144,8 +1382,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         webView.setOnTouchListener(new TouchListener());
         webView.setWebChromeClient(new FusionWebChromeClient());
         webView.setWebViewClient(new FusionWebViewClient(this));
+        FusionWebViewClient.ensureServiceWorkerHooked();
         webView.setDownloadListener(new FusionDownloadListener((this.mActivity != null) ? this.mActivity : webView.getContext()));
-        webView.addJavascriptInterface(new GhostBridgeInterface(), "GhostBridge");
+        webView.addJavascriptInterface(new GhostBridgeInterface(this, webView), "GhostBridge");
         webView.addJavascriptInterface(new FusionExtensionHelper.FusionExtensionBridge((this.mActivity != null) ? this.mActivity : webView.getContext(), webView), "__FusionExtensionBridge__");
         webView.addJavascriptInterface(new FusionNativeBridge(this, webView), "__FUSION_NATIVE__");
         webView.addJavascriptInterface(new FusionNativeBridge(this, webView), "FusionNative");
@@ -1240,8 +1479,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         fusionTab.mChainKey = initialChain;
         fusionTab.mChainId = FusionChainHelper.getChainIdByKey(initialChain);
+        fusionTab.mWalletName = this.mCurrentWalletName != null ? this.mCurrentWalletName : "";
+        fusionTab.mWalletAddress = this.mCurrentWalletAddress != null ? this.mCurrentWalletAddress : "";
+        fusionTab.mIotaWalletName = this.mCurrentIotaWalletName != null ? this.mCurrentIotaWalletName : "";
+        fusionTab.mIotaWalletAddress = this.mCurrentIotaWalletAddress != null ? this.mCurrentIotaWalletAddress : "";
+        fusionTab.mSolWalletName = this.mCurrentSolWalletName != null ? this.mCurrentSolWalletName : "";
+        fusionTab.mSolWalletAddress = this.mCurrentSolWalletAddress != null ? this.mCurrentSolWalletAddress : "";
         if (isHeadless) {
             fusionTab.mIsMinimized = true;
+            fusionTab.mKeepAliveBackground = true;
             int virtW = z2 ? 1280 : 1080;
             int virtH = z2 ? 720 : 1920;
             webView.measure(
@@ -1249,6 +1495,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 View.MeasureSpec.makeMeasureSpec(virtH, View.MeasureSpec.EXACTLY)
             );
             webView.layout(0, 0, virtW, virtH);
+            webView.setTranslationX(-10000.0f);
             webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             webView.setVisibility(View.VISIBLE);
             webView.resumeTimers();
@@ -2264,21 +2511,55 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     private static final java.util.Map<String, String> sAssetScriptCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<String, Long> sAssetScriptModCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public static void clearAssetScriptCache() {
+        sAssetScriptCache.clear();
+        sAssetScriptModCache.clear();
+    }
 
     public void injectAssetScript(WebView webView, String str) {
         try {
             TermuxActivity termuxActivity = this.mActivity;
-            if (termuxActivity == null) {
+            if (termuxActivity == null || webView == null || str == null) {
                 return;
             }
-            String script = sAssetScriptCache.get(str);
-            if (script == null) {
-                InputStream inputStreamOpen = termuxActivity.getAssets().open("webview_engine/" + str);
-                byte[] bArr = new byte[inputStreamOpen.available()];
-                inputStreamOpen.read(bArr);
-                inputStreamOpen.close();
-                script = new String(bArr, "UTF-8");
-                sAssetScriptCache.put(str, script);
+            File extFile = FusionProfileManager.resolveExternalEngineFile(str);
+            String script = null;
+            if (extFile != null) {
+                long mod = extFile.lastModified();
+                String cacheKey = "ext:" + extFile.getAbsolutePath();
+                Long cachedMod = sAssetScriptModCache.get(cacheKey);
+                if (cachedMod != null && cachedMod == mod) {
+                    script = sAssetScriptCache.get(cacheKey);
+                }
+                if (script == null) {
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    try (java.io.FileInputStream fis = new java.io.FileInputStream(extFile)) {
+                        int n;
+                        while ((n = fis.read(buf)) != -1) {
+                            baos.write(buf, 0, n);
+                        }
+                    }
+                    script = baos.toString("UTF-8");
+                    sAssetScriptCache.put(cacheKey, script);
+                    sAssetScriptModCache.put(cacheKey, mod);
+                }
+            } else {
+                script = sAssetScriptCache.get(str);
+                if (script == null) {
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
+                    try (InputStream inputStreamOpen = termuxActivity.getAssets().open("webview_engine/" + str)) {
+                        int n;
+                        while ((n = inputStreamOpen.read(buf)) != -1) {
+                            baos.write(buf, 0, n);
+                        }
+                    }
+                    script = baos.toString("UTF-8");
+                    sAssetScriptCache.put(str, script);
+                }
             }
             webView.evaluateJavascript(script, null);
         } catch (Exception unused) {
@@ -2305,29 +2586,82 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionTab ownerTab = getTabForWebView(webView);
         String tabProfile = (ownerTab != null && ownerTab.mProfile != null && !ownerTab.mProfile.isEmpty())
                 ? ownerTab.mProfile : this.mCurrentProfile;
+        if (tabProfile == null || tabProfile.isEmpty()) tabProfile = "default";
         FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(tabProfile);
-        String solName = (this.mCurrentSolWalletName != null && !this.mCurrentSolWalletName.isEmpty())
-                ? this.mCurrentSolWalletName : FusionWalletHelper.getMasterSolName();
-        String solAddr = (this.mCurrentSolWalletAddress != null && !this.mCurrentSolWalletAddress.isEmpty())
-                ? this.mCurrentSolWalletAddress : FusionWalletHelper.getMasterSolAddress();
-        String tronName = (this.mCurrentTronWalletName != null && !this.mCurrentTronWalletName.isEmpty())
-                ? this.mCurrentTronWalletName : FusionWalletHelper.getMasterTronName();
-        String tronAddr = (this.mCurrentTronWalletAddress != null && !this.mCurrentTronWalletAddress.isEmpty())
-                ? this.mCurrentTronWalletAddress : FusionWalletHelper.getMasterTronAddress();
-        String suiName = (this.mCurrentSuiWalletName != null && !this.mCurrentSuiWalletName.isEmpty())
-                ? this.mCurrentSuiWalletName : FusionWalletHelper.getMasterSuiName();
-        String suiAddr = (this.mCurrentSuiWalletAddress != null && !this.mCurrentSuiWalletAddress.isEmpty())
-                ? this.mCurrentSuiWalletAddress : FusionWalletHelper.getMasterSuiAddress();
-        String aptosName = (this.mCurrentAptosWalletName != null && !this.mCurrentAptosWalletName.isEmpty())
-                ? this.mCurrentAptosWalletName : FusionWalletHelper.getMasterAptosName();
-        String aptosAddr = (this.mCurrentAptosWalletAddress != null && !this.mCurrentAptosWalletAddress.isEmpty())
-                ? this.mCurrentAptosWalletAddress : FusionWalletHelper.getMasterAptosAddress();
-        String iotaName = (this.mCurrentIotaWalletName != null && !this.mCurrentIotaWalletName.isEmpty())
-                ? this.mCurrentIotaWalletName : FusionWalletHelper.getMasterIotaName();
-        String iotaAddr = (this.mCurrentIotaWalletAddress != null && !this.mCurrentIotaWalletAddress.isEmpty())
-                ? this.mCurrentIotaWalletAddress : FusionWalletHelper.getMasterIotaAddress();
+        String evmName = (ownerTab != null && ownerTab.mWalletName != null && !ownerTab.mWalletName.isEmpty())
+                ? ownerTab.mWalletName : (this.mCurrentWalletName != null ? this.mCurrentWalletName : "");
+        String evmAddr = (ownerTab != null && ownerTab.mWalletAddress != null && !ownerTab.mWalletAddress.isEmpty())
+                ? ownerTab.mWalletAddress : (this.mCurrentWalletAddress != null ? this.mCurrentWalletAddress : "");
+        String solName = (ownerTab != null && ownerTab.mSolWalletName != null && !ownerTab.mSolWalletName.isEmpty())
+                ? ownerTab.mSolWalletName
+                : ((this.mCurrentSolWalletName != null && !this.mCurrentSolWalletName.isEmpty()) ? this.mCurrentSolWalletName : FusionWalletHelper.getMasterSolName());
+        String solAddr = (ownerTab != null && ownerTab.mSolWalletAddress != null && !ownerTab.mSolWalletAddress.isEmpty())
+                ? ownerTab.mSolWalletAddress
+                : ((this.mCurrentSolWalletAddress != null && !this.mCurrentSolWalletAddress.isEmpty()) ? this.mCurrentSolWalletAddress : FusionWalletHelper.getMasterSolAddress());
+        String tronName = (ownerTab != null && ownerTab.mTronWalletName != null && !ownerTab.mTronWalletName.isEmpty())
+                ? ownerTab.mTronWalletName
+                : ((this.mCurrentTronWalletName != null && !this.mCurrentTronWalletName.isEmpty()) ? this.mCurrentTronWalletName : FusionWalletHelper.getMasterTronName());
+        String tronAddr = (ownerTab != null && ownerTab.mTronWalletAddress != null && !ownerTab.mTronWalletAddress.isEmpty())
+                ? ownerTab.mTronWalletAddress
+                : ((this.mCurrentTronWalletAddress != null && !this.mCurrentTronWalletAddress.isEmpty()) ? this.mCurrentTronWalletAddress : FusionWalletHelper.getMasterTronAddress());
+        String suiName = (ownerTab != null && ownerTab.mSuiWalletName != null && !ownerTab.mSuiWalletName.isEmpty())
+                ? ownerTab.mSuiWalletName
+                : ((this.mCurrentSuiWalletName != null && !this.mCurrentSuiWalletName.isEmpty()) ? this.mCurrentSuiWalletName : FusionWalletHelper.getMasterSuiName());
+        String suiAddr = (ownerTab != null && ownerTab.mSuiWalletAddress != null && !ownerTab.mSuiWalletAddress.isEmpty())
+                ? ownerTab.mSuiWalletAddress
+                : ((this.mCurrentSuiWalletAddress != null && !this.mCurrentSuiWalletAddress.isEmpty()) ? this.mCurrentSuiWalletAddress : FusionWalletHelper.getMasterSuiAddress());
+        String aptosName = (ownerTab != null && ownerTab.mAptosWalletName != null && !ownerTab.mAptosWalletName.isEmpty())
+                ? ownerTab.mAptosWalletName
+                : ((this.mCurrentAptosWalletName != null && !this.mCurrentAptosWalletName.isEmpty()) ? this.mCurrentAptosWalletName : FusionWalletHelper.getMasterAptosName());
+        String aptosAddr = (ownerTab != null && ownerTab.mAptosWalletAddress != null && !ownerTab.mAptosWalletAddress.isEmpty())
+                ? ownerTab.mAptosWalletAddress
+                : ((this.mCurrentAptosWalletAddress != null && !this.mCurrentAptosWalletAddress.isEmpty()) ? this.mCurrentAptosWalletAddress : FusionWalletHelper.getMasterAptosAddress());
+        String iotaName = (ownerTab != null && ownerTab.mIotaWalletName != null && !ownerTab.mIotaWalletName.isEmpty())
+                ? ownerTab.mIotaWalletName
+                : ((this.mCurrentIotaWalletName != null && !this.mCurrentIotaWalletName.isEmpty()) ? this.mCurrentIotaWalletName : FusionWalletHelper.getMasterIotaName());
+        String iotaAddr = (ownerTab != null && ownerTab.mIotaWalletAddress != null && !ownerTab.mIotaWalletAddress.isEmpty())
+                ? ownerTab.mIotaWalletAddress
+                : ((this.mCurrentIotaWalletAddress != null && !this.mCurrentIotaWalletAddress.isEmpty()) ? this.mCurrentIotaWalletAddress : FusionWalletHelper.getMasterIotaAddress());
 
-        webView.evaluateJavascript("window.__FUSION_PROFILE__ = '" + tabProfile + "'; window.__FUSION_DEVICE__ = " + dev.toJsonString() + "; window.__FUSION_WALLET_NAME__ = '" + this.mCurrentWalletName + "'; window.__FUSION_WALLET_ADDRESS__ = '" + this.mCurrentWalletAddress + "'; window.__FUSION_SOL_WALLET_NAME__ = '" + solName + "'; window.__FUSION_SOL_WALLET_ADDRESS__ = '" + solAddr + "'; window.__FUSION_TRON_WALLET_NAME__ = '" + tronName + "'; window.__FUSION_TRON_WALLET_ADDRESS__ = '" + tronAddr + "'; window.__FUSION_SUI_WALLET_NAME__ = '" + suiName + "'; window.__FUSION_SUI_WALLET_ADDRESS__ = '" + suiAddr + "'; window.__FUSION_APTOS_WALLET_NAME__ = '" + aptosName + "'; window.__FUSION_APTOS_WALLET_ADDRESS__ = '" + aptosAddr + "'; window.__FUSION_IOTA_WALLET_NAME__ = '" + iotaName + "'; window.__FUSION_IOTA_WALLET_ADDRESS__ = '" + iotaAddr + "'; window.__ACTIVE_AI_ENGINE__ = '" + FusionAiHelper.getActiveEngine() + "';", null);
+        String tabChain = (ownerTab != null && ownerTab.mChainKey != null && !ownerTab.mChainKey.isEmpty()) ? ownerTab.mChainKey : this.mCurrentChainKey;
+        String activeWName = (!evmName.isEmpty()) ? evmName : tabProfile;
+        String activeWAddr = (!evmAddr.isEmpty()) ? evmAddr : "";
+        String chromeVer = FusionProfileManager.getSystemChromeVersion(webView.getContext());
+        String effectiveUa = FusionProfileManager.getEffectiveUserAgent(webView.getContext(), dev, ownerTab != null && ownerTab.mIsDesktop);
+        String devJson;
+        try {
+            JSONObject devObj = new JSONObject(dev.toJsonString());
+            devObj.put("userAgent", effectiveUa);
+            devJson = devObj.toString();
+        } catch (Throwable ignored) {
+            devJson = dev.toJsonString();
+        }
+
+        StringBuilder js = new StringBuilder();
+        js.append("window.__FUSION_TAB_ID__ = ").append(ownerTab != null ? ownerTab.mId : -1).append(";");
+        js.append("window.__FUSION_PROFILE__ = ").append(JSONObject.quote(tabProfile)).append(";");
+        js.append("window.__FUSION_ACTIVE_PROFILE__ = ").append(JSONObject.quote(tabProfile)).append(";");
+        js.append("window.__FUSION_CHROME_VERSION__ = ").append(JSONObject.quote(chromeVer)).append(";");
+        js.append("window.__FUSION_IS_DESKTOP__ = ").append((ownerTab != null && ownerTab.mIsDesktop) ? "true" : "false").append(";");
+        js.append("window.__FUSION_DEVICE__ = ").append(devJson).append(";");
+        js.append("window.__FUSION_WALLET_NAME__ = ").append(JSONObject.quote(evmName)).append(";");
+        js.append("window.__FUSION_WALLET_ADDRESS__ = ").append(JSONObject.quote(evmAddr)).append(";");
+        js.append("window.__FUSION_ACTIVE_WALLET_NAME__ = window.__FUSION_ACTIVE_WALLET_NAME__ || ").append(JSONObject.quote(activeWName)).append(";");
+        js.append("window.__FUSION_ACTIVE_WALLET_ADDRESS__ = window.__FUSION_ACTIVE_WALLET_ADDRESS__ || ").append(JSONObject.quote(activeWAddr)).append(";");
+        js.append("window.__FUSION_ACTIVE_CHAIN__ = window.__FUSION_ACTIVE_CHAIN__ || ").append(JSONObject.quote(tabChain != null ? tabChain : "bsc")).append(";");
+        js.append("window.__FUSION_SOL_WALLET_NAME__ = ").append(JSONObject.quote(solName != null ? solName : "")).append(";");
+        js.append("window.__FUSION_SOL_WALLET_ADDRESS__ = ").append(JSONObject.quote(solAddr != null ? solAddr : "")).append(";");
+        js.append("window.__FUSION_TRON_WALLET_NAME__ = ").append(JSONObject.quote(tronName != null ? tronName : "")).append(";");
+        js.append("window.__FUSION_TRON_WALLET_ADDRESS__ = ").append(JSONObject.quote(tronAddr != null ? tronAddr : "")).append(";");
+        js.append("window.__FUSION_SUI_WALLET_NAME__ = ").append(JSONObject.quote(suiName != null ? suiName : "")).append(";");
+        js.append("window.__FUSION_SUI_WALLET_ADDRESS__ = ").append(JSONObject.quote(suiAddr != null ? suiAddr : "")).append(";");
+        js.append("window.__FUSION_APTOS_WALLET_NAME__ = ").append(JSONObject.quote(aptosName != null ? aptosName : "")).append(";");
+        js.append("window.__FUSION_APTOS_WALLET_ADDRESS__ = ").append(JSONObject.quote(aptosAddr != null ? aptosAddr : "")).append(";");
+        js.append("window.__FUSION_IOTA_WALLET_NAME__ = ").append(JSONObject.quote(iotaName != null ? iotaName : "")).append(";");
+        js.append("window.__FUSION_IOTA_WALLET_ADDRESS__ = ").append(JSONObject.quote(iotaAddr != null ? iotaAddr : "")).append(";");
+        js.append("window.__ACTIVE_AI_ENGINE__ = ").append(JSONObject.quote(FusionAiHelper.getActiveEngine())).append(";");
+
+        webView.evaluateJavascript(js.toString(), null);
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "ghost_injected.js");
         FusionUserscriptHelper.injectMatchingScripts(webView, webView.getUrl());
@@ -2339,6 +2673,21 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (arrayList != null && arrayList.size() > 0) {
             killTabDirect(this.mActiveTab);
         }
+    }
+
+    public void killTabById(final int tabId) {
+        TermuxActivity termuxActivity = this.mActivity;
+        if (termuxActivity == null) return;
+        termuxActivity.runOnUiThread(() -> {
+            if (this.mTabList == null) return;
+            for (int i = 0; i < this.mTabList.size(); i++) {
+                FusionTab t = (FusionTab) this.mTabList.get(i);
+                if (t != null && t.mId == tabId) {
+                    killTabDirect(i);
+                    return;
+                }
+            }
+        });
     }
 
     public void killTab(int i) {
@@ -3039,6 +3388,33 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         String subAddr = FusionWalletHelper.getAddressForChain("substrate", i);
         String dotAddr = FusionWalletHelper.getAddressForChain("polkadot", i);
 
+        // Sinkronkan wallet terpilih ke tab aktif agar GhostBridge per-tab selalu akurat
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+        if (activeTab != null) {
+            activeTab.mWalletName = name != null ? name : "";
+            activeTab.mWalletAddress = address != null ? address : "";
+            if (solAddr != null && !solAddr.isEmpty()) {
+                activeTab.mSolWalletName = solName;
+                activeTab.mSolWalletAddress = solAddr;
+            }
+            if (tronAddr != null && !tronAddr.isEmpty()) {
+                activeTab.mTronWalletName = tronName;
+                activeTab.mTronWalletAddress = tronAddr;
+            }
+            if (suiAddr != null && !suiAddr.isEmpty()) {
+                activeTab.mSuiWalletName = suiName;
+                activeTab.mSuiWalletAddress = suiAddr;
+            }
+            if (aptosAddr != null && !aptosAddr.isEmpty()) {
+                activeTab.mAptosWalletName = aptosName;
+                activeTab.mAptosWalletAddress = aptosAddr;
+            }
+            if (iotaAddr != null && !iotaAddr.isEmpty()) {
+                activeTab.mIotaWalletName = iotaName;
+                activeTab.mIotaWalletAddress = iotaAddr;
+            }
+        }
+
         updateMenuTexts();
         FusionToolPillHelper.updateToolPillUi(this);
         LinearLayout linearLayout = this.mMenuCard;
@@ -3060,7 +3436,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
         WebView webView = this.mActiveWebView;
         if (webView != null) {
-            webView.evaluateJavascript("if(window.ethereum){window.ethereum.selectedAddress='" + address + "';window.dispatchEvent(new CustomEvent('accountsChanged',{detail:['" + address + "']}));}", null);
+            webView.evaluateJavascript(
+                "window.__FUSION_WALLET_NAME__=" + JSONObject.quote(name != null ? name : "") + ";" +
+                "window.__FUSION_WALLET_ADDRESS__=" + JSONObject.quote(address != null ? address : "") + ";" +
+                "window.__FUSION_ACTIVE_WALLET_NAME__=" + JSONObject.quote(name != null ? name : "") + ";" +
+                "window.__FUSION_ACTIVE_WALLET_ADDRESS__=" + JSONObject.quote(address != null ? address : "") + ";" +
+                "if(window.ethereum){window.ethereum.selectedAddress=" + JSONObject.quote(address != null ? address : "") + ";window.dispatchEvent(new CustomEvent('accountsChanged',{detail:[" + JSONObject.quote(address != null ? address : "") + "]}));}", null);
             if (solAddr != null && !solAddr.isEmpty()) {
                 webView.evaluateJavascript("if(window.solana){window.__FUSION_SOL_WALLET_ADDRESS__='" + solAddr + "';if(window.solana.publicKey){window.solana.publicKey._val='" + solAddr + "';}window.solana.emit('accountChanged','" + solAddr + "');}", null);
             }
@@ -3248,17 +3629,23 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         TerminalSession currentSession = null;
         initViews();
         if (str == null || str.isEmpty() || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
-            str = "file:///android_asset/webview_engine/home.html";
+            File extHome = FusionProfileManager.resolveExternalEngineFile("home.html");
+            str = (extHome != null) ? ("file://" + extHome.getAbsolutePath()) : "file:///android_asset/webview_engine/home.html";
         }
         if (str2 == null) {
             str2 = "default";
         }
-        this.mCurrentProfile = str2;
-        this.mIsGhostMode = z;
-        this.mIsDesktopMode = z2;
-        this.mIsAutoMode = z3;
-        this.mWcUri = str5;
-        this.mIsMinimized = isHeadless;
+        FusionTab prevActiveBeforeOpen = FusionTabStateHelper.getActiveTab(this);
+        boolean hasVisibleActiveTab = prevActiveBeforeOpen != null && !prevActiveBeforeOpen.mIsHeadless && !prevActiveBeforeOpen.mIsMinimized && isWebViewVisible();
+        boolean skipUiSwitch = isHeadless && hasVisibleActiveTab;
+        if (!skipUiSwitch) {
+            this.mCurrentProfile = str2;
+            this.mIsGhostMode = z;
+            this.mIsDesktopMode = z2;
+            this.mIsAutoMode = z3;
+            this.mWcUri = str5;
+            this.mIsMinimized = isHeadless;
+        }
         String autoFromUrl = FusionChainHelper.detectChainFromUrl(str);
         if (autoFromUrl != null && !autoFromUrl.isEmpty()) {
             str4 = autoFromUrl;
@@ -3308,6 +3695,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             fusionTab2.mIsDesktop = z2;
             fusionTab2.mIsHeadless = isHeadless;
             fusionTab2.mIsMinimized = isHeadless;
+            fusionTab2.mWalletName = str3;
+            fusionTab2.mWalletAddress = strFindAddressByName;
             String autoChain2 = FusionChainHelper.detectChainFromUrl(str);
             if (autoChain2 != null && !autoChain2.isEmpty()) {
                 fusionTab2.mChainKey = autoChain2;
@@ -3328,7 +3717,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         } else {
             FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5, isHeadless);
             targetTab = fusionTabCreateTabInternal;
-            switchTab(this.mTabList.size() - 1);
+            if (targetTab != null) {
+                targetTab.mWalletName = str3;
+                targetTab.mWalletAddress = strFindAddressByName;
+                if (isHeadless) {
+                    targetTab.mKeepAliveBackground = true;
+                }
+            }
+            // Jangan bajak tab visual yang sedang aktif dilihat user jika tab baru adalah headless background worker
+            if (!skipUiSwitch) {
+                switchTab(this.mTabList.size() - 1);
+            }
             if (fusionTabCreateTabInternal != null && fusionTabCreateTabInternal.mWebView != null) {
                 fusionTabCreateTabInternal.mWebView.loadUrl(str);
             }
@@ -3342,7 +3741,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     targetTab.mAutoRotateIntervalSec = 0;
                     FusionProxyHelper.savePersistentState(this.mActivity, profKey, false, null, 0, "direct", null);
                     FusionProxyHelper.applyProxyToEngine(targetTab);
-                    FusionProxyHelper.updateProxyIndicator(this, targetTab);
+                    if (!skipUiSwitch) FusionProxyHelper.updateProxyIndicator(this, targetTab);
                 } else {
                     FusionProxyHelper.configureTabProxy(targetTab, proxyStr, intervalMins * 60, this);
                 }
@@ -3352,7 +3751,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         FusionProxyHelper.startAutoRotateScheduler(this);
                     }
                     FusionProxyHelper.applyProxyToEngine(targetTab);
-                    FusionProxyHelper.updateProxyIndicator(this, targetTab);
+                    if (!skipUiSwitch) FusionProxyHelper.updateProxyIndicator(this, targetTab);
                 } else {
                     FusionProxyHelper.PersistentProxyState saved = FusionProxyHelper.loadPersistentState(this.mActivity, profKey);
                     if (saved != null && saved.enabled && saved.item != null && saved.item.isValid()) {
@@ -3364,28 +3763,30 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                             FusionProxyHelper.startAutoRotateScheduler(this);
                         }
                         FusionProxyHelper.applyProxyToEngine(targetTab);
-                        FusionProxyHelper.updateProxyIndicator(this, targetTab);
+                        if (!skipUiSwitch) FusionProxyHelper.updateProxyIndicator(this, targetTab);
                     } else {
                         targetTab.mIsProxyEnabled = false;
                         targetTab.mAutoRotateIntervalSec = 0;
                         FusionProxyHelper.applyProxyToEngine(targetTab);
-                        FusionProxyHelper.updateProxyIndicator(this, targetTab);
+                        if (!skipUiSwitch) FusionProxyHelper.updateProxyIndicator(this, targetTab);
                     }
                 }
             }
         }
-        syncVisibility();
-        updateContextUi();
-        if (targetTab == null || !targetTab.mIsHeadless) {
-            FusionToolPillHelper.showToolPill(this);
-            FusionToolPillHelper.bringToFront();
-        } else {
-            FusionToolPillHelper.hideToolPill(this);
-            if (this.mControlPill != null) {
-                this.mControlPill.setVisibility(View.GONE);
-            }
-            if (this.mToolScroll != null) {
-                this.mToolScroll.setVisibility(View.GONE);
+        if (!skipUiSwitch) {
+            syncVisibility();
+            updateContextUi();
+            if (targetTab == null || !targetTab.mIsHeadless) {
+                FusionToolPillHelper.showToolPill(this);
+                FusionToolPillHelper.bringToFront();
+            } else {
+                FusionToolPillHelper.hideToolPill(this);
+                if (this.mControlPill != null) {
+                    this.mControlPill.setVisibility(View.GONE);
+                }
+                if (this.mToolScroll != null) {
+                    this.mToolScroll.setVisibility(View.GONE);
+                }
             }
         }
     }
@@ -3810,6 +4211,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 WebView webView = fusionTab.mWebView;
                 if (fusionTab.mIsMinimized || fusionTab.mIsHeadless) {
                     webView.setVisibility(View.VISIBLE);
+                    webView.setTranslationX(fusionTab.mIsHeadless ? -10000.0f : 0.0f);
                     webView.resumeTimers();
                     TextView textView = this.mMinPillBtn;
                     if (textView != null) {
@@ -3820,6 +4222,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         this.mTerminalPaneHost.bringToFront();
                     }
                 } else {
+                    webView.setTranslationX(0.0f);
                     webView.setVisibility(View.VISIBLE);
                     webView.bringToFront();
                     TextView textView2 = this.mMinPillBtn;
@@ -3839,9 +4242,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 FusionProxyHelper.updateProxyIndicator(this, fusionTab);
             } else {
                 if (fusionTab != null && fusionTab.mWebView != null) {
-                    if (fusionTab.mIsHeadless) {
+                    if (fusionTab.mIsHeadless || fusionTab.mKeepAliveBackground) {
+                        fusionTab.mWebView.setTranslationX(-10000.0f);
                         fusionTab.mWebView.setVisibility(View.VISIBLE);
+                        fusionTab.mWebView.resumeTimers();
                     } else {
+                        fusionTab.mWebView.setTranslationX(0.0f);
                         fusionTab.mWebView.setVisibility(View.GONE);
                     }
                 }
@@ -4254,54 +4660,60 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionTabStateHelper.toggleDesktop(this);
     }
 
-    public void toggleDevMode() {
-        if (this.mIsDevMode) {
+    public int setDevCdpEnabled(final boolean enable, final boolean showToast) {
+        if (!enable) {
             this.mIsDevMode = false;
-            WebView.setWebContentsDebuggingEnabled(false);
-            try {
-                new File("/data/data/com.termux/files/home/.webview_cdp_socket").delete();
-            } catch (Exception unused) {
+            if (this.mActivity != null) {
+                this.mActivity.runOnUiThread(() -> {
+                    WebView.setWebContentsDebuggingEnabled(false);
+                    TextView tv = this.mDevModeBtn;
+                    if (tv != null) {
+                        tv.setText("Dev: OFF");
+                        tv.setBackgroundColor(-4482645);
+                    }
+                    if (showToast) {
+                        FusionToast.makeText((Context) this.mActivity, (CharSequence) "CDP NONAKTIF (OFF)", 0).show();
+                    }
+                });
             }
-            try {
-                new File("/data/local/nhsystem/kali-arm64/root/webview_cdp_socket").delete();
-            } catch (Exception unused2) {
-            }
-            TextView textView = this.mDevModeBtn;
-            if (textView != null) {
-                textView.setText("Dev: OFF");
-                textView.setBackgroundColor(-4482645);
-            }
-            AppCompatActivity appCompatActivity = this.mActivity;
-            if (appCompatActivity != null) {
-                FusionToast.makeText((Context) appCompatActivity, (CharSequence) "CDP NONAKTIF (OFF)", 0).show();
-                return;
-            }
-            return;
+            FusionCdpBridge.stop();
+            try { new File("/data/data/com.termux/files/home/.webview_cdp_socket").delete(); } catch (Exception unused) {}
+            try { new File("/data/local/nhsystem/kali-arm64/root/webview_cdp_socket").delete(); } catch (Exception unused2) {}
+            return 0;
         }
         this.mIsDevMode = true;
-        WebView.setWebContentsDebuggingEnabled(true);
-        String str = "webview_devtools_remote_" + Process.myPid();
+        final int pid = Process.myPid();
+        final int cdpPort = FusionCdpBridge.start(pid);
+        final String str = "webview_devtools_remote_" + pid;
         try {
             FileOutputStream fileOutputStream = new FileOutputStream("/data/data/com.termux/files/home/.webview_cdp_socket");
             fileOutputStream.write(str.getBytes());
             fileOutputStream.close();
-        } catch (Exception unused3) {
-        }
+        } catch (Exception unused3) {}
         try {
             FileOutputStream fileOutputStream2 = new FileOutputStream("/data/local/nhsystem/kali-arm64/root/webview_cdp_socket");
             fileOutputStream2.write(str.getBytes());
             fileOutputStream2.close();
-        } catch (Exception unused4) {
+        } catch (Exception unused4) {}
+        if (this.mActivity != null) {
+            this.mActivity.runOnUiThread(() -> {
+                WebView.setWebContentsDebuggingEnabled(true);
+                TextView textView2 = this.mDevModeBtn;
+                if (textView2 != null) {
+                    textView2.setText("Dev: ON (CDP)");
+                    textView2.setBackgroundColor(-2263091);
+                }
+                if (showToast) {
+                    String portInfo = cdpPort > 0 ? ("\nLocal TCP: 127.0.0.1:" + cdpPort + " (Zero-ADB)") : "";
+                    FusionToast.makeText((Context) this.mActivity, (CharSequence) ("CDP AKTIF!\nSocket: @" + str + portInfo), 1).show();
+                }
+            });
         }
-        TextView textView2 = this.mDevModeBtn;
-        if (textView2 != null) {
-            textView2.setText("Dev: ON (CDP)");
-            textView2.setBackgroundColor(-2263091);
-        }
-        AppCompatActivity appCompatActivity2 = this.mActivity;
-        if (appCompatActivity2 != null) {
-            FusionToast.makeText((Context) appCompatActivity2, (CharSequence) ("CDP AKTIF!\nSocket: @" + str + "\nForward: adb forward tcp:9222 localabstract:" + str), 1).show();
-        }
+        return cdpPort;
+    }
+
+    public void toggleDevMode() {
+        setDevCdpEnabled(!this.mIsDevMode, true);
     }
 
     public void toggleMacroRecording() {

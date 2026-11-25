@@ -12,32 +12,1796 @@
 (() => {
     'use strict';
 
-    const FUSION_ENGINE_VERSION = "2.3.0";
+    const FUSION_ENGINE_VERSION = "2.4.0";
     if (window.__FUSION_AGENT_ENGINE__ && window.__FUSION_AGENT_ENGINE__.version === FUSION_ENGINE_VERSION) return;
 
     // --- 1. WebRTC STUN Leak Protection (Stealth WebRTC) ---
     window.__FUSION_WEBRTC_STEALTH__ = true;
-    if (window.RTCPeerConnection) {
-        const OrigPeerConnection = window.RTCPeerConnection;
-        window.RTCPeerConnection = function(config, constraints) {
+    const wrapRtcClass = (OrigPeerConnection) => {
+        if (!OrigPeerConnection) return OrigPeerConnection;
+        const Wrapped = function(config, constraints) {
             if (window.__FUSION_WEBRTC_STEALTH__ && config && config.iceServers) {
                 config = Object.assign({}, config, { iceServers: [] });
             }
             return new OrigPeerConnection(config, constraints);
         };
-        window.RTCPeerConnection.prototype = OrigPeerConnection.prototype;
+        Wrapped.prototype = OrigPeerConnection.prototype;
+        return Wrapped;
+    };
+    if (window.RTCPeerConnection) {
+        window.RTCPeerConnection = wrapRtcClass(window.RTCPeerConnection);
+    }
+    if (window.webkitRTCPeerConnection) {
+        window.webkitRTCPeerConnection = wrapRtcClass(window.webkitRTCPeerConnection);
     }
 
     // --- 1B. NINJA STEALTH & ANTI-SYBIL SUITE (1.000 Unique Fingerprints & Parity) ---
     (() => {
         // Deterministic Seed per Wallet
         function getWalletSeed() {
-            const raw = window.__FUSION_ACTIVE_WALLET_NAME__ || window.__FUSION_ACTIVE_WALLET_ADDRESS__ || (window.location && window.location.hostname) || 'default';
+            const raw = window.__FUSION_ACTIVE_WALLET_NAME__ || window.__FUSION_WALLET_NAME__ || window.__FUSION_ACTIVE_WALLET_ADDRESS__ || window.__FUSION_WALLET_ADDRESS__ || window.__FUSION_PROFILE__ || (window.location && window.location.hostname) || 'default';
             let h = 0x811c9dc5;
             for (let i = 0; i < raw.length; i++) {
                 h = Math.imul(h ^ raw.charCodeAt(i), 0x01000193);
             }
             return (h >>> 0);
+        }
+
+        // --- DETERMINISTIC DEVICE PROFILE MATRIX (Seeded per Wallet) ---
+        const DEVICE_PROFILES = [
+            {
+                name: "Samsung Galaxy S24 Ultra",
+                brand: "Samsung",
+                model: "SM-S928B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S928B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 384,
+                screenHeight: 832,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy S24+",
+                brand: "Samsung",
+                model: "SM-S926U",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S926U Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 384,
+                screenHeight: 832,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy S24",
+                brand: "Samsung",
+                model: "SM-S921U",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S921U Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 360,
+                screenHeight: 780,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy S23 Ultra",
+                brand: "Samsung",
+                model: "SM-S918B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S918B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 384,
+                screenHeight: 824,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy S23+",
+                brand: "Samsung",
+                model: "SM-S916B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S916B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 384,
+                screenHeight: 824,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy S23",
+                brand: "Samsung",
+                model: "SM-S911B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S911B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 360,
+                screenHeight: 780,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy S23 FE",
+                brand: "Samsung",
+                model: "SM-S711B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S711B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 384,
+                screenHeight: 854,
+                dpr: 2.8,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy S22 Ultra",
+                brand: "Samsung",
+                model: "SM-S908B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S908B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 384,
+                screenHeight: 824,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy S22+",
+                brand: "Samsung",
+                model: "SM-S906B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S906B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 384,
+                screenHeight: 824,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy S22",
+                brand: "Samsung",
+                model: "SM-S901B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-S901B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 360,
+                screenHeight: 780,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy S21 Ultra",
+                brand: "Samsung",
+                model: "SM-G998B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-G998B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G78 MP14",
+                screenWidth: 384,
+                screenHeight: 854,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy S20 FE",
+                brand: "Samsung",
+                model: "SM-G781B",
+                ua: "Mozilla/5.0 (Linux; Android 13; SM-G781B Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 650",
+                screenWidth: 360,
+                screenHeight: 800,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy Z Fold 5",
+                brand: "Samsung",
+                model: "SM-F946B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-F946B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 373,
+                screenHeight: 904,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy Z Flip 5",
+                brand: "Samsung",
+                model: "SM-F731B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-F731B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 360,
+                screenHeight: 884,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy Z Fold 6",
+                brand: "Samsung",
+                model: "SM-F956B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-F956B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 412,
+                screenHeight: 968,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy Z Flip 6",
+                brand: "Samsung",
+                model: "SM-F741B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-F741B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 360,
+                screenHeight: 884,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Samsung Galaxy A55 5G",
+                brand: "Samsung",
+                model: "SM-A556B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-A556B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G68",
+                screenWidth: 384,
+                screenHeight: 854,
+                dpr: 2.8125,
+                memory: 8
+            },
+            {
+                name: "Samsung Galaxy A54 5G",
+                brand: "Samsung",
+                model: "SM-A546B",
+                ua: "Mozilla/5.0 (Linux; Android 14; SM-A546B Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G68 MP5",
+                screenWidth: 360,
+                screenHeight: 800,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Google Pixel 9 Pro",
+                brand: "Google",
+                model: "Pixel 9 Pro",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 9 Pro Build/AD1A.240530.047; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715",
+                screenWidth: 412,
+                screenHeight: 923,
+                dpr: 2.875,
+                memory: 16
+            },
+            {
+                name: "Google Pixel 9",
+                brand: "Google",
+                model: "Pixel 9",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 9 Build/AD1A.240530.047; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715",
+                screenWidth: 412,
+                screenHeight: 923,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Google Pixel 8 Pro",
+                brand: "Google",
+                model: "Pixel 8 Pro",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro Build/UD1A.230803.041; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.875,
+                memory: 12
+            },
+            {
+                name: "Google Pixel 8",
+                brand: "Google",
+                model: "Pixel 8",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 8 Build/UD1A.230803.041; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Google Pixel 8a",
+                brand: "Google",
+                model: "Pixel 8a",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 8a Build/UD2A.240505.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Google Pixel Fold",
+                brand: "Google",
+                model: "Pixel Fold",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel Fold Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G710",
+                screenWidth: 412,
+                screenHeight: 892,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Google Pixel 7 Pro",
+                brand: "Google",
+                model: "Pixel 7 Pro",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 7 Pro Build/UQ1A.240205.004; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G710",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Google Pixel 7",
+                brand: "Google",
+                model: "Pixel 7",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 7 Build/UQ1A.240205.004; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G710",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Google Pixel 7a",
+                brand: "Google",
+                model: "Pixel 7a",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 7a Build/UQ1A.240205.004; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G710",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Google Pixel 6 Pro",
+                brand: "Google",
+                model: "Pixel 6 Pro",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 6 Pro Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G78 MP20",
+                screenWidth: 412,
+                screenHeight: 892,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "Google Pixel 6",
+                brand: "Google",
+                model: "Pixel 6",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 6 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G78 MP20",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Google Pixel 6a",
+                brand: "Google",
+                model: "Pixel 6a",
+                ua: "Mozilla/5.0 (Linux; Android 14; Pixel 6a Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G78 MP20",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 6
+            },
+            {
+                name: "Xiaomi 14 Ultra",
+                brand: "Xiaomi",
+                model: "24030PN60G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 24030PN60G Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Xiaomi 14 Pro",
+                brand: "Xiaomi",
+                model: "23116PN5BC",
+                ua: "Mozilla/5.0 (Linux; Android 14; 23116PN5BC Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Xiaomi 14",
+                brand: "Xiaomi",
+                model: "23127PN0CG",
+                ua: "Mozilla/5.0 (Linux; Android 14; 23127PN0CG Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Xiaomi 13 Ultra",
+                brand: "Xiaomi",
+                model: "2304FPN6DC",
+                ua: "Mozilla/5.0 (Linux; Android 14; 2304FPN6DC Build/UKQ1.230804.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Xiaomi 13 Pro",
+                brand: "Xiaomi",
+                model: "2210132G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 2210132G Build/TKQ1.221114.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Xiaomi 13",
+                brand: "Xiaomi",
+                model: "2211133G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 2211133G Build/TKQ1.221114.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Xiaomi 13T Pro",
+                brand: "Xiaomi",
+                model: "23078PND5G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 23078PND5G Build/UKQ1.230917.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Xiaomi 13T",
+                brand: "Xiaomi",
+                model: "2306EPN60G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 2306EPN60G Build/UKQ1.230917.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC6",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Xiaomi 12S Ultra",
+                brand: "Xiaomi",
+                model: "2203121C",
+                ua: "Mozilla/5.0 (Linux; Android 13; 2203121C Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Xiaomi 12 Pro",
+                brand: "Xiaomi",
+                model: "2201122G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 2201122G Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Xiaomi 12",
+                brand: "Xiaomi",
+                model: "2201123G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 2201123G Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Xiaomi 12T Pro",
+                brand: "Xiaomi",
+                model: "22081212UG",
+                ua: "Mozilla/5.0 (Linux; Android 13; 22081212UG Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Xiaomi 11T Pro",
+                brand: "Xiaomi",
+                model: "2107113SG",
+                ua: "Mozilla/5.0 (Linux; Android 13; 2107113SG Build/TKQ1.220807.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 660",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Xiaomi 11 Ultra",
+                brand: "Xiaomi",
+                model: "M2102K1G",
+                ua: "Mozilla/5.0 (Linux; Android 13; M2102K1G Build/TKQ1.220807.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 660",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "POCO F6 Pro",
+                brand: "Xiaomi",
+                model: "23113RKC6G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 23113RKC6G Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "POCO F6",
+                brand: "Xiaomi",
+                model: "24069PC21G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 24069PC21G Build/UKQ1.240227.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 735",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "POCO F5 Pro",
+                brand: "Xiaomi",
+                model: "23013PC75G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 23013PC75G Build/TKQ1.221013.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "POCO F5",
+                brand: "Xiaomi",
+                model: "23049PCD8G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 23049PCD8G Build/TKQ1.221013.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 725",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "POCO X6 Pro",
+                brand: "Xiaomi",
+                model: "2311DRK48G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 2311DRK48G Build/UKQ1.230917.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G615 MC6",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "POCO X6",
+                brand: "Xiaomi",
+                model: "23122PCD1G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 23122PCD1G Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 710",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "POCO X5 Pro",
+                brand: "Xiaomi",
+                model: "22101320G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 22101320G Build/TKQ1.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 642L",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "POCO F4 GT",
+                brand: "Xiaomi",
+                model: "21121210G",
+                ua: "Mozilla/5.0 (Linux; Android 13; 21121210G Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "POCO F4",
+                brand: "Xiaomi",
+                model: "22021211RG",
+                ua: "Mozilla/5.0 (Linux; Android 13; 22021211RG Build/TKQ1.220807.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 650",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "POCO F3",
+                brand: "Xiaomi",
+                model: "M2012K11AG",
+                ua: "Mozilla/5.0 (Linux; Android 13; M2012K11AG Build/TKQ1.220807.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 650",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Redmi K70 Pro",
+                brand: "Xiaomi",
+                model: "23117RK66C",
+                ua: "Mozilla/5.0 (Linux; Android 14; 23117RK66C Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Redmi K70",
+                brand: "Xiaomi",
+                model: "2311DRK48C",
+                ua: "Mozilla/5.0 (Linux; Android 14; 2311DRK48C Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Redmi K60 Pro",
+                brand: "Xiaomi",
+                model: "22127RK46C",
+                ua: "Mozilla/5.0 (Linux; Android 13; 22127RK46C Build/TKQ1.221114.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Redmi K60",
+                brand: "Xiaomi",
+                model: "23013RK75C",
+                ua: "Mozilla/5.0 (Linux; Android 13; 23013RK75C Build/TKQ1.221013.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Redmi Note 13 Pro+",
+                brand: "Xiaomi",
+                model: "23090RA98G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 23090RA98G Build/UKQ1.230917.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC4",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Redmi Note 13 Pro",
+                brand: "Xiaomi",
+                model: "2312DRA50G",
+                ua: "Mozilla/5.0 (Linux; Android 14; 2312DRA50G Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 710",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Redmi Note 12 Turbo",
+                brand: "Xiaomi",
+                model: "23049RAD8C",
+                ua: "Mozilla/5.0 (Linux; Android 13; 23049RAD8C Build/TKQ1.221013.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 725",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Redmi Note 12 Pro+",
+                brand: "Xiaomi",
+                model: "22101316UG",
+                ua: "Mozilla/5.0 (Linux; Android 13; 22101316UG Build/TKQ1.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G68 MC4",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Redmi K50 Gaming",
+                brand: "Xiaomi",
+                model: "21121210C",
+                ua: "Mozilla/5.0 (Linux; Android 13; 21121210C Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Redmi Note 11 Pro+",
+                brand: "Xiaomi",
+                model: "21091116UG",
+                ua: "Mozilla/5.0 (Linux; Android 12; 21091116UG Build/SKQ1.211006.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G68 MC4",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "OnePlus 12",
+                brand: "OnePlus",
+                model: "CPH2581",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2581 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3.5,
+                memory: 16
+            },
+            {
+                name: "OnePlus 12R",
+                brand: "OnePlus",
+                model: "CPH2609",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2609 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "OnePlus 11 5G",
+                brand: "OnePlus",
+                model: "CPH2449",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2449 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 919,
+                dpr: 3.5,
+                memory: 16
+            },
+            {
+                name: "OnePlus 11R",
+                brand: "OnePlus",
+                model: "CPH2487",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2487 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "OnePlus Open",
+                brand: "OnePlus",
+                model: "CPH2551",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2551 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "OnePlus 10 Pro",
+                brand: "OnePlus",
+                model: "NE2213",
+                ua: "Mozilla/5.0 (Linux; Android 14; NE2213 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 919,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "OnePlus 10T",
+                brand: "OnePlus",
+                model: "CPH2415",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2415 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 16
+            },
+            {
+                name: "OnePlus 9 Pro",
+                brand: "OnePlus",
+                model: "LE2123",
+                ua: "Mozilla/5.0 (Linux; Android 13; LE2123 Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 660",
+                screenWidth: 412,
+                screenHeight: 919,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "OnePlus Nord 3",
+                brand: "OnePlus",
+                model: "CPH2493",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2493 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G710 MC10",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "OnePlus Nord CE 3",
+                brand: "OnePlus",
+                model: "CPH2569",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2569 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 642L",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Vivo X100 Pro",
+                brand: "vivo",
+                model: "V2324A",
+                ua: "Mozilla/5.0 (Linux; Android 14; V2324A Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G720 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Vivo X100",
+                brand: "vivo",
+                model: "V2309A",
+                ua: "Mozilla/5.0 (Linux; Android 14; V2309A Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G720 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Vivo X90 Pro+",
+                brand: "vivo",
+                model: "V2227A",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2227A Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "Vivo X90 Pro",
+                brand: "vivo",
+                model: "V2218",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2218 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.8,
+                memory: 12
+            },
+            {
+                name: "Vivo X90",
+                brand: "vivo",
+                model: "V2241A",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2241A Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.8,
+                memory: 8
+            },
+            {
+                name: "Vivo X80 Pro",
+                brand: "vivo",
+                model: "V2185A",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2185A Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "Vivo V30 Pro",
+                brand: "vivo",
+                model: "V2319",
+                ua: "Mozilla/5.0 (Linux; Android 14; V2319 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G77 MC9",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.8,
+                memory: 12
+            },
+            {
+                name: "Vivo V29 Pro",
+                brand: "vivo",
+                model: "V2254",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2254 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G77 MC9",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.8,
+                memory: 12
+            },
+            {
+                name: "iQOO 12 Pro",
+                brand: "vivo",
+                model: "V2329A",
+                ua: "Mozilla/5.0 (Linux; Android 14; V2329A Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 16
+            },
+            {
+                name: "iQOO 12",
+                brand: "vivo",
+                model: "V2307A",
+                ua: "Mozilla/5.0 (Linux; Android 14; V2307A Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "iQOO 11 Pro",
+                brand: "vivo",
+                model: "V2243A",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2243A Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 16
+            },
+            {
+                name: "iQOO 11",
+                brand: "vivo",
+                model: "V2243A",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2243A Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "iQOO Neo 9 Pro",
+                brand: "vivo",
+                model: "V2339A",
+                ua: "Mozilla/5.0 (Linux; Android 14; V2339A Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G720 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "iQOO Neo 8 Pro",
+                brand: "vivo",
+                model: "V2302A",
+                ua: "Mozilla/5.0 (Linux; Android 13; V2302A Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Oppo Find X7 Ultra",
+                brand: "OPPO",
+                model: "PHY110",
+                ua: "Mozilla/5.0 (Linux; Android 14; PHY110 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 16
+            },
+            {
+                name: "Oppo Find X7",
+                brand: "OPPO",
+                model: "PHZ110",
+                ua: "Mozilla/5.0 (Linux; Android 14; PHZ110 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G720 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Oppo Find X6 Pro",
+                brand: "OPPO",
+                model: "PGEM10",
+                ua: "Mozilla/5.0 (Linux; Android 13; PGEM10 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 16
+            },
+            {
+                name: "Oppo Find X6",
+                brand: "OPPO",
+                model: "PGFM10",
+                ua: "Mozilla/5.0 (Linux; Android 13; PGFM10 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G715 Immortalis",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Oppo Find N3",
+                brand: "OPPO",
+                model: "CPH2499",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2499 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Oppo Reno 11 Pro",
+                brand: "OPPO",
+                model: "CPH2607",
+                ua: "Mozilla/5.0 (Linux; Android 14; CPH2607 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G77 MC9",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.8,
+                memory: 12
+            },
+            {
+                name: "Oppo Reno 10 Pro+",
+                brand: "OPPO",
+                model: "CPH2521",
+                ua: "Mozilla/5.0 (Linux; Android 13; CPH2521 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Oppo Reno 9 Pro+",
+                brand: "OPPO",
+                model: "PGW110",
+                ua: "Mozilla/5.0 (Linux; Android 13; PGW110 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 16
+            },
+            {
+                name: "Oppo Find X5 Pro",
+                brand: "OPPO",
+                model: "CPH2305",
+                ua: "Mozilla/5.0 (Linux; Android 13; CPH2305 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "Oppo Reno 8 Pro+",
+                brand: "OPPO",
+                model: "PFZM10",
+                ua: "Mozilla/5.0 (Linux; Android 13; PFZM10 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC6",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Realme GT 5 Pro",
+                brand: "realme",
+                model: "RMX3888",
+                ua: "Mozilla/5.0 (Linux; Android 14; RMX3888 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Realme GT 5",
+                brand: "realme",
+                model: "RMX3781",
+                ua: "Mozilla/5.0 (Linux; Android 13; RMX3781 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Realme GT Neo 5",
+                brand: "realme",
+                model: "RMX3708",
+                ua: "Mozilla/5.0 (Linux; Android 13; RMX3708 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 880,
+                dpr: 2.75,
+                memory: 16
+            },
+            {
+                name: "Realme GT Neo 3",
+                brand: "realme",
+                model: "RMX3560",
+                ua: "Mozilla/5.0 (Linux; Android 13; RMX3560 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC6",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Realme GT 2 Pro",
+                brand: "realme",
+                model: "RMX3301",
+                ua: "Mozilla/5.0 (Linux; Android 13; RMX3301 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3.5,
+                memory: 12
+            },
+            {
+                name: "Realme 12 Pro+",
+                brand: "realme",
+                model: "RMX3840",
+                ua: "Mozilla/5.0 (Linux; Android 14; RMX3840 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 710",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Realme 11 Pro+",
+                brand: "realme",
+                model: "RMX3740",
+                ua: "Mozilla/5.0 (Linux; Android 13; RMX3740 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G68 MC4",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Realme GT Master",
+                brand: "realme",
+                model: "RMX3363",
+                ua: "Mozilla/5.0 (Linux; Android 13; RMX3363 Build/TP1A.220905.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 642L",
+                screenWidth: 360,
+                screenHeight: 800,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Motorola Edge 50 Ultra",
+                brand: "motorola",
+                model: "XT2401-2",
+                ua: "Mozilla/5.0 (Linux; Android 14; XT2401-2 Build/U1UC34.1-107; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 735",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Motorola Edge 50 Pro",
+                brand: "motorola",
+                model: "XT2403-2",
+                ua: "Mozilla/5.0 (Linux; Android 14; XT2403-2 Build/U1UC34.1-107; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 710",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Motorola Edge 40 Pro",
+                brand: "motorola",
+                model: "XT2301-4",
+                ua: "Mozilla/5.0 (Linux; Android 14; XT2301-4 Build/U1TR34.8-30; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Motorola Razr 40 Ultra",
+                brand: "motorola",
+                model: "XT2321-1",
+                ua: "Mozilla/5.0 (Linux; Android 14; XT2321-1 Build/U1TZ34.8-19; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 360,
+                screenHeight: 880,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Motorola Edge 30 Ultra",
+                brand: "motorola",
+                model: "XT2241-2",
+                ua: "Mozilla/5.0 (Linux; Android 13; XT2241-2 Build/T1SQ33.73-15; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Motorola ThinkPhone",
+                brand: "motorola",
+                model: "XT2309-1",
+                ua: "Mozilla/5.0 (Linux; Android 14; XT2309-1 Build/U1TN34.8-21; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Asus ROG Phone 8 Pro",
+                brand: "asus",
+                model: "ASUS_AI2401_D",
+                ua: "Mozilla/5.0 (Linux; Android 14; ASUS_AI2401_D Build/UKQ1.231003.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 16
+            },
+            {
+                name: "Asus ROG Phone 7 Ultimate",
+                brand: "asus",
+                model: "ASUS_AI2205_D",
+                ua: "Mozilla/5.0 (Linux; Android 14; ASUS_AI2205_D Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 16
+            },
+            {
+                name: "Asus ROG Phone 6",
+                brand: "asus",
+                model: "ASUS_AI2201_B",
+                ua: "Mozilla/5.0 (Linux; Android 13; ASUS_AI2201_B Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Asus Zenfone 10",
+                brand: "asus",
+                model: "ASUS_AI2302",
+                ua: "Mozilla/5.0 (Linux; Android 14; ASUS_AI2302 Build/UKQ1.230924.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Asus Zenfone 9",
+                brand: "asus",
+                model: "ASUS_AI2202",
+                ua: "Mozilla/5.0 (Linux; Android 13; ASUS_AI2202 Build/TKQ1.220829.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Asus ROG Phone 5",
+                brand: "asus",
+                model: "ASUS_I005D",
+                ua: "Mozilla/5.0 (Linux; Android 13; ASUS_I005D Build/TKQ1.220807.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 660",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Sony Xperia 1 VI",
+                brand: "Sony",
+                model: "XQ-EC54",
+                ua: "Mozilla/5.0 (Linux; Android 14; XQ-EC54 Build/69.0.A.2.28; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Sony Xperia 1 V",
+                brand: "Sony",
+                model: "XQ-DQ54",
+                ua: "Mozilla/5.0 (Linux; Android 14; XQ-DQ54 Build/67.1.A.2.194; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 384,
+                screenHeight: 960,
+                dpr: 4,
+                memory: 12
+            },
+            {
+                name: "Sony Xperia 5 V",
+                brand: "Sony",
+                model: "XQ-DE54",
+                ua: "Mozilla/5.0 (Linux; Android 14; XQ-DE54 Build/67.1.A.2.194; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 360,
+                screenHeight: 800,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Sony Xperia 1 IV",
+                brand: "Sony",
+                model: "XQ-CT54",
+                ua: "Mozilla/5.0 (Linux; Android 13; XQ-CT54 Build/64.1.A.0.891; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 384,
+                screenHeight: 960,
+                dpr: 4,
+                memory: 12
+            },
+            {
+                name: "Sony Xperia 5 IV",
+                brand: "Sony",
+                model: "XQ-CQ54",
+                ua: "Mozilla/5.0 (Linux; Android 13; XQ-CQ54 Build/64.1.A.0.891; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 360,
+                screenHeight: 800,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Nothing Phone (2)",
+                brand: "Nothing",
+                model: "A065",
+                ua: "Mozilla/5.0 (Linux; Android 14; A065 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Nothing Phone (1)",
+                brand: "Nothing",
+                model: "A063",
+                ua: "Mozilla/5.0 (Linux; Android 14; A063 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 642L",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 8
+            },
+            {
+                name: "Nothing Phone (2a)",
+                brand: "Nothing",
+                model: "A142",
+                ua: "Mozilla/5.0 (Linux; Android 14; A142 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC4",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Nothing Phone (2a) Plus",
+                brand: "Nothing",
+                model: "A142P",
+                ua: "Mozilla/5.0 (Linux; Android 14; A142P Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC4",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 2.625,
+                memory: 12
+            },
+            {
+                name: "Honor Magic 6 Pro",
+                brand: "HONOR",
+                model: "BVL-AN16",
+                ua: "Mozilla/5.0 (Linux; Android 14; BVL-AN16 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 750",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Honor Magic 5 Pro",
+                brand: "HONOR",
+                model: "PGT-AN10",
+                ua: "Mozilla/5.0 (Linux; Android 13; PGT-AN10 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Honor Magic V2",
+                brand: "HONOR",
+                model: "VER-AN10",
+                ua: "Mozilla/5.0 (Linux; Android 13; VER-AN10 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 16
+            },
+            {
+                name: "Honor 100 Pro",
+                brand: "HONOR",
+                model: "MAA-AN10",
+                ua: "Mozilla/5.0 (Linux; Android 14; MAA-AN10 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 740",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Honor 90 Pro",
+                brand: "HONOR",
+                model: "REP-AN00",
+                ua: "Mozilla/5.0 (Linux; Android 13; REP-AN00 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Honor Magic 4 Pro",
+                brand: "HONOR",
+                model: "LGE-AN10",
+                ua: "Mozilla/5.0 (Linux; Android 13; LGE-AN10 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 730",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 8
+            },
+            {
+                name: "Honor 90",
+                brand: "HONOR",
+                model: "REA-NX9",
+                ua: "Mozilla/5.0 (Linux; Android 13; REA-NX9 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 644",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Honor 70",
+                brand: "HONOR",
+                model: "FNE-AN00",
+                ua: "Mozilla/5.0 (Linux; Android 12; FNE-AN00 Build/SKQ1.211006.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "Qualcomm",
+                gpuRenderer: "Adreno (TM) 642L",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Infinix Note 30 VIP",
+                brand: "Infinix",
+                model: "Infinix X6739",
+                ua: "Mozilla/5.0 (Linux; Android 13; Infinix X6739 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G77 MC9",
+                screenWidth: 393,
+                screenHeight: 895,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Infinix Zero 30 5G",
+                brand: "Infinix",
+                model: "Infinix X6731",
+                ua: "Mozilla/5.0 (Linux; Android 13; Infinix X6731 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G77 MC9",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Infinix GT 10 Pro",
+                brand: "Infinix",
+                model: "Infinix X6739",
+                ua: "Mozilla/5.0 (Linux; Android 13; Infinix X6739 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G77 MC9",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Infinix GT 20 Pro",
+                brand: "Infinix",
+                model: "Infinix X6871",
+                ua: "Mozilla/5.0 (Linux; Android 14; Infinix X6871 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC6",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Infinix Zero Ultra",
+                brand: "Infinix",
+                model: "Infinix X6820",
+                ua: "Mozilla/5.0 (Linux; Android 12; Infinix X6820 Build/SP1A.210812.016; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G68 MC4",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 8
+            },
+            {
+                name: "Tecno Camon 30 Premier",
+                brand: "Tecno",
+                model: "Tecno CL9",
+                ua: "Mozilla/5.0 (Linux; Android 14; Tecno CL9 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G610 MC6",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Tecno Phantom X2 Pro",
+                brand: "Tecno",
+                model: "Tecno AD9",
+                ua: "Mozilla/5.0 (Linux; Android 13; Tecno AD9 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G710 MC10",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            },
+            {
+                name: "Tecno Phantom V Fold",
+                brand: "Tecno",
+                model: "Tecno AD10",
+                ua: "Mozilla/5.0 (Linux; Android 13; Tecno AD10 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G710 MC10",
+                screenWidth: 412,
+                screenHeight: 915,
+                dpr: 3,
+                memory: 12
+            },
+            {
+                name: "Tecno Pova 6 Pro",
+                brand: "Tecno",
+                model: "Tecno LI9",
+                ua: "Mozilla/5.0 (Linux; Android 14; Tecno LI9 Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.6723.102 Mobile Safari/537.36",
+                gpuVendor: "ARM",
+                gpuRenderer: "Mali-G57 MC2",
+                screenWidth: 393,
+                screenHeight: 873,
+                dpr: 2.75,
+                memory: 12
+            }
+        ];
+
+        function getActiveDeviceProfile() {
+            const actualChromeVer = window.__FUSION_CHROME_VERSION__ || ((navigator.userAgent || '').match(/Chrome\/([0-9.]+)/) || [])[1] || '130.0.6723.102';
+            if (window.__FUSION_DEVICE__ && window.__FUSION_DEVICE__.userAgent) {
+                const jd = window.__FUSION_DEVICE__;
+                const normalizedUa = String(jd.userAgent).replace(/Chrome\/[0-9.]+/g, 'Chrome/' + actualChromeVer);
+                return {
+                    name: jd.name || 'Samsung Galaxy S24 Ultra',
+                    brand: jd.brand || 'Samsung',
+                    model: jd.model || 'SM-S928B',
+                    ua: normalizedUa,
+                    gpuVendor: jd.vendor || 'Qualcomm',
+                    gpuRenderer: jd.renderer || 'Adreno (TM) 750',
+                    screenWidth: jd.screenWidth ? Math.round(jd.screenWidth / (jd.pixelRatio || 3)) : 384,
+                    screenHeight: jd.screenHeight ? Math.round(jd.screenHeight / (jd.pixelRatio || 3)) : 832,
+                    dpr: jd.pixelRatio || 3,
+                    memory: jd.memory || 12
+                };
+            }
+            const seed = getWalletSeed();
+            const picked = DEVICE_PROFILES[seed % DEVICE_PROFILES.length];
+            return Object.assign({}, picked, {
+                ua: String(picked.ua).replace(/Chrome\/[0-9.]+/g, 'Chrome/' + actualChromeVer)
+            });
         }
 
         // 1. Scrub navigator.webdriver
@@ -103,8 +1867,9 @@
             } catch (_) {}
         }
 
-        // 4. Dynamic Seeded Micro-Noise for 2D Canvas (Unique Fingerprint per Wallet)
-        try {
+        // 4. Dynamic Seeded Micro-Noise for 2D Canvas (Unique Fingerprint per Wallet, skip double-noise if document_start already hooked)
+        if (!window.__FUSION_CANVAS_STEALTH__) try {
+            window.__FUSION_CANVAS_STEALTH__ = true;
             const origGetImageData = CanvasRenderingContext2D.prototype.getImageData;
             CanvasRenderingContext2D.prototype.getImageData = function(x, y, w, h) {
                 const imgData = origGetImageData.apply(this, arguments);
@@ -164,21 +1929,23 @@
         } catch (_) {}
 
         // 5. Context-Aware WebGL Spoofing (Mobile vs Desktop)
-        try {
+        if (!window.__FUSION_WEBGL_STEALTH__) try {
+            window.__FUSION_WEBGL_STEALTH__ = true;
             const hookWebGL = (proto) => {
                 if (!proto || !proto.getParameter) return;
                 const origGetParam = proto.getParameter;
                 proto.getParameter = function(param) {
                     const isDesktopMode = (navigator.userAgent && navigator.userAgent.includes('Windows')) || (window.innerWidth >= 1200);
+                    const devProfile = getActiveDeviceProfile();
                     // UNMASKED_VENDOR_WEBGL (0x9245)
                     if (param === 0x9245 || param === 37445) {
-                        return isDesktopMode ? 'Google Inc. (NVIDIA)' : 'ARM';
+                        return isDesktopMode ? 'Google Inc. (NVIDIA)' : devProfile.gpuVendor;
                     }
                     // UNMASKED_RENDERER_WEBGL (0x9246)
                     if (param === 0x9246 || param === 37446) {
                         return isDesktopMode
                             ? 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'
-                            : 'Mali-G77 MC9';
+                            : devProfile.gpuRenderer;
                     }
                     return origGetParam.apply(this, arguments);
                 };
@@ -252,28 +2019,102 @@
             };
         } catch (_) {}
 
-        // 8. Hardware Concurrency, Device Memory & Platform Consistency
+        // 8. Hardware Concurrency, Device Memory & Full Identity Parity (Deterministic per Wallet)
         try {
-            const isDesktop = (navigator.userAgent && (navigator.userAgent.includes('Windows') || navigator.userAgent.includes('Macintosh')));
+            window.__FUSION_GET_ACTIVE_DEVICE_PROFILE__ = getActiveDeviceProfile;
+            const isDesktop = Boolean(window.__FUSION_IS_DESKTOP__) || (navigator.userAgent && (navigator.userAgent.includes('Windows') || navigator.userAgent.includes('Macintosh')));
+            const activeChromeVer = window.__FUSION_CHROME_VERSION__ || ((navigator.userAgent || '').match(/Chrome\/([0-9.]+)/) || [])[1] || '130.0.6723.102';
+            const activeChromeMajor = activeChromeVer.split('.')[0] || '130';
+
             Object.defineProperty(navigator, 'hardwareConcurrency', {
                 get: () => 8,
                 configurable: true
             });
             Object.defineProperty(navigator, 'deviceMemory', {
-                get: () => 8,
+                get: () => isDesktop ? 8 : (getActiveDeviceProfile().memory || 8),
                 configurable: true
             });
+
             if (isDesktop) {
-                const isMac = navigator.userAgent.includes('Macintosh');
+                const isMac = navigator.userAgent && navigator.userAgent.includes('Macintosh');
                 Object.defineProperty(navigator, 'platform', {
                     get: () => isMac ? 'MacIntel' : 'Win32',
                     configurable: true
                 });
+                Object.defineProperty(screen, 'width', { get: () => 1920, configurable: true });
+                Object.defineProperty(screen, 'height', { get: () => 1080, configurable: true });
+                Object.defineProperty(screen, 'availWidth', { get: () => 1920, configurable: true });
+                Object.defineProperty(screen, 'availHeight', { get: () => 1040, configurable: true });
+                Object.defineProperty(window, 'devicePixelRatio', { get: () => 1, configurable: true });
+                if (navigator.userAgentData) {
+                    const desktopBrands = [
+                        { brand: 'Chromium', version: activeChromeMajor },
+                        { brand: 'Google Chrome', version: activeChromeMajor },
+                        { brand: 'Not_A Brand', version: '24' }
+                    ];
+                    try { Object.defineProperty(navigator.userAgentData, 'brands', { get: () => desktopBrands, configurable: true }); } catch (_) {}
+                    try { Object.defineProperty(navigator.userAgentData, 'mobile', { get: () => false, configurable: true }); } catch (_) {}
+                    try { Object.defineProperty(navigator.userAgentData, 'platform', { get: () => isMac ? 'macOS' : 'Windows', configurable: true }); } catch (_) {}
+                    navigator.userAgentData.getHighEntropyValues = () => Promise.resolve({
+                        architecture: 'x86',
+                        bitness: '64',
+                        brands: desktopBrands,
+                        fullVersionList: desktopBrands.map(b => ({ brand: b.brand, version: activeChromeVer })),
+                        model: '',
+                        platform: isMac ? 'macOS' : 'Windows',
+                        platformVersion: isMac ? '14.0.0' : '10.0.0',
+                        mobile: false,
+                        uaFullVersion: activeChromeVer
+                    });
+                }
             } else {
                 Object.defineProperty(navigator, 'platform', {
                     get: () => 'Linux armv8l',
                     configurable: true
                 });
+                // Hanya override navigator.userAgent jika belum diset konsisten oleh native Java WebSettings
+                if (!window.__FUSION_DEVICE__) {
+                    Object.defineProperty(navigator, 'userAgent', {
+                        get: () => getActiveDeviceProfile().ua,
+                        configurable: true
+                    });
+                    Object.defineProperty(navigator, 'appVersion', {
+                        get: () => {
+                            const ua = getActiveDeviceProfile().ua;
+                            return ua.substring(ua.indexOf('/') + 1);
+                        },
+                        configurable: true
+                    });
+                }
+                if (navigator.userAgentData) {
+                    const mobileBrands = [
+                        { brand: 'Chromium', version: activeChromeMajor },
+                        { brand: 'Google Chrome', version: activeChromeMajor },
+                        { brand: 'Not_A Brand', version: '24' }
+                    ];
+                    try { Object.defineProperty(navigator.userAgentData, 'brands', { get: () => mobileBrands, configurable: true }); } catch (_) {}
+                    try { Object.defineProperty(navigator.userAgentData, 'mobile', { get: () => true, configurable: true }); } catch (_) {}
+                    try { Object.defineProperty(navigator.userAgentData, 'platform', { get: () => 'Android', configurable: true }); } catch (_) {}
+                    navigator.userAgentData.getHighEntropyValues = (hints) => {
+                        const p = getActiveDeviceProfile();
+                        return Promise.resolve({
+                            architecture: 'arm64',
+                            bitness: '64',
+                            brands: mobileBrands,
+                            fullVersionList: mobileBrands.map(b => ({ brand: b.brand, version: activeChromeVer })),
+                            model: p.model,
+                            platform: 'Android',
+                            platformVersion: '14.0.0',
+                            mobile: true,
+                            uaFullVersion: activeChromeVer
+                        });
+                    };
+                }
+                Object.defineProperty(screen, 'width', { get: () => getActiveDeviceProfile().screenWidth, configurable: true });
+                Object.defineProperty(screen, 'height', { get: () => getActiveDeviceProfile().screenHeight, configurable: true });
+                Object.defineProperty(screen, 'availWidth', { get: () => getActiveDeviceProfile().screenWidth, configurable: true });
+                Object.defineProperty(screen, 'availHeight', { get: () => getActiveDeviceProfile().screenHeight, configurable: true });
+                Object.defineProperty(window, 'devicePixelRatio', { get: () => getActiveDeviceProfile().dpr, configurable: true });
             }
         } catch (_) {}
     })();
@@ -2416,6 +4257,12 @@
             } catch (e) {
                 return { success: false, error: e.message };
             }
+        },
+        deviceProfile: () => {
+            if (typeof window.__FUSION_GET_ACTIVE_DEVICE_PROFILE__ === 'function') {
+                return window.__FUSION_GET_ACTIVE_DEVICE_PROFILE__();
+            }
+            return window.__FUSION_ACTIVE_DEVICE_PROFILE__ || null;
         },
         haptic: (ms = 50) => {
             return window.Fusion.reflect('android.os.Vibrator', 'vibrate', [ms]);

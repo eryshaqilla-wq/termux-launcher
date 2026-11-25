@@ -25,8 +25,30 @@ send_cmd() {
 
     if [ -n "$py_cmd" ]; then
         "$py_cmd" -c "
-import socket, sys
-payload = sys.argv[1].encode() + b'\n'
+import json, os, socket, sys, urllib.request
+raw_cmd = sys.argv[1]
+remote = os.environ.get('FUSION_REMOTE', '').strip()
+if remote:
+    host_port = remote.replace('http://', '').replace('https://', '').split('/')[0]
+    if ':' not in host_port:
+        host_port = host_port + ':8765'
+    try:
+        req = urllib.request.Request(
+            f'http://{host_port}/ipc',
+            data=json.dumps({'cmd': raw_cmd}).encode(),
+            headers={'Content-Type': 'application/json'}
+        )
+        with urllib.request.urlopen(req, timeout=4.0) as r:
+            body = json.loads(r.read().decode(errors='ignore') or '{}')
+            out = body.get('result', '')
+            if out:
+                print(out)
+        sys.exit(0)
+    except Exception as e:
+        print(f'ERROR: Remote Wi-Fi IPC ({host_port}) failed: {e}', file=sys.stderr)
+        sys.exit(1)
+
+payload = raw_cmd.encode() + b'\n'
 targets = ['\0termux_ipc', '/var/tmp/termux_ipc.sock', '/tmp/termux_ipc.sock']
 resp = ''
 for target in targets:
@@ -772,6 +794,11 @@ for t in tabs:
         agy-stop|stop-agy|stop|--stop)
             send_cmd "WEBVIEW_EVAL window.AgyBridge && window.AgyBridge.stop && window.AgyBridge.stop();"
             echo "[termux-ipc] Perintah STOP darurat AGY telah dikirim!"
+            return 0
+            ;;
+        perm|permissions|--perm)
+            shift
+            send_cmd "WEBVIEW_PERMISSIONS $*"
             return 0
             ;;
         tg-join|telegram-join|join-tg|--tg-join)

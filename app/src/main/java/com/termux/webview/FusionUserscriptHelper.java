@@ -431,11 +431,15 @@ public class FusionUserscriptHelper {
             try {
                 List<String> matches = parseScriptMatches(f);
                 if (isUrlMatched(currentUrl, matches)) {
-                    byte[] bytes = new byte[(int) f.length()];
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    byte[] buf = new byte[8192];
                     try (FileInputStream fis = new FileInputStream(f)) {
-                        fis.read(bytes);
+                        int nRead;
+                        while ((nRead = fis.read(buf)) != -1) {
+                            baos.write(buf, 0, nRead);
+                        }
                     }
-                    String scriptCode = new String(bytes, StandardCharsets.UTF_8);
+                    String scriptCode = baos.toString(StandardCharsets.UTF_8.name());
                     String sName = parseScriptName(f);
                     String polyfill = getUserscriptPolyfill(sName, "1.0");
                     String wrapped = "(function() { try {\n" + polyfill + "\n" + scriptCode + "\n} catch(err) { console.error('[Userscript Error " + f.getName() + "]:', err); } })();";
@@ -460,7 +464,7 @@ public class FusionUserscriptHelper {
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(8000);
                 conn.setReadTimeout(10000);
-                conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36");
+                conn.setRequestProperty("User-Agent", FusionProfileManager.getEffectiveUserAgent(context, null, false));
 
                 if (conn.getResponseCode() != 200) return;
 

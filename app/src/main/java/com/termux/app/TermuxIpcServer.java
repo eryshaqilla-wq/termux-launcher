@@ -88,10 +88,8 @@ public class TermuxIpcServer {
             this.mSocket = localSocket;
         }
 
-        /* JADX WARN: Code duplicated, block: B:71:0x0172 A[Catch: Throwable -> 0x0188, TryCatch #0 {Throwable -> 0x0188, blocks: (B:2:0x0000, B:3:0x0016, B:5:0x001c, B:8:0x0027, B:10:0x002f, B:11:0x003c, B:13:0x0044, B:14:0x0064, B:16:0x006c, B:72:0x0175, B:17:0x0077, B:19:0x007f, B:20:0x0089, B:22:0x0091, B:23:0x0098, B:25:0x00a0, B:27:0x00ab, B:71:0x0172, B:28:0x00b1, B:30:0x00b9, B:32:0x00c4, B:33:0x00ca, B:35:0x00d2, B:37:0x00d8, B:38:0x00de, B:40:0x00e6, B:42:0x00ec, B:43:0x00f2, B:45:0x00fa, B:50:0x0112, B:52:0x011a, B:57:0x0132, B:59:0x013a, B:64:0x0152, B:66:0x015a, B:68:0x0162, B:70:0x0168, B:61:0x0142, B:63:0x0148, B:54:0x0122, B:56:0x0128, B:47:0x0102, B:49:0x0108, B:73:0x0183), top: B:76:0x0000 }] */
         @Override // java.lang.Thread, java.lang.Runnable
         public void run() {
-            TermuxActivity activity;
             try {
                 BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(this.mSocket.getInputStream()));
                 OutputStream outputStream = this.mSocket.getOutputStream();
@@ -101,15 +99,33 @@ public class TermuxIpcServer {
                         this.mSocket.close();
                         return;
                     }
-                    String strTrim = line.trim();
-                    if (!strTrim.isEmpty()) {
-                        if (strTrim.equalsIgnoreCase("PING")) {
-                            outputStream.write("PONG\n".getBytes());
-                            outputStream.flush();
-                        } else if (strTrim.equalsIgnoreCase("CLIP_GET")) {
-                            outputStream.write((TermuxIpcServer.getClipboard() + "\n").getBytes());
-                            outputStream.flush();
-                        } else {
+                    String resp = TermuxIpcServer.processCommand(line);
+                    if (resp != null && !resp.isEmpty()) {
+                        outputStream.write(resp.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        outputStream.flush();
+                    }
+                }
+            } catch (Throwable unused) {
+            }
+        }
+    }
+
+    public static String processCommand(String line) {
+        if (line == null) return "";
+        String strTrim = line.trim();
+        if (strTrim.isEmpty()) return "";
+        try {
+            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+            OutputStream outputStream = baos;
+            TermuxActivity activity;
+            do {
+                if (strTrim.equalsIgnoreCase("PING")) {
+                    outputStream.write("PONG\n".getBytes());
+                    outputStream.flush();
+                } else if (strTrim.equalsIgnoreCase("CLIP_GET")) {
+                    outputStream.write((TermuxIpcServer.getClipboard() + "\n").getBytes());
+                    outputStream.flush();
+                } else {
                             if (strTrim.startsWith("CLIP_SET ")) {
                                 TermuxIpcServer.setClipboard(strTrim.substring(9));
                             } else if (strTrim.startsWith("TOAST ")) {
@@ -773,14 +789,53 @@ public class TermuxIpcServer {
                                 outputStream.flush();
                                 continue;
                             } else if (strTrim.startsWith("WEBVIEW_WALLET_SET ") || strTrim.startsWith("WEBVIEW_SET_WALLET ")) {
-                                String wName = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                String rest = strTrim.substring(strTrim.indexOf(" ") + 1).trim();
+                                String[] wParts = rest.split("\\s+");
+                                String wName = wParts.length > 0 ? wParts[0] : "";
+                                String wAddr = wParts.length > 1 ? wParts[1] : null;
+                                String wChain = wParts.length > 2 ? wParts[2] : null;
                                 com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
                                 if (mgr != null) {
-                                    boolean ok = mgr.switchWalletByName(wName);
+                                    boolean ok = (wAddr != null && !wAddr.isEmpty())
+                                            ? mgr.switchWalletDirect(wName, wAddr, wChain)
+                                            : mgr.switchWalletByName(wName);
                                     outputStream.write((ok ? "OK\n" : "ERROR: Wallet not found\n").getBytes());
                                 } else {
                                     outputStream.write("ERROR: Manager not ready\n".getBytes());
                                 }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WALLET_TAB ")) {
+                                String[] wParts = strTrim.substring(19).trim().split("\\s+");
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && wParts.length >= 3) {
+                                    try {
+                                        int tabId = Integer.parseInt(wParts[0]);
+                                        String wName = wParts[1];
+                                        String wAddr = wParts[2];
+                                        String wChain = wParts.length > 3 ? wParts[3] : null;
+                                        boolean ok = mgr.switchWalletDirectOnTab(tabId, wName, wAddr, wChain);
+                                        outputStream.write((ok ? "OK\n" : "ERROR: Tab not found\n").getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid arguments (tabId name address [chain])\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WALLET_DAEMON ")) {
+                                String ep = strTrim.substring(22).trim();
+                                if ("local".equalsIgnoreCase(ep) || "default".equalsIgnoreCase(ep) || "reset".equalsIgnoreCase(ep)) {
+                                    com.termux.webview.GhostBridgeInterface.setWalletDaemonEndpoint("127.0.0.1", 3333);
+                                } else {
+                                    String clean = ep.replace("http://", "").replace("https://", "").split("/")[0];
+                                    String[] hp = clean.split(":");
+                                    String h = hp[0].trim();
+                                    int p = (hp.length > 1) ? Integer.parseInt(hp[1].trim()) : 3333;
+                                    com.termux.webview.GhostBridgeInterface.setWalletDaemonEndpoint(h, p);
+                                }
+                                outputStream.write(("{\"status\":\"ok\",\"host\":" + org.json.JSONObject.quote(com.termux.webview.GhostBridgeInterface.sWalletDaemonHost) + ",\"port\":" + com.termux.webview.GhostBridgeInterface.sWalletDaemonPort + "}\n").getBytes());
                                 outputStream.flush();
                                 continue;
                             } else if (strTrim.equals("WEBVIEW_WALLET_NEXT")) {
@@ -897,6 +952,344 @@ public class TermuxIpcServer {
                                 outputStream.write("OK\n".getBytes());
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.startsWith("WEBVIEW_KILL_TAB_ID ")) {
+                                String idStr = strTrim.substring(20).trim();
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    try {
+                                        mgr.killTabById(Integer.parseInt(idStr));
+                                        outputStream.write("OK\n".getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_EVAL_TAB ")) {
+                                String rest = strTrim.substring(17).trim();
+                                int sp = rest.indexOf(' ');
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && sp > 0) {
+                                    try {
+                                        int tabId = Integer.parseInt(rest.substring(0, sp).trim());
+                                        String js = rest.substring(sp + 1);
+                                        String res = mgr.evaluateJsOnTabSync(tabId, js, 5000);
+                                        outputStream.write(((res != null ? res : "null") + "\n").getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid arguments (tabId js)\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_ENGINE_RELOAD")) {
+                                com.termux.webview.FusionWebViewManager.clearAssetScriptCache();
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && mgr.mActivity != null) {
+                                    mgr.mActivity.runOnUiThread(() -> {
+                                        if (mgr.mTabList != null) {
+                                            for (Object obj : mgr.mTabList) {
+                                                if (obj instanceof com.termux.webview.FusionTab) {
+                                                    com.termux.webview.FusionTab t = (com.termux.webview.FusionTab) obj;
+                                                    if (t.mWebView != null) mgr.injectScripts(t.mWebView);
+                                                }
+                                            }
+                                        }
+                                    });
+                                }
+                                outputStream.write("OK\n".getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_NET_BLOCK ")) {
+                                String pattern = strTrim.substring(18).trim();
+                                boolean ok = com.termux.webview.FusionNetworkInterceptor.addBlockRule(pattern);
+                                outputStream.write((ok ? "OK\n" : "ERROR\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_NET_MIRROR ")) {
+                                String rest = strTrim.substring(19).trim();
+                                int sp = rest.indexOf(' ');
+                                boolean ok = (sp > 0) && com.termux.webview.FusionNetworkInterceptor.addLocalMirrorRule(rest.substring(0, sp).trim(), rest.substring(sp + 1).trim());
+                                outputStream.write((ok ? "OK\n" : "ERROR\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_NET_MOCK ")) {
+                                try {
+                                    org.json.JSONObject jo = new org.json.JSONObject(strTrim.substring(17).trim());
+                                    boolean ok = com.termux.webview.FusionNetworkInterceptor.addMockRule(
+                                        jo.getString("pattern"),
+                                        jo.optString("body", ""),
+                                        jo.optInt("statusCode", 200),
+                                        jo.optString("mimeType", "application/json"),
+                                        jo.optString("headers", "{}")
+                                    );
+                                    outputStream.write((ok ? "OK\n" : "ERROR\n").getBytes());
+                                } catch (Exception e) {
+                                    outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_NET_CLEAR")) {
+                                com.termux.webview.FusionNetworkInterceptor.clearRules();
+                                outputStream.write("OK\n".getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_STRICT_SSL ")) {
+                                String arg = strTrim.substring(19).trim();
+                                com.termux.webview.FusionWebViewClient.sStrictSslCheck = "on".equalsIgnoreCase(arg) || "true".equalsIgnoreCase(arg) || "1".equals(arg);
+                                outputStream.write("OK\n".getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_PERM") || strTrim.equals("WEBVIEW_PERMISSIONS") || strTrim.startsWith("WEBVIEW_PERM ") || strTrim.startsWith("WEBVIEW_PERMISSIONS ")) {
+                                String rest = "";
+                                if (strTrim.startsWith("WEBVIEW_PERMISSIONS ")) rest = strTrim.substring(20).trim();
+                                else if (strTrim.startsWith("WEBVIEW_PERM ")) rest = strTrim.substring(13).trim();
+                                String[] p = rest.isEmpty() ? new String[0] : rest.split("\\s+");
+                                if (p.length >= 2) {
+                                    String scope = p[0].toLowerCase(java.util.Locale.ROOT);
+                                    boolean enable = "on".equalsIgnoreCase(p[1]) || "true".equalsIgnoreCase(p[1]) || "1".equals(p[1]);
+                                    if ("geo".equals(scope) || "geolocation".equals(scope) || "gps".equals(scope) || "all".equals(scope)) {
+                                        com.termux.webview.FusionWebChromeClient.sAllowGeolocation = enable;
+                                    }
+                                    if ("drm".equals(scope) || "media-id".equals(scope) || "sensitive".equals(scope) || "all".equals(scope)) {
+                                        com.termux.webview.FusionWebChromeClient.sAllowDrmId = enable;
+                                    }
+                                    if ("cam".equals(scope) || "camera".equals(scope) || "video".equals(scope) || "sensitive".equals(scope) || "all".equals(scope)) {
+                                        com.termux.webview.FusionWebChromeClient.sAllowCamera = enable;
+                                    }
+                                    if ("mic".equals(scope) || "microphone".equals(scope) || "audio".equals(scope) || "sensitive".equals(scope) || "all".equals(scope)) {
+                                        com.termux.webview.FusionWebChromeClient.sAllowMic = enable;
+                                    }
+                                    if ("sensitive".equals(scope) || "all".equals(scope)) {
+                                        com.termux.webview.FusionWebChromeClient.sAllowSensitivePermissions = enable;
+                                    }
+                                } else if (p.length == 1 && ("on".equalsIgnoreCase(p[0]) || "off".equalsIgnoreCase(p[0]) || "true".equalsIgnoreCase(p[0]) || "false".equalsIgnoreCase(p[0]))) {
+                                    boolean enable = "on".equalsIgnoreCase(p[0]) || "true".equalsIgnoreCase(p[0]);
+                                    com.termux.webview.FusionWebChromeClient.sAllowGeolocation = enable;
+                                    com.termux.webview.FusionWebChromeClient.sAllowSensitivePermissions = enable;
+                                    com.termux.webview.FusionWebChromeClient.sAllowDrmId = enable;
+                                    com.termux.webview.FusionWebChromeClient.sAllowCamera = enable;
+                                    com.termux.webview.FusionWebChromeClient.sAllowMic = enable;
+                                }
+                                outputStream.write(("{\"geo\":" + com.termux.webview.FusionWebChromeClient.sAllowGeolocation
+                                        + ",\"drm\":" + com.termux.webview.FusionWebChromeClient.sAllowDrmId
+                                        + ",\"cam\":" + com.termux.webview.FusionWebChromeClient.sAllowCamera
+                                        + ",\"mic\":" + com.termux.webview.FusionWebChromeClient.sAllowMic
+                                        + ",\"sensitive\":" + com.termux.webview.FusionWebChromeClient.sAllowSensitivePermissions + "}\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_CDP_ON")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    int port = mgr.setDevCdpEnabled(true, false);
+                                    outputStream.write(("{\"status\":\"ok\",\"cdp\":true,\"port\":" + port + "}\n").getBytes());
+                                } else {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"Manager not ready\"}\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_CDP_OFF")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    mgr.setDevCdpEnabled(false, false);
+                                    outputStream.write("{\"status\":\"ok\",\"cdp\":false}\n".getBytes());
+                                } else {
+                                    outputStream.write("{\"status\":\"error\",\"message\":\"Manager not ready\"}\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_CDP_INFO")) {
+                                boolean running = com.termux.webview.FusionCdpBridge.isRunning();
+                                int port = com.termux.webview.FusionCdpBridge.getBoundPort();
+                                outputStream.write(("{\"running\":" + running + ",\"port\":" + port + ",\"pid\":" + android.os.Process.myPid() + "}\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_TOUCH_TAB ")) {
+                                String[] parts = strTrim.substring(18).trim().split("[,\\s]+");
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && parts.length >= 3) {
+                                    try {
+                                        int tabId = Integer.parseInt(parts[0]);
+                                        float x = Float.parseFloat(parts[1]);
+                                        float y = Float.parseFloat(parts[2]);
+                                        boolean ok = mgr.dispatchNativeTouchOnTab(tabId, x, y);
+                                        outputStream.write((ok ? "OK\n" : "ERROR: Tab not found\n").getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid arguments (tabId x y)\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_SWIPE_TAB ")) {
+                                String[] parts = strTrim.substring(18).trim().split("\\s+");
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && parts.length >= 5) {
+                                    try {
+                                        int tabId = Integer.parseInt(parts[0]);
+                                        float x1 = Float.parseFloat(parts[1]);
+                                        float y1 = Float.parseFloat(parts[2]);
+                                        float x2 = Float.parseFloat(parts[3]);
+                                        float y2 = Float.parseFloat(parts[4]);
+                                        int dur = parts.length >= 6 ? Integer.parseInt(parts[5]) : 300;
+                                        boolean ok = mgr.dispatchNativeSwipeOnTab(tabId, x1, y1, x2, y2, dur);
+                                        outputStream.write((ok ? "OK\n" : "ERROR: Tab not found\n").getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid arguments (tabId x1 y1 x2 y2 [dur])\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_SCREENSHOT_TAB ")) {
+                                String rest = strTrim.substring(23).trim();
+                                int sp = rest.indexOf(' ');
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && sp > 0) {
+                                    try {
+                                        int tabId = Integer.parseInt(rest.substring(0, sp).trim());
+                                        String outPath = rest.substring(sp + 1).trim();
+                                        String saved = mgr.captureTabScreenshot(tabId, outPath);
+                                        outputStream.write(((saved != null ? saved : "ERROR: Failed") + "\n").getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid arguments (tabId path)\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_KEEPALIVE_TAB ")) {
+                                String[] parts = strTrim.substring(22).trim().split("\\s+");
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && parts.length >= 2) {
+                                    try {
+                                        int tabId = Integer.parseInt(parts[0]);
+                                        boolean keep = "on".equalsIgnoreCase(parts[1]) || "true".equalsIgnoreCase(parts[1]) || "1".equals(parts[1]);
+                                        boolean ok = mgr.setTabKeepAlive(tabId, keep);
+                                        outputStream.write((ok ? "OK\n" : "ERROR: Tab not found\n").getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid arguments (tabId on|off)\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_PROFILE_CLEAR ")) {
+                                String prof = strTrim.substring(22).trim();
+                                com.termux.webview.FusionProfileManager.clearProfileData(TermuxIpcServer.getActivity(), prof);
+                                outputStream.write("OK\n".getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_PROFILE_WIPE ")) {
+                                String prof = strTrim.substring(21).trim();
+                                com.termux.webview.FusionProfileManager.wipeProfileCompletely(TermuxIpcServer.getActivity(), prof);
+                                outputStream.write("OK\n".getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WIFI_ON")) {
+                                String rest = strTrim.length() > 15 ? strTrim.substring(15).trim() : "";
+                                int port = com.termux.webview.FusionWifiRemoteServer.DEFAULT_PORT;
+                                boolean saveAuto = true;
+                                for (String tok : rest.split("\\s+")) {
+                                    if (tok.isEmpty()) continue;
+                                    if ("temp".equalsIgnoreCase(tok) || "no-autostart".equalsIgnoreCase(tok) || "--no-autostart".equalsIgnoreCase(tok)) {
+                                        saveAuto = false;
+                                    } else {
+                                        try { port = Integer.parseInt(tok); } catch (Exception ignored) {}
+                                    }
+                                }
+                                JSONObject st = com.termux.webview.FusionWifiRemoteServer.start(port);
+                                if (saveAuto) {
+                                    setWifiMarker("wifi_autostart", String.valueOf(port));
+                                }
+                                try { st.put("autostart", readWifiMarker("wifi_autostart") != null); } catch (Exception ignored) {}
+                                outputStream.write((st.toString() + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_WIFI_OFF")) {
+                                com.termux.webview.FusionWifiRemoteServer.stop();
+                                setWifiMarker("wifi_autostart", null);
+                                setWifiMarker("wifi_cdp_autostart", null);
+                                outputStream.write("{\"status\":\"ok\",\"running\":false,\"autostart\":false}\n".getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WIFI_AUTOSTART")) {
+                                String arg = strTrim.length() > 22 ? strTrim.substring(22).trim().toLowerCase(java.util.Locale.ROOT) : "status";
+                                if (arg.equals("on") || arg.equals("true") || arg.equals("1")) {
+                                    int p = com.termux.webview.FusionWifiRemoteServer.isRunning()
+                                            ? com.termux.webview.FusionWifiRemoteServer.getPort()
+                                            : com.termux.webview.FusionWifiRemoteServer.DEFAULT_PORT;
+                                    setWifiMarker("wifi_autostart", String.valueOf(p));
+                                } else if (arg.equals("off") || arg.equals("false") || arg.equals("0")) {
+                                    setWifiMarker("wifi_autostart", null);
+                                    setWifiMarker("wifi_cdp_autostart", null);
+                                }
+                                boolean autoOn = readWifiMarker("wifi_autostart") != null;
+                                boolean cdpAutoOn = readWifiMarker("wifi_cdp_autostart") != null;
+                                outputStream.write(("{\"status\":\"ok\",\"wifiAutostart\":" + autoOn + ",\"cdpLanAutostart\":" + cdpAutoOn + "}\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WIFI_CDP_AUTOSTART")) {
+                                String arg = strTrim.length() > 26 ? strTrim.substring(26).trim().toLowerCase(java.util.Locale.ROOT) : "status";
+                                if (arg.equals("on") || arg.equals("true") || arg.equals("1")) {
+                                    int cp = com.termux.webview.FusionCdpBridge.isLanRunning() ? com.termux.webview.FusionCdpBridge.getLanBoundPort() : 9223;
+                                    setWifiMarker("wifi_cdp_autostart", String.valueOf(cp));
+                                } else if (arg.equals("off") || arg.equals("false") || arg.equals("0")) {
+                                    setWifiMarker("wifi_cdp_autostart", null);
+                                }
+                                boolean cdpAutoOn = readWifiMarker("wifi_cdp_autostart") != null;
+                                outputStream.write(("{\"status\":\"ok\",\"cdpLanAutostart\":" + cdpAutoOn + "}\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.equals("WEBVIEW_WIFI_STATUS")) {
+                                JSONObject st = com.termux.webview.FusionWifiRemoteServer.getStatusJson();
+                                try {
+                                    st.put("wifiAutostart", readWifiMarker("wifi_autostart") != null);
+                                    st.put("cdpLanAutostart", readWifiMarker("wifi_cdp_autostart") != null);
+                                } catch (Exception ignored) {}
+                                outputStream.write((st.toString() + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_WIFI_CDP ")) {
+                                String arg = strTrim.substring(17).trim();
+                                boolean on = "on".equalsIgnoreCase(arg) || "true".equalsIgnoreCase(arg) || "1".equals(arg);
+                                if (on) {
+                                    com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                    if (mgr != null) mgr.setDevCdpEnabled(true, false);
+                                    int lanPort = com.termux.webview.FusionCdpBridge.startLan(android.os.Process.myPid(), 9223);
+                                    setWifiMarker("wifi_cdp_autostart", String.valueOf(lanPort));
+                                    String ip = com.termux.webview.FusionWifiRemoteServer.getLocalLanIp();
+                                    outputStream.write(("{\"status\":\"ok\",\"cdpLan\":true,\"ip\":\"" + ip + "\",\"port\":" + lanPort + "}\n").getBytes());
+                                } else {
+                                    com.termux.webview.FusionCdpBridge.stopLan();
+                                    setWifiMarker("wifi_cdp_autostart", null);
+                                    outputStream.write("{\"status\":\"ok\",\"cdpLan\":false}\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_CALL_NATIVE ")) {
+                                try {
+                                    org.json.JSONObject jo = new org.json.JSONObject(strTrim.substring(20).trim());
+                                    com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                    com.termux.webview.FusionNativeBridge bridge = new com.termux.webview.FusionNativeBridge(mgr, mgr != null ? mgr.mActiveWebView : null);
+                                    String res = bridge.reflect(
+                                        jo.getString("className"),
+                                        jo.getString("methodName"),
+                                        jo.optString("args", "[]")
+                                    );
+                                    outputStream.write((res + "\n").getBytes());
+                                } catch (Exception e) {
+                                    outputStream.write(("{\"success\":false,\"error\":" + org.json.JSONObject.quote(e.getMessage()) + "}\n").getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
                             } else if ((strTrim.equalsIgnoreCase("KEYBOARD_SHOW") || strTrim.equalsIgnoreCase("SHOW")) && (activity = TermuxIpcServer.getActivity()) != null) {
                                 activity.runOnUiThread(new KeyboardRunnable(activity, 3));
                             } else {
@@ -905,10 +1298,10 @@ public class TermuxIpcServer {
                             outputStream.write("OK\n".getBytes());
                             outputStream.flush();
                         }
-                    }
-                }
-            } catch (Throwable unused) {
-            }
+            } while (false);
+            return new String(baos.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Throwable t) {
+            return "ERROR: " + t.getMessage() + "\n";
         }
     }
 
@@ -987,6 +1380,42 @@ public class TermuxIpcServer {
         }
     }
 
+    private static void setWifiMarker(String name, String value) {
+        String[] dirs = new String[] { "/data/data/com.termux/files/home/.fusion", "/root/.fusion" };
+        for (String d : dirs) {
+            try {
+                java.io.File f = new java.io.File(d, name);
+                if (value == null) {
+                    if (f.exists()) f.delete();
+                } else {
+                    if (f.getParentFile() != null && !f.getParentFile().exists()) f.getParentFile().mkdirs();
+                    if (f.getParentFile() != null && f.getParentFile().exists()) {
+                        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(f)) {
+                            fos.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    private static String readWifiMarker(String name) {
+        String[] dirs = new String[] { "/data/data/com.termux/files/home/.fusion", "/root/.fusion" };
+        for (String d : dirs) {
+            try {
+                java.io.File f = new java.io.File(d, name);
+                if (f.exists() && f.length() > 0 && f.length() < 64) {
+                    byte[] b = new byte[(int) f.length()];
+                    try (java.io.FileInputStream fis = new java.io.FileInputStream(f)) {
+                        int n = fis.read(b);
+                        if (n > 0) return new String(b, 0, n, java.nio.charset.StandardCharsets.UTF_8).trim();
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
+        return null;
+    }
+
     public static synchronized void startServer(TermuxActivity termuxActivity) {
         try {
             synchronized (TermuxIpcServer.class) {
@@ -1011,6 +1440,26 @@ public class TermuxIpcServer {
                         }
                     }
                 }.start();
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(900);
+                        String wifiPort = readWifiMarker("wifi_autostart");
+                        if (wifiPort != null) {
+                            int p = com.termux.webview.FusionWifiRemoteServer.DEFAULT_PORT;
+                            try { p = Integer.parseInt(wifiPort); } catch (Exception ignored) {}
+                            com.termux.webview.FusionWifiRemoteServer.start(p);
+                        }
+                        String cdpPort = readWifiMarker("wifi_cdp_autostart");
+                        if (cdpPort != null) {
+                            int cp = 9223;
+                            try { cp = Integer.parseInt(cdpPort); } catch (Exception ignored) {}
+                            if (sActivity != null) {
+                                sActivity.runOnUiThread(() -> android.webkit.WebView.setWebContentsDebuggingEnabled(true));
+                            }
+                            com.termux.webview.FusionCdpBridge.startLan(android.os.Process.myPid(), cp);
+                        }
+                    } catch (Throwable ignored) {}
+                }, "FusionWifiAutoStart").start();
             }
         } catch (Throwable th) {
         }
