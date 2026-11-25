@@ -2024,6 +2024,7 @@
         // 8. Hardware Concurrency, Device Memory & Full Identity Parity (Deterministic per Wallet)
         try {
             window.__FUSION_GET_ACTIVE_DEVICE_PROFILE__ = getActiveDeviceProfile;
+            if (!window.__FUSION_FINGERPRINT_INJECTED__) {
             const isDesktop = Boolean(window.__FUSION_IS_DESKTOP__) || (navigator.userAgent && (navigator.userAgent.includes('Windows') || navigator.userAgent.includes('Macintosh')));
             const activeChromeVer = window.__FUSION_CHROME_VERSION__ || ((navigator.userAgent || '').match(/Chrome\/([0-9.]+)/) || [])[1] || '130.0.6723.102';
             const activeChromeMajor = activeChromeVer.split('.')[0] || '130';
@@ -2057,17 +2058,22 @@
                     try { Object.defineProperty(navigator.userAgentData, 'brands', { get: () => desktopBrands, configurable: true }); } catch (_) {}
                     try { Object.defineProperty(navigator.userAgentData, 'mobile', { get: () => false, configurable: true }); } catch (_) {}
                     try { Object.defineProperty(navigator.userAgentData, 'platform', { get: () => isMac ? 'macOS' : 'Windows', configurable: true }); } catch (_) {}
-                    navigator.userAgentData.getHighEntropyValues = () => Promise.resolve({
-                        architecture: 'x86',
-                        bitness: '64',
-                        brands: desktopBrands,
-                        fullVersionList: desktopBrands.map(b => ({ brand: b.brand, version: activeChromeVer })),
-                        model: '',
-                        platform: isMac ? 'macOS' : 'Windows',
-                        platformVersion: isMac ? '14.0.0' : '10.0.0',
-                        mobile: false,
-                        uaFullVersion: activeChromeVer
-                    });
+                    try {
+                        Object.defineProperty(navigator.userAgentData, 'getHighEntropyValues', {
+                            value: () => Promise.resolve({
+                                architecture: 'x86',
+                                bitness: '64',
+                                brands: desktopBrands,
+                                fullVersionList: desktopBrands.map(b => ({ brand: b.brand, version: b.brand.includes('Not') ? '24.0.0.0' : activeChromeVer })),
+                                model: '',
+                                platform: isMac ? 'macOS' : 'Windows',
+                                platformVersion: isMac ? '14.0.0' : '10.0.0',
+                                mobile: false,
+                                uaFullVersion: activeChromeVer
+                            }),
+                            configurable: true
+                        });
+                    } catch (_) {}
                 }
             } else {
                 Object.defineProperty(navigator, 'platform', {
@@ -2097,26 +2103,32 @@
                     try { Object.defineProperty(navigator.userAgentData, 'brands', { get: () => mobileBrands, configurable: true }); } catch (_) {}
                     try { Object.defineProperty(navigator.userAgentData, 'mobile', { get: () => true, configurable: true }); } catch (_) {}
                     try { Object.defineProperty(navigator.userAgentData, 'platform', { get: () => 'Android', configurable: true }); } catch (_) {}
-                    navigator.userAgentData.getHighEntropyValues = (hints) => {
-                        const p = getActiveDeviceProfile();
-                        return Promise.resolve({
-                            architecture: 'arm64',
-                            bitness: '64',
-                            brands: mobileBrands,
-                            fullVersionList: mobileBrands.map(b => ({ brand: b.brand, version: activeChromeVer })),
-                            model: p.model,
-                            platform: 'Android',
-                            platformVersion: '14.0.0',
-                            mobile: true,
-                            uaFullVersion: activeChromeVer
+                    try {
+                        Object.defineProperty(navigator.userAgentData, 'getHighEntropyValues', {
+                            value: (hints) => {
+                                const p = getActiveDeviceProfile();
+                                return Promise.resolve({
+                                    architecture: 'arm',
+                                    bitness: '64',
+                                    brands: mobileBrands,
+                                    fullVersionList: mobileBrands.map(b => ({ brand: b.brand, version: b.brand.includes('Not') ? '24.0.0.0' : activeChromeVer })),
+                                    model: p.model,
+                                    platform: 'Android',
+                                    platformVersion: '14.0.0',
+                                    mobile: true,
+                                    uaFullVersion: activeChromeVer
+                                });
+                            },
+                            configurable: true
                         });
-                    };
+                    } catch (_) {}
                 }
                 Object.defineProperty(screen, 'width', { get: () => getActiveDeviceProfile().screenWidth, configurable: true });
                 Object.defineProperty(screen, 'height', { get: () => getActiveDeviceProfile().screenHeight, configurable: true });
                 Object.defineProperty(screen, 'availWidth', { get: () => getActiveDeviceProfile().screenWidth, configurable: true });
                 Object.defineProperty(screen, 'availHeight', { get: () => getActiveDeviceProfile().screenHeight, configurable: true });
                 Object.defineProperty(window, 'devicePixelRatio', { get: () => getActiveDeviceProfile().dpr, configurable: true });
+            }
             }
         } catch (_) {}
     })();

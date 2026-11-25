@@ -372,7 +372,7 @@ public class FusionCdpBridge {
 
                     LocalSocket existing = sPersistentUaSockets.get(targetId);
                     if (existing != null && sAppliedTargetKeys.containsKey(targetId)) {
-                        if (applyKey.equals(sAppliedTargetKeys.get(targetId)) || targets.length() > 1) {
+                        if (applyKey.equals(sAppliedTargetKeys.get(targetId))) {
                             continue;
                         }
                         try { existing.close(); } catch (Throwable ignored) {}
@@ -465,7 +465,7 @@ public class FusionCdpBridge {
 
         org.json.JSONObject params = new org.json.JSONObject();
         params.put("userAgent", ua);
-        params.put("acceptLanguage", "id-ID,id,en-US");
+        params.put("acceptLanguage", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7");
         params.put("platform", isDesktop ? (isMac ? "MacIntel" : "Win32") : "Linux armv8l");
         params.put("userAgentMetadata", meta);
 

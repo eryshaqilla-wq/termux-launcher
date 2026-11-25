@@ -1142,7 +1142,8 @@
     window.trustwallet = window.trustwallet || {};
     window.trustwallet.tronWeb = tronWeb;
 
-    function broadcastTronReady() {
+    var _lastBroadcastTronAddr = null;
+    function broadcastTronReady(forcePost) {
         var addr = window.__FUSION_TRON_WALLET_ADDRESS__ || (window.GhostBridge && window.GhostBridge.getTronWalletAddress ? window.GhostBridge.getTronWalletAddress() : "") || "TM5eDfiwBYfkTCUptoLPdAejdRS6CtXJFF";
         if (window.tronWeb) {
             window.tronWeb.defaultAddress.base58 = addr;
@@ -1151,17 +1152,20 @@
         if (window.tronLink) {
             window.tronLink.ready = true;
         }
-        try {
-            window.postMessage({ message: { action: "setAccount", data: { address: addr } } }, "*");
-            window.postMessage({ message: { action: "setNode", data: { node: { fullNode: "https://api.trongrid.io" } } } }, "*");
-            window.dispatchEvent(new CustomEvent("tronLink#initialized"));
-        } catch(e) {}
+        if (forcePost || _lastBroadcastTronAddr !== addr) {
+            _lastBroadcastTronAddr = addr;
+            try {
+                window.postMessage({ message: { action: "setAccount", data: { address: addr } } }, "*");
+                window.postMessage({ message: { action: "setNode", data: { node: { fullNode: "https://api.trongrid.io" } } } }, "*");
+                window.dispatchEvent(new CustomEvent("tronLink#initialized"));
+            } catch(e) {}
+        }
     }
     window.__ghostBroadcastTron = broadcastTronReady;
-    broadcastTronReady();
+    broadcastTronReady(true);
     window.addEventListener("message", function(e) {
         if (e.data && e.data.message && e.data.message.action === "tab_requestAccounts") {
-            broadcastTronReady();
+            broadcastTronReady(true);
         }
     });
 

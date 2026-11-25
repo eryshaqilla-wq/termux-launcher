@@ -79,10 +79,12 @@
     function buildHighEntropyValues() {
         var brands = buildBrands();
         return {
-            architecture: isDesktop ? "x86" : "arm64",
+            architecture: isDesktop ? "x86" : "arm",
             bitness: "64",
             brands: brands,
-            fullVersionList: brands.map(function(b) { return { brand: b.brand, version: chromeVer }; }),
+            fullVersionList: brands.map(function(b) {
+                return { brand: b.brand, version: b.brand.indexOf("Not") !== -1 ? "24.0.0.0" : chromeVer };
+            }),
             mobile: !isDesktop,
             model: isDesktop ? "" : (dev.model || "SM-S928B"),
             platform: isDesktop ? (isMac ? "macOS" : "Windows") : "Android",
@@ -135,8 +137,8 @@
                     0: { value: m1, enumerable: true },
                     1: { value: m2, enumerable: true }
                 });
-                p.item = function(idx) { return this[idx] || null; };
-                p.namedItem = function(n) { return n === "application/pdf" ? m1 : (n === "text/pdf" ? m2 : null); };
+                p.item = markNative(function(idx) { return this[idx] || null; }, "item");
+                p.namedItem = markNative(function(n) { return n === "application/pdf" ? m1 : (n === "text/pdf" ? m2 : null); }, "namedItem");
                 return p;
             });
 
@@ -146,12 +148,12 @@
                 Object.defineProperty(fakePlugins, p.name, { value: p, enumerable: false });
             });
             Object.defineProperty(fakePlugins, "length", { value: pluginObjs.length, enumerable: true });
-            fakePlugins.item = function(idx) { return this[idx] || null; };
-            fakePlugins.namedItem = function(n) { return this[n] || null; };
-            fakePlugins.refresh = function() {};
+            fakePlugins.item = markNative(function(idx) { return this[idx] || null; }, "item");
+            fakePlugins.namedItem = markNative(function(n) { return this[n] || null; }, "namedItem");
+            fakePlugins.refresh = markNative(function() {}, "refresh");
 
             try { delete win.navigator.plugins; } catch(_) {}
-            Object.defineProperty(NavProto, "plugins", { get: function() { return fakePlugins; }, configurable: true });
+            Object.defineProperty(NavProto, "plugins", { get: markNative(function() { return fakePlugins; }, "get plugins"), configurable: true });
 
             if (MimeArrayProto) {
                 var fakeMimes = Object.create(MimeArrayProto);
@@ -162,10 +164,10 @@
                 Object.defineProperty(fakeMimes, "application/pdf", { value: m0, enumerable: false });
                 Object.defineProperty(fakeMimes, "text/pdf", { value: m1, enumerable: false });
                 Object.defineProperty(fakeMimes, "length", { value: 2, enumerable: true });
-                fakeMimes.item = function(idx) { return this[idx] || null; };
-                fakeMimes.namedItem = function(n) { return this[n] || null; };
+                fakeMimes.item = markNative(function(idx) { return this[idx] || null; }, "item");
+                fakeMimes.namedItem = markNative(function(n) { return this[n] || null; }, "namedItem");
                 try { delete win.navigator.mimeTypes; } catch(_) {}
-                Object.defineProperty(NavProto, "mimeTypes", { get: function() { return fakeMimes; }, configurable: true });
+                Object.defineProperty(NavProto, "mimeTypes", { get: markNative(function() { return fakeMimes; }, "get mimeTypes"), configurable: true });
             }
         } catch(_) {}
     }
@@ -208,7 +210,7 @@
 
             var wrapRtc = function(OrigRtc) {
                 if (!OrigRtc) return OrigRtc;
-                var Wrapped = function(config, constraints) {
+                var Wrapped = markNative(function(config, constraints) {
                     var cfg = config ? Object.assign({}, config) : {};
                     if (win.__FUSION_WEBRTC_STEALTH__) {
                         cfg.iceServers = [];
@@ -218,7 +220,7 @@
                     if (!win.__FUSION_WEBRTC_STEALTH__) return pc;
 
                     var origAddEL = pc.addEventListener.bind(pc);
-                    pc.addEventListener = function(type, listener, opts) {
+                    pc.addEventListener = markNative(function(type, listener, opts) {
                         if (type === "icecandidate" && typeof listener === "function") {
                             var wrappedListener = function(ev) {
                                 if (ev && ev.candidate && isPrivateOrHostCandidate(ev.candidate.candidate)) {
@@ -235,14 +237,14 @@
                             return origAddEL(type, wrappedListener, opts);
                         }
                         return origAddEL(type, listener, opts);
-                    };
+                    }, pc.addEventListener);
 
                     var userOnIce = null;
                     var iceListenerAttached = false;
                     try {
                         Object.defineProperty(pc, "onicecandidate", {
-                            get: function() { return userOnIce; },
-                            set: function(fn) {
+                            get: markNative(function() { return userOnIce; }, "get onicecandidate"),
+                            set: markNative(function(fn) {
                                 userOnIce = fn;
                                 if (!iceListenerAttached) {
                                     iceListenerAttached = true;
@@ -250,21 +252,21 @@
                                         if (typeof userOnIce === "function") userOnIce.call(pc, ev);
                                     });
                                 }
-                            },
+                            }, "set onicecandidate"),
                             configurable: true
                         });
                     } catch(_) {}
 
                     var origCreateOffer = pc.createOffer.bind(pc);
-                    pc.createOffer = function() {
+                    pc.createOffer = markNative(function() {
                         return origCreateOffer.apply(pc, arguments).then(scrubSdp);
-                    };
+                    }, pc.createOffer);
                     var origCreateAnswer = pc.createAnswer.bind(pc);
-                    pc.createAnswer = function() {
+                    pc.createAnswer = markNative(function() {
                         return origCreateAnswer.apply(pc, arguments).then(scrubSdp);
-                    };
+                    }, pc.createAnswer);
                     return pc;
-                };
+                }, OrigRtc);
                 Wrapped.prototype = OrigRtc.prototype;
                 return Wrapped;
             };
@@ -284,21 +286,21 @@
             }
         } catch(_) {}
         Object.defineProperties(obj, {
-            brands: { get: function() { return brands; }, enumerable: true, configurable: true },
-            mobile: { get: function() { return heValues.mobile; }, enumerable: true, configurable: true },
-            platform: { get: function() { return heValues.platform; }, enumerable: true, configurable: true },
+            brands: { get: markNative(function() { return brands; }, "get brands"), enumerable: true, configurable: true },
+            mobile: { get: markNative(function() { return heValues.mobile; }, "get mobile"), enumerable: true, configurable: true },
+            platform: { get: markNative(function() { return heValues.platform; }, "get platform"), enumerable: true, configurable: true },
             getHighEntropyValues: {
-                value: function(hints) {
+                value: markNative(function(hints) {
                     if (!Array.isArray(hints) || hints.length === 0) return Promise.resolve(heValues);
                     var out = { brands: brands, mobile: heValues.mobile, platform: heValues.platform };
                     hints.forEach(function(h) { if (h in heValues) out[h] = heValues[h]; });
                     return Promise.resolve(out);
-                },
+                }, "getHighEntropyValues"),
                 enumerable: true,
                 configurable: true
             },
             toJSON: {
-                value: function() { return { brands: brands, mobile: heValues.mobile, platform: heValues.platform }; },
+                value: markNative(function() { return { brands: brands, mobile: heValues.mobile, platform: heValues.platform }; }, "toJSON"),
                 enumerable: true,
                 configurable: true
             }
@@ -316,26 +318,31 @@
             vendor: effectiveVendor,
             renderer: effectiveRenderer,
             isDesktop: isDesktop,
+            spoofWebgl: (profileSeed !== "default" || isDesktop),
             he: buildHighEntropyValues()
         };
         return "(function(){try{" +
             "var C=" + JSON.stringify(cfg) + ";" +
+            "var nm=typeof WeakMap==='function'?new WeakMap():null;" +
+            "var mn=function(f,n){if(!nm||typeof f!=='function')return f;try{nm.set(f,typeof n==='function'?Function.prototype.toString.call(n):('function '+(n||f.name||'')+'() { [native code] }'));}catch(_){}return f;};" +
+            "try{if(nm&&self.Function&&self.Function.prototype&&!self.Function.prototype.toString.__FUSION_TS__){var ot=self.Function.prototype.toString;var wt=function(){if(nm.has(this))return nm.get(this);return ot.apply(this,arguments);};wt.__FUSION_TS__=true;nm.set(wt,ot.call(ot));Object.defineProperty(self.Function.prototype,'toString',{value:wt,writable:true,configurable:true});}}catch(_){}" +
             "var np=(self.WorkerNavigator&&self.WorkerNavigator.prototype)||self.navigator;" +
             "if(np&&self.navigator){" +
             "try{delete self.navigator.webdriver;}catch(_){}" +
-            "var def=function(k,v){try{Object.defineProperty(np,k,{get:function(){return v;},configurable:true});}catch(_){}};" +
+            "var def=function(k,v){try{Object.defineProperty(np,k,{get:mn(function(){return v;},'get '+k),configurable:true});}catch(_){}};" +
             "def('webdriver',false);" +
             "if(C.ua){def('userAgent',C.ua);def('appVersion',C.appVer);}" +
             "def('platform',C.platform);" +
             "def('hardwareConcurrency',C.cores);" +
             "def('deviceMemory',C.memory);" +
             "if(self.navigator.userAgentData){" +
-            "var fakeUAD={brands:C.he.brands,mobile:!C.isDesktop,platform:C.he.platform,getHighEntropyValues:function(){return Promise.resolve(C.he);},toJSON:function(){return{brands:C.he.brands,mobile:!C.isDesktop,platform:C.he.platform};}};" +
+            "var fakeUAD={};try{if(typeof NavigatorUAData!=='undefined'&&NavigatorUAData.prototype)fakeUAD=Object.create(NavigatorUAData.prototype);}catch(_){}" +
+            "Object.defineProperties(fakeUAD,{brands:{get:mn(function(){return C.he.brands;},'get brands'),enumerable:true,configurable:true},mobile:{get:mn(function(){return !C.isDesktop;},'get mobile'),enumerable:true,configurable:true},platform:{get:mn(function(){return C.he.platform;},'get platform'),enumerable:true,configurable:true},getHighEntropyValues:{value:mn(function(h){if(!Array.isArray(h)||!h.length)return Promise.resolve(C.he);var o={brands:C.he.brands,mobile:!C.isDesktop,platform:C.he.platform};h.forEach(function(k){if(k in C.he)o[k]=C.he[k];});return Promise.resolve(o);},'getHighEntropyValues'),enumerable:true,configurable:true},toJSON:{value:mn(function(){return{brands:C.he.brands,mobile:!C.isDesktop,platform:C.he.platform};},'toJSON'),enumerable:true,configurable:true}});" +
             "def('userAgentData',fakeUAD);" +
             "}}" +
-            "var hw=function(p){if(!p||!p.getParameter)return;var o=p.getParameter;p.getParameter=function(k){if(k===37445)return C.vendor;if(k===37446)return C.renderer;return o.apply(this,arguments);};};" +
+            "if(C.spoofWebgl){var hw=function(p){if(!p||!p.getParameter)return;var o=p.getParameter;p.getParameter=mn(function(k){if(k===37445)return C.vendor;if(k===37446)return C.renderer;return o.apply(this,arguments);},o);};" +
             "if(self.WebGLRenderingContext)hw(self.WebGLRenderingContext.prototype);" +
-            "if(self.WebGL2RenderingContext)hw(self.WebGL2RenderingContext.prototype);" +
+            "if(self.WebGL2RenderingContext)hw(self.WebGL2RenderingContext.prototype);}" +
             "}catch(_){}})();";
     }
 
@@ -412,10 +419,10 @@
         // 2. WebRTC STUN + LAN/Host IP Leak Protection
         hookWebRtcOnWindow(win);
 
-        // 3. Chrome Runtime / LoadTimes / CSI Parity
+        // 3. Chrome LoadTimes / CSI Parity (tanpa membocorkan chrome.runtime extension stub di mobile)
         try {
             if (!win.chrome) win.chrome = {};
-            if (!win.chrome.runtime) {
+            if (isDesktop && !win.chrome.runtime) {
                 win.chrome.runtime = {
                     OnInstalledReason: { CHROME_UPDATE: "chrome_update", INSTALL: "install", SHARED_MODULE_UPDATE: "shared_module_update", UPDATE: "update" },
                     OnRestartRequiredReason: { APP_UPDATE: "app_update", OS_UPDATE: "os_update", PERIODIC: "periodic" },
@@ -423,12 +430,12 @@
                     PlatformNaclArch: { ARM: "arm", MIPS: "mips", MIPS64: "mips64", X86_32: "x86-32", X86_64: "x86-64" },
                     PlatformOs: { ANDROID: "android", CROS: "cros", LINUX: "linux", MAC: "mac", OPENBSD: "openbsd", WIN: "win" },
                     RequestUpdateCheckStatus: { NO_UPDATE: "no_update", THROTTLED: "throttled", UPDATE_AVAILABLE: "update_available" },
-                    connect: function() { return { onDisconnect: { addListener: function() {} }, onMessage: { addListener: function() {} }, postMessage: function() {} }; },
-                    sendMessage: function(extId, msg, opt, cb) { if (typeof opt === 'function') cb = opt; if (cb) cb(); }
+                    connect: markNative(function() { return { onDisconnect: { addListener: function() {} }, onMessage: { addListener: function() {} }, postMessage: function() {} }; }, "connect"),
+                    sendMessage: markNative(function(extId, msg, opt, cb) { if (typeof opt === 'function') cb = opt; if (cb) cb(); }, "sendMessage")
                 };
             }
             if (!win.chrome.loadTimes) {
-                win.chrome.loadTimes = function() {
+                win.chrome.loadTimes = markNative(function() {
                     var t = (win.performance && win.performance.timing) || {};
                     var start = (t.navigationStart || Date.now()) / 1000;
                     return {
@@ -440,15 +447,15 @@
                         firstPaintTime: (t.domInteractive || Date.now()) / 1000,
                         navigationType: "Other"
                     };
-                };
+                }, "loadTimes");
             }
             if (!win.chrome.csi) {
-                win.chrome.csi = function() {
+                win.chrome.csi = markNative(function() {
                     var t = (win.performance && win.performance.timing) || {};
                     var s = t.navigationStart || Date.now();
                     var e = t.loadEventEnd || Date.now();
                     return { startE: s, onloadT: e, pageT: e - s, tran: 15 };
-                };
+                }, "csi");
             }
         } catch(_) {}
 
@@ -457,7 +464,7 @@
             var navProto = (win.Navigator && win.Navigator.prototype) || win.navigator;
             var defNav = function(prop, getter) {
                 try { delete win.navigator[prop]; } catch(_) {}
-                try { Object.defineProperty(navProto, prop, { get: getter, configurable: true }); } catch(_) {}
+                try { Object.defineProperty(navProto, prop, { get: markNative(getter, "get " + prop), configurable: true }); } catch(_) {}
             };
             defNav('hardwareConcurrency', function() { return effectiveCores; });
             defNav('deviceMemory', function() { return effectiveMemory; });
@@ -470,29 +477,29 @@
             // Headless outerWidth/outerHeight fix (native WebView headless returns 0, triggering 33% headless)
             if (!win.outerWidth || win.outerWidth === 0) {
                 Object.defineProperty(win, 'outerWidth', {
-                    get: function() { return win.innerWidth || (isDesktop ? 1920 : (dev.screenWidth || 480)); },
+                    get: markNative(function() { return win.innerWidth || (isDesktop ? 1920 : (dev.screenWidth || 480)); }, "get outerWidth"),
                     configurable: true
                 });
             }
             if (!win.outerHeight || win.outerHeight === 0) {
                 Object.defineProperty(win, 'outerHeight', {
-                    get: function() {
+                    get: markNative(function() {
                         var h = win.innerHeight || (isDesktop ? 1000 : (dev.screenHeight || 1067));
                         return isDesktop ? (h + 85) : h;
-                    },
+                    }, "get outerHeight"),
                     configurable: true
                 });
             }
 
             if (isDesktop && win.screen) {
-                Object.defineProperty(win.screen, 'width', { get: function() { return 1920; }, configurable: true });
-                Object.defineProperty(win.screen, 'height', { get: function() { return 1080; }, configurable: true });
-                Object.defineProperty(win.screen, 'availWidth', { get: function() { return 1920; }, configurable: true });
-                Object.defineProperty(win.screen, 'availHeight', { get: function() { return 1040; }, configurable: true });
-                Object.defineProperty(win, 'devicePixelRatio', { get: function() { return 1; }, configurable: true });
+                Object.defineProperty(win.screen, 'width', { get: markNative(function() { return 1920; }, "get width"), configurable: true });
+                Object.defineProperty(win.screen, 'height', { get: markNative(function() { return 1080; }, "get height"), configurable: true });
+                Object.defineProperty(win.screen, 'availWidth', { get: markNative(function() { return 1920; }, "get availWidth"), configurable: true });
+                Object.defineProperty(win.screen, 'availHeight', { get: markNative(function() { return 1040; }, "get availHeight"), configurable: true });
+                Object.defineProperty(win, 'devicePixelRatio', { get: markNative(function() { return 1; }, "get devicePixelRatio"), configurable: true });
                 if (win.screen.orientation) {
-                    try { Object.defineProperty(win.screen.orientation, 'type', { get: function() { return 'landscape-primary'; }, configurable: true }); } catch(_) {}
-                    try { Object.defineProperty(win.screen.orientation, 'angle', { get: function() { return 0; }, configurable: true }); } catch(_) {}
+                    try { Object.defineProperty(win.screen.orientation, 'type', { get: markNative(function() { return 'landscape-primary'; }, "get type"), configurable: true }); } catch(_) {}
+                    try { Object.defineProperty(win.screen.orientation, 'angle', { get: markNative(function() { return 0; }, "get angle"), configurable: true }); } catch(_) {}
                 }
             }
             if (win.navigator.userAgentData) {
@@ -555,7 +562,10 @@
         }
 
         // 7. Context-Aware WebGL Vendor & Renderer Spoofing (WebGL 1 & WebGL 2)
-        hookWebGLOnScope(win);
+        // Untuk profil default mobile, pertahankan GPU asli perangkat agar 100% selaras dengan kapabilitas/ekstensi WebGL
+        if (profileSeed !== "default" || isDesktop) {
+            hookWebGLOnScope(win);
+        }
 
         // 8. Worker & ServiceWorker Stealth Propagation (prevents native ; wv / Mali GPU leak across threads)
         hookWorkersAndServiceWorker(win);

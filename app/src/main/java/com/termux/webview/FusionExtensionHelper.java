@@ -1683,10 +1683,14 @@ public class FusionExtensionHelper {
     }
 
     public static String getChromePolyfillScript(Context context) {
-        return getChromePolyfillScript(context, null, false);
+        return getChromePolyfillScript(context, null, false, true);
     }
 
     public static String getChromePolyfillScript(Context context, ExtensionInfo ext, boolean isBackground) {
+        return getChromePolyfillScript(context, ext, isBackground, true);
+    }
+
+    public static String getChromePolyfillScript(Context context, ExtensionInfo ext, boolean isBackground, boolean exposeOnGlobal) {
         String extId = (ext != null && ext.id != null) ? ext.id : "";
         String manifestJsonStr = (ext != null && ext.manifestJson != null)
                 ? ext.manifestJson.toString()
@@ -1694,6 +1698,7 @@ public class FusionExtensionHelper {
 
         return "(function() {\n" +
                 "  var root = (typeof window !== 'undefined') ? window : ((typeof self !== 'undefined') ? self : globalThis);\n" +
+                "  var exposeOnGlobal = " + exposeOnGlobal + ";\n" +
                 "  var detectedExtId = '" + extId + "';\n" +
                 "  if (!detectedExtId) {\n" +
                 "    try {\n" +
@@ -1708,7 +1713,7 @@ public class FusionExtensionHelper {
                 "    } catch(e) {}\n" +
                 "  }\n" +
                 "  if (!detectedExtId) detectedExtId = 'fusion-extension-runtime';\n" +
-                "  if (root.chrome && root.chrome.__is_fusion_polyfill__ && root.chrome.__ext_id__ === detectedExtId) return;\n" +
+                "  if (exposeOnGlobal && root.chrome && root.chrome.__is_fusion_polyfill__ && root.chrome.__ext_id__ === detectedExtId) return root.chrome;\n" +
                 "  var extId = detectedExtId;\n" +
                 "  var isBackground = " + isBackground + ";\n" +
                 "  var manifestObj = " + manifestJsonStr + ";\n" +
@@ -2372,10 +2377,14 @@ public class FusionExtensionHelper {
                 "      }\n" +
                 "    }\n" +
                 "  };\n" +
-                "  root.chrome = Object.assign(root.chrome || {}, chromeShim);\n" +
-                "  if (typeof window !== 'undefined') window.chrome = root.chrome;\n" +
-                "  if (typeof self !== 'undefined') self.chrome = root.chrome;\n" +
-                "  if (typeof globalThis !== 'undefined') globalThis.chrome = root.chrome;\n" +
+                "  if (exposeOnGlobal) {\n" +
+                "    root.chrome = Object.assign(root.chrome || {}, chromeShim);\n" +
+                "    if (typeof window !== 'undefined') window.chrome = root.chrome;\n" +
+                "    if (typeof self !== 'undefined') self.chrome = root.chrome;\n" +
+                "    if (typeof globalThis !== 'undefined') globalThis.chrome = root.chrome;\n" +
+                "    return root.chrome;\n" +
+                "  }\n" +
+                "  return chromeShim;\n" +
                 "})();\n";
     }
 
@@ -2454,6 +2463,11 @@ public class FusionExtensionHelper {
         String safeExtId = ext.id.replaceAll("[^a-zA-Z0-9_]", "_");
         String runKey = "__FUSION_EXT_" + safeExtId + "_" + scriptIndex + "__";
 
+        String scopedChromeInit = "";
+        if (!"MAIN".equalsIgnoreCase(cs.world)) {
+            scopedChromeInit = "      var chrome = " + getChromePolyfillScript(null, ext, false, false) + "\n";
+        }
+
         StringBuilder sb = new StringBuilder();
         sb.append("(function() {\n");
         sb.append("  try {\n");
@@ -2486,6 +2500,7 @@ public class FusionExtensionHelper {
         sb.append("      if (window[runKey]) return;\n");
         sb.append("      window[runKey] = true;\n");
         sb.append("      try {\n");
+        sb.append(scopedChromeInit);
         sb.append(combinedScript).append("\n");
         sb.append("      } catch(e) { console.error('[Fusion Extension ").append(safeExtId).append(" Error]:', e); }\n");
         sb.append("    }\n");
@@ -2511,14 +2526,9 @@ public class FusionExtensionHelper {
         try {
             Context ctx = webView.getContext();
             sActiveTabWebViews.add(webView);
-
-            String polyfill = getChromePolyfillScript(ctx, null, false);
-            if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-                try {
-                    WebViewCompat.addDocumentStartJavaScript(webView, polyfill, Collections.singleton("*"));
-                } catch (Throwable ignored) {}
-            }
-
+            // Jangan menyuntikkan window.chrome.__is_fusion_polyfill__ ke semua situs web ("*")
+            // karena terdeteksi sebagai ekstensi tidak wajar oleh WAF/Cloudflare.
+            // Polyfill hanya disuntikkan ke halaman ekstensi atau scoped di dalam content script.
             startAllBackgroundHosts(ctx);
         } catch (Throwable e) {
             Log.e(TAG, "Gagal setupWebView ekstensi: " + e.getMessage());
@@ -2561,10 +2571,12 @@ public class FusionExtensionHelper {
         Context ctx = webView.getContext();
         sActiveTabWebViews.add(webView);
 
-        String polyfill = getChromePolyfillScript(ctx, null, false);
-        webView.evaluateJavascript(polyfill, null);
+        boolean isExtensionPage = currentUrl.startsWith("chrome-extension://")
+                || (currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/"));
+        if (isExtensionPage) {
+            String polyfill = getChromePolyfillScript(ctx, null, false, true);
+            webView.evaluateJavascript(polyfill, null);
 
-        if (currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/")) {
             String i18nJs = getI18nInjectionScript(currentUrl);
             if (i18nJs != null && !i18nJs.isEmpty()) {
                 webView.evaluateJavascript(i18nJs, null);
