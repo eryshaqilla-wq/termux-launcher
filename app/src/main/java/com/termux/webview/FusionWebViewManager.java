@@ -4493,9 +4493,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionTab targetTab = (FusionTab) arrayList.get(i);
         TermuxActivity termuxActivity = this.mActivity;
         if (targetTab != null && termuxActivity != null) {
+            boolean terminalVisible = this.mTerminalPaneHost != null && this.mTerminalPaneHost.getVisibility() == View.VISIBLE;
             if (targetTab.mBoundSession == null) {
                 targetTab.mBoundSession = termuxActivity.getCurrentSession();
-            } else if (termuxActivity.getTermuxTerminalSessionClient() != null && termuxActivity.getCurrentSession() != targetTab.mBoundSession) {
+            } else if (!terminalVisible && !targetTab.mIsHeadless && !targetTab.mIsMinimized
+                    && termuxActivity.getTermuxTerminalSessionClient() != null
+                    && termuxActivity.getCurrentSession() != targetTab.mBoundSession) {
                 termuxActivity.getTermuxTerminalSessionClient().setCurrentSession(targetTab.mBoundSession);
             }
         }
