@@ -1883,6 +1883,9 @@ async function main() {
         console.log(`Usage:`);
         console.log(`  web                           (Buka halaman Beranda browser)`);
         console.log(`  web <url> [options]           (Buka URL di WebView)`);
+        console.log(`  web --gecko <url>             (Buka URL dengan engine Mozilla GeckoView)`);
+        console.log(`  web --default <url>           (Buka URL dengan engine Android System WebView)`);
+        console.log(`  web --default-webview <gecko|default|status> (Atur / cek default WebView permanen)`);
         console.log(`  web --headless <url>          (Buka URL di background tanpa UI / headless)`);
         console.log(`  web --headless --new-tab <url> (Buka URL di tab baru background / paralel)`);
         console.log(`  web --desktop <url>           (Buka URL dengan tampilan mode Desktop 1280px)`);
@@ -3738,10 +3741,19 @@ async function main() {
                   firstArg === 'home' ||
                   firstArg === 'beranda';
 
+    if (cmd === 'default-webview') {
+        const output = runIpc(`--default-webview ${args.slice(1).join(' ')}`.trim());
+        if (output) console.log(output);
+        process.exit(0);
+    }
+
     const isLocalFile = fs.existsSync(firstArg);
     const isIpcFlag = firstArg.startsWith('--') && [
-        '--headless', '--new-tab', '--incognito', '--clear-cache', '--devtools',
-        '--proxy', '--user-agent', '--url', '--window', '--zoom'
+        '--gecko', '--geckoview', '--default', '--system-webview', '--default-webview',
+        '--headless', '--new-tab', '--desktop', '--wallet', '--profile', '--fresh',
+        '--incognito', '--clear-cache', '--devtools', '--proxy', '--user-agent',
+        '--url', '--window', '--zoom', '--wc', '--ghost', '--auto', '--turbo',
+        '--block-', '--monitor', '--watch', '--interval', '--rotate'
     ].some(f => firstArg.startsWith(f));
 
     if (args.length === 0 || isUrl || isLocalFile || isIpcFlag) {

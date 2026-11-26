@@ -101,19 +101,13 @@ public class FusionDrawerHelper {
         if (view2 != null) {
             view2.setVisibility(8);
         }
-        WebView webView = fusionWebViewManager.mActiveWebView;
-        if (webView == null) {
-            FusionRecPillHelper.hideRecPill();
-            return;
-        }
-        if (webView.getVisibility() != 0) {
-            FusionRecPillHelper.hideRecPill();
-            return;
-        }
         FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
-        if (activeTab == null) {
+        View activeView = activeTab != null ? activeTab.getRenderView() : fusionWebViewManager.mActiveWebView;
+        if (activeView == null || activeView.getVisibility() != View.VISIBLE) {
             FusionRecPillHelper.hideRecPill();
-        } else if (activeTab.mIsMinimized) {
+            return;
+        }
+        if (activeTab == null || activeTab.mIsMinimized) {
             FusionRecPillHelper.hideRecPill();
         } else {
             FusionTabStateHelper.setControlPillCollapsed(fusionWebViewManager, false);
@@ -814,6 +808,9 @@ public class FusionDrawerHelper {
                 if (fusionTab == null) {
                     sb2.append("about:blank");
                 } else {
+                    if (fusionTab.isGecko()) {
+                        sb2.append("[GECKO] ");
+                    }
                     if (fusionTab.mIsHeadless) {
                         sb2.append("[HEADLESS] ");
                     } else if (fusionTab.mIsMinimized) {
@@ -1466,10 +1463,7 @@ public class FusionDrawerHelper {
             @Override
             public void onClick(View v) {
                 fusionWebViewManager.closeAllDrawers();
-                WebView wv = fusionWebViewManager.mActiveWebView;
-                if (wv != null) {
-                    wv.loadUrl("https://greasyfork.org/id/scripts");
-                }
+                fusionWebViewManager.loadUrlOnActiveTab("https://greasyfork.org/id/scripts");
                 FusionToast.makeText(appCompatActivity, "🌐 Membuka GreasyFork... Klik 'Pasang' pada skrip yang diinginkan!", Toast.LENGTH_SHORT).show();
             }
         });

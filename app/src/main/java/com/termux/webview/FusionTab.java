@@ -1,7 +1,10 @@
 package com.termux.webview;
 
+import android.view.View;
 import android.webkit.WebView;
 import com.termux.terminal.TerminalSession;
+import org.mozilla.geckoview.GeckoSession;
+import org.mozilla.geckoview.GeckoView;
 
 /* JADX INFO: loaded from: /root/project/clean_build/classes21_new.dex */
 public class FusionTab {
@@ -12,6 +15,11 @@ public class FusionTab {
     public String mProfile;
     public String mUrl;
     public WebView mWebView;
+    public String mEngine = "default";
+    public GeckoView mGeckoView;
+    public GeckoSession mGeckoSession;
+    public boolean mGeckoCanGoBack = false;
+    public boolean mGeckoCanGoForward = false;
     public TerminalSession mBoundSession = null;
     public String mTitle = "New Tab";
     public boolean mIsMinimized = false;
@@ -55,5 +63,13 @@ public class FusionTab {
 
     public FusionTab(int i, String str, String str2, WebView webView, boolean z, boolean z2, boolean z3) {
         this(i, str, str2, webView, z, z2, z3, false);
+    }
+
+    public boolean isGecko() {
+        return "gecko".equalsIgnoreCase(this.mEngine) && this.mGeckoView != null;
+    }
+
+    public View getRenderView() {
+        return isGecko() ? this.mGeckoView : this.mWebView;
     }
 }

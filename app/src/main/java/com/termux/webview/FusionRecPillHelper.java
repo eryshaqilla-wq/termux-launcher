@@ -196,13 +196,10 @@ public class FusionRecPillHelper {
             @Override
             public void onClick(View v) {
                 String nextAddr = fusionWebViewManager.switchToNextWallet();
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    if (fusionWebViewManager.mIsRecording) {
-                        webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_wallet', timestamp:Date.now(), text:'Ganti Wallet -> " + nextAddr + "'});", null);
-                    }
-                    webView.evaluateJavascript("try { window.dispatchEvent(new CustomEvent('accountsChanged', {detail: ['" + nextAddr + "']})); } catch(_){}", null);
+                if (fusionWebViewManager.mIsRecording) {
+                    fusionWebViewManager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_wallet', timestamp:Date.now(), text:'Ganti Wallet -> " + nextAddr + "'});");
                 }
+                fusionWebViewManager.evalOnActiveTab("try { window.dispatchEvent(new CustomEvent('accountsChanged', {detail: ['" + nextAddr + "']})); } catch(_){}");
                 fusionWebViewManager.updateMenuTexts();
             }
         });
@@ -234,10 +231,7 @@ public class FusionRecPillHelper {
                 if (curAddr == null || curAddr.isEmpty()) {
                     curAddr = FusionWalletHelper.getMasterAddress();
                 }
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    webView.evaluateJavascript("(function(){ if (window.__AGY_PASTE_WALLET__) return window.__AGY_PASTE_WALLET__('" + curAddr + "'); })()", null);
-                }
+                fusionWebViewManager.evalOnActiveTab("(function(){ if (window.__AGY_PASTE_WALLET__) return window.__AGY_PASTE_WALLET__('" + curAddr + "'); })()");
             }
         });
         LinearLayout.LayoutParams abLp = new LinearLayout.LayoutParams(-2, -2);
@@ -256,10 +250,7 @@ public class FusionRecPillHelper {
         pwdBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    webView.evaluateJavascript("(function(){ if (window.__AGY_PASTE_PWD__) return window.__AGY_PASTE_PWD__(); })()", null);
-                }
+                fusionWebViewManager.evalOnActiveTab("(function(){ if (window.__AGY_PASTE_PWD__) return window.__AGY_PASTE_PWD__(); })()");
             }
         });
         LinearLayout.LayoutParams pbLp = new LinearLayout.LayoutParams(-2, -2);
@@ -278,13 +269,10 @@ public class FusionRecPillHelper {
         emailBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    if (fusionWebViewManager.mIsRecording) {
-                        webView.evaluateJavascript("(function(){ var ne = (typeof AgyDB !== 'undefined' && AgyDB.nextEmail) ? AgyDB.nextEmail() : 'tuyul@gmail.com'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_email', timestamp:Date.now(), text:'Ganti Email -> ' + ne, value:ne}); updateAgyHUD('Smart Email', 'Aktif: ' + ne, 'success'); return ne; })()", null);
-                    } else {
-                        webView.evaluateJavascript("(function(){ var ne = (typeof AgyDB !== 'undefined' && AgyDB.nextEmail) ? AgyDB.nextEmail() : 'tuyul@gmail.com'; return ne; })()", null);
-                    }
+                if (fusionWebViewManager.mIsRecording) {
+                    fusionWebViewManager.evalOnActiveTab("(function(){ var ne = (typeof AgyDB !== 'undefined' && AgyDB.nextEmail) ? AgyDB.nextEmail() : 'tuyul@gmail.com'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_email', timestamp:Date.now(), text:'Ganti Email -> ' + ne, value:ne}); updateAgyHUD('Smart Email', 'Aktif: ' + ne, 'success'); return ne; })()");
+                } else {
+                    fusionWebViewManager.evalOnActiveTab("(function(){ var ne = (typeof AgyDB !== 'undefined' && AgyDB.nextEmail) ? AgyDB.nextEmail() : 'tuyul@gmail.com'; return ne; })()");
                 }
             }
         });
@@ -304,13 +292,10 @@ public class FusionRecPillHelper {
         refBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    if (fusionWebViewManager.mIsRecording) {
-                        webView.evaluateJavascript("(function(){ var nr = (typeof AgyDB !== 'undefined' && AgyDB.nextRef) ? AgyDB.nextRef() : 'REF123'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'ref', timestamp:Date.now(), text:'Ref Code -> ' + nr, value:nr}); updateAgyHUD('Referral Code', 'Aktif: ' + nr, 'success'); return nr; })()", null);
-                    } else {
-                        webView.evaluateJavascript("(function(){ var nr = (typeof AgyDB !== 'undefined' && AgyDB.nextRef) ? AgyDB.nextRef() : 'REF123'; return nr; })()", null);
-                    }
+                if (fusionWebViewManager.mIsRecording) {
+                    fusionWebViewManager.evalOnActiveTab("(function(){ var nr = (typeof AgyDB !== 'undefined' && AgyDB.nextRef) ? AgyDB.nextRef() : 'REF123'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'ref', timestamp:Date.now(), text:'Ref Code -> ' + nr, value:nr}); updateAgyHUD('Referral Code', 'Aktif: ' + nr, 'success'); return nr; })()");
+                } else {
+                    fusionWebViewManager.evalOnActiveTab("(function(){ var nr = (typeof AgyDB !== 'undefined' && AgyDB.nextRef) ? AgyDB.nextRef() : 'REF123'; return nr; })()");
                 }
             }
         });
@@ -330,15 +315,12 @@ public class FusionRecPillHelper {
         reloadBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    if (fusionWebViewManager.mIsRecording) {
-                        webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) { window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){} }", null);
-                    } else {
-                        webView.evaluateJavascript("try{sessionStorage.removeItem('__agy_rec_active__'); sessionStorage.removeItem('__fusion_rec_active__');}catch(_){}", null);
-                    }
-                    webView.reload();
+                if (fusionWebViewManager.mIsRecording) {
+                    fusionWebViewManager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.isRecording) { window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){} }");
+                } else {
+                    fusionWebViewManager.evalOnActiveTab("try{sessionStorage.removeItem('__agy_rec_active__'); sessionStorage.removeItem('__fusion_rec_active__');}catch(_){}");
                 }
+                fusionWebViewManager.reloadActiveTab();
             }
         });
         LinearLayout.LayoutParams relLp = new LinearLayout.LayoutParams(-2, -2);
@@ -362,11 +344,11 @@ public class FusionRecPillHelper {
                     webView.clearCache(true);
                     webView.clearFormData();
                     try { android.webkit.WebStorage.getInstance().deleteAllData(); } catch(Throwable unused) {}
-                    if (fusionWebViewManager.mIsRecording) {
-                        webView.evaluateJavascript("try{localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){}; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'wipe_cache', timestamp:Date.now(), text:'Wipe Cache & Storage'});", null);
-                    } else {
-                        webView.evaluateJavascript("try{localStorage.clear(); sessionStorage.clear();}catch(_){};", null);
-                    }
+                }
+                if (fusionWebViewManager.mIsRecording) {
+                    fusionWebViewManager.evalOnActiveTab("try{localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){}; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'wipe_cache', timestamp:Date.now(), text:'Wipe Cache & Storage'});");
+                } else {
+                    fusionWebViewManager.evalOnActiveTab("try{localStorage.clear(); sessionStorage.clear();}catch(_){};");
                 }
             }
         });
@@ -386,9 +368,8 @@ public class FusionRecPillHelper {
         fpBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null && fusionWebViewManager.mIsRecording) {
-                    webView.evaluateJavascript("(function(){ var fp = (window.GhostBridge && window.GhostBridge.nextFingerprint) ? window.GhostBridge.nextFingerprint() : 'Acak'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'fingerprint', timestamp:Date.now(), text:'Fingerprint -> ' + fp, value:fp}); updateAgyHUD('Fingerprint Faker', 'Model HP: ' + fp, 'success'); return fp; })()", null);
+                if (fusionWebViewManager.mIsRecording) {
+                    fusionWebViewManager.evalOnActiveTab("(function(){ var fp = (window.GhostBridge && window.GhostBridge.nextFingerprint) ? window.GhostBridge.nextFingerprint() : 'Acak'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'fingerprint', timestamp:Date.now(), text:'Fingerprint -> ' + fp, value:fp}); updateAgyHUD('Fingerprint Faker', 'Model HP: ' + fp, 'success'); return fp; })()");
                 }
             }
         });
@@ -408,10 +389,7 @@ public class FusionRecPillHelper {
         stopIfBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.promptStopCondition) { window.AgyRecorder.promptStopCondition(); } else { var w = prompt('Masukkan kata pemicu AUTO-STOP loop (misal: Sold out, Limit):'); if (w && w.trim()) { window.AgyRecorder.recordEvent({type:'stop_if', text:w.trim(), timestamp:Date.now()}); updateAgyHUD('Auto-Stop Terekam', 'Berhenti jika ada: ' + w.trim(), 'success'); } }", null);
-                }
+                fusionWebViewManager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.promptStopCondition) { window.AgyRecorder.promptStopCondition(); } else { var w = prompt('Masukkan kata pemicu AUTO-STOP loop (misal: Sold out, Limit):'); if (w && w.trim()) { window.AgyRecorder.recordEvent({type:'stop_if', text:w.trim(), timestamp:Date.now()}); updateAgyHUD('Auto-Stop Terekam', 'Berhenti jika ada: ' + w.trim(), 'success'); } }");
             }
         });
         LinearLayout.LayoutParams stopLp = new LinearLayout.LayoutParams(-2, -2);
@@ -430,10 +408,7 @@ public class FusionRecPillHelper {
         solveBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.startChallengeSelector) { window.AgyRecorder.startChallengeSelector(); }", null);
-                }
+                fusionWebViewManager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.startChallengeSelector) { window.AgyRecorder.startChallengeSelector(); }");
             }
         });
         LinearLayout.LayoutParams solveLp = new LinearLayout.LayoutParams(-2, -2);
@@ -452,10 +427,7 @@ public class FusionRecPillHelper {
         rewardBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.startRewardSelector) { window.AgyRecorder.startRewardSelector(); }", null);
-                }
+                fusionWebViewManager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.startRewardSelector) { window.AgyRecorder.startRewardSelector(); }");
             }
         });
         LinearLayout.LayoutParams rewardLp = new LinearLayout.LayoutParams(-2, -2);
@@ -476,10 +448,7 @@ public class FusionRecPillHelper {
             public void onClick(View v) {
                 cycleAiEngineMode();
                 updateAiEngineButtonUi(aiEngineBtn);
-                WebView webView = fusionWebViewManager.mActiveWebView;
-                if (webView != null) {
-                    webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.setAiEngine) { window.AgyRecorder.setAiEngine('" + sCurrentAiEngine + "'); }", null);
-                }
+                fusionWebViewManager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.setAiEngine) { window.AgyRecorder.setAiEngine('" + sCurrentAiEngine + "'); }");
             }
         });
         LinearLayout.LayoutParams aiLp = new LinearLayout.LayoutParams(-2, -2);
@@ -575,12 +544,12 @@ public class FusionRecPillHelper {
         if (fusionWebViewManager == null) {
             return;
         }
-        WebView webView = fusionWebViewManager.mActiveWebView;
-        if (webView == null || webView.getVisibility() != 0) {
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+        View renderView = activeTab != null ? activeTab.getRenderView() : fusionWebViewManager.mActiveWebView;
+        if (renderView == null || renderView.getVisibility() != 0) {
             hideRecPill();
             return;
         }
-        FusionTab activeTab = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
         if (activeTab == null || activeTab.mIsMinimized || activeTab.mIsHeadless) {
             hideRecPill();
             return;

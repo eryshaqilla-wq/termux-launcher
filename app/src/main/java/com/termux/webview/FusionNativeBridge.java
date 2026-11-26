@@ -32,11 +32,21 @@ public class FusionNativeBridge {
 
     private final FusionWebViewManager mManager;
     private final WebView mWebView;
+    private final FusionTab mTab;
     private final Context mContext;
 
     public FusionNativeBridge(FusionWebViewManager manager, WebView webView) {
+        this(manager, webView, null);
+    }
+
+    public FusionNativeBridge(FusionWebViewManager manager, FusionTab tab) {
+        this(manager, tab != null ? tab.mWebView : null, tab);
+    }
+
+    public FusionNativeBridge(FusionWebViewManager manager, WebView webView, FusionTab tab) {
         this.mManager = manager;
         this.mWebView = webView;
+        this.mTab = tab;
         this.mContext = (manager != null && manager.mActivity != null)
                 ? manager.mActivity
                 : (webView != null ? webView.getContext() : null);
@@ -301,8 +311,12 @@ public class FusionNativeBridge {
     @JavascriptInterface
     public String reloadEngineScripts() {
         FusionWebViewManager.clearAssetScriptCache();
-        if (mManager != null && mManager.mActivity != null && mWebView != null) {
-            mManager.mActivity.runOnUiThread(() -> mManager.injectScripts(mWebView));
+        if (mManager != null && mManager.mActivity != null) {
+            if (mTab != null) {
+                mManager.mActivity.runOnUiThread(() -> mManager.injectScriptsForTab(mTab));
+            } else if (mWebView != null) {
+                mManager.mActivity.runOnUiThread(() -> mManager.injectScripts(mWebView));
+            }
         }
         return "{\"success\":true}";
     }

@@ -328,6 +328,14 @@ public class FusionExtensionHelper {
                 try { it.remove(); } catch (Throwable ignored2) {}
             }
         }
+        FusionWebViewManager mgr = FusionWebViewManager.getInstance();
+        if (mgr != null && mgr.getTabList() != null) {
+            for (FusionTab t : mgr.getTabList()) {
+                if (t != null && t.isGecko()) {
+                    FusionGeckoHelper.evaluateJs(t, script);
+                }
+            }
+        }
     }
 
     public static WebView findBackgroundWebView(String extId) {
@@ -2564,22 +2572,25 @@ public class FusionExtensionHelper {
 
     public static void injectMatchingScripts(WebView webView, String currentUrl, String triggerTiming) {
         if (webView == null || currentUrl == null || currentUrl.isEmpty()) return;
+        sActiveTabWebViews.add(webView);
+        injectMatchingScripts(webView.getContext(), currentUrl, triggerTiming, js -> webView.evaluateJavascript(js, null));
+    }
+
+    public static void injectMatchingScripts(Context ctx, String currentUrl, String triggerTiming, java.util.function.Consumer<String> evaluator) {
+        if (ctx == null || evaluator == null || currentUrl == null || currentUrl.isEmpty()) return;
         if (currentUrl.startsWith("file:///android_asset/") || currentUrl.startsWith("about:") || currentUrl.startsWith("javascript:")) {
             return;
         }
-
-        Context ctx = webView.getContext();
-        sActiveTabWebViews.add(webView);
 
         boolean isExtensionPage = currentUrl.startsWith("chrome-extension://")
                 || (currentUrl.startsWith("file://") && currentUrl.contains("/.fusion/extensions/"));
         if (isExtensionPage) {
             String polyfill = getChromePolyfillScript(ctx, null, false, true);
-            webView.evaluateJavascript(polyfill, null);
+            evaluator.accept(polyfill);
 
             String i18nJs = getI18nInjectionScript(currentUrl);
             if (i18nJs != null && !i18nJs.isEmpty()) {
-                webView.evaluateJavascript(i18nJs, null);
+                evaluator.accept(i18nJs);
             }
         }
 
@@ -2596,7 +2607,7 @@ public class FusionExtensionHelper {
                     }
                     String wrapped = buildContentScriptWrapper(ext, cs, i);
                     if (wrapped != null) {
-                        webView.evaluateJavascript(wrapped, null);
+                        evaluator.accept(wrapped);
                     }
                 }
             }
@@ -2820,8 +2831,15 @@ public class FusionExtensionHelper {
                 } else if (!ext.enabled) {
                     stopBackgroundHost(ext.id);
                 }
-                if (manager != null && manager.mActiveWebView != null) {
-                    setupWebView(manager.mActiveWebView);
+                if (manager != null) {
+                    if (manager.mActiveWebView != null) {
+                        setupWebView(manager.mActiveWebView);
+                    }
+                    FusionTab active = FusionTabStateHelper.getActiveTab(manager);
+                    if (active != null && active.isGecko()) {
+                        startAllBackgroundHosts(act);
+                        FusionGeckoHelper.injectScripts(manager, active);
+                    }
                 }
                 showExtensionsDialog(act, manager);
             } else if (selected.contains("Setelan Layer")) {
@@ -2899,8 +2917,8 @@ public class FusionExtensionHelper {
                 setLayerConfig(act, chosen);
                 FusionToast.makeText(act, "✅ Layer AI Pro disetel ke: " + chosen, Toast.LENGTH_SHORT).show();
 
-                if (manager != null && manager.mActiveWebView != null) {
-                    manager.mActiveWebView.evaluateJavascript(
+                if (manager != null) {
+                    manager.evalOnActiveTab(
                         "(function() {\n" +
                         "  try {\n" +
                         "    if (window.chrome && window.chrome.storage && window.chrome.storage.local) {\n" +
@@ -2908,7 +2926,7 @@ public class FusionExtensionHelper {
                         "    }\n" +
                         "    window.postMessage({ __gapt: 1, type: 'cfg', layer: '" + chosen + "' }, '*');\n" +
                         "  } catch(e) {}\n" +
-                        "})();", null);
+                        "})();");
                 }
                 dialog.dismiss();
             }
@@ -2945,8 +2963,15 @@ public class FusionExtensionHelper {
                 boolean ok = installPackage(act, selected);
                 if (ok) {
                     FusionToast.makeText(act, "✅ Ekstensi berhasil dipasang dari " + selected.getName(), Toast.LENGTH_LONG).show();
-                    if (manager != null && manager.mActiveWebView != null) {
-                        setupWebView(manager.mActiveWebView);
+                    if (manager != null) {
+                        if (manager.mActiveWebView != null) {
+                            setupWebView(manager.mActiveWebView);
+                        }
+                        FusionTab active = FusionTabStateHelper.getActiveTab(manager);
+                        if (active != null && active.isGecko()) {
+                            startAllBackgroundHosts(act);
+                            FusionGeckoHelper.injectScripts(manager, active);
+                        }
                     }
                     showExtensionsDialog(act, manager);
                 } else {
@@ -2965,8 +2990,15 @@ public class FusionExtensionHelper {
                     boolean ok = installPackage(act, customFile);
                     if (ok) {
                         FusionToast.makeText(act, "✅ Ekstensi berhasil dipasang!", Toast.LENGTH_LONG).show();
-                        if (manager != null && manager.mActiveWebView != null) {
-                            setupWebView(manager.mActiveWebView);
+                        if (manager != null) {
+                            if (manager.mActiveWebView != null) {
+                                setupWebView(manager.mActiveWebView);
+                            }
+                            FusionTab active = FusionTabStateHelper.getActiveTab(manager);
+                            if (active != null && active.isGecko()) {
+                                startAllBackgroundHosts(act);
+                                FusionGeckoHelper.injectScripts(manager, active);
+                            }
                         }
                         showExtensionsDialog(act, manager);
                     } else {

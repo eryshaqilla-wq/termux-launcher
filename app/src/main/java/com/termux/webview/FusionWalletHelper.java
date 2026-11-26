@@ -671,6 +671,8 @@ public class FusionWalletHelper {
                 if (activeUrl == null || activeUrl.isEmpty()) {
                     if (mgr.mActiveWebView != null) {
                         activeUrl = mgr.mActiveWebView.getUrl();
+                    } else if (activeTab != null && activeTab.mUrl != null) {
+                        activeUrl = activeTab.mUrl;
                     }
                 }
             }

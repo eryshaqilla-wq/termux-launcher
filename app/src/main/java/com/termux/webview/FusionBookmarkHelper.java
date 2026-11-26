@@ -85,9 +85,7 @@ public class FusionBookmarkHelper {
             if (which >= 0 && which < list.size()) {
                 String targetUrl = list.get(which).url;
                 manager.closeAllDrawers();
-                if (manager.mActiveWebView != null) {
-                    manager.mActiveWebView.loadUrl(targetUrl);
-                }
+                manager.loadUrlOnActiveTab(targetUrl);
             }
         });
         b.setNeutralButton("Hapus Semua", (dialog, which) -> {

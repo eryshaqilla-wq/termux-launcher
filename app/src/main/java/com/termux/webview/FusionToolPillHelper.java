@@ -178,12 +178,11 @@ public class FusionToolPillHelper {
             public void onClick(View v) {
                 String nextAddr = manager.switchToNextWallet();
                 updateToolPillUi(manager);
-                WebView webView = manager.mActiveWebView;
-                if (webView != null && nextAddr != null) {
+                if (nextAddr != null) {
                     if (manager.mIsRecording) {
-                        webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_wallet', timestamp:Date.now(), text:'Ganti Wallet -> " + nextAddr + "'});", null);
+                        manager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'next_wallet', timestamp:Date.now(), text:'Ganti Wallet -> " + nextAddr + "'});");
                     }
-                    webView.evaluateJavascript("try { window.dispatchEvent(new CustomEvent('accountsChanged', {detail: ['" + nextAddr + "']})); } catch(_){}", null);
+                    manager.evalOnActiveTab("try { window.dispatchEvent(new CustomEvent('accountsChanged', {detail: ['" + nextAddr + "']})); } catch(_){}");
                 }
             }
         });
@@ -242,15 +241,14 @@ public class FusionToolPillHelper {
                     }
                 } catch (Throwable ignored) {}
 
-                WebView wv = manager.mActiveWebView;
                 if (sHasFormFocus) {
-                    if (wv != null && addr != null) {
-                        wv.evaluateJavascript("(function(){ if (window.__AGY_PASTE_WALLET__) return window.__AGY_PASTE_WALLET__('" + addr + "'); })()", null);
+                    if (addr != null) {
+                        manager.evalOnActiveTab("(function(){ if (window.__AGY_PASTE_WALLET__) return window.__AGY_PASTE_WALLET__('" + addr + "'); })()");
                     }
                     FusionToast.makeText((Context) act, (CharSequence) ("Alamat (" + getShortNetworkName() + ") ditempel ke form!"), 0).show();
                 } else {
-                    if (manager.mIsRecording && wv != null && addr != null) {
-                        wv.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'copy_wallet', timestamp:Date.now(), text:'Salin Wallet -> " + addr + "', value:'" + addr + "'});", null);
+                    if (manager.mIsRecording && addr != null) {
+                        manager.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'copy_wallet', timestamp:Date.now(), text:'Salin Wallet -> " + addr + "', value:'" + addr + "'});");
                     }
                     String shortAddr = (addr != null && addr.length() > 14) ? (addr.substring(0, 6) + "..." + addr.substring(addr.length() - 4)) : addr;
                     FusionToast.makeText((Context) act, (CharSequence) ("Alamat (" + getShortNetworkName() + ") disalin: " + shortAddr), 0).show();
@@ -278,11 +276,11 @@ public class FusionToolPillHelper {
                     wv.clearCache(true);
                     wv.clearFormData();
                     try { WebStorage.getInstance().deleteAllData(); } catch(Throwable ignored) {}
-                    if (manager.mIsRecording) {
-                        wv.evaluateJavascript("try { localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true'); } catch(e){}; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'wipe_cache', timestamp:Date.now(), text:'Wipe Cache & Storage'});", null);
-                    } else {
-                        wv.evaluateJavascript("try { localStorage.clear(); sessionStorage.clear(); } catch(e){}", null);
-                    }
+                }
+                if (manager.mIsRecording) {
+                    manager.evalOnActiveTab("try { localStorage.clear(); sessionStorage.clear(); sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true'); } catch(e){}; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'wipe_cache', timestamp:Date.now(), text:'Wipe Cache & Storage'});");
+                } else {
+                    manager.evalOnActiveTab("try { localStorage.clear(); sessionStorage.clear(); } catch(e){}");
                 }
                 FusionProfileManager.clearAllCookiesAndStorage();
                 manager.reloadActiveTab();
@@ -310,9 +308,8 @@ public class FusionToolPillHelper {
                     sCurrentFpName = newDev;
                 }
                 updateToolPillUi(manager);
-                WebView wv = manager.mActiveWebView;
-                if (wv != null && manager.mIsRecording) {
-                    wv.evaluateJavascript("(function(){ var fp = '" + sCurrentFpName + "'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'fingerprint', timestamp:Date.now(), text:'Fingerprint -> ' + fp, value:fp}); return fp; })()", null);
+                if (manager.mIsRecording) {
+                    manager.evalOnActiveTab("(function(){ var fp = '" + sCurrentFpName + "'; if (window.AgyRecorder && window.AgyRecorder.isRecording) window.AgyRecorder.recordEvent({type:'fingerprint', timestamp:Date.now(), text:'Fingerprint -> ' + fp, value:fp}); return fp; })()");
                 }
             }
         });

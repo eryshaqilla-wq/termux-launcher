@@ -341,6 +341,12 @@ public class FusionCdpBridge {
      */
     public static void applyUserAgentOverrideAsync(final android.content.Context ctx, final String profileName,
                                                    final FusionProfileManager.DeviceProfile dev, final boolean isDesktop) {
+        applyUserAgentOverrideAsync(ctx, profileName, dev, isDesktop, null);
+    }
+
+    public static void applyUserAgentOverrideAsync(final android.content.Context ctx, final String profileName,
+                                                   final FusionProfileManager.DeviceProfile dev, final boolean isDesktop,
+                                                   final Runnable onComplete) {
         final String prof = (profileName != null && !profileName.isEmpty()) ? profileName : "default";
         final String socketName = "webview_devtools_remote_" + android.os.Process.myPid();
         Thread t = new Thread(() -> {
@@ -356,7 +362,7 @@ public class FusionCdpBridge {
                 for (int attempt = 0; attempt < 15; attempt++) {
                     targets = fetchLocalJsonTargets(socketName);
                     if (targets != null && targets.length() > 0) break;
-                    Thread.sleep(40);
+                    Thread.sleep(15);
                 }
                 if (targets == null || targets.length() == 0) return;
 
@@ -384,7 +390,12 @@ public class FusionCdpBridge {
                     if (slashIdx >= 0) wsPath = wsUrl.substring(slashIdx);
                     startPersistentCdpUaSession(socketName, targetId, wsPath, cmdPayload, applyKey);
                 }
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            } finally {
+                if (onComplete != null) {
+                    new android.os.Handler(android.os.Looper.getMainLooper()).post(onComplete);
+                }
+            }
         }, "FusionCdpUaOverride");
         t.setDaemon(true);
         t.start();
@@ -465,7 +476,7 @@ public class FusionCdpBridge {
 
         org.json.JSONObject params = new org.json.JSONObject();
         params.put("userAgent", ua);
-        params.put("acceptLanguage", "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7");
+        params.put("acceptLanguage", "id-ID,id,en-US,en");
         params.put("platform", isDesktop ? (isMac ? "MacIntel" : "Win32") : "Linux armv8l");
         params.put("userAgentMetadata", meta);
 

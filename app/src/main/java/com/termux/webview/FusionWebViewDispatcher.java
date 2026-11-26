@@ -15,6 +15,11 @@ public class FusionWebViewDispatcher {
         if (str.startsWith("WEBVIEW_CONFIG ")) {
             try {
                 JSONObject jSONObject = new JSONObject(str.substring(15));
+                boolean bm = jSONObject.optBoolean("block_media", false);
+                boolean bf = jSONObject.optBoolean("block_fonts", false);
+                boolean bc = jSONObject.optBoolean("block_css", false);
+                boolean bt = jSONObject.optBoolean("block_trackers", FusionWebViewClient.sEnableBuiltinTrackerBlock);
+                FusionGeckoHelper.applyBlockers(bm, bf, bc, bt);
                 fusionWebViewManager.openConfig(
                     jSONObject.getString("url"),
                     jSONObject.optString("profile", "default"),
@@ -27,12 +32,25 @@ public class FusionWebViewDispatcher {
                     jSONObject.optString("proxy", ""),
                     jSONObject.optInt("interval", 0),
                     jSONObject.optBoolean("isHeadless", false),
-                    jSONObject.optBoolean("isNewTab", false)
+                    jSONObject.optBoolean("isNewTab", false),
+                    jSONObject.optString("engine", "")
                 );
                 return;
             } catch (Exception unused) {
                 return;
             }
+        }
+        if (str.equals("WEBVIEW_DEFAULT_ENGINE") || str.equals("WEBVIEW_GET_DEFAULT_ENGINE")
+            || str.startsWith("WEBVIEW_DEFAULT_ENGINE ") || str.startsWith("WEBVIEW_ENGINE_DEFAULT ")) {
+            String arg = "";
+            int sp = str.indexOf(' ');
+            if (sp > 0) {
+                arg = str.substring(sp + 1).trim();
+            }
+            if (!arg.isEmpty() && !"status".equalsIgnoreCase(arg) && !"get".equalsIgnoreCase(arg)) {
+                fusionWebViewManager.setDefaultEngine(arg);
+            }
+            return;
         }
         if (str.startsWith("WEBVIEW_HEADLESS ")) {
             String targetUrl = str.substring(17).trim();
@@ -180,8 +198,12 @@ public class FusionWebViewDispatcher {
         }
         if (str.startsWith("WEBVIEW_PROFILE_LOAD ") || str.startsWith("WEBVIEW_LOAD_PROFILE ")) {
             String prof = str.substring(str.indexOf(" ") + 1).trim();
-            if (fusionWebViewManager.mActiveWebView != null) {
-                FusionProfileManager.applyProfile(prof, fusionWebViewManager.mActiveWebView, false);
+            if (fusionWebViewManager.mActivity != null) {
+                fusionWebViewManager.mActivity.runOnUiThread(() -> {
+                    if (fusionWebViewManager.mActiveWebView != null) {
+                        FusionProfileManager.applyProfile(prof, fusionWebViewManager.mActiveWebView, false);
+                    }
+                });
             }
             return;
         }
@@ -351,17 +373,22 @@ public class FusionWebViewDispatcher {
             java.io.File f = new java.io.File(path);
             if (f.exists()) {
                 boolean ok = FusionExtensionHelper.installPackage(fusionWebViewManager.mActivity, f);
-                if (ok && fusionWebViewManager.mActiveWebView != null) {
-                    FusionExtensionHelper.setupWebView(fusionWebViewManager.mActiveWebView);
+                if (ok) {
+                    if (fusionWebViewManager.mActiveWebView != null) {
+                        FusionExtensionHelper.setupWebView(fusionWebViewManager.mActiveWebView);
+                    }
+                    FusionTab active = FusionTabStateHelper.getActiveTab(fusionWebViewManager);
+                    if (active != null && active.isGecko()) {
+                        FusionExtensionHelper.startAllBackgroundHosts(fusionWebViewManager.mActivity);
+                        FusionGeckoHelper.injectScripts(fusionWebViewManager, active);
+                    }
                 }
             }
         } else if (str.startsWith("WEBVIEW_EXTENSION_LAYER ") || str.startsWith("WEBVIEW_EXT_LAYER ")) {
             String layer = str.substring(str.indexOf(" ") + 1).trim();
             FusionExtensionHelper.setLayerConfig(fusionWebViewManager.mActivity, layer);
-            if (fusionWebViewManager.mActiveWebView != null) {
-                fusionWebViewManager.mActiveWebView.evaluateJavascript(
-                    "(function(){ if(window.chrome&&window.chrome.storage&&window.chrome.storage.local) { window.chrome.storage.local.set({gapt_layer:'" + layer + "'}); } window.postMessage({__gapt:1,type:'cfg',layer:'" + layer + "'},'*'); })();", null);
-            }
+            fusionWebViewManager.evalOnActiveTab(
+                "(function(){ if(window.chrome&&window.chrome.storage&&window.chrome.storage.local) { window.chrome.storage.local.set({gapt_layer:'" + layer + "'}); } window.postMessage({__gapt:1,type:'cfg',layer:'" + layer + "'},'*'); })();");
         }
     }
 }

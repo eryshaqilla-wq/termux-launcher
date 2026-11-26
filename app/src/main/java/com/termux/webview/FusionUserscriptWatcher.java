@@ -102,8 +102,9 @@ public class FusionUserscriptWatcher {
                 @Override
                 public void run() {
                     FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-                    if (mgr == null || mgr.mActiveWebView == null) return;
-                    WebView wv = mgr.mActiveWebView;
+                    if (mgr == null) return;
+                    FusionTab activeTab = FusionTabStateHelper.getActiveTab(mgr);
+                    if (mgr.mActiveWebView == null && (activeTab == null || !activeTab.isGecko())) return;
 
                     String wrapped = "(function() { try {\n" +
                             polyfill + "\n" +
@@ -111,7 +112,7 @@ public class FusionUserscriptWatcher {
                             "console.log('[Fusion Hot-Reload] Re-injected: " + scriptFile.getName() + "');\n" +
                             "} catch(err) { console.error('[Fusion Hot-Reload Error " + scriptFile.getName() + "]:', err); } })();";
 
-                    wv.evaluateJavascript(wrapped, null);
+                    mgr.evalOnActiveTab(wrapped);
 
                     if (mgr.mActivity != null) {
                         FusionToast.show(mgr.mActivity, "⚡ Hot-Reloaded: " + scriptFile.getName());

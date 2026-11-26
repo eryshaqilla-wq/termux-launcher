@@ -338,6 +338,9 @@ handle_webview() {
             echo "  termux-ipc webview [options] <url>"
             echo ""
             echo "Pilihan URL & Web3:"
+            echo "  --gecko               Buka URL ini menggunakan engine Mozilla GeckoView"
+            echo "  --default             Buka URL ini menggunakan Android System WebView (default)"
+            echo "  --default-webview <gecko|default|status> Atur engine WebView default permanen"
             echo "  --wallet [name]       Pilih dompet dari wallets_db.json (default: Master)"
             echo "  --<chain>             Pilih jaringan (contoh: --base, --bsc, --arbitrum, --morph)"
             echo "  --auto                Mode auto-sign transaksi otomatis"
@@ -406,12 +409,13 @@ if not tabs:
     print('Tidak ada tab WebView yang sedang aktif.')
     sys.exit(0)
 
-print(f\"{'IDX':<4} {'STATUS':<10} {'MODE':<10} {'VIEW':<9} {'PROFILE':<12} {'TITLE':<25} {'URL'}\")
-print('-' * 95)
+print(f\"{'IDX':<4} {'STATUS':<10} {'ENGINE':<9} {'MODE':<10} {'VIEW':<9} {'PROFILE':<12} {'TITLE':<25} {'URL'}\")
+print('-' * 105)
 for t in tabs:
     idx = t.get('index', 0)
     is_active = t.get('active', False)
     status = '[ACTIVE]' if is_active else 'IDLE'
+    engine = (t.get('engine') or 'default').upper()
     is_headless = t.get('isHeadless', False) or t.get('isMinimized', False)
     mode = 'HEADLESS' if is_headless else 'NORMAL'
     is_desktop = t.get('isDesktop', False)
@@ -419,7 +423,7 @@ for t in tabs:
     profile = t.get('profile', 'default')
     title = (t.get('title') or 'New Tab')[:24]
     url = t.get('url') or 'about:blank'
-    print(f\"{idx:<4} {status:<10} {mode:<10} {view:<9} {profile:<12} {title:<25} {url}\")
+    print(f\"{idx:<4} {status:<10} {engine:<9} {mode:<10} {view:<9} {profile:<12} {title:<25} {url}\")
 " <<< "$RESP"
             fi
             return 0
@@ -902,6 +906,10 @@ for t in tabs:
     local PROFILE="default"
     local WALLET=""
     local CHAIN="base"
+    local ENGINE=""
+    local SET_DEFAULT_ENGINE=""
+    local HAS_SET_DEFAULT=0
+    local HAS_URL=0
     local IS_DESKTOP=0
     local IS_HEADLESS=0
     local IS_MONITOR=0
@@ -921,6 +929,29 @@ for t in tabs:
 
     while [ $# -gt 0 ]; do
         case "$1" in
+            --gecko|--geckoview)
+                ENGINE="gecko"
+                shift
+                ;;
+            --default|--system-webview)
+                ENGINE="default"
+                shift
+                ;;
+            --default-webview=*)
+                SET_DEFAULT_ENGINE="${1#*=}"
+                HAS_SET_DEFAULT=1
+                shift
+                ;;
+            --default-webview|default-webview)
+                HAS_SET_DEFAULT=1
+                if [ $# -ge 2 ] && [[ "$2" != --* ]] && [[ "$2" != http://* ]] && [[ "$2" != https://* ]]; then
+                    SET_DEFAULT_ENGINE="$2"
+                    shift 2
+                else
+                    SET_DEFAULT_ENGINE="status"
+                    shift 1
+                fi
+                ;;
             --proxy)
                 if [ $# -ge 2 ] && [[ "$2" != --* ]] && [[ "$2" != http://* ]] && [[ "$2" != https://* ]]; then
                     PROXY="$2"
@@ -1034,10 +1065,59 @@ for t in tabs:
                 ;;
             *)
                 URL="$1"
+                HAS_URL=1
                 shift
                 ;;
         esac
     done
+
+    local DEFAULT_ENGINE_FILE="$HOME/.fusion/default_webview"
+    local TERMUX_DEFAULT_ENGINE_FILE="/data/data/com.termux/files/home/.fusion/default_webview"
+    if [ "$HAS_SET_DEFAULT" = "1" ]; then
+        local ENG_LOWER
+        ENG_LOWER="$(echo "$SET_DEFAULT_ENGINE" | tr '[:upper:]' '[:lower:]')"
+        if [ -z "$ENG_LOWER" ] || [ "$ENG_LOWER" = "status" ] || [ "$ENG_LOWER" = "get" ]; then
+            local CUR_ENG
+            CUR_ENG=$(send_cmd "WEBVIEW_DEFAULT_ENGINE status")
+            if [ "$CUR_ENG" != "gecko" ] && [ "$CUR_ENG" != "default" ]; then
+                if [ -f "$DEFAULT_ENGINE_FILE" ]; then
+                    CUR_ENG="$(cat "$DEFAULT_ENGINE_FILE" 2>/dev/null | tr -d ' \n\r')"
+                elif [ -f "$TERMUX_DEFAULT_ENGINE_FILE" ]; then
+                    CUR_ENG="$(cat "$TERMUX_DEFAULT_ENGINE_FILE" 2>/dev/null | tr -d ' \n\r')"
+                else
+                    CUR_ENG="default"
+                fi
+            fi
+            echo "Default WebView engine: ${CUR_ENG:-default}"
+            [ "$HAS_URL" = "0" ] && return 0
+        elif [ "$ENG_LOWER" = "gecko" ] || [ "$ENG_LOWER" = "geckoview" ] || [ "$ENG_LOWER" = "firefox" ] || [ "$ENG_LOWER" = "default" ] || [ "$ENG_LOWER" = "chromium" ] || [ "$ENG_LOWER" = "webview" ]; then
+            local NORM_ENG="default"
+            if [ "$ENG_LOWER" = "gecko" ] || [ "$ENG_LOWER" = "geckoview" ] || [ "$ENG_LOWER" = "firefox" ]; then
+                NORM_ENG="gecko"
+            fi
+            mkdir -p "$(dirname "$DEFAULT_ENGINE_FILE")" 2>/dev/null || true
+            printf '%s\n' "$NORM_ENG" > "$DEFAULT_ENGINE_FILE" 2>/dev/null || true
+            if [ -d "/data/data/com.termux/files/home" ]; then
+                mkdir -p "/data/data/com.termux/files/home/.fusion" 2>/dev/null || true
+                printf '%s\n' "$NORM_ENG" > "$TERMUX_DEFAULT_ENGINE_FILE" 2>/dev/null || true
+            fi
+            local SET_RESP
+            SET_RESP=$(send_cmd "WEBVIEW_DEFAULT_ENGINE $NORM_ENG")
+            echo "[termux-ipc] Default WebView engine diatur ke: ${NORM_ENG}"
+            [ "$HAS_URL" = "0" ] && return 0
+        else
+            echo "Error: Engine tidak valid '$SET_DEFAULT_ENGINE'. Pilih: gecko | default | status"
+            return 1
+        fi
+    fi
+
+    if [ -z "$ENGINE" ]; then
+        if [ -f "$DEFAULT_ENGINE_FILE" ]; then
+            ENGINE="$(cat "$DEFAULT_ENGINE_FILE" 2>/dev/null | tr -d ' \n\r')"
+        elif [ -f "$TERMUX_DEFAULT_ENGINE_FILE" ]; then
+            ENGINE="$(cat "$TERMUX_DEFAULT_ENGINE_FILE" 2>/dev/null | tr -d ' \n\r')"
+        fi
+    fi
 
     if [ -z "$URL" ] || [ "$URL" = "home" ] || [ "$URL" = "about:home" ] || [ "$URL" = "about:newtab" ]; then
         URL="file:///android_asset/webview_engine/home.html"
@@ -1097,18 +1177,21 @@ data = {
     'proxy': sys.argv[13],
     'interval': int(sys.argv[14]) if len(sys.argv) > 14 and sys.argv[14].isdigit() else 0,
     'isHeadless': sys.argv[15] == '1' if len(sys.argv) > 15 else False,
-    'isNewTab': sys.argv[16] == '1' if len(sys.argv) > 16 else False
+    'isNewTab': sys.argv[16] == '1' if len(sys.argv) > 16 else False,
+    'engine': sys.argv[17] if len(sys.argv) > 17 else ''
 }
 print(json.dumps(data))
-" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL" "$IS_HEADLESS" "$IS_NEW_TAB")
+" "$URL" "$PROFILE" "$WALLET" "$CHAIN" "$IS_GHOST" "$IS_DESKTOP" "$IS_AUTO" "$WC" "$BLOCK_MEDIA" "$BLOCK_FONTS" "$BLOCK_TRACKERS" "$BLOCK_CSS" "$PROXY" "$INTERVAL" "$IS_HEADLESS" "$IS_NEW_TAB" "$ENGINE")
 
     local RESP
     RESP=$(send_cmd "WEBVIEW_CONFIG $CFG_PAYLOAD")
     if [ "$RESP" = "OK" ]; then
+        local ENG_LABEL=""
+        [ -n "$ENGINE" ] && ENG_LABEL=" [$ENGINE]"
         if [ "$IS_HEADLESS" = "1" ]; then
-            echo "Meluncurkan $URL di background (headless)"
+            echo "Meluncurkan $URL di background (headless)${ENG_LABEL}"
         else
-            echo "Meluncurkan $URL di tab baru"
+            echo "Meluncurkan $URL di tab baru${ENG_LABEL}"
         fi
     elif [ -n "$RESP" ]; then
         echo "$RESP"

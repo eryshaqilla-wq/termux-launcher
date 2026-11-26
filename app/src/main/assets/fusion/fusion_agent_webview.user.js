@@ -1931,7 +1931,7 @@
         } catch (_) {}
 
         // 5. Context-Aware WebGL Spoofing (Mobile vs Desktop)
-        if (!window.__FUSION_WEBGL_STEALTH__) try {
+        if (!window.__FUSION_FINGERPRINT_INJECTED__ && !window.__FUSION_WEBGL_STEALTH__) try {
             window.__FUSION_WEBGL_STEALTH__ = true;
             const hookWebGL = (proto) => {
                 if (!proto || !proto.getParameter) return;

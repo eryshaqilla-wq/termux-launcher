@@ -42,6 +42,9 @@ public class FusionWebChromeClient extends WebChromeClient {
     }
 
     public static boolean supplyFileToPendingChooser(String filePath) {
+        if (FusionGeckoHelper.supplyPendingFile(filePath)) {
+            return true;
+        }
         if (filePath == null || filePath.isEmpty()) {
             if (sPendingFileChooser != null) {
                 sPendingFileChooser.onReceiveValue(null);

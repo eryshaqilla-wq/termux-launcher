@@ -138,6 +138,106 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public int mActiveTab = 0;
     public ArrayList mTabList = new ArrayList();
     public int mNextTabId = 1;
+
+    public static final String ENGINE_DEFAULT = "default";
+    public static final String ENGINE_GECKO = "gecko";
+    private static final String PREFS_WEBVIEW = "fusion_webview_prefs";
+    private static final String KEY_DEFAULT_ENGINE = "default_webview_engine";
+
+    public static String normalizeEngine(String engine) {
+        if (engine == null) return ENGINE_DEFAULT;
+        String clean = engine.trim().toLowerCase();
+        if ("gecko".equals(clean) || "geckoview".equals(clean) || "firefox".equals(clean)) {
+            return ENGINE_GECKO;
+        }
+        return ENGINE_DEFAULT;
+    }
+
+    public String getDefaultEngine() {
+        TermuxActivity act = this.mActivity;
+        if (act == null) return ENGINE_DEFAULT;
+        try {
+            String val = act.getSharedPreferences(PREFS_WEBVIEW, Context.MODE_PRIVATE)
+                .getString(KEY_DEFAULT_ENGINE, ENGINE_DEFAULT);
+            return normalizeEngine(val);
+        } catch (Throwable ignored) {
+            return ENGINE_DEFAULT;
+        }
+    }
+
+    public void setDefaultEngine(String engine) {
+        String normalized = normalizeEngine(engine);
+        TermuxActivity act = this.mActivity;
+        if (act != null) {
+            try {
+                act.getSharedPreferences(PREFS_WEBVIEW, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_DEFAULT_ENGINE, normalized)
+                    .apply();
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    public FusionTab findTabById(int tabId) {
+        if (this.mTabList == null) return null;
+        for (int i = 0; i < this.mTabList.size(); i++) {
+            FusionTab t = (FusionTab) this.mTabList.get(i);
+            if (t != null && t.mId == tabId) {
+                return t;
+            }
+        }
+        return null;
+    }
+
+    public View getTabView(FusionTab tab) {
+        return tab != null ? tab.getRenderView() : null;
+    }
+
+    public View getActiveTabView() {
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null) {
+            View rv = active.getRenderView();
+            if (rv != null) return rv;
+        }
+        return this.mActiveWebView;
+    }
+
+    public void dispatchJsOnTab(FusionTab tab, String js) {
+        if (tab == null || js == null) return;
+        if (tab.isGecko()) {
+            FusionGeckoHelper.evaluateJs(tab, js);
+        } else if (tab.mWebView != null) {
+            tab.mWebView.evaluateJavascript(js, null);
+        }
+    }
+
+    public void loadUrlOnTab(FusionTab tab, String url) {
+        if (tab == null || url == null || url.isEmpty()) return;
+        tab.mUrl = url;
+        if (tab.isGecko()) {
+            FusionGeckoHelper.loadUrl(tab, url);
+        } else if (tab.mWebView != null) {
+            tab.mWebView.loadUrl(url);
+        }
+    }
+
+    public void loadUrlOnActiveTab(String url) {
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null) {
+            loadUrlOnTab(active, url);
+        } else if (this.mActiveWebView != null && url != null && !url.isEmpty()) {
+            this.mActiveWebView.loadUrl(url);
+        }
+    }
+
+    public void reloadTab(FusionTab tab) {
+        if (tab == null) return;
+        if (tab.isGecko()) {
+            FusionGeckoHelper.reload(tab);
+        } else if (tab.mWebView != null) {
+            tab.mWebView.reload();
+        }
+    }
     public boolean mIsDevMode = true;
     public PowerManager.WakeLock mMacroWakeLock;
     public WifiManager.WifiLock mMacroWifiLock;
@@ -315,12 +415,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
         @Override // java.lang.Runnable
         public void run() {
-            WebView webView;
             FusionWebViewManager fusionWebViewManager = this.mManager;
-            if (fusionWebViewManager == null || (webView = fusionWebViewManager.mActiveWebView) == null) {
+            if (fusionWebViewManager == null) {
                 return;
             }
-            webView.evaluateJavascript(this.mJsCode, null);
+            fusionWebViewManager.evalOnActiveTab(this.mJsCode);
         }
     }
 
@@ -354,8 +453,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         public final int mIntervalMins;
         public final boolean mIsHeadless;
         public final boolean mIsNewTab;
+        public final String mEngine;
 
-        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab) {
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab, String engine) {
             this.mManager = fusionWebViewManager;
             this.mUrl = str;
             this.mProfile = str2;
@@ -369,18 +469,23 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             this.mIntervalMins = i;
             this.mIsHeadless = isHeadless;
             this.mIsNewTab = isNewTab;
+            this.mEngine = engine;
+        }
+
+        public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab) {
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, isNewTab, "");
         }
 
         public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
-            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, false);
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, false, "");
         }
 
         public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i) {
-            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, false, false);
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, str6, i, false, false, "");
         }
 
         public OpenRunnable(FusionWebViewManager fusionWebViewManager, String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, "", 0, false, false);
+            this(fusionWebViewManager, str, str2, str3, str4, z, z2, z3, str5, "", 0, false, false, "");
         }
 
         @Override // java.lang.Runnable
@@ -389,7 +494,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (fusionWebViewManager == null) {
                 return;
             }
-            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri, this.mProxy, this.mIntervalMins, this.mIsHeadless, this.mIsNewTab);
+            fusionWebViewManager.openUrlInternal(this.mUrl, this.mProfile, this.mWalletName, this.mChainKey, this.mIsGhost, this.mIsDesktop, this.mIsAuto, this.mWcUri, this.mProxy, this.mIntervalMins, this.mIsHeadless, this.mIsNewTab, this.mEngine);
         }
     }
 
@@ -419,10 +524,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         @Override // android.view.View.OnClickListener
         public void onClick(View view) {
             FusionWebViewManager fusionWebViewManager = this.mManager;
-            if (fusionWebViewManager == null || fusionWebViewManager.mActiveWebView == null) {
+            if (fusionWebViewManager == null) {
                 return;
             }
-            this.mManager.mActiveWebView.reload();
+            fusionWebViewManager.reloadActiveTab();
         }
     }
 
@@ -595,8 +700,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             FusionToolPillHelper.syncToolPillPosition(this);
             FusionToolPillHelper.updateToolPillUi(this);
         }
-        if (fusionTabCreateTabInternal != null && fusionTabCreateTabInternal.mWebView != null) {
-            fusionTabCreateTabInternal.mWebView.loadUrl(str);
+        if (fusionTabCreateTabInternal != null) {
+            if (fusionTabCreateTabInternal.isGecko()) {
+                FusionGeckoHelper.loadUrl(fusionTabCreateTabInternal, str);
+            } else if (fusionTabCreateTabInternal.mWebView != null) {
+                fusionTabCreateTabInternal.mWebView.loadUrl(str);
+            }
         }
         updateContextUi();
     }
@@ -630,6 +739,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void clearWebviewCache() {
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null && active.isGecko()) {
+            FusionGeckoHelper.clearSessionData(active);
+        }
         WebView webView = this.mActiveWebView;
         if (webView != null) {
             webView.clearCache(true);
@@ -771,23 +884,22 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 updateMenuTexts();
                 FusionToolPillHelper.updateToolPillUi(FusionWebViewManager.this);
             });
-            pushWalletJsToWebView(this.mActiveWebView, cleanName, cleanAddr);
+            if (activeTab != null && activeTab.isGecko()) {
+                String qAddr = JSONObject.quote(cleanAddr);
+                String qName = JSONObject.quote(cleanName);
+                FusionGeckoHelper.evaluateJs(activeTab,
+                    "(function(){window.__FUSION_WALLET_NAME__=" + qName + ";window.__FUSION_ACTIVE_WALLET_NAME__=" + qName + ";window.__FUSION_WALLET_ADDRESS__=" + qAddr + ";window.__FUSION_ADDRESS__=" + qAddr + ";try{if(window.ethereum&&window.ethereum.emit){window.ethereum.selectedAddress=" + qAddr + ";window.ethereum.emit('accountsChanged',[" + qAddr + "]);}}catch(e){}})();"
+                );
+            } else {
+                pushWalletJsToWebView(this.mActiveWebView, cleanName, cleanAddr);
+            }
         }
         return true;
     }
 
     public boolean switchWalletDirectOnTab(int tabId, String targetName, String address, String chainKey) {
         if (address == null || address.trim().isEmpty()) return false;
-        FusionTab targetTab = null;
-        if (this.mTabList != null) {
-            for (int i = 0; i < this.mTabList.size(); i++) {
-                FusionTab t = (FusionTab) this.mTabList.get(i);
-                if (t != null && t.mId == tabId) {
-                    targetTab = t;
-                    break;
-                }
-            }
-        }
+        FusionTab targetTab = findTabById(tabId);
         if (targetTab == null) return false;
         String cleanName = (targetName != null && !targetName.trim().isEmpty()) ? targetName.trim() : "worker";
         String cleanAddr = address.trim();
@@ -801,7 +913,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 FusionToolPillHelper.updateToolPillUi(FusionWebViewManager.this);
             });
         }
-        pushWalletJsToWebView(targetTab.mWebView, cleanName, cleanAddr);
+        if (targetTab.isGecko()) {
+            String qAddr = JSONObject.quote(cleanAddr);
+            String qName = JSONObject.quote(cleanName);
+            FusionGeckoHelper.evaluateJs(targetTab,
+                "(function(){window.__FUSION_WALLET_NAME__=" + qName + ";window.__FUSION_ACTIVE_WALLET_NAME__=" + qName + ";window.__FUSION_WALLET_ADDRESS__=" + qAddr + ";window.__FUSION_ADDRESS__=" + qAddr + ";try{if(window.ethereum&&window.ethereum.emit){window.ethereum.selectedAddress=" + qAddr + ";window.ethereum.emit('accountsChanged',[" + qAddr + "]);}}catch(e){}})();"
+            );
+        } else {
+            pushWalletJsToWebView(targetTab.mWebView, cleanName, cleanAddr);
+        }
         return true;
     }
 
@@ -816,58 +936,48 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         updateMenuTexts();
         FusionToolPillHelper.updateToolPillUi(this);
-        if (this.mActiveWebView != null && this.mActivity != null) {
+        if (this.mActivity != null) {
             final int chainId = FusionChainHelper.getCurrentChainId();
             final String hexId = "0x" + Integer.toHexString(chainId);
-            this.mActivity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (mActiveWebView != null) {
-                        mActiveWebView.evaluateJavascript(
-                            "(function(){ if(window.ethereum && window.ethereum.emit){ window.ethereum.emit('chainChanged', '" + hexId + "'); } window.postMessage({type:'FUSION_CHAIN_CHANGED', chainId:" + chainId + ", hexId:'" + hexId + "'}, '*'); })();", null);
-                    }
-                }
-            });
+            final String js = "(function(){ if(window.ethereum && window.ethereum.emit){ window.ethereum.emit('chainChanged', '" + hexId + "'); } window.postMessage({type:'FUSION_CHAIN_CHANGED', chainId:" + chainId + ", hexId:'" + hexId + "'}, '*'); })();";
+            this.mActivity.runOnUiThread(() -> evalOnActiveTab(js));
         }
         return true;
     }
 
     public boolean dispatchNativeTouch(final float x, final float y) {
-        if (this.mActivity == null || this.mActiveWebView == null) return false;
-        return dispatchNativeTouchOnWebView(this.mActiveWebView, x, y);
+        View target = getActiveTabView();
+        if (this.mActivity == null || target == null) return false;
+        return dispatchNativeTouchOnView(target, x, y);
     }
 
     public boolean dispatchNativeTouchOnTab(final int tabId, final float x, final float y) {
-        WebView target = findWebViewByTabId(tabId);
+        FusionTab tab = findTabById(tabId);
+        View target = tab != null ? tab.getRenderView() : null;
         if (this.mActivity == null || target == null) return false;
-        return dispatchNativeTouchOnWebView(target, x, y);
+        return dispatchNativeTouchOnView(target, x, y);
     }
 
     private WebView findWebViewByTabId(int tabId) {
-        if (this.mTabList == null) return null;
-        for (int i = 0; i < this.mTabList.size(); i++) {
-            FusionTab t = (FusionTab) this.mTabList.get(i);
-            if (t != null && t.mId == tabId) {
-                return t.mWebView;
-            }
-        }
-        return null;
+        FusionTab t = findTabById(tabId);
+        return t != null ? t.mWebView : null;
     }
 
     public boolean setTabKeepAlive(int tabId, boolean keepAlive) {
-        if (this.mTabList == null) return false;
-        for (int i = 0; i < this.mTabList.size(); i++) {
-            FusionTab t = (FusionTab) this.mTabList.get(i);
-            if (t != null && t.mId == tabId) {
-                t.mKeepAliveBackground = keepAlive;
-                return true;
-            }
+        FusionTab t = findTabById(tabId);
+        if (t != null) {
+            t.mKeepAliveBackground = keepAlive;
+            return true;
         }
         return false;
     }
 
     public String captureTabScreenshot(final int tabId, final String outPath) {
-        final WebView target = (tabId < 0) ? this.mActiveWebView : findWebViewByTabId(tabId);
+        FusionTab targetTab = (tabId < 0) ? FusionTabStateHelper.getActiveTab(this) : findTabById(tabId);
+        if (targetTab != null && targetTab.isGecko()) {
+            return FusionGeckoHelper.captureScreenshot(targetTab, outPath, this.mActivity);
+        }
+        final View target = (targetTab != null) ? targetTab.getRenderView() : getActiveTabView();
         if (this.mActivity == null || target == null || outPath == null || outPath.trim().isEmpty()) {
             return null;
         }
@@ -899,17 +1009,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         return resRef.get();
     }
 
-    private boolean dispatchNativeTouchOnWebView(final WebView targetWv, final float x, final float y) {
-        if (this.mActivity == null || targetWv == null) return false;
+    private boolean dispatchNativeTouchOnView(final View targetView, final float x, final float y) {
+        if (this.mActivity == null || targetView == null) return false;
         this.mActivity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
                 long now = SystemClock.uptimeMillis();
                 MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
-                targetWv.dispatchTouchEvent(down);
+                targetView.dispatchTouchEvent(down);
                 down.recycle();
                 MotionEvent up = MotionEvent.obtain(now, now + 40, MotionEvent.ACTION_UP, x, y, 0);
-                targetWv.dispatchTouchEvent(up);
+                targetView.dispatchTouchEvent(up);
                 up.recycle();
             }
         });
@@ -917,16 +1027,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public boolean dispatchNativeSwipe(final float x1, final float y1, final float x2, final float y2, final int durationMs) {
-        return dispatchNativeSwipeOnWebView(this.mActiveWebView, x1, y1, x2, y2, durationMs);
+        return dispatchNativeSwipeOnView(getActiveTabView(), x1, y1, x2, y2, durationMs);
     }
 
     public boolean dispatchNativeSwipeOnTab(final int tabId, final float x1, final float y1, final float x2, final float y2, final int durationMs) {
-        WebView target = (tabId < 0) ? this.mActiveWebView : findWebViewByTabId(tabId);
-        return dispatchNativeSwipeOnWebView(target, x1, y1, x2, y2, durationMs);
+        FusionTab tab = (tabId < 0) ? FusionTabStateHelper.getActiveTab(this) : findTabById(tabId);
+        View target = (tab != null) ? tab.getRenderView() : getActiveTabView();
+        return dispatchNativeSwipeOnView(target, x1, y1, x2, y2, durationMs);
     }
 
-    private boolean dispatchNativeSwipeOnWebView(final WebView targetWv, final float x1, final float y1, final float x2, final float y2, final int durationMs) {
-        if (this.mActivity == null || targetWv == null) return false;
+    private boolean dispatchNativeSwipeOnView(final View targetView, final float x1, final float y1, final float x2, final float y2, final int durationMs) {
+        if (this.mActivity == null || targetView == null) return false;
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -939,7 +1050,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         @Override
                         public void run() {
                             MotionEvent down = MotionEvent.obtain(startTime, startTime, MotionEvent.ACTION_DOWN, x1, y1, 0);
-                            targetWv.dispatchTouchEvent(down);
+                            targetView.dispatchTouchEvent(down);
                             down.recycle();
                         }
                     });
@@ -954,7 +1065,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                             @Override
                             public void run() {
                                 MotionEvent move = MotionEvent.obtain(startTime, curTime, MotionEvent.ACTION_MOVE, curX, curY, 0);
-                                targetWv.dispatchTouchEvent(move);
+                                targetView.dispatchTouchEvent(move);
                                 move.recycle();
                             }
                         });
@@ -965,7 +1076,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         @Override
                         public void run() {
                             MotionEvent up = MotionEvent.obtain(startTime, endTime, MotionEvent.ACTION_UP, x2, y2, 0);
-                            targetWv.dispatchTouchEvent(up);
+                            targetView.dispatchTouchEvent(up);
                             up.recycle();
                         }
                     });
@@ -976,23 +1087,41 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public boolean navigateTabAction(final int tabId, final String action, final String url) {
-        final WebView target = (tabId < 0) ? this.mActiveWebView : findWebViewByTabId(tabId);
-        if (this.mActivity == null || target == null || action == null) return false;
+        final FusionTab targetTab = (tabId < 0) ? FusionTabStateHelper.getActiveTab(this) : findTabById(tabId);
+        final View targetView = (targetTab != null) ? targetTab.getRenderView() : getActiveTabView();
+        if (this.mActivity == null || targetView == null || action == null) return false;
         final String act = action.trim().toLowerCase();
         final CountDownLatch latch = new CountDownLatch(1);
         final AtomicBoolean result = new AtomicBoolean(true);
         this.mActivity.runOnUiThread(() -> {
             try {
-                if ("back".equals(act)) {
-                    if (target.canGoBack()) target.goBack();
-                    else result.set(false);
-                } else if ("forward".equals(act)) {
-                    if (target.canGoForward()) target.goForward();
-                    else result.set(false);
-                } else if ("reload".equals(act) || "refresh".equals(act)) {
-                    target.reload();
-                } else if ("url".equals(act) && url != null && !url.trim().isEmpty()) {
-                    target.loadUrl(url.trim());
+                if (targetTab != null && targetTab.isGecko()) {
+                    if ("back".equals(act)) {
+                        FusionGeckoHelper.goBack(targetTab);
+                    } else if ("forward".equals(act)) {
+                        FusionGeckoHelper.goForward(targetTab);
+                    } else if ("reload".equals(act) || "refresh".equals(act)) {
+                        FusionGeckoHelper.reload(targetTab);
+                    } else if ("url".equals(act) && url != null && !url.trim().isEmpty()) {
+                        FusionGeckoHelper.loadUrl(targetTab, url.trim());
+                    } else {
+                        result.set(false);
+                    }
+                } else if (targetView instanceof WebView) {
+                    WebView target = (WebView) targetView;
+                    if ("back".equals(act)) {
+                        if (target.canGoBack()) target.goBack();
+                        else result.set(false);
+                    } else if ("forward".equals(act)) {
+                        if (target.canGoForward()) target.goForward();
+                        else result.set(false);
+                    } else if ("reload".equals(act) || "refresh".equals(act)) {
+                        target.reload();
+                    } else if ("url".equals(act) && url != null && !url.trim().isEmpty()) {
+                        target.loadUrl(url.trim());
+                    } else {
+                        result.set(false);
+                    }
                 } else {
                     result.set(false);
                 }
@@ -1007,7 +1136,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public boolean dispatchNativeLongPress(final float x, final float y, final int durationMs) {
-        if (this.mActivity == null || this.mActiveWebView == null) return false;
+        final View targetView = getActiveTabView();
+        if (this.mActivity == null || targetView == null) return false;
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -1018,9 +1148,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     mActivity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (mActiveWebView == null) return;
                             MotionEvent down = MotionEvent.obtain(startTime, startTime, MotionEvent.ACTION_DOWN, x, y, 0);
-                            mActiveWebView.dispatchTouchEvent(down);
+                            targetView.dispatchTouchEvent(down);
                             down.recycle();
                         }
                     });
@@ -1031,9 +1160,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     mActivity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            if (mActiveWebView == null) return;
                             MotionEvent up = MotionEvent.obtain(startTime, endTime, MotionEvent.ACTION_UP, x, y, 0);
-                            mActiveWebView.dispatchTouchEvent(up);
+                            targetView.dispatchTouchEvent(up);
                             up.recycle();
                         }
                     });
@@ -1050,8 +1178,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             public void run() {
                 try {
                     View view = mActivity.getCurrentFocus();
-                    if (view == null && mActiveWebView != null) {
-                        view = mActiveWebView;
+                    if (view == null) {
+                        view = getActiveTabView();
                     }
                     if (view != null) {
                         InputMethodManager imm = (InputMethodManager) mActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -1065,20 +1193,19 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public String evaluateJsSync(final String str, long timeoutMs) {
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null && active.isGecko()) {
+            return FusionGeckoHelper.evaluateJsSync(active, str, timeoutMs);
+        }
         return evaluateJsOnWebViewSync(this.mActiveWebView, str, timeoutMs);
     }
 
     public String evaluateJsOnTabSync(int tabId, final String str, long timeoutMs) {
-        WebView targetWv = null;
-        if (this.mTabList != null) {
-            for (int i = 0; i < this.mTabList.size(); i++) {
-                FusionTab t = (FusionTab) this.mTabList.get(i);
-                if (t != null && t.mId == tabId) {
-                    targetWv = t.mWebView;
-                    break;
-                }
-            }
+        FusionTab targetTab = findTabById(tabId);
+        if (targetTab != null && targetTab.isGecko()) {
+            return FusionGeckoHelper.evaluateJsSync(targetTab, str, timeoutMs);
         }
+        WebView targetWv = targetTab != null ? targetTab.mWebView : null;
         if (targetWv == null) return null;
         return evaluateJsOnWebViewSync(targetWv, str, timeoutMs);
     }
@@ -1110,8 +1237,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public String getWebviewStateJson() {
         JSONObject obj = new JSONObject();
         try {
-            obj.put("url", this.mActiveWebView != null ? this.mActiveWebView.getUrl() : "");
-            obj.put("title", this.mActiveWebView != null ? this.mActiveWebView.getTitle() : "");
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+            String curUrl = this.mActiveWebView != null ? this.mActiveWebView.getUrl() : (activeTab != null && activeTab.mUrl != null ? activeTab.mUrl : "");
+            String curTitle = this.mActiveWebView != null ? this.mActiveWebView.getTitle() : (activeTab != null && activeTab.mTitle != null ? activeTab.mTitle : "");
+            obj.put("url", curUrl);
+            obj.put("title", curTitle);
+            obj.put("engine", activeTab != null && activeTab.mEngine != null ? activeTab.mEngine : ENGINE_DEFAULT);
+            obj.put("default_engine", getDefaultEngine());
             obj.put("active_tab", this.mActiveTab);
             obj.put("total_tabs", this.mTabList != null ? this.mTabList.size() : 0);
             obj.put("wallet_name", this.mCurrentWalletName != null ? this.mCurrentWalletName : "");
@@ -1120,7 +1252,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             obj.put("chain_id", FusionChainHelper.getCurrentChainId());
             obj.put("chain_name", FusionChainHelper.getCurrentChainName());
             obj.put("chain_symbol", FusionChainHelper.getCurrentChainSymbol());
-            FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
             if (activeTab != null) {
                 obj.put("profile", activeTab.mProfile != null ? activeTab.mProfile : "default");
                 obj.put("is_headless", activeTab.mIsHeadless);
@@ -1139,7 +1270,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             appCompatActivity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    if (mActiveWebView != null) {
+                    FusionTab active = FusionTabStateHelper.getActiveTab(FusionWebViewManager.this);
+                    if (active != null && active.isGecko()) {
+                        FusionGeckoHelper.reload(active);
+                    } else if (mActiveWebView != null) {
                         mActiveWebView.reload();
                     }
                 }
@@ -1148,7 +1282,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public String rotateDeviceFingerprint() {
-        if (mActiveWebView != null) {
+        FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+        if (mActiveWebView != null || (activeTab != null && activeTab.isGecko())) {
             String randProf = "fp_" + (System.currentTimeMillis() % 100000);
             FusionProfileManager.DeviceProfile dev = FusionProfileManager.getDeviceForProfile(randProf);
             AppCompatActivity appCompatActivity = this.mActivity;
@@ -1158,12 +1293,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     public void run() {
                         if (mActiveWebView != null) {
                             mActiveWebView.getSettings().setUserAgentString(FusionProfileManager.getEffectiveUserAgent(appCompatActivity, dev, false));
-                            mActiveWebView.evaluateJavascript(
-                                "window.__FUSION_DEVICE__ = " + dev.toJsonString() + ";" +
-                                "if(window.__applyFingerprintFaker) window.__applyFingerprintFaker();", null
-                            );
-                            FusionToast.makeText(appCompatActivity, "Fingerprint: " + dev.name, Toast.LENGTH_SHORT).show();
                         }
+                        evalOnActiveTab(
+                            "window.__FUSION_DEVICE__ = " + dev.toJsonString() + ";" +
+                            "if(window.__applyFingerprintFaker) window.__applyFingerprintFaker();"
+                        );
+                        FusionToast.makeText(appCompatActivity, "Fingerprint: " + dev.name, Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -1288,8 +1423,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
     public void pasteTextIntoActiveWebView(final String text) {
         if (text == null || this.mActivity == null) return;
-        final WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
-        if (webView == null) return;
         this.mActivity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -1315,7 +1448,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     "    try { document.execCommand('insertText', false, " + escaped + "); } catch(_) {}" +
                     "  }" +
                     "})()";
-                webView.evaluateJavascript(js, null);
+                evalOnActiveTab(js);
             }
         });
     }
@@ -1446,30 +1579,50 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (this.mActiveWebView != null) {
                 applyThemeToWebView(this.mActiveWebView, this.mActivity);
             }
+            FusionGeckoHelper.applyTheme(this.mActivity);
         });
     }
 
     public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5) {
-        return createTabInternal(str, str2, str3, str4, z, z2, z3, str5, false);
+        return createTabInternal(str, str2, str3, str4, z, z2, z3, str5, false, "");
     }
 
     public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, boolean isHeadless) {
+        return createTabInternal(str, str2, str3, str4, z, z2, z3, str5, isHeadless, "");
+    }
+
+    public FusionTab createTabInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, boolean isHeadless, String engine) {
         AppCompatActivity appCompatActivity = this.mActivity;
         if (appCompatActivity == null) {
             return null;
         }
-        WebView webView = createNewConfiguredWebView(str2, z2);
-        if (webView == null) {
-            return null;
-        }
-        FrameLayout frameLayout = this.mPaneHost;
-        if (frameLayout != null) {
-            frameLayout.addView(webView, new FrameLayout.LayoutParams(-1, -1));
-        }
-        webView.setElevation(0.0f);
+        String resolvedEngine = (engine == null || engine.trim().isEmpty()) ? getDefaultEngine() : normalizeEngine(engine);
         int i = this.mNextTabId;
         this.mNextTabId = i + 1;
-        FusionTab fusionTab = new FusionTab(i, str, str2, webView, z, z2, z3, isHeadless);
+        FusionTab fusionTab;
+        if (ENGINE_GECKO.equals(resolvedEngine)) {
+            fusionTab = new FusionTab(i, str, str2, null, z, z2, z3, isHeadless);
+            fusionTab.mEngine = ENGINE_GECKO;
+            if (!FusionGeckoHelper.createGeckoTab(this, fusionTab, str2, z2)) {
+                return null;
+            }
+            if (this.mPaneHost != null && fusionTab.mGeckoView != null) {
+                this.mPaneHost.addView(fusionTab.mGeckoView, new FrameLayout.LayoutParams(-1, -1));
+                fusionTab.mGeckoView.setElevation(0.0f);
+            }
+        } else {
+            WebView webView = createNewConfiguredWebView(str2, z2);
+            if (webView == null) {
+                return null;
+            }
+            FrameLayout frameLayout = this.mPaneHost;
+            if (frameLayout != null) {
+                frameLayout.addView(webView, new FrameLayout.LayoutParams(-1, -1));
+            }
+            webView.setElevation(0.0f);
+            fusionTab = new FusionTab(i, str, str2, webView, z, z2, z3, isHeadless);
+            fusionTab.mEngine = ENGINE_DEFAULT;
+        }
         String initialChain = (str4 != null && !str4.isEmpty()) ? str4 : "bsc";
         String autoChain = FusionChainHelper.detectChainFromUrl(str);
         if (autoChain != null && !autoChain.isEmpty()) {
@@ -1490,19 +1643,29 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             fusionTab.mKeepAliveBackground = true;
             int virtW = z2 ? 1280 : 1080;
             int virtH = z2 ? 720 : 1920;
-            webView.measure(
-                View.MeasureSpec.makeMeasureSpec(virtW, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(virtH, View.MeasureSpec.EXACTLY)
-            );
-            webView.layout(0, 0, virtW, virtH);
-            webView.setTranslationX(-10000.0f);
-            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-            webView.setVisibility(View.VISIBLE);
-            webView.resumeTimers();
+            View renderView = fusionTab.getRenderView();
+            if (renderView != null) {
+                renderView.measure(
+                    View.MeasureSpec.makeMeasureSpec(virtW, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(virtH, View.MeasureSpec.EXACTLY)
+                );
+                renderView.layout(0, 0, virtW, virtH);
+                renderView.setTranslationX(-10000.0f);
+                if (!fusionTab.isGecko()) {
+                    renderView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+                }
+                renderView.setVisibility(View.VISIBLE);
+            }
+            if (fusionTab.mWebView != null) {
+                fusionTab.mWebView.resumeTimers();
+            }
+            if (fusionTab.isGecko()) {
+                FusionGeckoHelper.setActive(fusionTab, true);
+            }
             acquireWakeLock();
         }
-        if (webView != null && webView.getWebViewClient() instanceof FusionWebViewClient) {
-            ((FusionWebViewClient) webView.getWebViewClient()).setCurrentUrl(str);
+        if (fusionTab.mWebView != null && fusionTab.mWebView.getWebViewClient() instanceof FusionWebViewClient) {
+            ((FusionWebViewClient) fusionTab.mWebView.getWebViewClient()).setCurrentUrl(str);
         }
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity != null) {
@@ -1587,7 +1750,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         FusionTabStateHelper.cycleOpacity(this);
     }
 
-    public void evalOnActiveTab(String str) {
+    public void evalOnActiveTab(final String str) {
+        if (str == null) return;
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper() && this.mActivity != null) {
+            this.mActivity.runOnUiThread(() -> evalOnActiveTab(str));
+            return;
+        }
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null && active.isGecko()) {
+            FusionGeckoHelper.evaluateJs(active, str);
+            return;
+        }
         WebView webView = this.mActiveWebView;
         if (webView == null) {
             return;
@@ -1693,8 +1866,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (linearLayout2 != null) {
             linearLayout2.setVisibility(8);
         }
+        View activeView = getActiveTabView();
+        if (activeView != null) {
+            activeView.setVisibility(8);
+        }
         WebView webView = this.mActiveWebView;
-        if (webView != null) {
+        if (webView != null && webView != activeView) {
             webView.setVisibility(8);
         }
     }
@@ -1791,7 +1968,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (session == null || this.mTabList == null) return false;
         for (int i = 0; i < this.mTabList.size(); i++) {
             FusionTab tab = (FusionTab) this.mTabList.get(i);
-            if (tab != null && tab.mBoundSession == session && !tab.mIsMinimized && !tab.mIsHeadless && tab.mWebView != null) {
+            if (tab != null && tab.mBoundSession == session && !tab.mIsMinimized && !tab.mIsHeadless && tab.getRenderView() != null) {
                 return true;
             }
         }
@@ -1804,7 +1981,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (session == null || this.mTabList == null) return false;
         for (int i = 0; i < this.mTabList.size(); i++) {
             FusionTab tab = (FusionTab) this.mTabList.get(i);
-            if (tab != null && !tab.mIsHeadless && (tab.mBoundSession == session || tab.mBoundSession == null) && tab.mWebView != null) {
+            if (tab != null && !tab.mIsHeadless && (tab.mBoundSession == session || tab.mBoundSession == null) && tab.getRenderView() != null) {
                 return true;
             }
         }
@@ -1899,17 +2076,18 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
         }
 
-        // Re-parent active webviews if needed
+        // Re-parent active webviews / geckoviews if needed
         if (this.mPaneHost != null && this.mTabList != null) {
             for (int ti = 0; ti < this.mTabList.size(); ti++) {
                 FusionTab tab = (FusionTab) this.mTabList.get(ti);
-                if (tab != null && tab.mWebView != null) {
-                    ViewParent p = tab.mWebView.getParent();
+                View renderView = tab != null ? tab.getRenderView() : null;
+                if (renderView != null) {
+                    ViewParent p = renderView.getParent();
                     if (p != this.mPaneHost) {
                         if (p instanceof ViewGroup) {
-                            ((ViewGroup) p).removeView(tab.mWebView);
+                            ((ViewGroup) p).removeView(renderView);
                         }
-                        this.mPaneHost.addView(tab.mWebView, new FrameLayout.LayoutParams(-1, -1));
+                        this.mPaneHost.addView(renderView, new FrameLayout.LayoutParams(-1, -1));
                     }
                 }
             }
@@ -1965,13 +2143,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             reloadPillBtn.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    WebView webView = FusionWebViewManager.this.mActiveWebView;
-                    if (webView != null) {
-                        if (FusionWebViewManager.this.mIsRecording) {
-                            webView.evaluateJavascript("if (window.AgyRecorder && window.AgyRecorder.isRecording) { window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){} }", null);
-                        } else {
-                            webView.evaluateJavascript("try{sessionStorage.removeItem('__agy_rec_active__'); sessionStorage.removeItem('__fusion_rec_active__');}catch(_){}", null);
-                        }
+                    if (FusionWebViewManager.this.mIsRecording) {
+                        FusionWebViewManager.this.evalOnActiveTab("if (window.AgyRecorder && window.AgyRecorder.isRecording) { window.AgyRecorder.recordEvent({type:'reload', timestamp:Date.now(), text:'Reload Halaman'}); try{sessionStorage.setItem('__agy_rec_active__','true'); sessionStorage.setItem('__fusion_rec_active__','true');}catch(_){} }");
+                    } else {
+                        FusionWebViewManager.this.evalOnActiveTab("try{sessionStorage.removeItem('__agy_rec_active__'); sessionStorage.removeItem('__fusion_rec_active__');}catch(_){}");
                     }
                     FusionWebViewManager.this.reloadActiveTab();
                     FusionToast.makeText(FusionWebViewManager.this.mActivity, "Reloading...", 0).show();
@@ -2518,11 +2693,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         sAssetScriptModCache.clear();
     }
 
-    public void injectAssetScript(WebView webView, String str) {
+    public String loadAssetScript(String str) {
         try {
             TermuxActivity termuxActivity = this.mActivity;
-            if (termuxActivity == null || webView == null || str == null) {
-                return;
+            if (termuxActivity == null || str == null) {
+                return null;
             }
             File extFile = FusionProfileManager.resolveExternalEngineFile(str);
             String script = null;
@@ -2561,8 +2736,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     sAssetScriptCache.put(str, script);
                 }
             }
-            webView.evaluateJavascript(script, null);
+            return script;
         } catch (Exception unused) {
+            return null;
+        }
+    }
+
+    public void injectAssetScript(WebView webView, String str) {
+        if (webView == null || str == null) return;
+        String script = loadAssetScript(str);
+        if (script != null) {
+            webView.evaluateJavascript(script, null);
         }
     }
 
@@ -2579,11 +2763,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         return null;
     }
 
-    public void injectScripts(WebView webView) {
-        if (webView == null) {
-            return;
-        }
-        FusionTab ownerTab = getTabForWebView(webView);
+    public String buildBaseInjectionJs(FusionTab ownerTab) {
         String tabProfile = (ownerTab != null && ownerTab.mProfile != null && !ownerTab.mProfile.isEmpty())
                 ? ownerTab.mProfile : this.mCurrentProfile;
         if (tabProfile == null || tabProfile.isEmpty()) tabProfile = "default";
@@ -2626,12 +2806,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         String tabChain = (ownerTab != null && ownerTab.mChainKey != null && !ownerTab.mChainKey.isEmpty()) ? ownerTab.mChainKey : this.mCurrentChainKey;
         String activeWName = (!evmName.isEmpty()) ? evmName : tabProfile;
         String activeWAddr = (!evmAddr.isEmpty()) ? evmAddr : "";
-        String chromeVer = FusionProfileManager.getSystemChromeVersion(webView.getContext());
-        String effectiveUa = FusionProfileManager.getEffectiveUserAgent(webView.getContext(), dev, ownerTab != null && ownerTab.mIsDesktop);
+        Context ctx = (ownerTab != null && ownerTab.mWebView != null) ? ownerTab.mWebView.getContext() : this.mActivity;
+        String chromeVer = ctx != null ? FusionProfileManager.getSystemChromeVersion(ctx) : "136.0.0.0";
+        String effectiveUa = ctx != null ? FusionProfileManager.getEffectiveUserAgent(ctx, dev, ownerTab != null && ownerTab.mIsDesktop) : "";
         String devJson;
         try {
             JSONObject devObj = new JSONObject(dev.toJsonString());
-            devObj.put("userAgent", effectiveUa);
+            if (!effectiveUa.isEmpty() && (ownerTab == null || !ownerTab.isGecko())) {
+                devObj.put("userAgent", effectiveUa);
+            }
             devJson = devObj.toString();
         } catch (Throwable ignored) {
             devJson = dev.toJsonString();
@@ -2660,8 +2843,24 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         js.append("window.__FUSION_IOTA_WALLET_NAME__ = ").append(JSONObject.quote(iotaName != null ? iotaName : "")).append(";");
         js.append("window.__FUSION_IOTA_WALLET_ADDRESS__ = ").append(JSONObject.quote(iotaAddr != null ? iotaAddr : "")).append(";");
         js.append("window.__ACTIVE_AI_ENGINE__ = ").append(JSONObject.quote(FusionAiHelper.getActiveEngine())).append(";");
+        return js.toString();
+    }
 
-        webView.evaluateJavascript(js.toString(), null);
+    public void injectScriptsForTab(FusionTab tab) {
+        if (tab == null) return;
+        if (tab.isGecko()) {
+            FusionGeckoHelper.injectScripts(this, tab);
+        } else if (tab.mWebView != null) {
+            injectScripts(tab.mWebView);
+        }
+    }
+
+    public void injectScripts(WebView webView) {
+        if (webView == null) {
+            return;
+        }
+        FusionTab ownerTab = getTabForWebView(webView);
+        webView.evaluateJavascript(buildBaseInjectionJs(ownerTab), null);
         injectAssetScript(webView, "fingerprint_faker.js");
         injectAssetScript(webView, "ghost_injected.js");
         FusionUserscriptHelper.injectMatchingScripts(webView, webView.getUrl());
@@ -2669,6 +2868,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void killActiveTab() {
+        if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper() && this.mActivity != null) {
+            this.mActivity.runOnUiThread(this::killActiveTab);
+            return;
+        }
         ArrayList arrayList = this.mTabList;
         if (arrayList != null && arrayList.size() > 0) {
             killTabDirect(this.mActiveTab);
@@ -2705,6 +2908,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         int i = this.mTabList.indexOf(fusionTab);
         if (i != -1) {
             this.mTabList.remove(i);
+        }
+        if (fusionTab.mGeckoView != null || fusionTab.mGeckoSession != null) {
+            FusionGeckoHelper.destroyTab(fusionTab, this.mPaneHost);
         }
         WebView webView = fusionTab.mWebView;
         if (webView != null) {
@@ -2788,18 +2994,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         final String profile = fusionTab.mProfile;
         final TerminalSession boundSession = fusionTab.mBoundSession != null ? fusionTab.mBoundSession : (this.mActivity != null ? this.mActivity.getCurrentSession() : null);
         if (profile != null && !profile.isEmpty() && !"default".equals(profile) && !profile.startsWith("fresh_")) {
-            // 1. Flush cookies native Android seketika (1ms)
-            FusionProfileManager.flushCookies(profile);
+            if (!fusionTab.isGecko()) {
+                // 1. Flush cookies native Android seketika (1ms)
+                FusionProfileManager.flushCookies(profile);
 
-            // 2. Auto-export ke JSON di background thread (fire-and-forget, zero UI block, ~15ms)
-            final Context context = this.mActivity != null ? this.mActivity : (fusionTab.mWebView != null ? fusionTab.mWebView.getContext() : null);
-            final TermuxActivity act = this.mActivity;
-            new Thread(() -> {
-                String saveMsg = FusionProfileManager.exportProfileSessionToJson(context, profile);
-                if (saveMsg != null && boundSession != null && act != null) {
-                    FusionProfileManager.printToTerminalSession(act, boundSession, "\r\n\033[32m[Fusion] " + saveMsg + "\033[0m\r\n");
-                }
-            }).start();
+                // 2. Auto-export ke JSON di background thread (fire-and-forget, zero UI block, ~15ms)
+                final Context context = this.mActivity != null ? this.mActivity : (fusionTab.mWebView != null ? fusionTab.mWebView.getContext() : null);
+                final TermuxActivity act = this.mActivity;
+                new Thread(() -> {
+                    String saveMsg = FusionProfileManager.exportProfileSessionToJson(context, profile);
+                    if (saveMsg != null && boundSession != null && act != null) {
+                        FusionProfileManager.printToTerminalSession(act, boundSession, "\r\n\033[32m[Fusion] " + saveMsg + "\033[0m\r\n");
+                    }
+                }).start();
+            }
         }
 
         performDirectTabDestroy(fusionTab);
@@ -2857,12 +3065,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (view != null) {
             view.setVisibility(8);
         }
-        WebView webView = this.mActiveWebView;
         final String chainKey = FusionChainHelper.getCurrentChainKey();
         final String chainIdHex = FusionChainHelper.getChainIdHex();
-        if (webView != null) {
-            webView.evaluateJavascript("if(window.ethereum){window.ethereum.chainId='" + chainIdHex + "';window.ethereum.networkVersion='" + FusionChainHelper.getChainIdDec() + "';window.dispatchEvent(new CustomEvent('chainChanged',{detail:'" + chainIdHex + "'}));}", null);
-        }
+        evalOnActiveTab("if(window.ethereum){window.ethereum.chainId='" + chainIdHex + "';window.ethereum.networkVersion='" + FusionChainHelper.getChainIdDec() + "';window.dispatchEvent(new CustomEvent('chainChanged',{detail:'" + chainIdHex + "'}));}");
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -3035,11 +3240,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     act.goToTerminalCanvas(true);
                 }
                 FusionTab activeTab = FusionTabStateHelper.getActiveTab(FusionWebViewManager.this);
+                View activeView = activeTab != null ? activeTab.getRenderView() : mActiveWebView;
                 if (activeTab != null && activeTab.mIsMinimized) {
                     FusionTabStateHelper.toggleMinimize(FusionWebViewManager.this);
-                } else if (mActiveWebView != null) {
-                    mActiveWebView.setVisibility(View.VISIBLE);
-                    mActiveWebView.bringToFront();
+                } else if (activeView != null) {
+                    activeView.setVisibility(View.VISIBLE);
+                    activeView.bringToFront();
                     if (mTerminalPaneHost != null) {
                         mTerminalPaneHost.setVisibility(View.GONE);
                     }
@@ -3053,8 +3259,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                         mToolScroll.bringToFront();
                     }
                 }
-                if (targetUrl != null && !targetUrl.trim().isEmpty() && mActiveWebView != null) {
-                    mActiveWebView.loadUrl(targetUrl.trim());
+                if (targetUrl != null && !targetUrl.trim().isEmpty()) {
+                    loadUrlOnActiveTab(targetUrl.trim());
                 }
             }
         });
@@ -3434,51 +3640,53 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
         }).start();
 
-        WebView webView = this.mActiveWebView;
-        if (webView != null) {
-            webView.evaluateJavascript(
-                "window.__FUSION_WALLET_NAME__=" + JSONObject.quote(name != null ? name : "") + ";" +
-                "window.__FUSION_WALLET_ADDRESS__=" + JSONObject.quote(address != null ? address : "") + ";" +
-                "window.__FUSION_ACTIVE_WALLET_NAME__=" + JSONObject.quote(name != null ? name : "") + ";" +
-                "window.__FUSION_ACTIVE_WALLET_ADDRESS__=" + JSONObject.quote(address != null ? address : "") + ";" +
-                "if(window.ethereum){window.ethereum.selectedAddress=" + JSONObject.quote(address != null ? address : "") + ";window.dispatchEvent(new CustomEvent('accountsChanged',{detail:[" + JSONObject.quote(address != null ? address : "") + "]}));}", null);
-            if (solAddr != null && !solAddr.isEmpty()) {
-                webView.evaluateJavascript("if(window.solana){window.__FUSION_SOL_WALLET_ADDRESS__='" + solAddr + "';if(window.solana.publicKey){window.solana.publicKey._val='" + solAddr + "';}window.solana.emit('accountChanged','" + solAddr + "');}", null);
+        String walletSwitchJs =
+            "window.__FUSION_WALLET_NAME__=" + JSONObject.quote(name != null ? name : "") + ";" +
+            "window.__FUSION_WALLET_ADDRESS__=" + JSONObject.quote(address != null ? address : "") + ";" +
+            "window.__FUSION_ACTIVE_WALLET_NAME__=" + JSONObject.quote(name != null ? name : "") + ";" +
+            "window.__FUSION_ACTIVE_WALLET_ADDRESS__=" + JSONObject.quote(address != null ? address : "") + ";" +
+            "if(window.ethereum){window.ethereum.selectedAddress=" + JSONObject.quote(address != null ? address : "") + ";window.dispatchEvent(new CustomEvent('accountsChanged',{detail:[" + JSONObject.quote(address != null ? address : "") + "]}));}";
+        if (solAddr != null && !solAddr.isEmpty()) {
+            walletSwitchJs += "if(window.solana){window.__FUSION_SOL_WALLET_ADDRESS__='" + solAddr + "';if(window.solana.publicKey){window.solana.publicKey._val='" + solAddr + "';}window.solana.emit('accountChanged','" + solAddr + "');}";
+        }
+        if (tronAddr != null && !tronAddr.isEmpty()) {
+            walletSwitchJs += "if(window.tronWeb){window.__FUSION_TRON_WALLET_ADDRESS__='" + tronAddr + "';if(window.tronWeb.defaultAddress){window.tronWeb.defaultAddress.base58='" + tronAddr + "';}window.postMessage({message:{action:'setAccount',data:{address:'" + tronAddr + "'}}},'*');}";
+        }
+        if (suiAddr != null && !suiAddr.isEmpty()) {
+            walletSwitchJs += "if(window.__FUSION_SET_SUI_ACCOUNT__){window.__FUSION_SET_SUI_ACCOUNT__('" + suiAddr + "');}";
+        }
+        if (aptosAddr != null && !aptosAddr.isEmpty()) {
+            walletSwitchJs += "if(window.__FUSION_SET_APTOS_ACCOUNT__){window.__FUSION_SET_APTOS_ACCOUNT__('" + aptosAddr + "');}";
+        }
+        if (iotaAddr != null && !iotaAddr.isEmpty()) {
+            walletSwitchJs += "if(window.__FUSION_SET_IOTA_ACCOUNT__){window.__FUSION_SET_IOTA_ACCOUNT__('" + iotaAddr + "');}";
+        }
+        String curChainKey = FusionChainHelper.getCurrentChainKey();
+        boolean isSubSite = "substrate".equalsIgnoreCase(curChainKey) || "flop".equalsIgnoreCase(curChainKey) || "polkadot".equalsIgnoreCase(curChainKey) || "dot".equalsIgnoreCase(curChainKey);
+        if (isSubSite) {
+            if (subAddr != null && !subAddr.isEmpty()) {
+                walletSwitchJs += "if(window.__FUSION_SET_SUBSTRATE_ACCOUNT__){window.__FUSION_SET_SUBSTRATE_ACCOUNT__('" + subAddr + "');}try{window.dispatchEvent(new CustomEvent('substrateAccountChanged',{detail:'" + subAddr + "'}));}catch(_){}";
             }
-            if (tronAddr != null && !tronAddr.isEmpty()) {
-                webView.evaluateJavascript("if(window.tronWeb){window.__FUSION_TRON_WALLET_ADDRESS__='" + tronAddr + "';if(window.tronWeb.defaultAddress){window.tronWeb.defaultAddress.base58='" + tronAddr + "';}window.postMessage({message:{action:'setAccount',data:{address:'" + tronAddr + "'}}},'*');}", null);
-            }
-            if (suiAddr != null && !suiAddr.isEmpty()) {
-                webView.evaluateJavascript("if(window.__FUSION_SET_SUI_ACCOUNT__){window.__FUSION_SET_SUI_ACCOUNT__('" + suiAddr + "');}", null);
-            }
-            if (aptosAddr != null && !aptosAddr.isEmpty()) {
-                webView.evaluateJavascript("if(window.__FUSION_SET_APTOS_ACCOUNT__){window.__FUSION_SET_APTOS_ACCOUNT__('" + aptosAddr + "');}", null);
-            }
-            if (iotaAddr != null && !iotaAddr.isEmpty()) {
-                webView.evaluateJavascript("if(window.__FUSION_SET_IOTA_ACCOUNT__){window.__FUSION_SET_IOTA_ACCOUNT__('" + iotaAddr + "');}", null);
-            }
-            String curChainKey = FusionChainHelper.getCurrentChainKey();
-            boolean isSubSite = "substrate".equalsIgnoreCase(curChainKey) || "flop".equalsIgnoreCase(curChainKey) || "polkadot".equalsIgnoreCase(curChainKey) || "dot".equalsIgnoreCase(curChainKey);
-            if (isSubSite) {
-                if (subAddr != null && !subAddr.isEmpty()) {
-                    webView.evaluateJavascript("if(window.__FUSION_SET_SUBSTRATE_ACCOUNT__){window.__FUSION_SET_SUBSTRATE_ACCOUNT__('" + subAddr + "');}try{window.dispatchEvent(new CustomEvent('substrateAccountChanged',{detail:'" + subAddr + "'}));}catch(_){}", null);
-                }
-                if (dotAddr != null && !dotAddr.isEmpty()) {
-                    webView.evaluateJavascript("if(window.__FUSION_SET_POLKADOT_ACCOUNT__){window.__FUSION_SET_POLKADOT_ACCOUNT__('" + dotAddr + "');}try{window.dispatchEvent(new CustomEvent('polkadotAccountChanged',{detail:'" + dotAddr + "'}));}catch(_){}", null);
-                }
-            }
-            if (this.mIsRecording) {
-                webView.evaluateJavascript("if(window.AgyRecorder && window.AgyRecorder.isRecording){window.AgyRecorder.recordEvent({type:'next_wallet',timestamp:Date.now(),text:'Ganti Wallet -> " + address + "'});}", null);
+            if (dotAddr != null && !dotAddr.isEmpty()) {
+                walletSwitchJs += "if(window.__FUSION_SET_POLKADOT_ACCOUNT__){window.__FUSION_SET_POLKADOT_ACCOUNT__('" + dotAddr + "');}try{window.dispatchEvent(new CustomEvent('polkadotAccountChanged',{detail:'" + dotAddr + "'}));}catch(_){}";
             }
         }
+        if (this.mIsRecording) {
+            walletSwitchJs += "if(window.AgyRecorder && window.AgyRecorder.isRecording){window.AgyRecorder.recordEvent({type:'next_wallet',timestamp:Date.now(),text:'Ganti Wallet -> " + address + "'});}";
+        }
+        evalOnActiveTab(walletSwitchJs);
     }
 
-    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab) {
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab, String engine) {
         TermuxActivity termuxActivity = this.mActivity;
         if (termuxActivity == null) {
             return;
         }
-        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, isNewTab));
+        termuxActivity.runOnUiThread(new OpenRunnable(this, str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, isNewTab, engine));
+    }
+
+    public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless, boolean isNewTab) {
+        openConfig(str, str2, str3, str4, z, z2, z3, str5, str6, i, isHeadless, isNewTab, "");
     }
 
     public void openConfig(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String str6, int i, boolean isHeadless) {
@@ -3513,6 +3721,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 obj.put("url", tab.mUrl != null ? tab.mUrl : "about:blank");
                 obj.put("title", tab.mTitle != null ? tab.mTitle : "New Tab");
                 obj.put("profile", tab.mProfile != null ? tab.mProfile : "default");
+                obj.put("engine", tab.mEngine != null ? tab.mEngine : ENGINE_DEFAULT);
                 obj.put("isHeadless", tab.mIsHeadless);
                 obj.put("isMinimized", tab.mIsMinimized);
                 obj.put("isDesktop", tab.mIsDesktop);
@@ -3539,11 +3748,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (tab != null) {
                 tab.mIsHeadless = false;
                 tab.mIsMinimized = false;
+                View rv = tab.getRenderView();
+                if (rv != null) {
+                    rv.setVisibility(View.VISIBLE);
+                    rv.bringToFront();
+                }
                 if (tab.mWebView != null) {
-                    tab.mWebView.setVisibility(View.VISIBLE);
                     tab.mWebView.onResume();
                     tab.mWebView.resumeTimers();
-                    tab.mWebView.bringToFront();
+                }
+                if (tab.isGecko()) {
+                    FusionGeckoHelper.setActive(tab, true);
                 }
             }
             switchTab(target);
@@ -3578,9 +3793,15 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (tab != null) {
                 tab.mIsHeadless = true;
                 tab.mIsMinimized = true;
+                View rv = tab.getRenderView();
+                if (rv != null) {
+                    rv.setVisibility(View.VISIBLE);
+                }
                 if (tab.mWebView != null) {
-                    tab.mWebView.setVisibility(View.VISIBLE);
                     tab.mWebView.resumeTimers();
+                }
+                if (tab.isGecko()) {
+                    FusionGeckoHelper.setActive(tab, true);
                 }
             }
             if (target == this.mActiveTab) {
@@ -3626,8 +3847,13 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins, boolean isHeadless, boolean isNewTab) {
+        openUrlInternal(str, str2, str3, str4, z, z2, z3, str5, proxyStr, intervalMins, isHeadless, isNewTab, "");
+    }
+
+    public void openUrlInternal(String str, String str2, String str3, String str4, boolean z, boolean z2, boolean z3, String str5, String proxyStr, int intervalMins, boolean isHeadless, boolean isNewTab, String engine) {
         TerminalSession currentSession = null;
         initViews();
+        String effectiveEngine = (engine == null || engine.trim().isEmpty()) ? getDefaultEngine() : normalizeEngine(engine);
         if (str == null || str.isEmpty() || "home".equalsIgnoreCase(str) || "about:home".equalsIgnoreCase(str) || "about:newtab".equalsIgnoreCase(str)) {
             File extHome = FusionProfileManager.resolveExternalEngineFile("home.html");
             str = (extHome != null) ? ("file://" + extHome.getAbsolutePath()) : "file:///android_asset/webview_engine/home.html";
@@ -3682,7 +3908,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 if (fusionTab != null && fusionTab.mBoundSession == currentSession) {
                     String tabProf = (fusionTab.mProfile == null || fusionTab.mProfile.isEmpty()) ? "default" : fusionTab.mProfile;
                     if (str2.equals(tabProf)) {
-                        i = i2;
+                        String tabEngine = fusionTab.mEngine != null ? fusionTab.mEngine : ENGINE_DEFAULT;
+                        if (effectiveEngine.equals(tabEngine)) {
+                            i = i2;
+                        } else {
+                            performDirectTabDestroy(fusionTab);
+                        }
                         break;
                     }
                 }
@@ -3707,15 +3938,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             }
             targetTab = fusionTab2;
             switchTab(i);
-            FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
-            if (fusionTab2.mWebView != null) {
-                if (z2) {
-                    applyDesktopSettingsToWebView(fusionTab2.mWebView);
+            if (fusionTab2.isGecko()) {
+                FusionGeckoHelper.setDesktopMode(fusionTab2, z2);
+                FusionGeckoHelper.loadUrl(fusionTab2, str);
+            } else {
+                FusionProfileManager.applyProfile(str2, fusionTab2.mWebView, z2);
+                if (fusionTab2.mWebView != null) {
+                    if (z2) {
+                        applyDesktopSettingsToWebView(fusionTab2.mWebView);
+                    }
+                    fusionTab2.mWebView.loadUrl(str);
                 }
-                fusionTab2.mWebView.loadUrl(str);
             }
         } else {
-            FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5, isHeadless);
+            FusionTab fusionTabCreateTabInternal = createTabInternal(str, str2, str3, str4, z, z2, z3, str5, isHeadless, effectiveEngine);
             targetTab = fusionTabCreateTabInternal;
             if (targetTab != null) {
                 targetTab.mWalletName = str3;
@@ -3728,8 +3964,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
             if (!skipUiSwitch) {
                 switchTab(this.mTabList.size() - 1);
             }
-            if (fusionTabCreateTabInternal != null && fusionTabCreateTabInternal.mWebView != null) {
-                fusionTabCreateTabInternal.mWebView.loadUrl(str);
+            if (fusionTabCreateTabInternal != null) {
+                if (fusionTabCreateTabInternal.isGecko()) {
+                    FusionGeckoHelper.loadUrl(fusionTabCreateTabInternal, str);
+                } else if (fusionTabCreateTabInternal.mWebView != null) {
+                    final WebView newWv = fusionTabCreateTabInternal.mWebView;
+                    final String targetLoadUrl = str;
+                    if (this.mIsDevMode && (str.startsWith("http://") || str.startsWith("https://"))) {
+                        newWv.loadUrl("about:blank");
+                        FusionProfileManager.DeviceProfile devProf = FusionProfileManager.getDeviceForProfile(str2);
+                        FusionCdpBridge.applyUserAgentOverrideAsync(this.mActivity, str2, devProf, z2, () -> newWv.loadUrl(targetLoadUrl));
+                    } else {
+                        newWv.loadUrl(str);
+                    }
+                }
             }
         }
         if (targetTab != null) {
@@ -3796,6 +4044,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void performQuickBack() {
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null && active.isGecko()) {
+            FusionGeckoHelper.goBack(active);
+            return;
+        }
         WebView webView;
         if (this.mActiveTab != 1 || (webView = this.mWorkerWebView) == null) {
             webView = this.mActiveWebView;
@@ -3811,6 +4064,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public void performQuickForward() {
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        if (active != null && active.isGecko()) {
+            FusionGeckoHelper.goForward(active);
+            return;
+        }
         WebView webView;
         if (this.mActiveTab != 1 || (webView = this.mWorkerWebView) == null) {
             webView = this.mActiveWebView;
@@ -3828,13 +4086,23 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public void toggleBookmarkCurrentPage() {
         TermuxActivity act = this.mActivity;
         if (act == null) return;
-        WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
-        if (webView == null || webView.getUrl() == null || webView.getUrl().isEmpty()) {
+        FusionTab active = FusionTabStateHelper.getActiveTab(this);
+        String url = null;
+        String title = null;
+        if (active != null && active.isGecko()) {
+            url = active.mUrl;
+            title = active.mTitle;
+        } else {
+            WebView webView = (this.mActiveTab != 1 || this.mWorkerWebView == null) ? this.mActiveWebView : this.mWorkerWebView;
+            if (webView != null) {
+                url = webView.getUrl();
+                title = webView.getTitle();
+            }
+        }
+        if (url == null || url.isEmpty()) {
             FusionToast.makeText(act, "Tidak ada halaman aktif untuk disimpan", Toast.LENGTH_SHORT).show();
             return;
         }
-        String url = webView.getUrl();
-        String title = webView.getTitle();
         if (title == null || title.isEmpty()) {
             title = url;
         }
@@ -3980,10 +4248,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         if (this.mActivity != null && this.mActivity.currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
             return false;
         }
-        WebView webView;
-        if (this.mActiveTab != 1 || (webView = this.mWorkerWebView) == null) {
-            webView = this.mActiveWebView;
+        View activeView = getActiveTabView();
+        if (activeView != null && activeView.getVisibility() == View.VISIBLE) {
+            return true;
         }
+        WebView webView = (this.mActiveTab == 1 && this.mWorkerWebView != null) ? this.mWorkerWebView : this.mActiveWebView;
         return (webView != null && webView.getVisibility() == View.VISIBLE)
             || (this.mMenuCard != null && this.mMenuCard.getVisibility() == View.VISIBLE);
     }
@@ -4207,48 +4476,66 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         for (int i2 = 0; i2 < size; i2++) {
             FusionTab fusionTab = (FusionTab) arrayList.get(i2);
+            View renderView = fusionTab != null ? fusionTab.getRenderView() : null;
             if (i2 == i) {
-                WebView webView = fusionTab.mWebView;
-                if (fusionTab.mIsMinimized || fusionTab.mIsHeadless) {
-                    webView.setVisibility(View.VISIBLE);
-                    webView.setTranslationX(fusionTab.mIsHeadless ? -10000.0f : 0.0f);
-                    webView.resumeTimers();
-                    TextView textView = this.mMinPillBtn;
-                    if (textView != null) {
-                        textView.setText(" MAX ");
-                    }
-                    if (this.mTerminalPaneHost != null) {
-                        this.mTerminalPaneHost.setVisibility(View.VISIBLE);
-                        this.mTerminalPaneHost.bringToFront();
-                    }
-                } else {
-                    webView.setTranslationX(0.0f);
-                    webView.setVisibility(View.VISIBLE);
-                    webView.bringToFront();
-                    TextView textView2 = this.mMinPillBtn;
-                    if (textView2 != null) {
-                        textView2.setText(" MIN ");
-                    }
-                    if (this.mTerminalPaneHost != null) {
-                        this.mTerminalPaneHost.setVisibility(View.GONE);
-                    }
-                    if (termuxActivity != null) {
-                        KeyboardUtils.setSoftInputModeAdjustResize(termuxActivity);
+                if (renderView != null) {
+                    if (fusionTab.mIsMinimized || fusionTab.mIsHeadless) {
+                        renderView.setVisibility(View.VISIBLE);
+                        renderView.setTranslationX(fusionTab.mIsHeadless ? -10000.0f : 0.0f);
+                        if (fusionTab.mWebView != null) {
+                            fusionTab.mWebView.resumeTimers();
+                        }
+                        if (fusionTab.isGecko()) {
+                            FusionGeckoHelper.setActive(fusionTab, true);
+                        }
+                        TextView textView = this.mMinPillBtn;
+                        if (textView != null) {
+                            textView.setText(" MAX ");
+                        }
+                        if (this.mTerminalPaneHost != null) {
+                            this.mTerminalPaneHost.setVisibility(View.VISIBLE);
+                            this.mTerminalPaneHost.bringToFront();
+                        }
+                    } else {
+                        renderView.setTranslationX(0.0f);
+                        renderView.setVisibility(View.VISIBLE);
+                        if (fusionTab.isGecko()) {
+                            FusionGeckoHelper.setActive(fusionTab, true);
+                        }
+                        renderView.bringToFront();
+                        TextView textView2 = this.mMinPillBtn;
+                        if (textView2 != null) {
+                            textView2.setText(" MIN ");
+                        }
+                        if (this.mTerminalPaneHost != null) {
+                            this.mTerminalPaneHost.setVisibility(View.GONE);
+                        }
+                        if (termuxActivity != null) {
+                            KeyboardUtils.setSoftInputModeAdjustResize(termuxActivity);
+                        }
                     }
                 }
-                this.mActiveWebView = webView;
+                this.mActiveWebView = fusionTab.mWebView;
                 this.mCurrentProfile = fusionTab.mProfile;
                 FusionProxyHelper.applyProxyToEngine(fusionTab);
                 FusionProxyHelper.updateProxyIndicator(this, fusionTab);
             } else {
-                if (fusionTab != null && fusionTab.mWebView != null) {
+                if (renderView != null) {
                     if (fusionTab.mIsHeadless || fusionTab.mKeepAliveBackground) {
-                        fusionTab.mWebView.setTranslationX(-10000.0f);
-                        fusionTab.mWebView.setVisibility(View.VISIBLE);
-                        fusionTab.mWebView.resumeTimers();
+                        renderView.setTranslationX(-10000.0f);
+                        renderView.setVisibility(View.VISIBLE);
+                        if (fusionTab.mWebView != null) {
+                            fusionTab.mWebView.resumeTimers();
+                        }
+                        if (fusionTab.isGecko()) {
+                            FusionGeckoHelper.setActive(fusionTab, true);
+                        }
                     } else {
-                        fusionTab.mWebView.setTranslationX(0.0f);
-                        fusionTab.mWebView.setVisibility(View.GONE);
+                        renderView.setTranslationX(0.0f);
+                        renderView.setVisibility(View.GONE);
+                        if (fusionTab.isGecko()) {
+                            FusionGeckoHelper.setActive(fusionTab, false);
+                        }
                     }
                 }
             }
@@ -4440,13 +4727,20 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 this.mActiveTab = i;
                 FusionTab fusionTab2 = (FusionTab) arrayList.get(i);
                 WebView webView3 = fusionTab2.mWebView;
+                View activeView3 = fusionTab2.getRenderView();
                 this.mActiveWebView = webView3;
                 FusionTabStateHelper.syncTabState(this, fusionTab2);
                 for (int i3 = 0; i3 < size; i3++) {
                     FusionTab fusionTab3 = (FusionTab) arrayList.get(i3);
-                    if (fusionTab3 != null && (webView2 = fusionTab3.mWebView) != null && i3 != i) {
-                        webView2.setVisibility(8);
-                        webView2.resumeTimers();
+                    View otherView = fusionTab3 != null ? fusionTab3.getRenderView() : null;
+                    if (otherView != null && i3 != i) {
+                        otherView.setVisibility(8);
+                        if (fusionTab3.mWebView != null) {
+                            fusionTab3.mWebView.resumeTimers();
+                        }
+                        if (fusionTab3.isGecko()) {
+                            FusionGeckoHelper.setActive(fusionTab3, fusionTab3.mIsHeadless || fusionTab3.mKeepAliveBackground);
+                        }
                     }
                 }
                 if (fusionTab2.mIsHeadless) {
@@ -4481,8 +4775,11 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     frameLayout3.bringToFront();
                 }
                 if (fusionTab2.mIsMinimized) {
-                    if (webView3 != null) {
-                        webView3.setVisibility(8);
+                    if (activeView3 != null) {
+                        activeView3.setVisibility(8);
+                    }
+                    if (fusionTab2.isGecko()) {
+                        FusionGeckoHelper.setActive(fusionTab2, false);
                     }
                     TextView textView = this.mMinPillBtn;
                     if (textView != null) {
@@ -4541,19 +4838,22 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 if (textView2 != null) {
                     textView2.setText(" MIN ");
                 }
-                if (webView3 != null) {
-                    if (webView3.getParent() == null && (frameLayout2 = this.mPaneHost) != null) {
-                        frameLayout2.addView(webView3, new FrameLayout.LayoutParams(-1, -1));
+                if (activeView3 != null) {
+                    if (activeView3.getParent() == null && (frameLayout2 = this.mPaneHost) != null) {
+                        frameLayout2.addView(activeView3, new FrameLayout.LayoutParams(-1, -1));
                     }
                     View view2 = this.mTerminalPaneHost;
                     if (view2 != null) {
                         view2.setVisibility(8);
                     }
-                    webView3.setVisibility(0);
-                    webView3.setElevation(0.0f);
-                    webView3.bringToFront();
-                    webView3.requestFocus();
-                    webView3.requestFocusFromTouch();
+                    activeView3.setVisibility(0);
+                    activeView3.setElevation(0.0f);
+                    if (fusionTab2.isGecko()) {
+                        FusionGeckoHelper.setActive(fusionTab2, true);
+                    }
+                    activeView3.bringToFront();
+                    activeView3.requestFocus();
+                    activeView3.requestFocusFromTouch();
                     termuxActivity.beginWebViewExternalTextInput();
                 }
                 LinearLayout linearLayout3 = this.mControlPill;
@@ -4597,9 +4897,12 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
         for (int i4 = 0; arrayList != null && i4 < arrayList.size(); i4++) {
             FusionTab fusionTab4 = (FusionTab) arrayList.get(i4);
-            if (fusionTab4 != null && (webView = fusionTab4.mWebView) != null) {
-                webView.setVisibility(8);
-                webView.resumeTimers();
+            View rv4 = fusionTab4 != null ? fusionTab4.getRenderView() : null;
+            if (rv4 != null) {
+                rv4.setVisibility(8);
+                if (fusionTab4.mWebView != null) {
+                    fusionTab4.mWebView.resumeTimers();
+                }
             }
         }
         this.mActiveWebView = null;

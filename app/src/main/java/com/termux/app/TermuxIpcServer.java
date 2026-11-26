@@ -686,6 +686,21 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.equals("WEBVIEW_DEFAULT_ENGINE") || strTrim.equals("WEBVIEW_GET_DEFAULT_ENGINE")
+                                    || strTrim.startsWith("WEBVIEW_DEFAULT_ENGINE ") || strTrim.startsWith("WEBVIEW_ENGINE_DEFAULT ")) {
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null) {
+                                    int sp = strTrim.indexOf(' ');
+                                    String arg = sp > 0 ? strTrim.substring(sp + 1).trim() : "";
+                                    if (!arg.isEmpty() && !"status".equalsIgnoreCase(arg) && !"get".equalsIgnoreCase(arg)) {
+                                        mgr.setDefaultEngine(arg);
+                                    }
+                                    outputStream.write((mgr.getDefaultEngine() + "\n").getBytes());
+                                } else {
+                                    outputStream.write("ERROR: Manager not ready\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
                             } else if (strTrim.equals("WEBVIEW_LIST") || strTrim.equals("WEBVIEW_GET_TABS")) {
                                 com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
                                 String res = mgr != null ? mgr.getTabsJson() : "[]";

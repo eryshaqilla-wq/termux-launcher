@@ -842,6 +842,9 @@ public class FusionProxyHelper {
      * Menerapkan Proxy tab aktif ke engine Android WebView secara real-time
      */
     public static void applyProxyToEngine(FusionTab tab) {
+        if (tab != null && tab.isGecko()) {
+            FusionGeckoHelper.applyProxy(tab);
+        }
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
             Log.w(TAG, "WebViewFeature.PROXY_OVERRIDE tidak didukung pada versi Android ini.");
             return;

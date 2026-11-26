@@ -26,7 +26,7 @@ public class FusionTabStateHelper {
         if (fusionWebViewManager == null || fusionTab == null) {
             return;
         }
-        WebView webView = fusionTab.mWebView;
+        View renderView = fusionTab.getRenderView();
         int i = fusionTab.mOpacityLevel;
         if (i == 0) {
             f = 1.0f;
@@ -41,8 +41,8 @@ public class FusionTabStateHelper {
             f = 0.1f;
             str = "Opacity: 10% (Stealth)";
         }
-        if (webView != null) {
-            webView.setAlpha(f);
+        if (renderView != null) {
+            renderView.setAlpha(f);
         }
         TextView textView = fusionWebViewManager.mOpacityBtn;
         if (textView != null) {
@@ -225,6 +225,18 @@ public class FusionTabStateHelper {
             return;
         }
         FusionTab activeTab = getActiveTab(fusionWebViewManager);
+        if (activeTab != null && activeTab.isGecko()) {
+            boolean z = !activeTab.mIsDesktop;
+            activeTab.mIsDesktop = z;
+            fusionWebViewManager.mIsDesktopMode = z;
+            FusionGeckoHelper.setDesktopMode(activeTab, z);
+            updateDesktopMenuText(fusionWebViewManager, activeTab);
+            TermuxActivity act = fusionWebViewManager.mActivity;
+            if (act != null) {
+                FusionToast.makeText(act, z ? "Mode Desktop AKTIF (Gecko)" : "Mode Mobile AKTIF (Gecko)", Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
         WebView webView = activeTab != null ? activeTab.mWebView : fusionWebViewManager.mActiveWebView;
         if (webView == null) {
             return;
@@ -292,15 +304,20 @@ public class FusionTabStateHelper {
 
     /* JADX WARN: Type inference failed for: r2v13, types: [android.app.Activity, android.content.Context, com.termux.app.TermuxActivity] */
     public static void toggleMinimize(FusionWebViewManager fusionWebViewManager) {
-        WebView webView;
         FusionTab activeTab = getActiveTab(fusionWebViewManager);
-        if (activeTab == null || (webView = activeTab.mWebView) == null) {
+        View renderView = activeTab != null ? activeTab.getRenderView() : null;
+        if (activeTab == null || renderView == null) {
             return;
         }
-        if (webView.getVisibility() == 0) {
+        if (renderView.getVisibility() == 0) {
             activeTab.mIsMinimized = true;
-            webView.setVisibility(8);
-            webView.resumeTimers();
+            renderView.setVisibility(8);
+            if (activeTab.mWebView != null) {
+                activeTab.mWebView.resumeTimers();
+            }
+            if (activeTab.isGecko()) {
+                FusionGeckoHelper.setActive(activeTab, false);
+            }
             LinearLayout linearLayout = fusionWebViewManager.mMenuCard;
             if (linearLayout != null) {
                 linearLayout.setVisibility(8);
@@ -366,10 +383,15 @@ public class FusionTabStateHelper {
             if (view3 != null) {
                 view3.setVisibility(8);
             }
-            webView.setVisibility(0);
-            webView.onResume();
-            webView.resumeTimers();
-            webView.bringToFront();
+            renderView.setVisibility(0);
+            if (activeTab.mWebView != null) {
+                activeTab.mWebView.onResume();
+                activeTab.mWebView.resumeTimers();
+            }
+            if (activeTab.isGecko()) {
+                FusionGeckoHelper.setActive(activeTab, true);
+            }
+            renderView.bringToFront();
             FrameLayout frameLayout = fusionWebViewManager.mPaneHost;
             if (frameLayout != null && frameLayout.getVisibility() != View.VISIBLE) {
                 frameLayout.setVisibility(View.VISIBLE);

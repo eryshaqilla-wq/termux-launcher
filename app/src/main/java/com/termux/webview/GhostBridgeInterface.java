@@ -56,17 +56,30 @@ public class GhostBridgeInterface implements Runnable {
 
     private final FusionWebViewManager mManager;
     private final WebView mWebView;
+    private final FusionTab mTab;
 
     public GhostBridgeInterface() {
-        this(null, null);
+        this(null, null, null);
     }
 
     public GhostBridgeInterface(FusionWebViewManager manager, WebView webView) {
+        this(manager, webView, null);
+    }
+
+    public GhostBridgeInterface(FusionWebViewManager manager, FusionTab tab) {
+        this(manager, tab != null ? tab.mWebView : null, tab);
+    }
+
+    public GhostBridgeInterface(FusionWebViewManager manager, WebView webView, FusionTab tab) {
         this.mManager = manager;
         this.mWebView = webView;
+        this.mTab = tab;
     }
 
     private FusionTab getOwnerTab() {
+        if (this.mTab != null) {
+            return this.mTab;
+        }
         FusionWebViewManager mgr = (this.mManager != null) ? this.mManager : FusionWebViewManager.getInstance();
         if (mgr != null && this.mWebView != null) {
             return mgr.getTabForWebView(this.mWebView);
@@ -100,21 +113,27 @@ public class GhostBridgeInterface implements Runnable {
             if (address.isEmpty()) return;
 
             final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-            if (mgr != null && mgr.mActiveWebView != null) {
-                String curUrl = mgr.mActiveWebView.getUrl();
-                String detected = FusionChainHelper.detectChainFromUrl(curUrl);
-                if (detected != null && !detected.isEmpty()) {
-                    boolean isMatching = detected.equalsIgnoreCase(chain);
-                    if (!isMatching) {
-                        boolean isSubGroupDetected = "substrate".equalsIgnoreCase(detected) || "flop".equalsIgnoreCase(detected) || "polkadot".equalsIgnoreCase(detected) || "dot".equalsIgnoreCase(detected);
-                        boolean isSubGroupIncoming = "substrate".equalsIgnoreCase(chain) || "flop".equalsIgnoreCase(chain) || "polkadot".equalsIgnoreCase(chain) || "dot".equalsIgnoreCase(chain);
-                        if (isSubGroupDetected && isSubGroupIncoming) {
-                            isMatching = true;
+            if (mgr != null) {
+                String curUrl = mgr.mActiveWebView != null ? mgr.mActiveWebView.getUrl() : null;
+                if (curUrl == null || curUrl.isEmpty()) {
+                    FusionTab owner = getOwnerTab();
+                    if (owner != null) curUrl = owner.mUrl;
+                }
+                if (curUrl != null && !curUrl.isEmpty()) {
+                    String detected = FusionChainHelper.detectChainFromUrl(curUrl);
+                    if (detected != null && !detected.isEmpty()) {
+                        boolean isMatching = detected.equalsIgnoreCase(chain);
+                        if (!isMatching) {
+                            boolean isSubGroupDetected = "substrate".equalsIgnoreCase(detected) || "flop".equalsIgnoreCase(detected) || "polkadot".equalsIgnoreCase(detected) || "dot".equalsIgnoreCase(detected);
+                            boolean isSubGroupIncoming = "substrate".equalsIgnoreCase(chain) || "flop".equalsIgnoreCase(chain) || "polkadot".equalsIgnoreCase(chain) || "dot".equalsIgnoreCase(chain);
+                            if (isSubGroupDetected && isSubGroupIncoming) {
+                                isMatching = true;
+                            }
                         }
-                    }
-                    if (!isMatching) {
-                        // Dilarang membajak tool wallet jika chain yang diminta tidak sesuai dengan situs aktif
-                        return;
+                        if (!isMatching) {
+                            // Dilarang membajak tool wallet jika chain yang diminta tidak sesuai dengan situs aktif
+                            return;
+                        }
                     }
                 }
             }
@@ -1602,11 +1621,21 @@ public class GhostBridgeInterface implements Runnable {
     public String getFullCookies(String url) {
         if (url == null || url.trim().isEmpty()) {
             FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-            if (mgr != null && mgr.mActiveWebView != null) {
-                url = mgr.mActiveWebView.getUrl();
+            if (mgr != null) {
+                if (mgr.mActiveWebView != null) {
+                    url = mgr.mActiveWebView.getUrl();
+                } else {
+                    FusionTab active = FusionTabStateHelper.getActiveTab(mgr);
+                    if (active != null && active.mUrl != null) {
+                        url = active.mUrl;
+                    }
+                }
             }
         }
         if (url == null || url.trim().isEmpty()) return "";
+        if (this.mTab != null && this.mTab.isGecko()) {
+            return "";
+        }
         try {
             android.webkit.CookieManager cm = FusionProfileManager.getCookieManagerForWebView(this.mWebView);
             String cookies = cm.getCookie(url);
@@ -2108,8 +2137,8 @@ public class GhostBridgeInterface implements Runnable {
                         java.util.List<FusionTab> tabs = mgr.getTabList();
                         if (tabs != null) {
                             for (FusionTab t : tabs) {
-                                if (t != null && t.mWebView != null) {
-                                    t.mWebView.evaluateJavascript(script, null);
+                                if (t != null) {
+                                    mgr.dispatchJsOnTab(t, script);
                                 }
                             }
                         }
@@ -2171,12 +2200,18 @@ public class GhostBridgeInterface implements Runnable {
     public boolean reloadUserscripts() {
         try {
             final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-            if (mgr == null || mgr.mActivity == null || mgr.mActiveWebView == null) return false;
+            if (mgr == null || mgr.mActivity == null) return false;
+            final FusionTab owner = getOwnerTab() != null ? getOwnerTab() : FusionTabStateHelper.getActiveTab(mgr);
+            if (owner == null && mgr.mActiveWebView == null) return false;
             mgr.mActivity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        FusionUserscriptHelper.injectMatchingScripts(mgr.mActiveWebView, mgr.mActiveWebView.getUrl());
+                        if (owner != null) {
+                            mgr.injectScriptsForTab(owner);
+                        } else if (mgr.mActiveWebView != null) {
+                            FusionUserscriptHelper.injectMatchingScripts(mgr.mActiveWebView, mgr.mActiveWebView.getUrl());
+                        }
                     } catch (Throwable ignored) {}
                 }
             });
@@ -2219,8 +2254,8 @@ public class GhostBridgeInterface implements Runnable {
                     java.util.List<FusionTab> tabs = mgr.getTabList();
                     if (tabs != null && tabIndex >= 0 && tabIndex < tabs.size()) {
                         FusionTab t = tabs.get(tabIndex);
-                        if (t != null && t.mWebView != null) {
-                            t.mWebView.evaluateJavascript(jsCode, null);
+                        if (t != null) {
+                            mgr.dispatchJsOnTab(t, jsCode);
                         }
                     }
                 } catch (Throwable ignored) {}
@@ -2258,7 +2293,18 @@ public class GhostBridgeInterface implements Runnable {
     public boolean setUserAgent(final String ua) {
         if (ua == null || ua.trim().isEmpty()) return false;
         final FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-        if (mgr == null || mgr.mActivity == null || mgr.mActiveWebView == null) return false;
+        if (mgr == null || mgr.mActivity == null) return false;
+        final FusionTab owner = getOwnerTab() != null ? getOwnerTab() : FusionTabStateHelper.getActiveTab(mgr);
+        if (owner != null && owner.isGecko() && owner.mGeckoSession != null) {
+            mgr.mActivity.runOnUiThread(() -> {
+                try {
+                    owner.mGeckoSession.getSettings().setUserAgentOverride(ua.trim());
+                    owner.mGeckoSession.reload();
+                } catch (Throwable ignored) {}
+            });
+            return true;
+        }
+        if (mgr.mActiveWebView == null) return false;
         mgr.mActivity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -2273,7 +2319,13 @@ public class GhostBridgeInterface implements Runnable {
     @JavascriptInterface
     public String getUserAgent() {
         FusionWebViewManager mgr = FusionWebViewManager.getInstance();
-        if (mgr == null || mgr.mActiveWebView == null) return "";
+        if (mgr == null) return "";
+        FusionTab owner = getOwnerTab() != null ? getOwnerTab() : FusionTabStateHelper.getActiveTab(mgr);
+        if (owner != null && owner.isGecko() && owner.mGeckoSession != null) {
+            String ov = owner.mGeckoSession.getSettings().getUserAgentOverride();
+            return (ov != null && !ov.isEmpty()) ? ov : org.mozilla.geckoview.GeckoSession.getDefaultUserAgent();
+        }
+        if (mgr.mActiveWebView == null) return "";
         return mgr.mActiveWebView.getSettings().getUserAgentString();
     }
 }

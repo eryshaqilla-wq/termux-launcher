@@ -201,6 +201,8 @@ dependencies {
     implementation "com.google.android.material:material:1.14.0"
     // Native Multi-Profile & Document Start Script support for WebView
     implementation "androidx.webkit:webkit:1.12.0"
+    // Hybrid GeckoView engine (arm64-v8a) for sites blocked by System WebView headers
+    implementation "org.mozilla.geckoview:geckoview-arm64-v8a:136.0.20250317200840"
     // The editor's bottom area (appearance_editor_panel). Material 1.14.0 already resolves 2.2.1;
     // declared here because the app's own layouts use it directly.
     implementation "androidx.constraintlayout:constraintlayout:2.2.1"

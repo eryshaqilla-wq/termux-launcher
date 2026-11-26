@@ -57,3 +57,9 @@
 -dontwarn android.content.IIntentReceiver
 -dontwarn android.content.IIntentSender
 -dontwarn android.content.pm.IPackageManager
+
+# Hybrid GeckoView runtime & JNI bridges
+-keep class org.mozilla.geckoview.** { *; }
+-keep class org.mozilla.gecko.** { *; }
+-dontwarn org.mozilla.geckoview.**
+-dontwarn org.mozilla.gecko.**

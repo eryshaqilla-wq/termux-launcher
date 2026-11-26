@@ -419,11 +419,15 @@ public class FusionUserscriptHelper {
 
     public static void injectMatchingScripts(WebView webView, String currentUrl) {
         if (webView == null || currentUrl == null || currentUrl.isEmpty()) return;
+        injectMatchingScripts(webView.getContext(), currentUrl, js -> webView.evaluateJavascript(js, null));
+    }
+
+    public static void injectMatchingScripts(Context ctx, String currentUrl, java.util.function.Consumer<String> evaluator) {
+        if (evaluator == null || currentUrl == null || currentUrl.isEmpty()) return;
         if (currentUrl.startsWith("file:///android_asset/") || currentUrl.startsWith("about:") || currentUrl.startsWith("javascript:")) {
             return;
         }
 
-        Context ctx = webView.getContext();
         List<File> scripts = getInstalledScripts(ctx);
         if (scripts.isEmpty()) return;
 
@@ -443,7 +447,7 @@ public class FusionUserscriptHelper {
                     String sName = parseScriptName(f);
                     String polyfill = getUserscriptPolyfill(sName, "1.0");
                     String wrapped = "(function() { try {\n" + polyfill + "\n" + scriptCode + "\n} catch(err) { console.error('[Userscript Error " + f.getName() + "]:', err); } })();";
-                    webView.evaluateJavascript(wrapped, null);
+                    evaluator.accept(wrapped);
                     Log.i(TAG, "Injected userscript [" + f.getName() + "] into " + currentUrl);
                 }
             } catch (Throwable e) {
@@ -453,9 +457,18 @@ public class FusionUserscriptHelper {
     }
 
     public static boolean promptInstallUserscript(final TermuxActivity act, final WebView webView, final String scriptUrl) {
-        if (webView == null || scriptUrl == null || !scriptUrl.contains(".user.js")) return false;
-        final Context context = (act != null) ? act : webView.getContext();
-        if (context == null) return false;
+        final Context context = (act != null) ? act : (webView != null ? webView.getContext() : null);
+        if (context == null || scriptUrl == null || !scriptUrl.contains(".user.js")) return false;
+        return promptInstallUserscript(act, context, webView, scriptUrl);
+    }
+
+    public static boolean promptInstallUserscript(final TermuxActivity act, final String scriptUrl) {
+        if (act == null || scriptUrl == null || !scriptUrl.contains(".user.js")) return false;
+        return promptInstallUserscript(act, act, null, scriptUrl);
+    }
+
+    private static boolean promptInstallUserscript(final TermuxActivity act, final Context context, final WebView webView, final String scriptUrl) {
+        if (context == null || scriptUrl == null || !scriptUrl.contains(".user.js")) return false;
 
         new Thread(() -> {
             try {
@@ -578,10 +591,7 @@ public class FusionUserscriptHelper {
         b.setPositiveButton("Buka GreasyFork", (dialog, which) -> {
             if (manager != null) {
                 manager.closeAllDrawers();
-                WebView wv = manager.mActiveWebView;
-                if (wv != null) {
-                    wv.loadUrl("https://greasyfork.org/id/scripts");
-                }
+                manager.loadUrlOnActiveTab("https://greasyfork.org/id/scripts");
             }
         });
 
