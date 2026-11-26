@@ -63,3 +63,6 @@
 -keep class org.mozilla.gecko.** { *; }
 -dontwarn org.mozilla.geckoview.**
 -dontwarn org.mozilla.gecko.**
+-keep class org.yaml.snakeyaml.** { *; }
+-dontwarn org.yaml.snakeyaml.**
+-dontwarn java.beans.**
