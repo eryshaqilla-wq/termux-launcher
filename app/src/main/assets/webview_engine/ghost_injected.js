@@ -11820,6 +11820,7 @@
         window.addEventListener("hashchange", checkAndAutoImportRecipeFromUrl);
     } catch(_) {}
 
+    window.AgyBatchRunner = AgyBatchRunner;
     window.AgyRecorder = AgyRecorder;
     console.log("[AGY Co-Pilot] Smart Shield, Step Editor, Batch Runner & Settings Hub v3.2 Initialized.");
 })();

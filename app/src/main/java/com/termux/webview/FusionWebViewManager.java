@@ -95,6 +95,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public TextView mKillWorkerBtn;
     public View mMenuBackdrop;
     public LinearLayout mMenuCard;
+    public LinearLayout mGeckoAddonMenuRow;
     public TextView mMinBtn;
     public TextView mMinPillBtn;
     public TextView mNewWorkerBtn;
@@ -1238,8 +1239,21 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         JSONObject obj = new JSONObject();
         try {
             FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
-            String curUrl = this.mActiveWebView != null ? this.mActiveWebView.getUrl() : (activeTab != null && activeTab.mUrl != null ? activeTab.mUrl : "");
-            String curTitle = this.mActiveWebView != null ? this.mActiveWebView.getTitle() : (activeTab != null && activeTab.mTitle != null ? activeTab.mTitle : "");
+            String curUrl = "";
+            String curTitle = "";
+            if (activeTab != null) {
+                if (activeTab.isGecko()) {
+                    curUrl = activeTab.mUrl != null ? activeTab.mUrl : "";
+                    curTitle = activeTab.mTitle != null ? activeTab.mTitle : "";
+                } else if (activeTab.mWebView != null) {
+                    curUrl = activeTab.mWebView.getUrl() != null ? activeTab.mWebView.getUrl() : (activeTab.mUrl != null ? activeTab.mUrl : "");
+                    curTitle = activeTab.mWebView.getTitle() != null ? activeTab.mWebView.getTitle() : (activeTab.mTitle != null ? activeTab.mTitle : "");
+                }
+            }
+            if (curUrl.isEmpty() && this.mActiveWebView != null) {
+                curUrl = this.mActiveWebView.getUrl() != null ? this.mActiveWebView.getUrl() : "";
+                curTitle = this.mActiveWebView.getTitle() != null ? this.mActiveWebView.getTitle() : "";
+            }
             obj.put("url", curUrl);
             obj.put("title", curTitle);
             obj.put("engine", activeTab != null && activeTab.mEngine != null ? activeTab.mEngine : ENGINE_DEFAULT);
@@ -2394,6 +2408,17 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                     showExtensionsDialog();
                 }
             }));
+
+            LinearLayout geckoAddonRow = FusionUiHelper.createMenuRow(this.mActivity, "🦊", "Firefox Add-ons (.xpi Native)", new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    closeAllDrawers();
+                    FusionGeckoHelper.showAddonsDialog(FusionWebViewManager.this);
+                }
+            });
+            geckoAddonRow.setVisibility(View.GONE);
+            this.mGeckoAddonMenuRow = geckoAddonRow;
+            menuContent.addView(geckoAddonRow);
 
             menuContent.addView(FusionUiHelper.createMenuRow(this.mActivity, "🌐", "Pengaturan Proxy (Per-Tab)", new View.OnClickListener() {
                 @Override
@@ -5205,6 +5230,10 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 textView7.setText("[Start Wallet (" + FusionWalletHelper.getDetectedEngine() + ")]");
                 textView7.setBackgroundColor(-12285730);
             }
+        }
+        if (this.mGeckoAddonMenuRow != null) {
+            FusionTab activeTab = FusionTabStateHelper.getActiveTab(this);
+            this.mGeckoAddonMenuRow.setVisibility(activeTab != null && activeTab.isGecko() ? View.VISIBLE : View.GONE);
         }
         FusionToolPillHelper.updateToolPillUi(this);
     }

@@ -2851,6 +2851,7 @@ async function main() {
 
         // 2. Validasi whitelist flag/argumen yang diizinkan untuk "web play"
         const ALLOWED_PLAY_FLAGS = new Set([
+            '--gecko', '--geckoview', '--default', '--system-webview',
             '--wallet', '--wallets', '--chain', '--loop',
             '--p', '--proxy-file', '-pf', '--file-proxy', '--px-file',
             '--proxy', '--px', '-px',
@@ -2916,6 +2917,19 @@ async function main() {
         if (lIdx !== -1 && args[lIdx + 1]) loop = parseInt(args[lIdx + 1], 10) || 1;
         let fresh = args.includes('--fresh') || args.includes('--incognito');
         let headless = args.includes('--headless');
+        let engine = '';
+        if (args.includes('--gecko') || args.includes('--geckoview')) {
+            engine = 'gecko';
+        } else if (args.includes('--default') || args.includes('--system-webview')) {
+            engine = 'default';
+        } else {
+            try {
+                const engOut = execSync('termux-ipc webview --default-webview status', { encoding: 'utf8', timeout: 1500 }).trim().toLowerCase();
+                engine = engOut.includes('gecko') ? 'gecko' : 'default';
+            } catch (_) {
+                engine = 'default';
+            }
+        }
         let ghostwallet = args.includes('--ghostwallet') || args.includes('--ghost-wallet') || args.includes('--ghost') || args.includes('--daemon') || args.includes('--sign');
         let email = '';
         const emIdx = args.indexOf('--email');
@@ -3216,6 +3230,7 @@ async function main() {
 
             // Baris 3: Info WebView & Execution Mode
             const webviewParts = [
+                engine === 'gecko' ? '\x1b[33mGECKO\x1b[0m' : '\x1b[90mSYSTEM\x1b[0m',
                 headless ? '\x1b[36mHEADLESS\x1b[0m' : '\x1b[32mVISUAL\x1b[0m',
                 turbo ? `\x1b[36mTURBO${noJit ? ' (NO-JIT)' : ' (JIT)'}\x1b[0m` : (jit ? '\x1b[33mJIT\x1b[0m' : ''),
                 (concurrency > 1 && burst <= 1) ? `\x1b[33mPARALEL (x${concurrency})\x1b[0m` : '',
@@ -3233,7 +3248,7 @@ async function main() {
 
             console.log(`\n${headerLine}\n${walletLine}\n${webviewLine}`);
 
-            const res = await pb.playRecipe(recipeName, { wallet, wallets, loop, chain: resolved.chainKey, headless, url, ghostwallet, proxy, proxyFile, rotateProxy, concurrency, all, from: fromWallet, showSniff, turbo, jit, noJit, wire, burst, doze, email, emails, emailFile, cloudMail, snap, restore, fresh });
+            const res = await pb.playRecipe(recipeName, { wallet, wallets, loop, chain: resolved.chainKey, engine, headless, url, ghostwallet, proxy, proxyFile, rotateProxy, concurrency, all, from: fromWallet, showSniff, turbo, jit, noJit, wire, burst, doze, email, emails, emailFile, cloudMail, snap, restore, fresh });
             if (res.error) {
                 console.error(`\x1b[1m\x1b[31m✗ Error:\x1b[0m \x1b[97m${res.error}\x1b[0m`);
                 process.exitCode = 1;

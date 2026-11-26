@@ -368,8 +368,14 @@ public class FusionWebViewDispatcher {
             fusionWebViewManager.toggleCollapsePill();
         } else if (str.equals("WEBVIEW_EXTENSIONS") || str.equals("WEBVIEW_EXTENSION_DIALOG")) {
             fusionWebViewManager.showExtensionsDialog();
+        } else if (str.equals("WEBVIEW_GECKO_ADDONS")) {
+            FusionGeckoHelper.showAddonsDialog(fusionWebViewManager);
         } else if (str.startsWith("WEBVIEW_EXTENSION_INSTALL ")) {
             String path = str.substring(26).trim();
+            if (path.toLowerCase().endsWith(".xpi") || ((path.startsWith("http://") || path.startsWith("https://")) && path.toLowerCase().contains(".xpi"))) {
+                FusionGeckoHelper.installXpiExtension(fusionWebViewManager.mActivity, path, null);
+                return;
+            }
             java.io.File f = new java.io.File(path);
             if (f.exists()) {
                 boolean ok = FusionExtensionHelper.installPackage(fusionWebViewManager.mActivity, f);

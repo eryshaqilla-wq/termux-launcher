@@ -5,7 +5,16 @@
   let port = null;
   let pendingQueue = [];
 
-  function runInPageWorld(code, wantResult) {
+  function serializeEvalVal(v) {
+    if (v === undefined) return null;
+    try {
+      return JSON.stringify(v);
+    } catch (_) {
+      return String(v);
+    }
+  }
+
+  function runInPageWorld(code, wantResult, onDone) {
     const target = document.documentElement || document.head;
     if (!target) {
       return { deferred: true };
@@ -16,14 +25,19 @@
         s.textContent = code;
         target.appendChild(s);
         s.remove();
-        return { done: true, value: null, error: null };
+        const res = { done: true, value: null, error: null };
+        if (onDone) onDone(res);
+        return res;
       } catch (err) {
-        return { done: false, error: String(err) };
+        const res = { done: false, error: String(err) };
+        if (onDone) onDone(res);
+        return res;
       }
     }
 
     const eventId = "__fg_eval_" + Math.random().toString(36).slice(2) + "_" + Date.now();
-    let captured = { done: false, value: null, error: null };
+    const asyncEventId = eventId + "_async";
+    let captured = { done: false, pendingAsync: false, value: null, error: null };
     const handler = (ev) => {
       if (ev && ev.detail) {
         captured = ev.detail;
@@ -32,35 +46,69 @@
       }
     };
     window.addEventListener(eventId, handler, { once: true });
+
+    let asyncFinished = false;
+    let asyncTimer = null;
+    const finishAsync = (resObj) => {
+      if (asyncFinished) return;
+      asyncFinished = true;
+      if (asyncTimer) clearTimeout(asyncTimer);
+      window.removeEventListener(asyncEventId, asyncHandler);
+      if (onDone) onDone(resObj);
+    };
+    const asyncHandler = (ev) => {
+      const detail = (ev && ev.detail) ? ev.detail : { done: true, value: null, error: null };
+      finishAsync(detail);
+    };
+    window.addEventListener(asyncEventId, asyncHandler, { once: true });
+
     try {
       const s = document.createElement("script");
       s.textContent =
-        "(function(){var v=null,e=null;try{v=(0,eval)(" +
-        JSON.stringify(code) +
-        ");if(v!==undefined){try{v=JSON.stringify(v);}catch(_){v=String(v);}}else{v=null;}}catch(err){e=String(err&&err.message?err.message:err);}window.dispatchEvent(new CustomEvent(" +
-        JSON.stringify(eventId) +
-        ",{detail:{done:true,value:v,error:e}}));})();";
+        "(function(){var v=null,e=null,pending=false;" +
+        "function _ser(x){if(x===undefined)return null;try{return JSON.stringify(x);}catch(_){return String(x);}}" +
+        "try{v=(0,eval)(" + JSON.stringify(code) + ");" +
+        "if(v&&typeof v.then==='function'){pending=true;" +
+        "v.then(function(r){window.dispatchEvent(new CustomEvent(" + JSON.stringify(asyncEventId) + ",{detail:{done:true,value:_ser(r),error:null}}));}," +
+        "function(err){window.dispatchEvent(new CustomEvent(" + JSON.stringify(asyncEventId) + ",{detail:{done:true,value:null,error:String(err&&err.message?err.message:err)}}));});" +
+        "}else{v=_ser(v);}" +
+        "}catch(err){e=String(err&&err.message?err.message:err);}" +
+        "window.dispatchEvent(new CustomEvent(" + JSON.stringify(eventId) + ",{detail:{done:true,pendingAsync:pending,value:v,error:e}}));})();";
       target.appendChild(s);
       s.remove();
     } catch (_) {}
     window.removeEventListener(eventId, handler);
 
+    if (captured.pendingAsync) {
+      asyncTimer = setTimeout(() => {
+        finishAsync({ done: true, value: null, error: "Async eval timeout (25000ms)" });
+      }, 25000);
+      return captured;
+    }
+
+    window.removeEventListener(asyncEventId, asyncHandler);
+
     if (!captured.done) {
       try {
         let res = (0, eval)(code);
-        captured.done = true;
-        if (res !== undefined) {
-          try {
-            captured.value = JSON.stringify(res);
-          } catch (_) {
-            captured.value = String(res);
-          }
+        if (res && typeof res.then === "function") {
+          asyncTimer = setTimeout(() => {
+            finishAsync({ done: true, value: null, error: "Async eval timeout (25000ms)" });
+          }, 25000);
+          res.then(
+            (r) => finishAsync({ done: true, value: serializeEvalVal(r), error: null }),
+            (err2) => finishAsync({ done: true, value: null, error: String(err2 && err2.message ? err2.message : err2) })
+          );
+          return { done: true, pendingAsync: true };
         }
+        captured.done = true;
+        captured.value = serializeEvalVal(res);
       } catch (err2) {
         captured.done = true;
         captured.error = String(err2 && err2.message ? err2.message : err2);
       }
     }
+    if (onDone) onDone(captured);
     return captured;
   }
 
@@ -119,17 +167,18 @@
         pendingQueue.push(msg);
         return;
       }
-      const res = runInPageWorld(msg.code, !!msg.reqId);
-      if (msg.reqId && port) {
-        try {
-          port.postMessage({
-            type: "evalResult",
-            reqId: msg.reqId,
-            value: res.value,
-            error: res.error
-          });
-        } catch (_) {}
-      }
+      runInPageWorld(msg.code, !!msg.reqId, (res) => {
+        if (msg.reqId && port) {
+          try {
+            port.postMessage({
+              type: "evalResult",
+              reqId: msg.reqId,
+              value: res.value,
+              error: res.error
+            });
+          } catch (_) {}
+        }
+      });
     }
   }
 

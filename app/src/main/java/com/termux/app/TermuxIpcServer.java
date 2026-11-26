@@ -990,13 +990,32 @@ public class TermuxIpcServer {
                                     try {
                                         int tabId = Integer.parseInt(rest.substring(0, sp).trim());
                                         String js = rest.substring(sp + 1);
-                                        String res = mgr.evaluateJsOnTabSync(tabId, js, 5000);
+                                        String res = mgr.evaluateJsOnTabSync(tabId, js, 20000);
                                         outputStream.write(((res != null ? res : "null") + "\n").getBytes());
                                     } catch (Exception e) {
                                         outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
                                     }
                                 } else {
                                     outputStream.write("ERROR: Invalid arguments (tabId js)\n".getBytes());
+                                }
+                                outputStream.flush();
+                                continue;
+                            } else if (strTrim.startsWith("WEBVIEW_ACTION_TAB ")) {
+                                String rest = strTrim.substring(19).trim();
+                                String[] parts = rest.split("\\s+", 3);
+                                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                                if (mgr != null && parts.length >= 2) {
+                                    try {
+                                        int tabId = Integer.parseInt(parts[0].trim());
+                                        String action = parts[1].trim();
+                                        String urlArg = parts.length >= 3 ? parts[2].trim() : null;
+                                        boolean ok = mgr.dispatchTabAction(tabId, action, urlArg);
+                                        outputStream.write((ok ? "OK\n" : "ERROR: Tab not found\n").getBytes());
+                                    } catch (Exception e) {
+                                        outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
+                                    }
+                                } else {
+                                    outputStream.write("ERROR: Invalid arguments (tabId action [url])\n".getBytes());
                                 }
                                 outputStream.flush();
                                 continue;
@@ -1009,7 +1028,8 @@ public class TermuxIpcServer {
                                             for (Object obj : mgr.mTabList) {
                                                 if (obj instanceof com.termux.webview.FusionTab) {
                                                     com.termux.webview.FusionTab t = (com.termux.webview.FusionTab) obj;
-                                                    if (t.mWebView != null) mgr.injectScripts(t.mWebView);
+                                                    if (t.isGecko()) com.termux.webview.FusionGeckoHelper.injectScripts(mgr, t);
+                                                    else if (t.mWebView != null) mgr.injectScripts(t.mWebView);
                                                 }
                                             }
                                         }

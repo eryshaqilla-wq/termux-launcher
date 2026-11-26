@@ -536,6 +536,11 @@ for t in tabs:
             fi
             return 0
             ;;
+        addons|gecko-ext|xpi|--addons|--xpi)
+            send_cmd "WEBVIEW_GECKO_ADDONS"
+            echo "[termux-ipc] Membuka Manajer Firefox Add-ons (.xpi Native)..."
+            return 0
+            ;;
         ext|extension|extensions|--ext|--extension)
             shift
             local SUB="$1"

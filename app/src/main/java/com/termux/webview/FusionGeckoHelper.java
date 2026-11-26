@@ -40,6 +40,7 @@ import org.mozilla.geckoview.GeckoSession;
 import org.mozilla.geckoview.GeckoSessionSettings;
 import org.mozilla.geckoview.GeckoView;
 import org.mozilla.geckoview.WebExtension;
+import org.mozilla.geckoview.WebExtensionController;
 import org.mozilla.geckoview.WebResponse;
 
 /**
@@ -71,6 +72,8 @@ public final class FusionGeckoHelper {
     private static final Map<GeckoSession, WebExtension.Port> sSessionPorts = new ConcurrentHashMap<>();
     private static final Map<GeckoSession, List<String>> sQueuedScripts = new ConcurrentHashMap<>();
     private static final Map<String, PendingEval> sPendingEvals = new ConcurrentHashMap<>();
+    private static final Map<String, WebExtension.Action> sAddonActions = new ConcurrentHashMap<>();
+    private static final Map<String, WebExtension> sInstalledAddons = new ConcurrentHashMap<>();
 
     private static volatile GeckoResult<GeckoSession.PromptDelegate.PromptResponse> sPendingFileResult;
     private static volatile GeckoSession.PromptDelegate.FilePrompt sPendingFilePrompt;
@@ -137,7 +140,11 @@ public final class FusionGeckoHelper {
                 .accept(ext -> {
                     sBridgeExtension = ext;
                     attachBackgroundDelegate(ext);
-                }, err -> Log.w(TAG, "Built-in Gecko extension init skipped", err));
+                    syncInstalledAddons(runtime);
+                }, err -> {
+                    Log.w(TAG, "Built-in Gecko extension init skipped", err);
+                    syncInstalledAddons(runtime);
+                });
         } catch (Throwable t) {
             Log.w(TAG, "Failed ensuring Gecko bridge extension", t);
         }
@@ -910,12 +917,17 @@ public final class FusionGeckoHelper {
                             }
                             resRef.set(outFile.getAbsolutePath());
                         }
-                    } catch (Throwable ignored) {
+                    } catch (Throwable t) {
+                        Log.e(TAG, "Screenshot write error", t);
                     } finally {
                         latch.countDown();
                     }
-                }, err -> latch.countDown());
-            } catch (Throwable ignored) {
+                }, err -> {
+                    Log.e(TAG, "capturePixels error callback", err);
+                    latch.countDown();
+                });
+            } catch (Throwable t) {
+                Log.e(TAG, "capturePixels exception", t);
                 latch.countDown();
             }
         });
@@ -1003,5 +1015,307 @@ public final class FusionGeckoHelper {
         if (act != null && msg != null) {
             act.runOnUiThread(() -> FusionToast.makeText(act, msg, 0).show());
         }
+    }
+
+    private static void registerAddonActionDelegate(final GeckoRuntime runtime, final WebExtension ext) {
+        if (ext == null || ext.id == null || EXT_ID.equals(ext.id)) return;
+        sInstalledAddons.put(ext.id, ext);
+        try {
+            ext.setActionDelegate(new WebExtension.ActionDelegate() {
+                @Override
+                public void onBrowserAction(@NonNull WebExtension extension, @Nullable GeckoSession session, @NonNull WebExtension.Action action) {
+                    if (extension.id != null) {
+                        sAddonActions.put(extension.id, action);
+                    }
+                }
+
+                @Override
+                public void onPageAction(@NonNull WebExtension extension, @Nullable GeckoSession session, @NonNull WebExtension.Action action) {
+                    if (extension.id != null) {
+                        sAddonActions.put(extension.id, action);
+                    }
+                }
+
+                @Nullable
+                @Override
+                public GeckoResult<GeckoSession> onOpenPopup(@NonNull WebExtension extension, @NonNull WebExtension.Action action) {
+                    return openPopupDialog(runtime, extension, action);
+                }
+
+                @Nullable
+                @Override
+                public GeckoResult<GeckoSession> onTogglePopup(@NonNull WebExtension extension, @NonNull WebExtension.Action action) {
+                    return openPopupDialog(runtime, extension, action);
+                }
+            });
+        } catch (Throwable t) {
+            Log.w(TAG, "registerAddonActionDelegate error for " + ext.id, t);
+        }
+    }
+
+    private static GeckoResult<GeckoSession> openPopupDialog(GeckoRuntime runtime, WebExtension extension, WebExtension.Action action) {
+        FusionWebViewManager mgr = FusionWebViewManager.sInstance;
+        final AppCompatActivity act = mgr != null ? mgr.mActivity : null;
+        if (runtime == null || act == null || act.isFinishing()) {
+            return null;
+        }
+        final GeckoResult<GeckoSession> res = new GeckoResult<>();
+        act.runOnUiThread(() -> {
+            try {
+                GeckoSessionSettings settings = new GeckoSessionSettings.Builder()
+                    .useTrackingProtection(false)
+                    .build();
+                final GeckoSession popupSession = new GeckoSession(settings);
+                popupSession.setNavigationDelegate(new GeckoSession.NavigationDelegate() {
+                    @Nullable
+                    @Override
+                    public GeckoResult<GeckoSession> onNewSession(@NonNull GeckoSession s, @NonNull String uri) {
+                        if (mgr != null && uri != null && !uri.isEmpty()) {
+                            mgr.addNewTab(uri);
+                        }
+                        return null;
+                    }
+                });
+                popupSession.open(runtime);
+
+                final GeckoView gv = new GeckoView(act);
+                gv.setSession(popupSession);
+                float density = act.getResources().getDisplayMetrics().density;
+                gv.setLayoutParams(new ViewGroup.LayoutParams(-1, (int) (460 * density)));
+
+                String title = (extension.metaData != null && extension.metaData.name != null && !extension.metaData.name.isEmpty())
+                    ? extension.metaData.name
+                    : "Firefox Add-on";
+                if (action != null && action.title != null && !action.title.isEmpty()) {
+                    title = title + " — " + action.title;
+                }
+
+                AlertDialog dlg = new AlertDialog.Builder(act)
+                    .setTitle("🦊 " + title)
+                    .setView(gv)
+                    .setNegativeButton("Tutup", (d, w) -> d.dismiss())
+                    .create();
+                dlg.setOnDismissListener(d -> {
+                    try {
+                        gv.releaseSession();
+                        if (popupSession.isOpen()) popupSession.close();
+                    } catch (Throwable ignored) {}
+                });
+                dlg.show();
+                res.complete(popupSession);
+            } catch (Throwable t) {
+                Log.e(TAG, "openPopupDialog error", t);
+                res.completeExceptionally(t);
+            }
+        });
+        return res;
+    }
+
+    private static void syncInstalledAddons(final GeckoRuntime runtime) {
+        if (runtime == null) return;
+        try {
+            runtime.getWebExtensionController().list().accept(exts -> {
+                sInstalledAddons.clear();
+                if (exts != null) {
+                    for (WebExtension ext : exts) {
+                        if (ext != null && ext.id != null && !EXT_ID.equals(ext.id)) {
+                            registerAddonActionDelegate(runtime, ext);
+                        }
+                    }
+                }
+            }, err -> Log.w(TAG, "syncInstalledAddons error", err));
+        } catch (Throwable t) {
+            Log.w(TAG, "syncInstalledAddons call failed", t);
+        }
+    }
+
+    public static void installXpiExtension(final AppCompatActivity act, final String pathOrUrl, final Runnable onDone) {
+        if (act == null || pathOrUrl == null || pathOrUrl.trim().isEmpty()) return;
+        final GeckoRuntime rt = getOrCreateRuntime(act);
+        if (rt == null) return;
+        String raw = pathOrUrl.trim();
+        final boolean isDir;
+        final String uri;
+        if (raw.startsWith("http://") || raw.startsWith("https://") || raw.startsWith("file://") || raw.startsWith("resource://")) {
+            uri = raw;
+            isDir = raw.endsWith("/");
+        } else {
+            File f = new File(raw);
+            isDir = f.isDirectory();
+            uri = Uri.fromFile(f).toString() + (isDir && !raw.endsWith("/") ? "/" : "");
+        }
+        act.runOnUiThread(() -> {
+            FusionToast.makeText(act, "🦊 Memasang Firefox Add-on...", 0).show();
+            try {
+                GeckoResult<WebExtension> call = isDir
+                    ? rt.getWebExtensionController().installBuiltIn(uri)
+                    : rt.getWebExtensionController().install(uri);
+                call.accept(ext -> {
+                    if (ext != null) {
+                        registerAddonActionDelegate(rt, ext);
+                        String nm = (ext.metaData != null && ext.metaData.name != null) ? ext.metaData.name : ext.id;
+                        FusionToast.makeText(act, "✅ Add-on Firefox terpasang: " + nm, 1).show();
+                    }
+                    syncInstalledAddons(rt);
+                    if (onDone != null) act.runOnUiThread(onDone);
+                }, err -> {
+                    String em = err != null && err.getMessage() != null ? err.getMessage() : "Gagal pasang .xpi (pastikan signed AMO .xpi atau URL valid)";
+                    FusionToast.makeText(act, "❌ " + em, 1).show();
+                });
+            } catch (Throwable t) {
+                FusionToast.makeText(act, "❌ Error pasang Add-on: " + t.getMessage(), 1).show();
+            }
+        });
+    }
+
+    private static List<File> scanXpiFiles(Context ctx) {
+        List<File> out = new ArrayList<>();
+        List<File> dirs = new ArrayList<>();
+        dirs.add(new File("/sdcard/Download"));
+        dirs.add(new File("/storage/emulated/0/Download"));
+        dirs.add(new File("/data/data/com.termux/files/home"));
+        dirs.add(new File("/data/data/com.termux/files/home/downloads"));
+        if (ctx != null && ctx.getFilesDir() != null) {
+            dirs.add(new File(ctx.getFilesDir(), "gecko_addons"));
+        }
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (File d : dirs) {
+            if (d == null || !d.exists() || !d.isDirectory()) continue;
+            File[] files = d.listFiles();
+            if (files == null) continue;
+            for (File f : files) {
+                if (f.isFile() && f.getName().toLowerCase().endsWith(".xpi") && seen.add(f.getAbsolutePath())) {
+                    out.add(f);
+                }
+            }
+        }
+        return out;
+    }
+
+    public static void showAddonsDialog(final FusionWebViewManager manager) {
+        if (manager == null || manager.mActivity == null) return;
+        final AppCompatActivity act = manager.mActivity;
+        final GeckoRuntime rt = getOrCreateRuntime(act);
+        if (rt == null) return;
+
+        rt.getWebExtensionController().list().accept(exts -> {
+            final List<WebExtension> userAddons = new ArrayList<>();
+            if (exts != null) {
+                for (WebExtension e : exts) {
+                    if (e != null && e.id != null && !EXT_ID.equals(e.id)) {
+                        registerAddonActionDelegate(rt, e);
+                        userAddons.add(e);
+                    }
+                }
+            }
+            act.runOnUiThread(() -> {
+                List<String> labels = new ArrayList<>();
+                labels.add("➕ Pasang Add-on Asli Firefox (.xpi / URL AMO)");
+                for (WebExtension e : userAddons) {
+                    String name = (e.metaData != null && e.metaData.name != null && !e.metaData.name.isEmpty()) ? e.metaData.name : e.id;
+                    String ver = (e.metaData != null && e.metaData.version != null) ? " v" + e.metaData.version : "";
+                    boolean enabled = e.metaData != null && e.metaData.enabled;
+                    String status = enabled ? "[AKTIF]" : "[NONAKTIF]";
+                    String actTag = sAddonActions.containsKey(e.id) ? " • Popup" : "";
+                    labels.add("🦊 " + name + ver + " " + status + actTag);
+                }
+                if (userAddons.isEmpty()) {
+                    labels.add("ℹ️ Belum ada Firefox Add-on (.xpi) terpasang");
+                }
+
+                AlertDialog.Builder b = new AlertDialog.Builder(act);
+                b.setTitle("🦊 Firefox Add-ons (.xpi Native Gecko)");
+                b.setItems(labels.toArray(new String[0]), (d, which) -> {
+                    if (which == 0) {
+                        promptInstallXpiDialog(manager);
+                    } else if (which > 0 && which <= userAddons.size()) {
+                        showSingleAddonActions(manager, rt, userAddons.get(which - 1));
+                    }
+                });
+                b.setNegativeButton("Tutup", null);
+                b.show();
+            });
+        }, err -> act.runOnUiThread(() -> promptInstallXpiDialog(manager)));
+    }
+
+    private static void promptInstallXpiDialog(final FusionWebViewManager manager) {
+        final AppCompatActivity act = manager.mActivity;
+        if (act == null) return;
+        final List<File> xpis = scanXpiFiles(act);
+        List<String> items = new ArrayList<>();
+        for (File f : xpis) {
+            long kb = Math.max(1, f.length() / 1024);
+            items.add("📦 " + f.getName() + " (" + kb + " KB)");
+        }
+        items.add("✏️ Ketik Path .xpi atau Link Download addons.mozilla.org (.xpi)");
+
+        AlertDialog.Builder b = new AlertDialog.Builder(act);
+        b.setTitle("📦 Pilih / Pasang Firefox Add-on (.xpi)");
+        b.setItems(items.toArray(new String[0]), (d, which) -> {
+            if (which >= 0 && which < xpis.size()) {
+                installXpiExtension(act, xpis.get(which).getAbsolutePath(), () -> showAddonsDialog(manager));
+            } else {
+                final EditText input = new EditText(act);
+                input.setHint("https://addons.mozilla.org/firefox/downloads/latest/.../addon.xpi");
+                new AlertDialog.Builder(act)
+                    .setTitle("URL / Path Firefox Add-on (.xpi)")
+                    .setView(input)
+                    .setPositiveButton("Pasang", (dd, w) -> {
+                        String val = input.getText().toString().trim();
+                        if (!val.isEmpty()) {
+                            installXpiExtension(act, val, () -> showAddonsDialog(manager));
+                        }
+                    })
+                    .setNegativeButton("Batal", null)
+                    .show();
+            }
+        });
+        b.setNegativeButton("Batal", null);
+        b.show();
+    }
+
+    private static void showSingleAddonActions(final FusionWebViewManager manager, final GeckoRuntime rt, final WebExtension ext) {
+        final AppCompatActivity act = manager.mActivity;
+        if (act == null || ext == null) return;
+        final boolean enabled = ext.metaData != null && ext.metaData.enabled;
+        final WebExtension.Action action = ext.id != null ? sAddonActions.get(ext.id) : null;
+        List<String> opts = new ArrayList<>();
+        if (action != null) {
+            opts.add("🪟 Buka Popup Add-on");
+        }
+        opts.add(enabled ? "⏸️ Nonaktifkan Add-on" : "▶️ Aktifkan Add-on");
+        opts.add("🗑️ Hapus (Uninstall)");
+
+        String name = (ext.metaData != null && ext.metaData.name != null) ? ext.metaData.name : ext.id;
+        new AlertDialog.Builder(act)
+            .setTitle("🦊 " + name)
+            .setItems(opts.toArray(new String[0]), (d, which) -> {
+                String sel = opts.get(which);
+                if (sel.contains("Buka Popup")) {
+                    try {
+                        action.click();
+                    } catch (Throwable t) {
+                        FusionToast.makeText(act, "Gagal membuka popup: " + t.getMessage(), 0).show();
+                    }
+                } else if (sel.contains("Nonaktifkan")) {
+                    rt.getWebExtensionController().disable(ext, WebExtensionController.EnableSource.USER)
+                        .accept(r -> act.runOnUiThread(() -> showAddonsDialog(manager)));
+                } else if (sel.contains("Aktifkan")) {
+                    rt.getWebExtensionController().enable(ext, WebExtensionController.EnableSource.USER)
+                        .accept(r -> act.runOnUiThread(() -> showAddonsDialog(manager)));
+                } else if (sel.contains("Hapus")) {
+                    rt.getWebExtensionController().uninstall(ext)
+                        .accept(r -> act.runOnUiThread(() -> {
+                            if (ext.id != null) {
+                                sInstalledAddons.remove(ext.id);
+                                sAddonActions.remove(ext.id);
+                            }
+                            FusionToast.makeText(act, "✅ Add-on dihapus", 0).show();
+                            showAddonsDialog(manager);
+                        }));
+                }
+            })
+            .setNegativeButton("Kembali", (d, w) -> showAddonsDialog(manager))
+            .show();
     }
 }
