@@ -1009,7 +1009,7 @@ public class TermuxIpcServer {
                                         int tabId = Integer.parseInt(parts[0].trim());
                                         String action = parts[1].trim();
                                         String urlArg = parts.length >= 3 ? parts[2].trim() : null;
-                                        boolean ok = mgr.dispatchTabAction(tabId, action, urlArg);
+                                        boolean ok = mgr.navigateTabAction(tabId, action, urlArg);
                                         outputStream.write((ok ? "OK\n" : "ERROR: Tab not found\n").getBytes());
                                     } catch (Exception e) {
                                         outputStream.write(("ERROR: " + e.getMessage() + "\n").getBytes());
