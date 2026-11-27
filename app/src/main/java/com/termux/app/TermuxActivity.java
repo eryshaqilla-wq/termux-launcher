@@ -22540,13 +22540,6 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
 
     private void executeTerminalQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
         String actionKey = key.key;
-        if ("tool:ipc.telegram".equalsIgnoreCase(actionKey) || "ipc.telegram".equalsIgnoreCase(actionKey)) {
-            com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
-            if (mgr != null) {
-                mgr.showTelegramPanel(com.termux.webview.FusionWebViewManager.TELEGRAM_CANVAS_MIDDLE);
-            }
-            return;
-        }
         if (actionKey != null && actionKey.startsWith("app:")) {
             launchAppByRefOrPackage(actionKey.substring(4));
             return;
@@ -22779,41 +22772,8 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         sheet.show();
     }
 
-    @NonNull
-    public com.termux.app.terminal.PaneSurfaceStyle getPaneSurfaceStyle() {
-        return paneSurfaceStyle();
-    }
-
-    @Nullable
-    public com.termux.app.chrome.ChromeInk getChromeInk() {
-        return mChrome != null ? mChrome.ink() : null;
-    }
-
-    public int getActivePlaceAccent() {
-        return com.termux.app.statusbar.StatusBarLensView.accentFor(this, currentWallPage());
-    }
-
-    @Nullable
-    public ViewGroup getLeftWidgetsHost() {
-        if (mPaneWallController == null) return null;
-        return mPaneWallController.widgetsPage();
-    }
-
-    public void goToWallPage(@NonNull com.termux.app.wall.PaneWallPage page) {
-        if (mPaneWallController != null) {
-            mPaneWallController.goTo(page, true);
-        }
-    }
-
     public void executeLeftCanvasQuickKey(@NonNull com.termux.app.terminal.io.ExtraKeysLayoutModel.Key key) {
         String actionKey = key.key != null ? key.key : "";
-        if ("tool:ipc.telegram".equalsIgnoreCase(actionKey) || "ipc.telegram".equalsIgnoreCase(actionKey)) {
-            com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
-            if (mgr != null) {
-                mgr.showTelegramPanel(com.termux.webview.FusionWebViewManager.TELEGRAM_CANVAS_LEFT);
-            }
-            return;
-        }
         if (actionKey.startsWith("app:")) {
             launchAppByRefOrPackage(actionKey.substring(4));
             return;

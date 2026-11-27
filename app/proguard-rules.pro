@@ -66,7 +66,3 @@
 -keep class org.yaml.snakeyaml.** { *; }
 -dontwarn org.yaml.snakeyaml.**
 -dontwarn java.beans.**
-
-# Native TDLib (Telegram Database Library) JNI bindings
--keep class org.drinkless.tdlib.** { *; }
--dontwarn org.drinkless.tdlib.**

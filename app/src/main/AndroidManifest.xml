@@ -156,7 +156,6 @@
         android:usesCleartextTraffic="${TERMUX_APP_USES_CLEARTEXT_TRAFFIC}"
         android:supportsRtl="true"
         android:theme="@style/Theme.TermuxApp.DayNight.DarkActionBar"
-        tools:replace="android:label,android:allowBackup"
         tools:targetApi="o">
 
         <uses-native-library

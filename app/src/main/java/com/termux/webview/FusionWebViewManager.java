@@ -100,13 +100,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     public TextView mMinPillBtn;
     public TextView mNewWorkerBtn;
     public TextView mOpacityBtn;
-    public static final String TELEGRAM_CANVAS_MIDDLE = "middle";
-    public static final String TELEGRAM_CANVAS_LEFT = "left";
     public FrameLayout mPaneHost;
-    public com.termux.telegram.FusionTelegramView mTelegramView;
-    public boolean mTelegramVisible = false;
-    public String mTelegramCanvasLock = "";
-    public TerminalSession mTelegramBoundSession = null;
     public TextView mQuickBackBtn;
     public TextView mReloadPillBtn;
     public TextView mProxyBtn;
@@ -1996,12 +1990,6 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
     }
 
     public boolean hasMiddleCanvasWebView() {
-        if (this.mTelegramVisible && TELEGRAM_CANVAS_MIDDLE.equals(this.mTelegramCanvasLock) && this.mTelegramView != null) {
-            TerminalSession cur = this.mActivity != null ? this.mActivity.getCurrentSession() : null;
-            if (this.mTelegramBoundSession == null || this.mTelegramBoundSession == cur) {
-                return true;
-            }
-        }
         if (this.mActivity == null) return false;
         TerminalSession session = this.mActivity.getCurrentSession();
         if (session == null || this.mTabList == null) return false;
@@ -4695,128 +4683,8 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         }
     }
 
-    public void showTelegramPanel() {
-        String target = (this.mActivity != null && this.mActivity.currentWallPage() == com.termux.app.wall.PaneWallPage.WIDGETS)
-            ? TELEGRAM_CANVAS_LEFT : TELEGRAM_CANVAS_MIDDLE;
-        showTelegramPanel(target);
-    }
-
-    public void showTelegramPanel(String targetCanvas) {
-        if (this.mActivity == null) return;
-        final String target = TELEGRAM_CANVAS_LEFT.equalsIgnoreCase(targetCanvas)
-            ? TELEGRAM_CANVAS_LEFT : TELEGRAM_CANVAS_MIDDLE;
-        this.mActivity.runOnUiThread(() -> {
-            if (this.mTelegramVisible && !this.mTelegramCanvasLock.isEmpty() && !this.mTelegramCanvasLock.equals(target)) {
-                String lockLabel = TELEGRAM_CANVAS_LEFT.equals(this.mTelegramCanvasLock) ? "Kanvas Kiri" : "Kanvas Tengah";
-                com.termux.app.FusionToast.makeText(this.mActivity, "EsoGram sedang aktif & terkunci di " + lockLabel, 0).show();
-                this.mActivity.goToWallPage(TELEGRAM_CANVAS_LEFT.equals(this.mTelegramCanvasLock)
-                    ? com.termux.app.wall.PaneWallPage.WIDGETS
-                    : com.termux.app.wall.PaneWallPage.TERMINAL);
-                return;
-            }
-            if (this.mPaneHost == null) {
-                initViews();
-            }
-            ViewGroup host = TELEGRAM_CANVAS_LEFT.equals(target)
-                ? this.mActivity.getLeftWidgetsHost()
-                : this.mPaneHost;
-            if (host == null) {
-                host = this.mPaneHost;
-            }
-            if (host == null) return;
-
-            if (this.mTelegramView == null) {
-                this.mTelegramView = new com.termux.telegram.FusionTelegramView(this.mActivity, this);
-            } else {
-                this.mTelegramView.resolveTheme();
-                this.mTelegramView.syncUiState();
-            }
-            if (this.mTelegramView.getParent() instanceof ViewGroup && this.mTelegramView.getParent() != host) {
-                ((ViewGroup) this.mTelegramView.getParent()).removeView(this.mTelegramView);
-            }
-            if (this.mTelegramView.getParent() == null) {
-                host.addView(this.mTelegramView, new FrameLayout.LayoutParams(-1, -1));
-            }
-            this.mTelegramCanvasLock = (host == this.mPaneHost) ? TELEGRAM_CANVAS_MIDDLE : TELEGRAM_CANVAS_LEFT;
-            this.mTelegramBoundSession = TELEGRAM_CANVAS_MIDDLE.equals(this.mTelegramCanvasLock)
-                ? this.mActivity.getCurrentSession() : null;
-            this.mTelegramVisible = true;
-            this.mTelegramView.setVisibility(View.VISIBLE);
-            this.mTelegramView.bringToFront();
-            this.mTelegramView.setElevation(200.0f);
-
-            if (TELEGRAM_CANVAS_MIDDLE.equals(this.mTelegramCanvasLock)) {
-                this.mActivity.goToWallPage(com.termux.app.wall.PaneWallPage.TERMINAL);
-                if (this.mTerminalPaneHost != null) {
-                    this.mTerminalPaneHost.setVisibility(View.GONE);
-                }
-                this.mPaneHost.setVisibility(View.VISIBLE);
-                this.mPaneHost.setAlpha(1.0f);
-                this.mPaneHost.setTranslationX(0.0f);
-                this.mPaneHost.bringToFront();
-                if (this.mControlPill != null) this.mControlPill.setVisibility(View.GONE);
-                if (this.mToolScroll != null) this.mToolScroll.setVisibility(View.GONE);
-                this.mActivity.beginWebViewExternalTextInput();
-            } else {
-                this.mActivity.goToWallPage(com.termux.app.wall.PaneWallPage.WIDGETS);
-            }
-            this.mActivity.refreshTerminalWindowBar();
-        });
-    }
-
-    public void hideTelegramPanel() {
-        if (this.mActivity == null) return;
-        this.mActivity.runOnUiThread(() -> {
-            this.mTelegramVisible = false;
-            this.mTelegramCanvasLock = "";
-            this.mTelegramBoundSession = null;
-            if (this.mTelegramView != null) {
-                this.mTelegramView.setVisibility(View.GONE);
-                if (this.mTelegramView.getParent() instanceof ViewGroup) {
-                    ((ViewGroup) this.mTelegramView.getParent()).removeView(this.mTelegramView);
-                }
-            }
-            syncVisibility();
-        });
-    }
-
-    public void toggleTelegramPanel() {
-        toggleTelegramPanel(null);
-    }
-
-    public void toggleTelegramPanel(String targetCanvas) {
-        if (this.mTelegramVisible) {
-            hideTelegramPanel();
-        } else if (targetCanvas != null && !targetCanvas.isEmpty()) {
-            showTelegramPanel(targetCanvas);
-        } else {
-            showTelegramPanel();
-        }
-    }
-
     /* JADX WARN: Type inference failed for: r5v26, types: [android.app.Activity, com.termux.app.TermuxActivity] */
     public void syncVisibility() {
-        if (this.mTelegramVisible && TELEGRAM_CANVAS_MIDDLE.equals(this.mTelegramCanvasLock)
-            && this.mTelegramView != null && this.mPaneHost != null) {
-            TerminalSession cur = this.mActivity != null ? this.mActivity.getCurrentSession() : null;
-            if (this.mTelegramBoundSession == null || this.mTelegramBoundSession == cur) {
-                if (this.mActivity != null && this.mActivity.currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
-                    this.mPaneHost.setVisibility(View.GONE);
-                    return;
-                }
-                if (this.mTerminalPaneHost != null) {
-                    this.mTerminalPaneHost.setVisibility(View.GONE);
-                }
-                this.mPaneHost.setVisibility(View.VISIBLE);
-                this.mPaneHost.setAlpha(1.0f);
-                this.mPaneHost.setTranslationX(0.0f);
-                this.mPaneHost.bringToFront();
-                this.mTelegramView.setVisibility(View.VISIBLE);
-                this.mTelegramView.bringToFront();
-                return;
-            }
-            this.mTelegramView.setVisibility(View.GONE);
-        }
         WebView webView;
         int size;
         FrameLayout frameLayout;
