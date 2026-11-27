@@ -155,6 +155,16 @@
   function handleIncomingMessage(msg) {
     installConsoleMirror();
     if (!msg || typeof msg !== "object") return;
+    if (msg.type === "bindTab" && msg.tabKey) {
+      try {
+        browser.runtime.sendMessage({
+          type: "bindTab",
+          tabKey: String(msg.tabKey),
+          contextId: msg.contextId ? String(msg.contextId) : ""
+        }).catch(() => {});
+      } catch (_) {}
+      return;
+    }
     if (msg.type === "bootstrap" && typeof msg.code === "string") {
       const res = runInPageWorld(msg.code, false);
       if (res.deferred) {

@@ -71,13 +71,36 @@ public final class FusionGeckoHelper {
 
     private static final Map<GeckoSession, WebExtension.Port> sSessionPorts = new ConcurrentHashMap<>();
     private static final Map<GeckoSession, List<String>> sQueuedScripts = new ConcurrentHashMap<>();
+    private static final Map<GeckoSession, List<PendingPortEval>> sPendingPortEvals = new ConcurrentHashMap<>();
     private static final Map<String, PendingEval> sPendingEvals = new ConcurrentHashMap<>();
+    private static final Map<GeckoSession, TabMeta> sSessionMeta = new ConcurrentHashMap<>();
+    private static final Map<String, JSONObject> sPendingTabProxies = new ConcurrentHashMap<>();
     private static final Map<String, WebExtension.Action> sAddonActions = new ConcurrentHashMap<>();
     private static final Map<String, WebExtension> sInstalledAddons = new ConcurrentHashMap<>();
 
     private static volatile GeckoResult<GeckoSession.PromptDelegate.PromptResponse> sPendingFileResult;
     private static volatile GeckoSession.PromptDelegate.FilePrompt sPendingFilePrompt;
     private static volatile Context sLastContext;
+
+    private static final class TabMeta {
+        final String tabKey;
+        final String contextId;
+        TabMeta(String tabKey, String contextId) {
+            this.tabKey = tabKey;
+            this.contextId = contextId;
+        }
+    }
+
+    private static final class PendingPortEval {
+        final String reqId;
+        final String code;
+        final PendingEval pending;
+        PendingPortEval(String reqId, String code, PendingEval pending) {
+            this.reqId = reqId;
+            this.code = code;
+            this.pending = pending;
+        }
+    }
 
     private static final class PendingEval {
         final AtomicReference<String> value = new AtomicReference<>(null);
@@ -157,7 +180,13 @@ public final class FusionGeckoHelper {
                 @Override
                 public void onConnect(@NonNull WebExtension.Port port) {
                     sBgPort = port;
-                    if (sPendingProxyPayload != null) {
+                    if (!sPendingTabProxies.isEmpty()) {
+                        for (JSONObject pPayload : sPendingTabProxies.values()) {
+                            try {
+                                port.postMessage(pPayload);
+                            } catch (Throwable ignored) {}
+                        }
+                    } else if (sPendingProxyPayload != null) {
                         try {
                             port.postMessage(sPendingProxyPayload);
                         } catch (Throwable ignored) {}
@@ -206,6 +235,7 @@ public final class FusionGeckoHelper {
         GeckoSession session = new GeckoSession(sessionSettings);
         tab.mEngine = FusionWebViewManager.ENGINE_GECKO;
         tab.mGeckoSession = session;
+        sSessionMeta.put(session, new TabMeta(String.valueOf(tab.mId), contextId));
 
         attachDelegates(manager, tab, session);
         attachExtensionBridge(manager, tab, runtime, session);
@@ -664,7 +694,18 @@ public final class FusionGeckoHelper {
             @Override
             public void onConnect(@NonNull WebExtension.Port port) {
                 sSessionPorts.put(session, port);
+                TabMeta meta = sSessionMeta.get(session);
+                if (meta != null) {
+                    try {
+                        JSONObject bindMsg = new JSONObject();
+                        bindMsg.put("type", "bindTab");
+                        bindMsg.put("tabKey", meta.tabKey);
+                        bindMsg.put("contextId", meta.contextId);
+                        port.postMessage(bindMsg);
+                    } catch (Throwable ignored) {}
+                }
                 flushQueuedScripts(session, port);
+                flushPendingPortEvals(session, port);
                 injectScripts(manager, tab, true);
                 port.setDelegate(new WebExtension.PortDelegate() {
                     @Override
@@ -726,6 +767,27 @@ public final class FusionGeckoHelper {
                 payload.put("code", code);
                 port.postMessage(payload);
             } catch (Throwable ignored) {}
+        }
+    }
+
+    private static void flushPendingPortEvals(GeckoSession session, WebExtension.Port port) {
+        List<PendingPortEval> queued = sPendingPortEvals.remove(session);
+        if (queued == null || queued.isEmpty() || port == null) return;
+        for (PendingPortEval item : queued) {
+            if (!sPendingEvals.containsKey(item.reqId)) {
+                item.pending.latch.countDown();
+                continue;
+            }
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("type", "eval");
+                payload.put("reqId", item.reqId);
+                payload.put("code", item.code);
+                port.postMessage(payload);
+            } catch (Throwable t) {
+                sPendingEvals.remove(item.reqId);
+                item.pending.latch.countDown();
+            }
         }
     }
 
@@ -807,6 +869,14 @@ public final class FusionGeckoHelper {
         }
         JSONObject payload = new JSONObject();
         try {
+            String tabKey = (tab != null) ? String.valueOf(tab.mId) : "";
+            TabMeta meta = (tab != null && tab.mGeckoSession != null) ? sSessionMeta.get(tab.mGeckoSession) : null;
+            if (!tabKey.isEmpty()) {
+                payload.put("tabKey", tabKey);
+            }
+            if (meta != null && meta.contextId != null) {
+                payload.put("contextId", meta.contextId);
+            }
             if (tab != null && tab.mIsProxyEnabled && tab.mProxyItem != null && tab.mProxyItem.isValid()) {
                 String host = tab.mProxyItem.host;
                 int port = tab.mProxyItem.port;
@@ -835,6 +905,9 @@ public final class FusionGeckoHelper {
                 payload.put("enabled", false);
             }
             sPendingProxyPayload = payload;
+            if (!tabKey.isEmpty()) {
+                sPendingTabProxies.put(tabKey, payload);
+            }
             WebExtension.Port bg = sBgPort;
             if (bg != null) {
                 bg.postMessage(payload);
@@ -949,31 +1022,28 @@ public final class FusionGeckoHelper {
                 return;
             } catch (Throwable ignored) {}
         }
-        sQueuedScripts.computeIfAbsent(tab.mGeckoSession, k -> new ArrayList<>()).add(code);
-        new Handler(Looper.getMainLooper()).post(() -> {
-            try {
-                if (sSessionPorts.get(tab.mGeckoSession) == null) {
-                    tab.mGeckoSession.loadUri("javascript:(function(){" + code + "})();");
-                }
-            } catch (Throwable ignored) {}
-        });
+        sQueuedScripts.computeIfAbsent(tab.mGeckoSession,
+            k -> java.util.Collections.synchronizedList(new ArrayList<>())).add(code);
     }
 
     public static String evaluateJsSync(FusionTab tab, String code, long timeoutMs) {
         if (tab == null || tab.mGeckoSession == null || code == null) return null;
-        WebExtension.Port port = sSessionPorts.get(tab.mGeckoSession);
-        if (port == null) {
-            return null;
-        }
         String reqId = UUID.randomUUID().toString();
         PendingEval pending = new PendingEval();
         sPendingEvals.put(reqId, pending);
         try {
-            JSONObject payload = new JSONObject();
-            payload.put("type", "eval");
-            payload.put("reqId", reqId);
-            payload.put("code", code);
-            port.postMessage(payload);
+            WebExtension.Port port = sSessionPorts.get(tab.mGeckoSession);
+            if (port != null) {
+                JSONObject payload = new JSONObject();
+                payload.put("type", "eval");
+                payload.put("reqId", reqId);
+                payload.put("code", code);
+                port.postMessage(payload);
+            } else {
+                sPendingPortEvals.computeIfAbsent(tab.mGeckoSession,
+                    k -> java.util.Collections.synchronizedList(new ArrayList<>()))
+                    .add(new PendingPortEval(reqId, code, pending));
+            }
             pending.latch.await(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (Throwable ignored) {
         } finally {
@@ -984,6 +1054,17 @@ public final class FusionGeckoHelper {
 
     public static void destroyTab(FusionTab tab, ViewGroup host) {
         if (tab == null) return;
+        String tabKey = String.valueOf(tab.mId);
+        sPendingTabProxies.remove(tabKey);
+        WebExtension.Port bg = sBgPort;
+        if (bg != null) {
+            try {
+                JSONObject unbind = new JSONObject();
+                unbind.put("type", "unbindTab");
+                unbind.put("tabKey", tabKey);
+                bg.postMessage(unbind);
+            } catch (Throwable ignored) {}
+        }
         GeckoView gv = tab.mGeckoView;
         if (gv != null) {
             try {
@@ -1002,6 +1083,14 @@ public final class FusionGeckoHelper {
         if (session != null) {
             sSessionPorts.remove(session);
             sQueuedScripts.remove(session);
+            sSessionMeta.remove(session);
+            List<PendingPortEval> pendingList = sPendingPortEvals.remove(session);
+            if (pendingList != null) {
+                for (PendingPortEval item : pendingList) {
+                    sPendingEvals.remove(item.reqId);
+                    item.pending.latch.countDown();
+                }
+            }
             try {
                 if (session.isOpen()) {
                     session.close();
