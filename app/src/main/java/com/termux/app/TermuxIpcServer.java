@@ -1567,8 +1567,14 @@ public class TermuxIpcServer {
             if ("delete_recipe".equals(sub)) {
                 return com.termux.telegram.FusionTelegramHelper.deleteRecipeJson(arg).toString();
             }
-            if ("reload_plugins".equals(sub) || "plugins".equals(sub)) {
+            if ("reload_plugins".equals(sub) || "plugins".equals(sub) || "ui_reload".equals(sub)) {
                 return com.termux.telegram.FusionTelegramHelper.reloadPlugins().toString();
+            }
+            if ("bar_set".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.setLiveBarJson(arg).toString();
+            }
+            if ("bar_clear".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.clearLiveBar().toString();
             }
             if ("login_creds".equals(sub)) {
                 String[] p = arg.split("\\s+", 2);

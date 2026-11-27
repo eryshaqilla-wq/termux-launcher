@@ -65,6 +65,12 @@ public final class FusionTelegramHelper {
     private static final List<JSONObject> sPluginMessageActions = new CopyOnWriteArrayList<>();
     private static final List<JSONObject> sPluginHeaderActions = new CopyOnWriteArrayList<>();
     private static final List<JSONObject> sPluginMessageHooks = new CopyOnWriteArrayList<>();
+    private static final List<JSONObject> sPluginOverflowMenu = new CopyOnWriteArrayList<>();
+    private static final List<JSONObject> sPluginCustomBars = new CopyOnWriteArrayList<>();
+    private static final List<JSONObject> sPluginCustomSettings = new CopyOnWriteArrayList<>();
+    private static volatile JSONObject sLiveBar = null;
+    private static final Map<Integer, String> sDownloadedFiles = new ConcurrentHashMap<>();
+    private static final Map<Long, List<TdApi.BotCommand>> sBotCommandsCache = new ConcurrentHashMap<>();
     private static volatile com.termux.app.TermuxActivity sHostActivity;
     private static volatile boolean sIsRecording = false;
     private static volatile String sRecordTarget = "";
@@ -110,6 +116,7 @@ public final class FusionTelegramHelper {
         void onChatsUpdated();
         void onNewMessage(long chatId, TdApi.Message message);
         void onFiltersUpdated();
+        default void onUiConfigUpdated() {}
     }
 
     private FusionTelegramHelper() {
@@ -344,6 +351,14 @@ public final class FusionTelegramHelper {
                 if (u.message != null) {
                     recordNewMessageEvent(slot, u.message);
                     if (slot.id.equals(sActiveAccountId)) notifyNewMessage(u.message.chatId, u.message);
+                }
+                break;
+            }
+            case TdApi.UpdateFile.CONSTRUCTOR: {
+                TdApi.UpdateFile u = (TdApi.UpdateFile) object;
+                if (u.file != null && u.file.local != null && u.file.local.isDownloadingCompleted && u.file.local.path != null && !u.file.local.path.isEmpty()) {
+                    sDownloadedFiles.put(u.file.id, u.file.local.path);
+                    if (slot.id.equals(sActiveAccountId)) notifyChatsUpdated();
                 }
                 break;
             }
@@ -1047,6 +1062,9 @@ public final class FusionTelegramHelper {
         sPluginMessageActions.clear();
         sPluginHeaderActions.clear();
         sPluginMessageHooks.clear();
+        sPluginOverflowMenu.clear();
+        sPluginCustomBars.clear();
+        sPluginCustomSettings.clear();
         JSONObject out = new JSONObject();
         try {
             File f = new File("/data/data/com.termux/files/usr/tmp/esogram_plugins.json");
@@ -1056,36 +1074,171 @@ public final class FusionTelegramHelper {
             if (f.exists() && f.length() > 0) {
                 byte[] raw = java.nio.file.Files.readAllBytes(f.toPath());
                 JSONObject root = new JSONObject(new String(raw, StandardCharsets.UTF_8));
-                JSONArray msgActs = root.optJSONArray("messageActions");
-                if (msgActs != null) {
-                    for (int i = 0; i < msgActs.length(); i++) {
-                        JSONObject item = msgActs.optJSONObject(i);
-                        if (item != null) sPluginMessageActions.add(item);
-                    }
-                }
-                JSONArray hdrActs = root.optJSONArray("headerActions");
-                if (hdrActs != null) {
-                    for (int i = 0; i < hdrActs.length(); i++) {
-                        JSONObject item = hdrActs.optJSONObject(i);
-                        if (item != null) sPluginHeaderActions.add(item);
-                    }
-                }
-                JSONArray hooks = root.optJSONArray("onNewMessageHooks");
-                if (hooks != null) {
-                    for (int i = 0; i < hooks.length(); i++) {
-                        JSONObject item = hooks.optJSONObject(i);
-                        if (item != null) sPluginMessageHooks.add(item);
-                    }
-                }
+                fillPluginList(root.optJSONArray("messageActions"), sPluginMessageActions);
+                fillPluginList(root.optJSONArray("headerActions"), sPluginHeaderActions);
+                fillPluginList(root.optJSONArray("onNewMessageHooks"), sPluginMessageHooks);
+                fillPluginList(root.optJSONArray("overflowMenu"), sPluginOverflowMenu);
+                fillPluginList(root.optJSONArray("customBars"), sPluginCustomBars);
+                fillPluginList(root.optJSONArray("customSettings"), sPluginCustomSettings);
+            }
+            File liveFile = new File("/data/data/com.termux/files/usr/tmp/esogram_live_bar.json");
+            if (liveFile.exists() && liveFile.length() > 0) {
+                byte[] rawLive = java.nio.file.Files.readAllBytes(liveFile.toPath());
+                sLiveBar = new JSONObject(new String(rawLive, StandardCharsets.UTF_8));
             }
             out.put("ok", true);
             out.put("messageActions", sPluginMessageActions.size());
             out.put("headerActions", sPluginHeaderActions.size());
+            out.put("overflowMenu", sPluginOverflowMenu.size());
+            out.put("customBars", sPluginCustomBars.size());
+            out.put("customSettings", sPluginCustomSettings.size());
             out.put("onNewMessageHooks", sPluginMessageHooks.size());
+            notifyUiConfigUpdated();
         } catch (Throwable t) {
             return errorJson("Reload plugins error: " + t.getMessage());
         }
         return out;
+    }
+
+    private static void fillPluginList(JSONArray arr, List<JSONObject> dst) {
+        if (arr == null) return;
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject item = arr.optJSONObject(i);
+            if (item != null) dst.add(item);
+        }
+    }
+
+    public static JSONObject setLiveBarJson(String json) {
+        try {
+            if (json == null || json.trim().isEmpty()) {
+                return clearLiveBar();
+            }
+            JSONObject obj = new JSONObject(json.trim());
+            sLiveBar = obj;
+            notifyUiConfigUpdated();
+            JSONObject out = new JSONObject();
+            out.put("ok", true);
+            out.put("liveBar", obj);
+            return out;
+        } catch (Throwable t) {
+            return errorJson("Invalid liveBar JSON: " + t.getMessage());
+        }
+    }
+
+    public static JSONObject clearLiveBar() {
+        sLiveBar = null;
+        notifyUiConfigUpdated();
+        JSONObject out = new JSONObject();
+        try { out.put("ok", true); out.put("cleared", true); } catch (Throwable ignored) {}
+        return out;
+    }
+
+    public static JSONObject getLiveBar() {
+        return sLiveBar;
+    }
+
+    public static List<JSONObject> getPluginOverflowMenu() {
+        return new ArrayList<>(sPluginOverflowMenu);
+    }
+
+    public static List<JSONObject> getPluginCustomBars() {
+        return new ArrayList<>(sPluginCustomBars);
+    }
+
+    public static List<JSONObject> getPluginCustomSettings() {
+        return new ArrayList<>(sPluginCustomSettings);
+    }
+
+    public static String getChatAvatarPath(TdApi.Chat chat) {
+        if (chat == null || chat.photo == null || chat.photo.small == null) return null;
+        return getOrDownloadFilePath(chat.photo.small);
+    }
+
+    public static String getMeAvatarPath() {
+        TdApi.User me = activeSlot().meUser;
+        if (me == null || me.profilePhoto == null || me.profilePhoto.small == null) return null;
+        return getOrDownloadFilePath(me.profilePhoto.small);
+    }
+
+    public static String getOrDownloadFilePath(TdApi.File f) {
+        if (f == null) return null;
+        if (f.local != null && f.local.isDownloadingCompleted && f.local.path != null && !f.local.path.isEmpty()) {
+            sDownloadedFiles.put(f.id, f.local.path);
+            return f.local.path;
+        }
+        String cached = sDownloadedFiles.get(f.id);
+        if (cached != null) return cached;
+        Client c = activeSlot().client;
+        if (c != null) {
+            c.send(new TdApi.DownloadFile(f.id, 16, 0, 0, false), res -> {
+                if (res instanceof TdApi.File) {
+                    TdApi.File df = (TdApi.File) res;
+                    if (df.local != null && df.local.isDownloadingCompleted && df.local.path != null && !df.local.path.isEmpty()) {
+                        sDownloadedFiles.put(df.id, df.local.path);
+                        notifyChatsUpdated();
+                    }
+                }
+            });
+        }
+        return null;
+    }
+
+    public static boolean isChatPinned(TdApi.Chat c) {
+        if (c == null || c.positions == null) return false;
+        for (TdApi.ChatPosition p : c.positions) {
+            if (p.list instanceof TdApi.ChatListMain && p.isPinned) return true;
+        }
+        return false;
+    }
+
+    public static boolean isChatMuted(TdApi.Chat c) {
+        return c != null && c.notificationSettings != null && c.notificationSettings.muteFor > 0;
+    }
+
+    public static String getChatSubtitle(TdApi.Chat c) {
+        if (c == null) return "";
+        if (isChannelChat(c)) return "Channel";
+        if (isGroupChat(c)) return "Grup";
+        return "Obrolan / Bot";
+    }
+
+    public interface BotCommandsCallback {
+        void onLoaded(List<TdApi.BotCommand> commands);
+    }
+
+    public static void fetchBotCommands(long chatId, BotCommandsCallback cb) {
+        if (cb == null) return;
+        List<TdApi.BotCommand> cached = sBotCommandsCache.get(chatId);
+        if (cached != null) {
+            sMainHandler.post(() -> cb.onLoaded(cached));
+            return;
+        }
+        AccountSlot slot = activeSlot();
+        TdApi.Chat c = slot.chats.get(chatId);
+        if (c == null || !(c.type instanceof TdApi.ChatTypePrivate) || slot.client == null) {
+            sMainHandler.post(() -> cb.onLoaded(Collections.emptyList()));
+            return;
+        }
+        long userId = ((TdApi.ChatTypePrivate) c.type).userId;
+        slot.client.send(new TdApi.GetUserFullInfo(userId), res -> {
+            List<TdApi.BotCommand> list = new ArrayList<>();
+            if (res instanceof TdApi.UserFullInfo) {
+                TdApi.UserFullInfo ufi = (TdApi.UserFullInfo) res;
+                if (ufi.botInfo != null && ufi.botInfo.commands != null) {
+                    Collections.addAll(list, ufi.botInfo.commands);
+                }
+            }
+            sBotCommandsCache.put(chatId, list);
+            sMainHandler.post(() -> cb.onLoaded(list));
+        });
+    }
+
+    private static void notifyUiConfigUpdated() {
+        sMainHandler.post(() -> {
+            for (TelegramUiListener l : sListeners) {
+                l.onUiConfigUpdated();
+            }
+        });
     }
 
     public static List<JSONObject> getPluginHeaderActions() {
