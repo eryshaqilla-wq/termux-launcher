@@ -14,17 +14,17 @@ public class WidgetPaneMenuPolicyTest {
     }
 
     @Test public void populatedPageOffersAddAndEditAndNeverAPage() {
-        assertEquals(Arrays.asList(ADD_WIDGET, EDIT_WIDGETS),
+        assertEquals(Arrays.asList(ADD_WIDGET, EDIT_WIDGETS, SET_PAGE_COUNT),
             WidgetPaneMenuPolicy.itemsFor(true, 1, false));
         assertEquals("populated pages are never removable",
-            Arrays.asList(ADD_WIDGET, EDIT_WIDGETS),
+            Arrays.asList(ADD_WIDGET, EDIT_WIDGETS, SET_PAGE_COUNT),
             WidgetPaneMenuPolicy.itemsFor(true, 2, false));
     }
 
     @Test public void emptyPageSkipsEditAndOffersRemoveOnlyPastOnePage() {
-        assertEquals(Arrays.asList(ADD_WIDGET),
+        assertEquals(Arrays.asList(ADD_WIDGET, SET_PAGE_COUNT),
             WidgetPaneMenuPolicy.itemsFor(true, 1, true));
-        assertEquals(Arrays.asList(ADD_WIDGET, REMOVE_PAGE),
+        assertEquals(Arrays.asList(ADD_WIDGET, SET_PAGE_COUNT, REMOVE_PAGE),
             WidgetPaneMenuPolicy.itemsFor(true, 2, true));
     }
 
