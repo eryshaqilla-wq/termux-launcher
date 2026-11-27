@@ -46,8 +46,8 @@
     <string name="tool_desc_ipc_wallet">Start Ghost Web3 wallet daemon (port 3333).</string>
     <string name="tool_ipc_web">Web Browser</string>
     <string name="tool_desc_ipc_web">Open WebView browser or navigate to URL.</string>
-    <string name="tool_ipc_telegram">Telegram Sniper</string>
-    <string name="tool_desc_ipc_telegram">Run Telegram link &amp; code sniper (pemantau).</string>
+    <string name="tool_ipc_telegram">EsoGram</string>
+    <string name="tool_desc_ipc_telegram">Buka client EsoGram TDLib &amp; kontrol multi-akun.</string>
     <string name="tool_ipc_ai">Tri-Engine AI</string>
     <string name="tool_desc_ipc_ai">Run Tri-Engine Auto-Engine AI CLI.</string>
     <string name="tool_ipc_run">IPC Command</string>

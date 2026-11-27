@@ -111,11 +111,11 @@ handle_left_canvas() {
         left-canvas|canvas-left|canvas-kiri|eso-browser)
         handle_left_canvas "$@"
         ;;
-    telegram|tg)
+    esogram|telegram|tg)
         if [ $# -eq 0 ]; then
-            send_cmd "TELEGRAM open"
+            send_cmd "ESOGRAM open"
         elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
-            echo "Penggunaan: termux-ipc telegram [@acc:<id>] <perintah>"
+            echo "Penggunaan: termux-ipc esogram [@acc:<id>] <perintah>"
             echo "  open [left|middle] | close | toggle | tab_pos [bottom|top]"
             echo "  status | accounts | use <id> | login_creds <id> <hash> | login_phone <no> | login_code <otp> | login_pass <pw> | logout"
             echo "  chats [filter] [limit] | history <chatId> [limit] | search <chatId|0> <query> | resolve <@user>"
@@ -1463,11 +1463,11 @@ sys.exit(res.returncode)
     left-canvas|canvas-left|canvas-kiri|eso-browser)
         handle_left_canvas "$@"
         ;;
-    telegram|tg)
+    esogram|telegram|tg)
         if [ $# -eq 0 ]; then
-            send_cmd "TELEGRAM open"
+            send_cmd "ESOGRAM open"
         elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
-            echo "Penggunaan: termux-ipc telegram [@acc:<id>] <perintah>"
+            echo "Penggunaan: termux-ipc esogram [@acc:<id>] <perintah>"
             echo "  open [left|middle] | close | toggle | tab_pos [bottom|top]"
             echo "  status | accounts | use <id> | login_creds <id> <hash> | login_phone <no> | login_code <otp> | login_pass <pw> | logout"
             echo "  chats [filter] [limit] | history <chatId> [limit] | search <chatId|0> <query> | resolve <@user>"

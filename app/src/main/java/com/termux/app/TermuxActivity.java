@@ -22779,6 +22779,20 @@ public final class TermuxActivity extends AppCompatActivity implements ServiceCo
         sheet.show();
     }
 
+    @NonNull
+    public com.termux.app.terminal.PaneSurfaceStyle getPaneSurfaceStyle() {
+        return paneSurfaceStyle();
+    }
+
+    @Nullable
+    public com.termux.app.chrome.ChromeInk getChromeInk() {
+        return mChrome != null ? mChrome.ink() : null;
+    }
+
+    public int getActivePlaceAccent() {
+        return com.termux.app.statusbar.StatusBarLensView.accentFor(this, currentWallPage());
+    }
+
     @Nullable
     public ViewGroup getLeftWidgetsHost() {
         if (mPaneWallController == null) return null;

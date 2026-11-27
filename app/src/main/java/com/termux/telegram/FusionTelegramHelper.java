@@ -62,6 +62,10 @@ public final class FusionTelegramHelper {
     private static final List<JSONObject> sRecentEvents = new CopyOnWriteArrayList<>();
     private static final List<TelegramUiListener> sListeners = new CopyOnWriteArrayList<>();
     private static final List<JSONObject> sRecordedSteps = new CopyOnWriteArrayList<>();
+    private static final List<JSONObject> sPluginMessageActions = new CopyOnWriteArrayList<>();
+    private static final List<JSONObject> sPluginHeaderActions = new CopyOnWriteArrayList<>();
+    private static final List<JSONObject> sPluginMessageHooks = new CopyOnWriteArrayList<>();
+    private static volatile com.termux.app.TermuxActivity sHostActivity;
     private static volatile boolean sIsRecording = false;
     private static volatile String sRecordTarget = "";
     private static final Handler sMainHandler = new Handler(Looper.getMainLooper());
@@ -167,9 +171,13 @@ public final class FusionTelegramHelper {
     public static synchronized boolean ensureStarted(Context ctx) {
         if (ctx != null) {
             sAppContext = ctx.getApplicationContext();
+            if (ctx instanceof com.termux.app.TermuxActivity) {
+                sHostActivity = (com.termux.app.TermuxActivity) ctx;
+            }
             String saved = sAppContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getString(KEY_ACTIVE_ACC, "default");
             sActiveAccountId = normalizeAccountId(saved);
+            reloadPlugins();
         }
         return ensureStartedFor(sAppContext, sActiveAccountId);
     }
@@ -1035,6 +1043,93 @@ public final class FusionTelegramHelper {
         return out;
     }
 
+    public static JSONObject reloadPlugins() {
+        sPluginMessageActions.clear();
+        sPluginHeaderActions.clear();
+        sPluginMessageHooks.clear();
+        JSONObject out = new JSONObject();
+        try {
+            File f = new File("/data/data/com.termux/files/usr/tmp/esogram_plugins.json");
+            if (!f.exists() && sAppContext != null) {
+                f = new File(sAppContext.getFilesDir(), "esogram_plugins.json");
+            }
+            if (f.exists() && f.length() > 0) {
+                byte[] raw = java.nio.file.Files.readAllBytes(f.toPath());
+                JSONObject root = new JSONObject(new String(raw, StandardCharsets.UTF_8));
+                JSONArray msgActs = root.optJSONArray("messageActions");
+                if (msgActs != null) {
+                    for (int i = 0; i < msgActs.length(); i++) {
+                        JSONObject item = msgActs.optJSONObject(i);
+                        if (item != null) sPluginMessageActions.add(item);
+                    }
+                }
+                JSONArray hdrActs = root.optJSONArray("headerActions");
+                if (hdrActs != null) {
+                    for (int i = 0; i < hdrActs.length(); i++) {
+                        JSONObject item = hdrActs.optJSONObject(i);
+                        if (item != null) sPluginHeaderActions.add(item);
+                    }
+                }
+                JSONArray hooks = root.optJSONArray("onNewMessageHooks");
+                if (hooks != null) {
+                    for (int i = 0; i < hooks.length(); i++) {
+                        JSONObject item = hooks.optJSONObject(i);
+                        if (item != null) sPluginMessageHooks.add(item);
+                    }
+                }
+            }
+            out.put("ok", true);
+            out.put("messageActions", sPluginMessageActions.size());
+            out.put("headerActions", sPluginHeaderActions.size());
+            out.put("onNewMessageHooks", sPluginMessageHooks.size());
+        } catch (Throwable t) {
+            return errorJson("Reload plugins error: " + t.getMessage());
+        }
+        return out;
+    }
+
+    public static List<JSONObject> getPluginHeaderActions() {
+        return new ArrayList<>(sPluginHeaderActions);
+    }
+
+    public static List<JSONObject> getMatchingMessageActions(String text) {
+        List<JSONObject> res = new ArrayList<>();
+        if (text == null || text.isEmpty()) return res;
+        for (JSONObject act : sPluginMessageActions) {
+            String regex = act.optString("matchRegex", "");
+            if (regex.isEmpty()) {
+                res.add(act);
+            } else {
+                try {
+                    if (java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text).find()) {
+                        res.add(act);
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
+        return res;
+    }
+
+    public static void executePluginCommand(String cmdTemplate, String title, long chatId, long msgId, String text, String accId) {
+        if (cmdTemplate == null || cmdTemplate.trim().isEmpty()) return;
+        String matchedUrl = "";
+        if (text != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(text);
+            if (m.find()) matchedUrl = m.group();
+        }
+        String safeText = text != null ? text.replace("\"", "\\\"").replace("\n", " ") : "";
+        final String cmd = cmdTemplate
+            .replace("{{CHAT_ID}}", String.valueOf(chatId))
+            .replace("{{MSG_ID}}", String.valueOf(msgId))
+            .replace("{{URL}}", matchedUrl)
+            .replace("{{TEXT}}", safeText)
+            .replace("{{ACCOUNT_ID}}", accId != null ? accId : sActiveAccountId);
+        final com.termux.app.TermuxActivity act = sHostActivity;
+        if (act != null) {
+            sMainHandler.post(() -> act.launchScriptInBackground(cmd, title != null ? title : "EsoGram Plugin", "auto"));
+        }
+    }
+
     public static JSONObject getRecentEventsJson(int limit) {
         JSONObject out = new JSONObject();
         JSONArray arr = new JSONArray();
@@ -1163,6 +1258,19 @@ public final class FusionTelegramHelper {
                 }
             } catch (Throwable ignored) {}
         });
+        if (!sPluginMessageHooks.isEmpty() && !msg.isOutgoing) {
+            String text = extractMessageText(msg);
+            for (JSONObject hook : sPluginMessageHooks) {
+                String regex = hook.optString("matchRegex", "");
+                String cmd = hook.optString("command", "");
+                if (cmd.isEmpty()) continue;
+                try {
+                    if (regex.isEmpty() || java.util.regex.Pattern.compile(regex, java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text).find()) {
+                        executePluginCommand(cmd, hook.optString("label", "EsoGram Hook"), msg.chatId, msg.id, text, slot != null ? slot.id : sActiveAccountId);
+                    }
+                } catch (Throwable ignored) {}
+            }
+        }
     }
 
     private static TdApi.Object sendSyncRaw(TdApi.Function req, long timeoutMs) {

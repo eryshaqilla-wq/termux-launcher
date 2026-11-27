@@ -15,7 +15,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -24,6 +23,10 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import com.termux.app.FusionToast;
 import com.termux.app.TermuxActivity;
+import com.termux.app.terminal.PaneGlass;
+import com.termux.app.terminal.PaneGlassBackdropView;
+import com.termux.app.terminal.PaneSurfaceStyle;
+import com.termux.app.terminal.TerminalWindowBar;
 import com.termux.shared.termux.settings.preferences.TermuxAppSharedPreferences;
 import com.termux.webview.FusionWebViewManager;
 import java.text.SimpleDateFormat;
@@ -44,6 +47,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
     private final TermuxActivity mActivity;
     private final FusionWebViewManager mManager;
 
+    private PaneGlassBackdropView mGlassBackdrop;
     private LinearLayout mRootColumn;
     private LinearLayout mHeaderBar;
     private TextView mHeaderTitle;
@@ -53,8 +57,19 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
     private TextView mPosToggleBtn;
     private TextView mCloseBtn;
 
-    private HorizontalScrollView mTabScroll;
-    private LinearLayout mTabContainer;
+    private TerminalWindowBar mTabBar;
+    private final List<TabEntry> mTabEntries = new ArrayList<>();
+
+    private static final class TabEntry {
+        final String label;
+        final String builtInKey;
+        final int folderId;
+        TabEntry(String label, String builtInKey, int folderId) {
+            this.label = label;
+            this.builtInKey = builtInKey;
+            this.folderId = folderId;
+        }
+    }
 
     private FrameLayout mContentHost;
     private ScrollView mAuthContainer;
@@ -150,6 +165,9 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
             mBubbleInColor = Color.argb(alphaBubble, 255, 255, 255);  // #ffffff
             mStrokeColor = Color.argb(38, 30, 32, 48);
         }
+        if (mGlassBackdrop != null) {
+            applyTermuxGlassSurface();
+        }
     }
 
     private GradientDrawable makeBox(int fill, float radiusPx, boolean withStroke) {
@@ -167,7 +185,9 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
     }
 
     private void buildUi() {
-        setBackground(makeBox(mBgSurface, mCornerPx, true));
+        mGlassBackdrop = new PaneGlassBackdropView(mActivity);
+        addView(mGlassBackdrop, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        applyTermuxGlassSurface();
         setClickable(true);
 
         mRootColumn = new LinearLayout(mActivity);
@@ -187,7 +207,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
         mHeaderBar.addView(mBackBtn);
 
         mHeaderTitle = new TextView(mActivity);
-        mHeaderTitle.setText("Telegram");
+        mHeaderTitle.setText("EsoGram");
         mHeaderTitle.setTextColor(mTextPrimary);
         mHeaderTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         mHeaderTitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -227,31 +247,57 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
         mContentHost.addView(mChatListContainer, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         mContentHost.addView(mRoomContainer, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Tab bar (folder tabs — bottom by default, switchable to top)
-        mTabScroll = new HorizontalScrollView(mActivity);
-        mTabScroll.setHorizontalScrollBarEnabled(false);
-        mTabScroll.setBackground(makeBox(mBgHeader, mCornerPx * 0.7f, true));
-        mTabScroll.setPadding(dp(6), dp(5), dp(6), dp(5));
-
-        mTabContainer = new LinearLayout(mActivity);
-        mTabContainer.setOrientation(LinearLayout.HORIZONTAL);
-        mTabContainer.setGravity(Gravity.CENTER_VERTICAL);
-        mTabScroll.addView(mTabContainer, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        // Tab bar (native Termux TerminalWindowBar — 100% identical Termux tab chips & animation)
+        mTabBar = new TerminalWindowBar(mActivity, null);
+        mTabBar.setCreateButtonShown(false);
+        mTabBar.setBackground(makeBox(mBgHeader, mCornerPx * 0.7f, true));
+        mTabBar.setPadding(dp(6), dp(4), dp(6), dp(4));
+        mTabBar.setChromeInk(mActivity.getChromeInk());
+        mTabBar.setPlaceAccent(mActivity.getActivePlaceAccent());
+        mTabBar.setSurfaceStyle(mCornerPx > 0f, mCornerPx);
+        mTabBar.setOnWindowSelectedListener(index -> {
+            if (index >= 0 && index < mTabEntries.size()) {
+                TabEntry entry = mTabEntries.get(index);
+                mActiveBuiltInTab = entry.builtInKey != null ? entry.builtInKey : "all";
+                mActiveFolderId = entry.folderId;
+                if (mActiveChatId != 0) exitChatRoom();
+                rebuildFolderTabs();
+                refreshChats();
+            }
+        });
 
         rebuildFolderTabs();
         layoutColumns(contentLp);
+    }
+
+    private void applyTermuxGlassSurface() {
+        try {
+            PaneSurfaceStyle style = mActivity.getPaneSurfaceStyle();
+            PaneGlass.apply(style, this, mGlassBackdrop, mCornerPx);
+        } catch (Throwable t) {
+            setBackground(makeBox(mBgSurface, mCornerPx, true));
+        }
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        if (mGlassBackdrop != null) {
+            PaneGlass.followLayout(mGlassBackdrop);
+        }
     }
 
     private void layoutColumns(LinearLayout.LayoutParams contentLp) {
         mRootColumn.removeAllViews();
         String pos = FusionTelegramHelper.getTabPosition(mActivity);
         mRootColumn.addView(mHeaderBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        int barH = dp(40);
         if ("top".equals(pos)) {
-            mRootColumn.addView(mTabScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            mRootColumn.addView(mTabBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, barH));
             mRootColumn.addView(mContentHost, contentLp);
         } else {
             mRootColumn.addView(mContentHost, contentLp);
-            mRootColumn.addView(mTabScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            mRootColumn.addView(mTabBar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, barH));
         }
     }
 
@@ -260,7 +306,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
         String next = "top".equals(cur) ? "bottom" : "top";
         FusionTelegramHelper.setTabPosition(mActivity, next);
         layoutColumns(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        FusionToast.makeText(mActivity, "Tab Telegram: " + ("top".equals(next) ? "Atas" : "Bawah"), 0).show();
+        FusionToast.makeText(mActivity, "Tab EsoGram: " + ("top".equals(next) ? "Atas" : "Bawah"), 0).show();
     }
 
     private void showAccountSwitcherDialog() {
@@ -281,7 +327,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
         }
         labels.add("+ Tambah Akun Baru");
         new android.app.AlertDialog.Builder(mActivity)
-            .setTitle("Akun Telegram (" + FusionTelegramHelper.getActiveAccountId() + ")")
+            .setTitle("Akun EsoGram (" + FusionTelegramHelper.getActiveAccountId() + ")")
             .setItems(labels.toArray(new CharSequence[0]), (d, which) -> {
                 if (which < ids.size()) {
                     mActiveChatId = 0;
@@ -291,7 +337,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
                 } else {
                     final EditText in = makeInput("ID akun baru (misal: tuyul1)");
                     new android.app.AlertDialog.Builder(mActivity)
-                        .setTitle("Tambah Slot Akun TDLib")
+                        .setTitle("Tambah Slot Akun EsoGram")
                         .setView(in)
                         .setPositiveButton("Buat", (d2, w2) -> {
                             String newId = in.getText().toString().trim();
@@ -313,12 +359,12 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
         if (!FusionTelegramHelper.isRecording()) {
             FusionTelegramHelper.startRecording(mActiveChatTitle);
             updateRecButtonUi();
-            FusionToast.makeText(mActivity, "Rekam aksi bot Telegram dimulai", 0).show();
+            FusionToast.makeText(mActivity, "Rekam aksi bot EsoGram dimulai", 0).show();
         } else {
             final EditText input = makeInput("Nama resep rekaman...");
-            input.setText("tg_" + System.currentTimeMillis() / 1000L);
+            input.setText("esogram_" + System.currentTimeMillis() / 1000L);
             new android.app.AlertDialog.Builder(mActivity)
-                .setTitle("Simpan Rekaman Telegram (" + FusionTelegramHelper.getRecordedCount() + " langkah)")
+                .setTitle("Simpan Rekaman EsoGram (" + FusionTelegramHelper.getRecordedCount() + " langkah)")
                 .setView(input)
                 .setPositiveButton("Simpan", (d, w) -> {
                     JSONObject saved = FusionTelegramHelper.stopRecordingAndSave(input.getText().toString());
@@ -371,7 +417,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
         mApiIdInput = makeInput("API ID (my.telegram.org)");
         mApiHashInput = makeInput("API Hash");
         mPhoneInput = makeInput("Nomor HP (+628...)");
-        mCodeInput = makeInput("Kode OTP Telegram");
+        mCodeInput = makeInput("Kode OTP EsoGram");
         mPassInput = makeInput("Password 2FA");
 
         int savedId = FusionTelegramHelper.getApiId(mActivity);
@@ -517,40 +563,31 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
     }
 
     private void rebuildFolderTabs() {
-        if (mTabContainer == null) return;
-        mTabContainer.removeAllViews();
-        addFolderTab("All", "all", 0);
-        addFolderTab("Unread", "unread", 0);
-        addFolderTab("Channels", "channels", 0);
-        addFolderTab("Groups", "groups", 0);
-        addFolderTab("Bots", "bots", 0);
+        if (mTabBar == null) return;
+        mTabEntries.clear();
+        mTabEntries.add(new TabEntry("All", "all", 0));
+        mTabEntries.add(new TabEntry("Unread", "unread", 0));
+        mTabEntries.add(new TabEntry("Channels", "channels", 0));
+        mTabEntries.add(new TabEntry("Groups", "groups", 0));
+        mTabEntries.add(new TabEntry("Bots", "bots", 0));
         for (TdApi.ChatFilterInfo fi : FusionTelegramHelper.getChatFilters()) {
             if (fi != null && fi.name != null && fi.name.text != null) {
-                addFolderTab(fi.name.text.text, null, fi.id);
+                mTabEntries.add(new TabEntry(fi.name.text.text, null, fi.id));
             }
         }
-    }
-
-    private void addFolderTab(String label, String builtInKey, int folderId) {
-        TextView tv = new TextView(mActivity);
-        tv.setText(label);
-        boolean active = (folderId > 0 && mActiveFolderId == folderId)
-            || (folderId == 0 && mActiveFolderId == 0 && builtInKey != null && builtInKey.equals(mActiveBuiltInTab));
-        tv.setTextColor(active ? Color.WHITE : mTextSecondary);
-        tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-        tv.setTypeface(active ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-        tv.setPadding(dp(12), dp(6), dp(12), dp(6));
-        tv.setBackground(makeBox(active ? mAccentColor : Color.TRANSPARENT, mCornerPx * 0.7f, false));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMarginEnd(dp(4));
-        tv.setOnClickListener(v -> {
-            mActiveBuiltInTab = builtInKey != null ? builtInKey : "all";
-            mActiveFolderId = folderId;
-            if (mActiveChatId != 0) exitChatRoom();
-            rebuildFolderTabs();
-            refreshChats();
-        });
-        mTabContainer.addView(tv, lp);
+        List<TerminalWindowBar.WindowItem> winItems = new ArrayList<>();
+        int selectedIdx = 0;
+        for (int i = 0; i < mTabEntries.size(); i++) {
+            TabEntry e = mTabEntries.get(i);
+            boolean active = (e.folderId > 0 && mActiveFolderId == e.folderId)
+                || (e.folderId == 0 && mActiveFolderId == 0 && e.builtInKey != null && e.builtInKey.equals(mActiveBuiltInTab));
+            if (active) selectedIdx = i;
+            winItems.add(new TerminalWindowBar.WindowItem(e.label, e.label));
+        }
+        mTabBar.setChromeInk(mActivity.getChromeInk());
+        mTabBar.setPlaceAccent(mActivity.getActivePlaceAccent());
+        mTabBar.setSurfaceStyle(mCornerPx > 0f, mCornerPx);
+        mTabBar.setWindows(winItems, selectedIdx);
     }
 
     public void syncUiState() {
@@ -561,9 +598,9 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
             mChatListContainer.setVisibility(View.GONE);
             mRoomContainer.setVisibility(View.GONE);
             mBackBtn.setVisibility(View.GONE);
-            mHeaderTitle.setText("Telegram Login");
+            mHeaderTitle.setText("EsoGram Login");
 
-            mAuthStatusText.setText("Status TDLib: " + st);
+            mAuthStatusText.setText("Status EsoGram: " + st);
             mApiIdInput.setVisibility(("wait_credentials".equals(st) || "uninitialized".equals(st) || st.startsWith("error:")) ? View.VISIBLE : View.GONE);
             mApiHashInput.setVisibility(mApiIdInput.getVisibility());
             mPhoneInput.setVisibility("wait_phone".equals(st) ? View.VISIBLE : View.GONE);
@@ -582,7 +619,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
             mChatListContainer.setVisibility(View.VISIBLE);
             mRoomContainer.setVisibility(View.GONE);
             mBackBtn.setVisibility(View.GONE);
-            mHeaderTitle.setText("Telegram");
+            mHeaderTitle.setText("EsoGram");
             refreshChats();
         }
     }
@@ -789,16 +826,18 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
             TdApi.Message m = items.get(pos);
             h.row.setGravity(m.isOutgoing ? Gravity.END : Gravity.START);
             h.bubble.setBackground(makeBox(m.isOutgoing ? mBubbleOutColor : mBubbleInColor, mCornerPx * 0.85f, true));
-            h.body.setText(FusionTelegramHelper.extractMessageText(m));
+            final String msgText = FusionTelegramHelper.extractMessageText(m);
+            h.body.setText(msgText);
             Linkify.addLinks(h.body, Linkify.WEB_URLS);
             h.body.setMovementMethod(LinkMovementMethod.getInstance());
             h.time.setText(fmt.format(new Date(m.date * 1000L)));
 
             h.inlineHost.removeAllViews();
+            boolean hasButtons = false;
             if (m.replyMarkup instanceof TdApi.ReplyMarkupInlineKeyboard) {
                 TdApi.ReplyMarkupInlineKeyboard kb = (TdApi.ReplyMarkupInlineKeyboard) m.replyMarkup;
                 if (kb.rows != null) {
-                    h.inlineHost.setVisibility(View.VISIBLE);
+                    hasButtons = true;
                     int btnIdx = 0;
                     for (TdApi.InlineKeyboardButton[] btnRow : kb.rows) {
                         LinearLayout rLayout = new LinearLayout(mActivity);
@@ -819,12 +858,34 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
                         }
                         h.inlineHost.addView(rLayout);
                     }
-                } else {
-                    h.inlineHost.setVisibility(View.GONE);
                 }
-            } else {
-                h.inlineHost.setVisibility(View.GONE);
             }
+            List<JSONObject> pluginActs = FusionTelegramHelper.getMatchingMessageActions(msgText);
+            if (!pluginActs.isEmpty()) {
+                hasButtons = true;
+                LinearLayout pRow = new LinearLayout(mActivity);
+                pRow.setOrientation(LinearLayout.HORIZONTAL);
+                for (JSONObject pAct : pluginActs) {
+                    String label = pAct.optString("label", "Run");
+                    String cmd = pAct.optString("command", "");
+                    TextView pBtn = new TextView(mActivity);
+                    pBtn.setText(label);
+                    pBtn.setTextColor(Color.WHITE);
+                    pBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+                    pBtn.setGravity(Gravity.CENTER);
+                    pBtn.setPadding(dp(8), dp(5), dp(8), dp(5));
+                    pBtn.setBackground(makeBox(mAccentColor, mCornerPx * 0.5f, false));
+                    LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    pLp.setMargins(dp(2), dp(3), dp(2), dp(2));
+                    pBtn.setOnClickListener(v -> {
+                        FusionTelegramHelper.executePluginCommand(cmd, label, m.chatId, m.id, msgText, FusionTelegramHelper.getActiveAccountId());
+                        FusionToast.makeText(mActivity, "Plugin: " + label, 0).show();
+                    });
+                    pRow.addView(pBtn, pLp);
+                }
+                h.inlineHost.addView(pRow);
+            }
+            h.inlineHost.setVisibility(hasButtons ? View.VISIBLE : View.GONE);
         }
 
         private void openUrlFromTelegram(String url) {

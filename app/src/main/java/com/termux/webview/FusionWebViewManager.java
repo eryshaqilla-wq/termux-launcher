@@ -4708,7 +4708,7 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
         this.mActivity.runOnUiThread(() -> {
             if (this.mTelegramVisible && !this.mTelegramCanvasLock.isEmpty() && !this.mTelegramCanvasLock.equals(target)) {
                 String lockLabel = TELEGRAM_CANVAS_LEFT.equals(this.mTelegramCanvasLock) ? "Kanvas Kiri" : "Kanvas Tengah";
-                com.termux.app.FusionToast.makeText(this.mActivity, "Telegram sedang aktif & terkunci di " + lockLabel, 0).show();
+                com.termux.app.FusionToast.makeText(this.mActivity, "EsoGram sedang aktif & terkunci di " + lockLabel, 0).show();
                 this.mActivity.goToWallPage(TELEGRAM_CANVAS_LEFT.equals(this.mTelegramCanvasLock)
                     ? com.termux.app.wall.PaneWallPage.WIDGETS
                     : com.termux.app.wall.PaneWallPage.TERMINAL);
@@ -4747,6 +4747,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
 
             if (TELEGRAM_CANVAS_MIDDLE.equals(this.mTelegramCanvasLock)) {
                 this.mActivity.goToWallPage(com.termux.app.wall.PaneWallPage.TERMINAL);
+                if (this.mTerminalPaneHost != null) {
+                    this.mTerminalPaneHost.setVisibility(View.GONE);
+                }
                 this.mPaneHost.setVisibility(View.VISIBLE);
                 this.mPaneHost.setAlpha(1.0f);
                 this.mPaneHost.setTranslationX(0.0f);
@@ -4800,6 +4803,9 @@ public class FusionWebViewManager implements View.OnClickListener, ValueCallback
                 if (this.mActivity != null && this.mActivity.currentWallPage() != com.termux.app.wall.PaneWallPage.TERMINAL) {
                     this.mPaneHost.setVisibility(View.GONE);
                     return;
+                }
+                if (this.mTerminalPaneHost != null) {
+                    this.mTerminalPaneHost.setVisibility(View.GONE);
                 }
                 this.mPaneHost.setVisibility(View.VISIBLE);
                 this.mPaneHost.setAlpha(1.0f);

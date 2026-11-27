@@ -1000,8 +1000,11 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
-                            } else if (strTrim.startsWith("TELEGRAM ") || strTrim.equals("TELEGRAM")) {
-                                String rest = strTrim.length() > 8 ? strTrim.substring(8).trim() : "status";
+                            } else if (strTrim.startsWith("ESOGRAM ") || strTrim.equals("ESOGRAM")
+                                    || strTrim.startsWith("TELEGRAM ") || strTrim.equals("TELEGRAM")) {
+                                String rest = strTrim.startsWith("ESOGRAM")
+                                    ? (strTrim.length() > 7 ? strTrim.substring(7).trim() : "status")
+                                    : (strTrim.length() > 8 ? strTrim.substring(8).trim() : "status");
                                 String outJson = handleTelegramCommand(rest);
                                 outputStream.write((outJson + "\n").getBytes());
                                 outputStream.flush();
@@ -1563,6 +1566,9 @@ public class TermuxIpcServer {
             }
             if ("delete_recipe".equals(sub)) {
                 return com.termux.telegram.FusionTelegramHelper.deleteRecipeJson(arg).toString();
+            }
+            if ("reload_plugins".equals(sub) || "plugins".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.reloadPlugins().toString();
             }
             if ("login_creds".equals(sub)) {
                 String[] p = arg.split("\\s+", 2);
