@@ -1000,6 +1000,12 @@ public class TermuxIpcServer {
                                 }
                                 outputStream.flush();
                                 continue;
+                            } else if (strTrim.startsWith("TELEGRAM ") || strTrim.equals("TELEGRAM")) {
+                                String rest = strTrim.length() > 8 ? strTrim.substring(8).trim() : "status";
+                                String outJson = handleTelegramCommand(rest);
+                                outputStream.write((outJson + "\n").getBytes());
+                                outputStream.flush();
+                                continue;
                             } else if (strTrim.startsWith("WEBVIEW_ACTION_TAB ")) {
                                 String rest = strTrim.substring(19).trim();
                                 String[] parts = rest.split("\\s+", 3);
@@ -1497,6 +1503,166 @@ public class TermuxIpcServer {
                 }, "FusionWifiAutoStart").start();
             }
         } catch (Throwable th) {
+        }
+    }
+
+    private static String handleTelegramCommand(String rest) {
+        boolean hasOverride = false;
+        try {
+            String cmd = (rest == null || rest.trim().isEmpty()) ? "status" : rest.trim();
+            if (cmd.startsWith("@acc:")) {
+                int sp = cmd.indexOf(' ');
+                String accId = sp > 0 ? cmd.substring(5, sp).trim() : cmd.substring(5).trim();
+                cmd = sp > 0 ? cmd.substring(sp + 1).trim() : "status";
+                if (sActivity != null) com.termux.telegram.FusionTelegramHelper.ensureStarted(sActivity);
+                com.termux.telegram.FusionTelegramHelper.setThreadAccountOverride(accId);
+                hasOverride = true;
+            }
+            String[] parts = cmd.split("\\s+", 2);
+            String sub = parts[0].toLowerCase(java.util.Locale.ROOT);
+            String arg = parts.length > 1 ? parts[1].trim() : "";
+
+            if ("open".equals(sub) || "show".equals(sub)) {
+                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                if (mgr != null) {
+                    if (arg.isEmpty()) mgr.showTelegramPanel();
+                    else mgr.showTelegramPanel(arg);
+                    return "{\"ok\":true,\"panel\":\"open\",\"lock\":\"" + mgr.mTelegramCanvasLock + "\"}";
+                }
+                return "{\"ok\":false,\"error\":\"WebViewManager not ready\"}";
+            }
+            if ("close".equals(sub) || "hide".equals(sub)) {
+                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                if (mgr != null) {
+                    mgr.hideTelegramPanel();
+                    return "{\"ok\":true,\"panel\":\"closed\"}";
+                }
+                return "{\"ok\":false,\"error\":\"WebViewManager not ready\"}";
+            }
+            if ("toggle".equals(sub)) {
+                com.termux.webview.FusionWebViewManager mgr = com.termux.webview.FusionWebViewManager.getInstance();
+                if (mgr != null) {
+                    mgr.toggleTelegramPanel(arg);
+                    return "{\"ok\":true,\"panel\":\"toggled\",\"lock\":\"" + mgr.mTelegramCanvasLock + "\"}";
+                }
+                return "{\"ok\":false,\"error\":\"WebViewManager not ready\"}";
+            }
+
+            if (sActivity != null) {
+                com.termux.telegram.FusionTelegramHelper.ensureStarted(sActivity);
+            }
+
+            if ("status".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.getStatusJson().toString();
+            }
+            if ("accounts".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.listAccountsJson().toString();
+            }
+            if ("use".equals(sub) || "switch".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.switchAccount(sActivity, arg).toString();
+            }
+            if ("delete_recipe".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.deleteRecipeJson(arg).toString();
+            }
+            if ("login_creds".equals(sub)) {
+                String[] p = arg.split("\\s+", 2);
+                if (p.length < 2 || sActivity == null) return "{\"ok\":false,\"error\":\"Usage: login_creds <apiId> <apiHash>\"}";
+                com.termux.telegram.FusionTelegramHelper.setApiCredentials(sActivity, Integer.parseInt(p[0]), p[1]);
+                return com.termux.telegram.FusionTelegramHelper.getStatusJson().toString();
+            }
+            if ("login_phone".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.sendPhoneNumber(arg).toString();
+            }
+            if ("login_code".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.sendAuthCode(arg).toString();
+            }
+            if ("login_pass".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.sendPassword(arg).toString();
+            }
+            if ("logout".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.logout().toString();
+            }
+            if ("chats".equals(sub)) {
+                String filter = "all";
+                int limit = 30;
+                if (!arg.isEmpty()) {
+                    String[] p = arg.split("\\s+");
+                    filter = p[0];
+                    if (p.length > 1) limit = Integer.parseInt(p[1]);
+                }
+                return com.termux.telegram.FusionTelegramHelper.getChatsJson(filter, limit).toString();
+            }
+            if ("history".equals(sub)) {
+                String[] p = arg.split("\\s+");
+                if (p.length < 1 || p[0].isEmpty()) return "{\"ok\":false,\"error\":\"Usage: history <chatId> [limit]\"}";
+                long chatId = Long.parseLong(p[0]);
+                int limit = p.length > 1 ? Integer.parseInt(p[1]) : 30;
+                return com.termux.telegram.FusionTelegramHelper.getHistoryJson(chatId, 0, limit).toString();
+            }
+            if ("send".equals(sub)) {
+                String[] p = arg.split("\\s+", 2);
+                if (p.length < 2) return "{\"ok\":false,\"error\":\"Usage: send <chatId> <text>\"}";
+                long chatId = Long.parseLong(p[0]);
+                return com.termux.telegram.FusionTelegramHelper.sendMessageJson(chatId, p[1], 0).toString();
+            }
+            if ("click".equals(sub)) {
+                String[] p = arg.split("\\s+", 3);
+                if (p.length < 3) return "{\"ok\":false,\"error\":\"Usage: click <chatId> <msgId> <data>\"}";
+                return com.termux.telegram.FusionTelegramHelper.clickInlineButtonJson(Long.parseLong(p[0]), Long.parseLong(p[1]), p[2]).toString();
+            }
+            if ("webapp".equals(sub)) {
+                String[] p = arg.split("\\s+", 3);
+                if (p.length < 2) return "{\"ok\":false,\"error\":\"Usage: webapp <chatId> <botUserId> [url]\"}";
+                return com.termux.telegram.FusionTelegramHelper.openWebAppJson(Long.parseLong(p[0]), Long.parseLong(p[1]), p.length > 2 ? p[2] : "").toString();
+            }
+            if ("search".equals(sub)) {
+                String[] p = arg.split("\\s+", 2);
+                if (p.length < 2) return "{\"ok\":false,\"error\":\"Usage: search <chatId|0> <query>\"}";
+                return com.termux.telegram.FusionTelegramHelper.searchMessagesJson(Long.parseLong(p[0]), p[1], 25).toString();
+            }
+            if ("join".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.joinChatJson(arg).toString();
+            }
+            if ("resolve".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.resolveChatJson(arg).toString();
+            }
+            if ("start_bot".equals(sub)) {
+                String[] p = arg.split("\\s+", 2);
+                if (p.length < 1 || p[0].isEmpty()) return "{\"ok\":false,\"error\":\"Usage: start_bot <bot> [param]\"}";
+                return com.termux.telegram.FusionTelegramHelper.startBotJson(p[0], p.length > 1 ? p[1] : "").toString();
+            }
+            if ("recipes".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.listRecipesJson().toString();
+            }
+            if ("play".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.replayRecipeJson(arg, 0).toString();
+            }
+            if ("events".equals(sub)) {
+                int lim = arg.isEmpty() ? 30 : Integer.parseInt(arg);
+                return com.termux.telegram.FusionTelegramHelper.getRecentEventsJson(lim).toString();
+            }
+            if ("rec_start".equals(sub)) {
+                com.termux.telegram.FusionTelegramHelper.startRecording(arg);
+                return "{\"ok\":true,\"recording\":true}";
+            }
+            if ("rec_stop".equals(sub)) {
+                return com.termux.telegram.FusionTelegramHelper.stopRecordingAndSave(arg).toString();
+            }
+            if ("rec_status".equals(sub)) {
+                return "{\"ok\":true,\"recording\":" + com.termux.telegram.FusionTelegramHelper.isRecording()
+                    + ",\"count\":" + com.termux.telegram.FusionTelegramHelper.getRecordedCount() + "}";
+            }
+            if ("tab_pos".equals(sub) && sActivity != null) {
+                com.termux.telegram.FusionTelegramHelper.setTabPosition(sActivity, arg);
+                return "{\"ok\":true,\"tabPos\":\"" + com.termux.telegram.FusionTelegramHelper.getTabPosition(sActivity) + "\"}";
+            }
+            return "{\"ok\":false,\"error\":\"Unknown telegram command: " + sub + "\"}";
+        } catch (Throwable t) {
+            return "{\"ok\":false,\"error\":\"" + String.valueOf(t.getMessage()).replace("\"", "'") + "\"}";
+        } finally {
+            if (hasOverride) {
+                com.termux.telegram.FusionTelegramHelper.clearThreadAccountOverride();
+            }
         }
     }
 

@@ -7,7 +7,7 @@ import java.util.List;
 
 /** Pure item policy for the pane's empty-surface long-press menu. */
 public final class WidgetPaneMenuPolicy {
-    public enum Item { ADD_WIDGET, EDIT_WIDGETS, REMOVE_PAGE }
+    public enum Item { ADD_WIDGET, EDIT_WIDGETS, SET_PAGE_COUNT, REMOVE_PAGE }
 
     private WidgetPaneMenuPolicy() {}
 
@@ -23,6 +23,7 @@ public final class WidgetPaneMenuPolicy {
         if (!widgetsAvailable) return items;
         items.add(Item.ADD_WIDGET);
         if (!currentPageEmpty) items.add(Item.EDIT_WIDGETS);
+        items.add(Item.SET_PAGE_COUNT);
         if (currentPageEmpty && pageCount > 1) items.add(Item.REMOVE_PAGE);
         return items;
     }

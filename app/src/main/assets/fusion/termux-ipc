@@ -111,6 +111,33 @@ handle_left_canvas() {
         left-canvas|canvas-left|canvas-kiri|eso-browser)
         handle_left_canvas "$@"
         ;;
+    telegram|tg)
+        if [ $# -eq 0 ]; then
+            send_cmd "TELEGRAM open"
+        elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+            echo "Penggunaan: termux-ipc telegram [@acc:<id>] <perintah>"
+            echo "  open [left|middle] | close | toggle | tab_pos [bottom|top]"
+            echo "  status | accounts | use <id> | login_creds <id> <hash> | login_phone <no> | login_code <otp> | login_pass <pw> | logout"
+            echo "  chats [filter] [limit] | history <chatId> [limit] | search <chatId|0> <query> | resolve <@user>"
+            echo "  send <chatId> <teks> | click <chatId> <msgId> <data> | join <target> | start_bot <bot> [param] | webapp <chatId> <botId> [url]"
+            echo "  watch [regex] | events [limit] | rec_start [bot] | rec_stop [nama] | rec_status | recipes | play <nama|json> | delete_recipe <nama>"
+        elif [ "$1" = "watch" ] || [ "$1" = "pantau" ]; then
+            shift
+            EVT_FILE="/data/data/com.termux/files/usr/tmp/tdlib_events.jsonl"
+            if [ -f "$EVT_FILE" ]; then
+                if [ -n "$1" ]; then
+                    tail -n 10 -f "$EVT_FILE" | grep --line-buffered -iE "$1"
+                else
+                    tail -n 10 -f "$EVT_FILE"
+                fi
+            else
+                echo "Menunggu event TDLib ($EVT_FILE)..."
+                send_cmd "TELEGRAM events 20"
+            fi
+        else
+            send_cmd "TELEGRAM $*"
+        fi
+        ;;
     tab)
             send_cmd "LEFT_CANVAS tab $*"
             ;;
@@ -1435,6 +1462,33 @@ sys.exit(res.returncode)
         ;;
     left-canvas|canvas-left|canvas-kiri|eso-browser)
         handle_left_canvas "$@"
+        ;;
+    telegram|tg)
+        if [ $# -eq 0 ]; then
+            send_cmd "TELEGRAM open"
+        elif [ "$1" = "--help" ] || [ "$1" = "-h" ] || [ "$1" = "help" ]; then
+            echo "Penggunaan: termux-ipc telegram [@acc:<id>] <perintah>"
+            echo "  open [left|middle] | close | toggle | tab_pos [bottom|top]"
+            echo "  status | accounts | use <id> | login_creds <id> <hash> | login_phone <no> | login_code <otp> | login_pass <pw> | logout"
+            echo "  chats [filter] [limit] | history <chatId> [limit] | search <chatId|0> <query> | resolve <@user>"
+            echo "  send <chatId> <teks> | click <chatId> <msgId> <data> | join <target> | start_bot <bot> [param] | webapp <chatId> <botId> [url]"
+            echo "  watch [regex] | events [limit] | rec_start [bot] | rec_stop [nama] | rec_status | recipes | play <nama|json> | delete_recipe <nama>"
+        elif [ "$1" = "watch" ] || [ "$1" = "pantau" ]; then
+            shift
+            EVT_FILE="/data/data/com.termux/files/usr/tmp/tdlib_events.jsonl"
+            if [ -f "$EVT_FILE" ]; then
+                if [ -n "$1" ]; then
+                    tail -n 10 -f "$EVT_FILE" | grep --line-buffered -iE "$1"
+                else
+                    tail -n 10 -f "$EVT_FILE"
+                fi
+            else
+                echo "Menunggu event TDLib ($EVT_FILE)..."
+                send_cmd "TELEGRAM events 20"
+            fi
+        else
+            send_cmd "TELEGRAM $*"
+        fi
         ;;
     tab)
         handle_tab "$@"

@@ -319,8 +319,33 @@ public final class WidgetPaneController implements LauncherWidgetHostController.
         switch (item) {
             case ADD_WIDGET: openPicker(); break;
             case EDIT_WIDGETS: menuEditWidgets(); break;
+            case SET_PAGE_COUNT: menuSetPageCount(); break;
             case REMOVE_PAGE: menuRemovePage(); break;
         }
+    }
+
+    private void menuSetPageCount() {
+        int curCount = widgets.repository().pageCount();
+        int checked = Math.max(0, Math.min(4, curCount - 1));
+        final CharSequence[] options = { "1 Page", "2 Page", "3 Page", "4 Page", "5 Page" };
+        new android.app.AlertDialog.Builder(pane.getContext())
+            .setTitle("Jumlah Page Kanvas Kiri")
+            .setSingleChoiceItems(options, checked, (dialog, which) -> {
+                int target = which + 1;
+                java.util.LinkedHashSet<Integer> nextFresh = new java.util.LinkedHashSet<>(
+                    widgets.repository().freshPages());
+                for (int p = curCount; p < target; p++) {
+                    nextFresh.add(p);
+                }
+                widgets.repository().setPages(target, nextFresh);
+                clampCurrentPage();
+                render();
+                dialog.dismiss();
+                com.termux.app.FusionToast.makeText(pane.getContext(),
+                    "Kanvas Kiri: " + target + " Page", 0).show();
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
     }
 
     /**
