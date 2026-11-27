@@ -570,7 +570,7 @@ public final class FusionTelegramView extends FrameLayout implements FusionTeleg
         mTabEntries.add(new TabEntry("Channels", "channels", 0));
         mTabEntries.add(new TabEntry("Groups", "groups", 0));
         mTabEntries.add(new TabEntry("Bots", "bots", 0));
-        for (TdApi.ChatFilterInfo fi : FusionTelegramHelper.getChatFilters()) {
+        for (TdApi.ChatFolderInfo fi : FusionTelegramHelper.getChatFilters()) {
             if (fi != null && fi.name != null && fi.name.text != null) {
                 mTabEntries.add(new TabEntry(fi.name.text.text, null, fi.id));
             }

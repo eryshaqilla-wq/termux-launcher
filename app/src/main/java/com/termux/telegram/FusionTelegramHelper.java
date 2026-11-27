@@ -50,7 +50,7 @@ public final class FusionTelegramHelper {
         volatile TdApi.User meUser;
         volatile boolean initialized = false;
         final Map<Long, TdApi.Chat> chats = new ConcurrentHashMap<>();
-        final List<TdApi.ChatFilterInfo> chatFilters = new CopyOnWriteArrayList<>();
+        final List<TdApi.ChatFolderInfo> chatFilters = new CopyOnWriteArrayList<>();
         AccountSlot(String id) { this.id = id; }
     }
 
@@ -330,11 +330,11 @@ public final class FusionTelegramHelper {
                 }
                 break;
             }
-            case TdApi.UpdateChatFilters.CONSTRUCTOR: {
-                TdApi.UpdateChatFilters u = (TdApi.UpdateChatFilters) object;
+            case TdApi.UpdateChatFolders.CONSTRUCTOR: {
+                TdApi.UpdateChatFolders u = (TdApi.UpdateChatFolders) object;
                 slot.chatFilters.clear();
-                if (u.chatFilters != null) {
-                    Collections.addAll(slot.chatFilters, u.chatFilters);
+                if (u.chatFolders != null) {
+                    Collections.addAll(slot.chatFilters, u.chatFolders);
                 }
                 if (slot.id.equals(sActiveAccountId)) notifyFiltersUpdated();
                 break;
@@ -508,7 +508,7 @@ public final class FusionTelegramHelper {
         return jo;
     }
 
-    public static List<TdApi.ChatFilterInfo> getChatFilters() {
+    public static List<TdApi.ChatFolderInfo> getChatFilters() {
         return new ArrayList<>(activeSlot().chatFilters);
     }
 
@@ -707,7 +707,7 @@ public final class FusionTelegramHelper {
             "android",
             TdApi.WebAppOpenModeFullSize.CONSTRUCTOR == 0 ? null : new TdApi.WebAppOpenModeFullSize()
         );
-        TdApi.OpenWebApp req = new TdApi.OpenWebApp(chatId, botUserId, url != null ? url : "", params);
+        TdApi.OpenWebApp req = new TdApi.OpenWebApp(chatId, botUserId, url != null ? url : "", null, null, params);
         TdApi.Object res = sendSyncRaw(req, 8000);
         if (res instanceof TdApi.WebAppInfo) {
             TdApi.WebAppInfo info = (TdApi.WebAppInfo) res;
